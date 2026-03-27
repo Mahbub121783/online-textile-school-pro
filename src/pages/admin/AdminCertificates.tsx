@@ -12,7 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Award, Plus, Trash2, Eye, Upload, Save, GripVertical, Italic, AlignLeft, AlignCenter, AlignRight, Download, Type } from 'lucide-react';
-import { useCloudinaryUpload } from '@/hooks/useCloudinaryUpload';
+import { useFileUpload } from '@/hooks/useFileUpload';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import type { CertificateField, CertificateData } from '@/lib/certificateRenderer';
@@ -57,7 +57,7 @@ const AdminCertificates = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const previewContainerRef = useRef<HTMLDivElement>(null);
   const bgImageRef = useRef<HTMLImageElement | null>(null);
-  const { upload, uploading } = useCloudinaryUpload();
+  const { upload, uploading } = useFileUpload();
 
   const [dragging, setDragging] = useState<number | null>(null);
   const [customFieldCounter, setCustomFieldCounter] = useState(1);

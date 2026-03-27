@@ -105,7 +105,7 @@ const CloudflareR2SettingsTab = () => {
         endpoint_url: form.endpoint_url.trim(),
         bucket_name: form.bucket_name.trim(),
         public_domain_url: form.public_domain_url.trim(),
-        status: form.is_active ? 'active' : 'inactive',
+        status: 'pending',
         updated_at: new Date().toISOString(),
       };
 
