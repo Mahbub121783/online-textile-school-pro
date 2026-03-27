@@ -57,7 +57,7 @@ const AdminCertificates = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const previewContainerRef = useRef<HTMLDivElement>(null);
   const bgImageRef = useRef<HTMLImageElement | null>(null);
-  const { upload, uploading } = useCloudinaryUpload();
+  const { upload, uploading } = useFileUpload();
 
   const [dragging, setDragging] = useState<number | null>(null);
   const [customFieldCounter, setCustomFieldCounter] = useState(1);
