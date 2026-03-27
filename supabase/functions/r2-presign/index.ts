@@ -95,7 +95,8 @@ async function handleTest(supabase: any, body: any, headers: any) {
 
   try {
     const s3 = buildS3Client(account);
-    await s3.send(new HeadBucketCommand({ Bucket: account.bucket_name }));
+    // Use ListObjectsV2 with MaxKeys=1 — more reliable with R2 than HeadBucket
+    await s3.send(new ListObjectsV2Command({ Bucket: account.bucket_name, MaxKeys: 1 }));
 
     await supabase
       .from("cloudflare_r2_accounts")
@@ -106,13 +107,15 @@ async function handleTest(supabase: any, body: any, headers: any) {
       headers: { ...headers, "Content-Type": "application/json" },
     });
   } catch (err: any) {
+    console.error("R2 test error:", err.name, err.message, err.$metadata);
     await supabase
       .from("cloudflare_r2_accounts")
       .update({ status: "error", updated_at: new Date().toISOString() })
       .eq("id", account_id);
 
+    const msg = err.message || err.name || "Connection failed";
     return new Response(
-      JSON.stringify({ success: false, error: err.message || "Connection failed" }),
+      JSON.stringify({ success: false, error: msg }),
       { headers: { ...headers, "Content-Type": "application/json" } }
     );
   }
