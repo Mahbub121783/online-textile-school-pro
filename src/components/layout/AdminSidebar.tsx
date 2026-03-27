@@ -1,4 +1,4 @@
-import { LayoutDashboard, Users, BookOpen, Image, Activity, LogOut, GraduationCap, Tag, Wallet, FileText, PenTool, ImageIcon, Menu, Palette, Video, HelpCircle, ClipboardList, Award, Settings, ChevronDown, BarChart3, UserCog, CheckSquare, DollarSign, Shield, MessageSquare, Wrench, Mail, CreditCard, ReceiptText, Cloud, Bell, ShoppingCart } from 'lucide-react';
+import { LayoutDashboard, Users, BookOpen, Image, Activity, LogOut, GraduationCap, Tag, Wallet, FileText, PenTool, ImageIcon, Menu, Palette, Video, HelpCircle, ClipboardList, Award, Settings, ChevronDown, BarChart3, UserCog, CheckSquare, DollarSign, Shield, MessageSquare, Wrench, Mail, CreditCard, ReceiptText, Cloud, Bell, ShoppingCart, HardDrive } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
@@ -37,6 +37,7 @@ const setupSubItems = [
   { title: 'SMTP', url: '/admin/setup', icon: Mail },
   { title: 'Email Templates', url: '/admin/setup/email-templates', icon: FileText },
   { title: 'Cloudinary', url: '/admin/setup/cloudinary', icon: Cloud },
+  { title: 'Cloudflare R2', url: '/admin/setup/cloudflare-r2', icon: HardDrive },
 ];
 
 const paymentSubItems = [

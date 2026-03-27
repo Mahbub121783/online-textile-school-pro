@@ -2,8 +2,9 @@ import { useState, useRef } from 'react';
 import { Upload, X, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
-import { useCloudinaryUpload } from '@/hooks/useCloudinaryUpload';
+import { useFileUpload } from '@/hooks/useFileUpload';
 import { handleImgError } from '@/lib/cloudinaryUrl';
+import { Progress } from '@/components/ui/progress';
 
 interface MediaUploaderProps {
   value?: string;
@@ -17,13 +18,13 @@ const MediaUploader = ({ value, onChange, accept = 'image/*', label = 'Upload Im
   const [dragOver, setDragOver] = useState(false);
   const [fallbackUrl, setFallbackUrl] = useState<string | undefined>();
   const inputRef = useRef<HTMLInputElement>(null);
-  const { upload, uploading } = useCloudinaryUpload();
+  const { upload, uploading, progress } = useFileUpload();
 
   const handleUpload = async (file: File) => {
     try {
       const result = await upload(file);
       onChange(result.url);
-      setFallbackUrl(result.fallbackUrl);
+      if (result.fallbackUrl) setFallbackUrl(result.fallbackUrl);
       toast.success('Uploaded!');
     } catch {
       // error already toasted by hook
@@ -81,11 +82,14 @@ const MediaUploader = ({ value, onChange, accept = 'image/*', label = 'Upload Im
     >
       <input ref={inputRef} type="file" accept={accept} className="hidden" onChange={handleChange} />
       {uploading ? (
-        <Loader2 className="h-8 w-8 mx-auto mb-2 animate-spin text-muted-foreground" />
+        <div className="space-y-2">
+          <Loader2 className="h-8 w-8 mx-auto mb-2 animate-spin text-muted-foreground" />
+          <Progress value={progress} className="h-2 max-w-[200px] mx-auto" />
+        </div>
       ) : (
         <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
       )}
-      <p className="text-sm font-medium text-muted-foreground">{uploading ? 'Uploading...' : label}</p>
+      <p className="text-sm font-medium text-muted-foreground">{uploading ? `Uploading... ${progress}%` : label}</p>
       <p className="text-xs text-muted-foreground mt-1">Drag & drop or click to browse</p>
     </div>
   );
