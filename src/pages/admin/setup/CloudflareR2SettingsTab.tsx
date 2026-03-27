@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { toast } from 'sonner';
 import {
@@ -37,12 +38,48 @@ const emptyForm = {
   is_active: true,
 };
 
+const R2_ACCESS_KEY_LENGTH = 32;
+
+const getCredentialValidationMessage = (
+  values: Pick<typeof emptyForm, 'access_key_id' | 'secret_access_key' | 'endpoint_url' | 'public_domain_url'>,
+  isEditing: boolean,
+) => {
+  const accessKeyId = values.access_key_id.trim();
+  const secretAccessKey = values.secret_access_key.trim();
+  const endpointUrl = values.endpoint_url.trim();
+  const publicDomainUrl = values.public_domain_url.trim();
+
+  if (accessKeyId.length !== R2_ACCESS_KEY_LENGTH) {
+    return `Access Key ID must be ${R2_ACCESS_KEY_LENGTH} characters. Cloudflare R2 Access Key IDs are not the same as API tokens.`;
+  }
+
+  if (!isEditing && !secretAccessKey) {
+    return 'Secret Access Key is required.';
+  }
+
+  if (secretAccessKey && secretAccessKey === accessKeyId) {
+    return 'Access Key ID and Secret Access Key cannot be identical. Please paste the two different R2 credentials.';
+  }
+
+  if (endpointUrl && !endpointUrl.includes('.r2.cloudflarestorage.com')) {
+    return 'Endpoint URL should look like https://<account-id>.r2.cloudflarestorage.com';
+  }
+
+  if (publicDomainUrl && !/^https:\/\//.test(publicDomainUrl)) {
+    return 'Public Domain URL must start with https://';
+  }
+
+  return null;
+};
+
 const CloudflareR2SettingsTab = () => {
   const queryClient = useQueryClient();
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [testingId, setTestingId] = useState<string | null>(null);
+
+  const formValidationMessage = getCredentialValidationMessage(form, Boolean(editingId));
 
   const { data: accounts = [], isLoading } = useQuery({
     queryKey: ['r2-accounts'],
@@ -59,6 +96,9 @@ const CloudflareR2SettingsTab = () => {
 
   const saveMutation = useMutation({
     mutationFn: async () => {
+      const validationMessage = getCredentialValidationMessage(form, Boolean(editingId));
+      if (validationMessage) throw new Error(validationMessage);
+
       const payload: any = {
         nickname: form.nickname.trim(),
         access_key_id: form.access_key_id.trim(),
@@ -92,7 +132,7 @@ const CloudflareR2SettingsTab = () => {
       toast.success(editingId ? 'Account updated' : 'Account added');
       closeModal();
     },
-    onError: () => toast.error('Failed to save account'),
+    onError: (error: Error) => toast.error(error.message || 'Failed to save account'),
   });
 
   const deleteMutation = useMutation({
@@ -108,6 +148,11 @@ const CloudflareR2SettingsTab = () => {
   });
 
   const handleTest = async (account: R2Account) => {
+    if (account.access_key_id.trim().length !== R2_ACCESS_KEY_LENGTH) {
+      toast.error(`This saved Access Key ID is ${account.access_key_id.trim().length} characters long. Cloudflare R2 requires ${R2_ACCESS_KEY_LENGTH}. Please edit the account and paste the correct Access Key ID.`);
+      return;
+    }
+
     setTestingId(account.id);
     try {
       const { data, error } = await supabase.functions.invoke('r2-presign', {
@@ -299,17 +344,26 @@ const CloudflareR2SettingsTab = () => {
             <DialogTitle>{editingId ? 'Edit R2 Account' : 'Add Cloudflare R2 Account'}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 pt-2">
+            <Alert>
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                Use the two values from <span className="font-medium">Cloudflare R2 API Tokens → Manage API tokens</span>:
+                the <span className="font-medium">Access Key ID</span> and the separate <span className="font-medium">Secret Access Key</span>.
+              </AlertDescription>
+            </Alert>
+
             <div className="space-y-2">
               <Label>Account Nickname *</Label>
               <Input value={form.nickname} onChange={(e) => setForm({ ...form, nickname: e.target.value })} placeholder='e.g. "R2 Storage 1"' />
             </div>
             <div className="space-y-2">
               <Label>Access Key ID *</Label>
-              <Input value={form.access_key_id} onChange={(e) => setForm({ ...form, access_key_id: e.target.value })} placeholder="e.g. abc123def456..." type="password" />
+              <Input value={form.access_key_id} onChange={(e) => setForm({ ...form, access_key_id: e.target.value })} placeholder="32-character R2 access key ID" type="password" />
+              <p className="text-xs text-muted-foreground">Expected length: {R2_ACCESS_KEY_LENGTH} characters.</p>
             </div>
             <div className="space-y-2">
               <Label>Secret Access Key *{editingId ? ' (leave blank to keep current)' : ''}</Label>
-              <Input value={form.secret_access_key} onChange={(e) => setForm({ ...form, secret_access_key: e.target.value })} placeholder={editingId ? 'Leave blank to keep current' : '••••••••••••••••••••'} type="password" />
+              <Input value={form.secret_access_key} onChange={(e) => setForm({ ...form, secret_access_key: e.target.value })} placeholder={editingId ? 'Leave blank to keep current' : 'R2 secret access key'} type="password" />
             </div>
             <div className="space-y-2">
               <Label>Endpoint URL *</Label>
@@ -330,10 +384,16 @@ const CloudflareR2SettingsTab = () => {
               </div>
               <Switch checked={form.is_active} onCheckedChange={(checked) => setForm({ ...form, is_active: checked })} />
             </div>
+            {formValidationMessage ? (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>{formValidationMessage}</AlertDescription>
+              </Alert>
+            ) : null}
             <Button
               className="w-full bg-primary hover:bg-primary-light text-primary-foreground"
               onClick={() => saveMutation.mutate()}
-              disabled={saveMutation.isPending || !form.nickname || !form.access_key_id || !form.endpoint_url || !form.bucket_name || !form.public_domain_url || (!editingId && !form.secret_access_key)}
+              disabled={saveMutation.isPending || !form.nickname || !form.access_key_id || !form.endpoint_url || !form.bucket_name || !form.public_domain_url || (!editingId && !form.secret_access_key) || Boolean(formValidationMessage)}
             >
               {saveMutation.isPending ? (
                 <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Saving...</>
