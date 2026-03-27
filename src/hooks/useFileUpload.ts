@@ -38,6 +38,7 @@ interface UploadResult {
   publicId?: string;
   fallbackUrl?: string;
   accountId?: string;
+  fileKey?: string;
 }
 
 export function useFileUpload() {
@@ -101,7 +102,7 @@ export function useFileUpload() {
       throw new Error(data.error);
     }
 
-    const { presignedUrl, publicUrl, accountId } = data;
+    const { presignedUrl, publicUrl, accountId, fileKey } = data;
 
     // Step 2: Upload directly to R2 via presigned URL with progress
     setProgress(10);
@@ -123,22 +124,37 @@ export function useFileUpload() {
           setProgress(100);
           resolve();
         } else {
-          reject(new Error(`Upload failed with status ${xhr.status}`));
+          reject(new Error(`Upload failed with status ${xhr.status}. Check Cloudflare R2 bucket CORS for this site origin.`));
         }
       };
 
-      xhr.onerror = () => reject(new Error('Network error during upload'));
+      xhr.onerror = () => reject(new Error('Browser upload blocked or failed. Cloudflare R2 bucket CORS likely does not allow this site origin.'));
       xhr.ontimeout = () => reject(new Error('Upload timed out'));
       xhr.timeout = 600000; // 10 minutes
 
       xhr.send(file);
     });
 
+    const { data: completeData, error: completeError } = await supabase.functions.invoke('r2-presign', {
+      body: {
+        action: 'complete',
+        account_id: accountId,
+        file_key: fileKey,
+      },
+    });
+
+    if (completeError || completeData?.error) {
+      const errorMessage = completeData?.error || completeData?.details || completeError?.message || 'Upload could not be confirmed in R2';
+      toast.error(errorMessage);
+      throw new Error(errorMessage);
+    }
+
     toast.success('File uploaded to R2!');
     return {
       url: publicUrl,
       source: 'r2',
       accountId,
+      fileKey,
     };
   };
 
