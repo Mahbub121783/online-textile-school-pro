@@ -339,7 +339,7 @@ const CloudflareR2SettingsTab = () => {
       </Card>
 
       <Dialog open={modalOpen} onOpenChange={(o) => !o && closeModal()}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editingId ? 'Edit R2 Account' : 'Add Cloudflare R2 Account'}</DialogTitle>
           </DialogHeader>
