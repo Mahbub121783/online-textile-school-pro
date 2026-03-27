@@ -2,17 +2,20 @@ import { useParams } from 'react-router-dom';
 import SmtpSettingsTab from './setup/SmtpSettingsTab';
 import EmailTemplatesTab from './setup/EmailTemplatesTab';
 import CloudinarySettingsTab from './setup/CloudinarySettingsTab';
+import CloudflareR2SettingsTab from './setup/CloudflareR2SettingsTab';
 
 const tabComponents: Record<string, React.ComponentType> = {
   smtp: SmtpSettingsTab,
   'email-templates': EmailTemplatesTab,
   cloudinary: CloudinarySettingsTab,
+  'cloudflare-r2': CloudflareR2SettingsTab,
 };
 
 const tabTitles: Record<string, string> = {
   smtp: 'SMTP Configuration',
   'email-templates': 'Email Templates',
   cloudinary: 'Cloudinary Settings',
+  'cloudflare-r2': 'Cloudflare R2 Settings',
 };
 
 const AdminSetup = () => {
