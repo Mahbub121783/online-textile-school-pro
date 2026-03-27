@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
-import { S3Client, PutObjectCommand, ListObjectsV2Command } from "npm:@aws-sdk/client-s3@3.525.0";
+import { S3Client, PutObjectCommand, ListObjectsV2Command, HeadObjectCommand } from "npm:@aws-sdk/client-s3@3.525.0";
 import { getSignedUrl } from "npm:@aws-sdk/s3-request-presigner@3.525.0";
 
 const corsHeaders = {
@@ -45,6 +45,10 @@ serve(async (req) => {
 
     if (action === "presign") {
       return await handlePresign(supabase, body, corsHeaders);
+    }
+
+    if (action === "complete") {
+      return await handleComplete(supabase, body, corsHeaders);
     }
 
     return new Response(JSON.stringify({ error: "Invalid action" }), {
@@ -103,7 +107,11 @@ async function handleTest(supabase: any, body: any, headers: any) {
       .update({ status: "active", updated_at: new Date().toISOString() })
       .eq("id", account_id);
 
-    return new Response(JSON.stringify({ success: true, message: "Connection verified" }), {
+    return new Response(JSON.stringify({
+      success: true,
+      message: "Connection verified",
+      note: "Browser uploads still require Cloudflare R2 bucket CORS for your app origin.",
+    }), {
       headers: { ...headers, "Content-Type": "application/json" },
     });
   } catch (err: any) {
@@ -186,7 +194,7 @@ async function handlePresign(supabase: any, body: any, headers: any) {
     let publicDomain = selectedAccount.public_domain_url.replace(/\/+$/, "");
     const publicUrl = `${publicDomain}/${fileKey}`;
 
-    // Update round-robin state and upload count
+     // Update round-robin state only. Upload count is confirmed after the browser PUT succeeds.
     await supabase
       .from("r2_round_robin_state")
       .update({
@@ -195,20 +203,13 @@ async function handlePresign(supabase: any, body: any, headers: any) {
       })
       .eq("id", 1);
 
-    await supabase
-      .from("cloudflare_r2_accounts")
-      .update({
-        upload_count: (selectedAccount.upload_count || 0) + 1,
-        last_used_at: new Date().toISOString(),
-      })
-      .eq("id", selectedAccount.id);
-
     return new Response(
       JSON.stringify({
         presignedUrl,
         publicUrl,
         accountId: selectedAccount.id,
         fileKey,
+         corsRequired: true,
       }),
       { headers: { ...headers, "Content-Type": "application/json" } }
     );
@@ -217,5 +218,56 @@ async function handlePresign(supabase: any, body: any, headers: any) {
       JSON.stringify({ error: "Failed to generate presigned URL: " + err.message }),
       { status: 500, headers: { ...headers, "Content-Type": "application/json" } }
     );
+  }
+}
+
+async function handleComplete(supabase: any, body: any, headers: any) {
+  const { account_id, file_key } = body;
+
+  if (!account_id || !file_key) {
+    return new Response(JSON.stringify({ error: "account_id and file_key required" }), {
+      status: 400,
+      headers: { ...headers, "Content-Type": "application/json" },
+    });
+  }
+
+  const { data: account, error } = await supabase
+    .from("cloudflare_r2_accounts")
+    .select("*")
+    .eq("id", account_id)
+    .single();
+
+  if (error || !account) {
+    return new Response(JSON.stringify({ error: "Account not found" }), {
+      status: 404,
+      headers: { ...headers, "Content-Type": "application/json" },
+    });
+  }
+
+  try {
+    const s3 = buildS3Client(account);
+    await s3.send(new HeadObjectCommand({ Bucket: account.bucket_name, Key: file_key }));
+
+    await supabase
+      .from("cloudflare_r2_accounts")
+      .update({
+        upload_count: (account.upload_count || 0) + 1,
+        last_used_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", account_id);
+
+    return new Response(JSON.stringify({ success: true }), {
+      headers: { ...headers, "Content-Type": "application/json" },
+    });
+  } catch (err: any) {
+    console.error("R2 complete verification error:", err.name, err.message, err.$metadata);
+    return new Response(JSON.stringify({
+      error: "Upload was not confirmed in R2. Check bucket CORS and public domain settings.",
+      details: err.message || err.name || "Unknown verification error",
+    }), {
+      status: 400,
+      headers: { ...headers, "Content-Type": "application/json" },
+    });
   }
 }

@@ -94,6 +94,8 @@ const CloudflareR2SettingsTab = () => {
 
   const totalUploads = accounts.reduce((sum, a) => sum + (a.upload_count || 0), 0);
 
+  const appOrigin = typeof window !== 'undefined' ? window.location.origin : 'https://your-preview-origin';
+
   const saveMutation = useMutation({
     mutationFn: async () => {
       const validationMessage = getCredentialValidationMessage(form, Boolean(editingId));
@@ -349,6 +351,16 @@ const CloudflareR2SettingsTab = () => {
               <AlertDescription>
                 Use the two values from <span className="font-medium">Cloudflare R2 API Tokens → Manage API tokens</span>:
                 the <span className="font-medium">Access Key ID</span> and the separate <span className="font-medium">Secret Access Key</span>.
+              </AlertDescription>
+            </Alert>
+
+            <Alert>
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                <span className="font-medium">Important:</span> a passing connection test only proves the bucket is reachable from the server.
+                For browser PDF/video/document uploads, your Cloudflare bucket also needs a CORS rule allowing origin{' '}
+                <span className="font-medium break-all">{appOrigin}</span> with methods <span className="font-medium">PUT, GET, HEAD</span>
+                and header <span className="font-medium">Content-Type</span>.
               </AlertDescription>
             </Alert>
 
