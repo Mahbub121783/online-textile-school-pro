@@ -288,6 +288,51 @@ export type Database = {
           },
         ]
       }
+      cloudflare_r2_accounts: {
+        Row: {
+          access_key_id: string
+          bucket_name: string
+          created_at: string | null
+          endpoint_url: string
+          id: string
+          last_used_at: string | null
+          nickname: string
+          public_domain_url: string
+          secret_access_key: string
+          status: string
+          updated_at: string | null
+          upload_count: number | null
+        }
+        Insert: {
+          access_key_id: string
+          bucket_name: string
+          created_at?: string | null
+          endpoint_url: string
+          id?: string
+          last_used_at?: string | null
+          nickname: string
+          public_domain_url: string
+          secret_access_key: string
+          status?: string
+          updated_at?: string | null
+          upload_count?: number | null
+        }
+        Update: {
+          access_key_id?: string
+          bucket_name?: string
+          created_at?: string | null
+          endpoint_url?: string
+          id?: string
+          last_used_at?: string | null
+          nickname?: string
+          public_domain_url?: string
+          secret_access_key?: string
+          status?: string
+          updated_at?: string | null
+          upload_count?: number | null
+        }
+        Relationships: []
+      }
       cloudinary_accounts: {
         Row: {
           api_key: string
@@ -1789,6 +1834,32 @@ export type Database = {
             columns: ["section_id"]
             isOneToOne: false
             referencedRelation: "course_sections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      r2_round_robin_state: {
+        Row: {
+          id: number
+          last_account_id: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: number
+          last_account_id?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: number
+          last_account_id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "r2_round_robin_state_last_account_id_fkey"
+            columns: ["last_account_id"]
+            isOneToOne: false
+            referencedRelation: "cloudflare_r2_accounts"
             referencedColumns: ["id"]
           },
         ]
