@@ -1,16 +1,35 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import SEOHead from '@/components/SEOHead';
+import UtilityBar from '@/components/layout/UtilityBar';
+import Header from '@/components/layout/Header';
+import Footer from '@/components/layout/Footer';
+import BottomNav from '@/components/layout/BottomNav';
+import HeroSlider from '@/components/features/home/HeroSlider';
+import StatsSection from '@/components/features/home/StatsSection';
+import FeaturedCourses from '@/components/features/home/FeaturedCourses';
+import EbookShowcase from '@/components/features/home/EbookShowcase';
+import InstructorSpotlight from '@/components/features/home/InstructorSpotlight';
+import TestimonialsSection from '@/components/features/home/TestimonialsSection';
+import DemoClassCTA from '@/components/features/home/DemoClassCTA';
 
-// IMPORTANT: Fully REPLACE this with your own code
-const PlaceholderIndex = () => {
-  // PLACEHOLDER: Replace this entire return statement with the user's app.
-  // The inline background color is intentionally not part of the design system.
+const Index = () => {
   return (
-    <div className="flex min-h-screen items-center justify-center" style={{ backgroundColor: '#fcfbf8' }}>
-      <img data-lovable-blank-page-placeholder="REMOVE_THIS" src="/placeholder.svg" alt="Your app will live here!" />
+    <div className="min-h-screen flex flex-col">
+      <SEOHead />
+      <UtilityBar />
+      <Header />
+      <main className="flex-1 pb-14 lg:pb-0">
+        <HeroSlider />
+        <StatsSection />
+        <FeaturedCourses />
+        <EbookShowcase />
+        <InstructorSpotlight />
+        <TestimonialsSection />
+        <DemoClassCTA />
+      </main>
+      <Footer />
+      <BottomNav />
     </div>
   );
 };
-
-const Index = PlaceholderIndex;
 
 export default Index;
