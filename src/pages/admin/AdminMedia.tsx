@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { useCloudinaryUpload } from '@/hooks/useCloudinaryUpload';
+import { useFileUpload } from '@/hooks/useFileUpload';
 import { handleImgError } from '@/lib/cloudinaryUrl';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,7 +18,7 @@ const AdminMedia = () => {
   const [uploading, setUploading] = useState(false);
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const { upload: cloudinaryUpload } = useCloudinaryUpload();
+  const { upload: fileUpload } = useFileUpload();
 
   const { data: media = [], isLoading } = useQuery({
     queryKey: ['admin-media'],
@@ -50,7 +50,7 @@ const AdminMedia = () => {
 
     for (const file of Array.from(files)) {
       try {
-        const result = await cloudinaryUpload(file);
+        const result = await fileUpload(file);
 
         await supabase.from('media_library').insert({
           file_url: result.url,
