@@ -113,7 +113,19 @@ const CloudflareR2SettingsTab = () => {
       const { data, error } = await supabase.functions.invoke('r2-presign', {
         body: { action: 'test', account_id: account.id },
       });
-      if (error) throw new Error(error.message);
+      if (error) {
+        // Try to read the response body for details
+        let msg = 'Edge function error';
+        try {
+          if (error.context && typeof error.context.json === 'function') {
+            const body = await error.context.json();
+            msg = body?.error || msg;
+          } else {
+            msg = error.message || msg;
+          }
+        } catch { msg = error.message || msg; }
+        throw new Error(msg);
+      }
       if (!data?.success) throw new Error(data?.error || 'Test failed');
       queryClient.invalidateQueries({ queryKey: ['r2-accounts'] });
       toast.success('Connection Verified — R2 bucket is accessible.');
