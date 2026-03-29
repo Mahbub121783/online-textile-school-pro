@@ -13,6 +13,8 @@ const HEAVY_EXTENSIONS = new Set([
   'doc', 'docx', 'xls', 'xlsx', 'csv', 'odt', 'ods', 'odp',
 ]);
 
+const PROXY_UPLOAD_MAX_BYTES = 4.5 * 1024 * 1024; // 4.5MB
+
 function getFileExtension(fileName: string): string {
   return fileName.split('.').pop()?.toLowerCase() || '';
 }
@@ -30,6 +32,20 @@ function isHeavyFile(file: File): boolean {
   if (file.type.includes('zip') || file.type.includes('rar')) return true;
   if (file.type.includes('document') || file.type.includes('spreadsheet') || file.type.includes('presentation')) return true;
   return false;
+}
+
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      // Strip data URI prefix
+      const base64 = result.split(',')[1];
+      resolve(base64);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
 }
 
 interface UploadResult {
@@ -64,8 +80,13 @@ export function useFileUpload() {
         };
       }
 
-      // Heavy file → R2 presigned upload
-      return await uploadToR2(file);
+      // Heavy file → R2
+      // For files under 4.5MB, use server-side proxy (no CORS needed)
+      // For larger files, use presigned URL (requires CORS on R2 bucket)
+      if (file.size <= PROXY_UPLOAD_MAX_BYTES) {
+        return await uploadToR2Proxy(file);
+      }
+      return await uploadToR2Presigned(file);
     } catch (err: any) {
       throw err;
     } finally {
@@ -73,7 +94,41 @@ export function useFileUpload() {
     }
   };
 
-  const uploadToR2 = async (file: File): Promise<UploadResult> => {
+  const uploadToR2Proxy = async (file: File): Promise<UploadResult> => {
+    setProgress(10);
+    const base64 = await fileToBase64(file);
+    setProgress(30);
+
+    const { data, error } = await supabase.functions.invoke('r2-presign', {
+      body: {
+        action: 'proxy-upload',
+        file_base64: base64,
+        file_name: file.name,
+        file_type: file.type || 'application/octet-stream',
+      },
+    });
+
+    if (error) {
+      toast.error('Upload failed: ' + (error.message || 'Unknown error'));
+      throw new Error(error.message || 'Upload failed');
+    }
+
+    if (data?.error) {
+      toast.error('Upload error: ' + data.error);
+      throw new Error(data.error);
+    }
+
+    setProgress(100);
+    toast.success('File uploaded to R2!');
+    return {
+      url: data.url,
+      source: 'r2',
+      accountId: data.accountId,
+      fileKey: data.fileKey,
+    };
+  };
+
+  const uploadToR2Presigned = async (file: File): Promise<UploadResult> => {
     // Step 1: Get presigned URL from edge function
     setProgress(5);
     const { data: session } = await supabase.auth.getSession();
@@ -124,17 +179,18 @@ export function useFileUpload() {
           setProgress(100);
           resolve();
         } else {
-          reject(new Error(`Upload failed with status ${xhr.status}. Check Cloudflare R2 bucket CORS for this site origin.`));
+          reject(new Error(`Upload failed with status ${xhr.status}. Your Cloudflare R2 bucket needs CORS configured for this site origin.`));
         }
       };
 
-      xhr.onerror = () => reject(new Error('Browser upload blocked or failed. Cloudflare R2 bucket CORS likely does not allow this site origin.'));
+      xhr.onerror = () => reject(new Error('Browser upload blocked. Your Cloudflare R2 bucket CORS does not allow this site origin. For files over 4.5MB, CORS must be configured on the R2 bucket.'));
       xhr.ontimeout = () => reject(new Error('Upload timed out'));
       xhr.timeout = 600000; // 10 minutes
 
       xhr.send(file);
     });
 
+    // Step 3: Verify upload in R2
     const { data: completeData, error: completeError } = await supabase.functions.invoke('r2-presign', {
       body: {
         action: 'complete',
