@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { S3Client, PutObjectCommand, ListObjectsV2Command, HeadObjectCommand } from "npm:@aws-sdk/client-s3@3.525.0";
+import { decode } from "https://deno.land/std@0.168.0/encoding/base64.ts";
 import { getSignedUrl } from "npm:@aws-sdk/s3-request-presigner@3.525.0";
 
 const corsHeaders = {
@@ -49,6 +50,10 @@ serve(async (req) => {
 
     if (action === "complete") {
       return await handleComplete(supabase, body, corsHeaders);
+    }
+
+    if (action === "proxy-upload") {
+      return await handleProxyUpload(supabase, body, corsHeaders);
     }
 
     return new Response(JSON.stringify({ error: "Invalid action" }), {
