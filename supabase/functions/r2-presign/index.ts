@@ -276,3 +276,93 @@ async function handleComplete(supabase: any, body: any, headers: any) {
     });
   }
 }
+
+async function handleProxyUpload(supabase: any, body: any, headers: any) {
+  const { file_base64, file_name, file_type } = body;
+
+  if (!file_base64 || !file_name) {
+    return new Response(JSON.stringify({ error: "file_base64 and file_name required" }), {
+      status: 400,
+      headers: { ...headers, "Content-Type": "application/json" },
+    });
+  }
+
+  // Fetch all active R2 accounts with round-robin
+  const { data: accounts, error: accErr } = await supabase
+    .from("cloudflare_r2_accounts")
+    .select("*")
+    .eq("status", "active")
+    .order("created_at", { ascending: true });
+
+  if (accErr || !accounts || accounts.length === 0) {
+    return new Response(
+      JSON.stringify({ error: "No active R2 accounts configured" }),
+      { status: 400, headers: { ...headers, "Content-Type": "application/json" } }
+    );
+  }
+
+  // Round-robin selection
+  const { data: rrState } = await supabase
+    .from("r2_round_robin_state")
+    .select("last_account_id")
+    .eq("id", 1)
+    .single();
+
+  const lastId = rrState?.last_account_id;
+  let selectedAccount;
+  if (!lastId) {
+    selectedAccount = accounts[0];
+  } else {
+    const lastIndex = accounts.findIndex((a: any) => a.id === lastId);
+    const nextIndex = (lastIndex + 1) % accounts.length;
+    selectedAccount = accounts[nextIndex];
+  }
+
+  // Generate unique file key
+  const timestamp = Date.now();
+  const random = Math.random().toString(36).substring(2, 8);
+  const safeName = file_name.replace(/[^a-zA-Z0-9._-]/g, "_").substring(0, 100);
+  const fileKey = `uploads/${timestamp}-${random}-${safeName}`;
+
+  try {
+    const s3 = buildS3Client(selectedAccount);
+    const fileBytes = decode(file_base64);
+    const contentType = file_type || "application/octet-stream";
+
+    await s3.send(new PutObjectCommand({
+      Bucket: selectedAccount.bucket_name,
+      Key: fileKey,
+      Body: fileBytes,
+      ContentType: contentType,
+    }));
+
+    // Update round-robin and upload count
+    await supabase
+      .from("r2_round_robin_state")
+      .update({ last_account_id: selectedAccount.id, updated_at: new Date().toISOString() })
+      .eq("id", 1);
+
+    await supabase
+      .from("cloudflare_r2_accounts")
+      .update({
+        upload_count: (selectedAccount.upload_count || 0) + 1,
+        last_used_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", selectedAccount.id);
+
+    let publicDomain = selectedAccount.public_domain_url.replace(/\/+$/, "");
+    const publicUrl = `${publicDomain}/${fileKey}`;
+
+    return new Response(
+      JSON.stringify({ url: publicUrl, source: "r2", accountId: selectedAccount.id, fileKey }),
+      { headers: { ...headers, "Content-Type": "application/json" } }
+    );
+  } catch (err: any) {
+    console.error("R2 proxy upload error:", err);
+    return new Response(
+      JSON.stringify({ error: "Server-side upload to R2 failed: " + (err.message || "Unknown error") }),
+      { status: 500, headers: { ...headers, "Content-Type": "application/json" } }
+    );
+  }
+}
