@@ -1,140 +1,53 @@
 
 
-## Plan: Cloudflare R2 Multi-Account Upload System with Round-Robin
+## Plan: Fix Image Uploads (Missing Edge Function) + R2 CORS Issue
 
-### Overview
-Replace the Cloudinary flow for heavy files (PDFs, videos, documents, archives) with a Cloudflare R2 presigned-URL upload system. Images stay on Cloudinary. Multiple R2 accounts rotate via round-robin to stay within free-tier limits.
+### Root Cause Found
 
-### Architecture
+**The `cloudinary-proxy` edge function does not exist.** The project has only one edge function (`r2-presign`). When you upload an image:
 
-```text
-User uploads file
-       │
-       ▼
-  Check MIME/ext
-       │
-  ┌────┴────┐
-  │ Image?  │ Yes → Cloudinary (existing flow)
-  └────┬────┘
-       │ No (PDF/video/doc/archive)
-       ▼
-  Edge Function: r2-presign
-       │
-  1. Fetch active R2 accounts from DB
-  2. Round-robin select next account
-  3. Generate presigned PUT URL via @aws-sdk
-  4. Return presigned URL + public URL
-       │
-       ▼
-  Frontend PUT directly to R2
-  (bypasses Vercel/edge 4.5MB limit)
-       │
-       ▼
-  Save public URL to Supabase
-```
+1. `useFileUpload` detects it's an image and routes to `useCloudinaryUpload`
+2. `useCloudinaryUpload` calls `supabase.functions.invoke('cloudinary-proxy', ...)`
+3. That function doesn't exist, so the call fails silently
+4. The image "vanishes" because it was never uploaded anywhere
 
-### Changes Required
+For R2 (PDFs/videos): The presigned URL is generated server-side, but the browser PUT to R2 is blocked by **missing CORS on your R2 bucket**. The upload_count of 2 in the database was from a previous code version that didn't have proper verification.
 
-#### 1. Database: `cloudflare_r2_accounts` table (migration)
+### Fix (2 steps)
 
-```sql
-CREATE TABLE public.cloudflare_r2_accounts (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  nickname text NOT NULL,
-  access_key_id text NOT NULL,
-  secret_access_key text NOT NULL,
-  endpoint_url text NOT NULL,
-  bucket_name text NOT NULL,
-  public_domain_url text NOT NULL,
-  status text NOT NULL DEFAULT 'active',
-  last_used_at timestamptz,
-  upload_count bigint DEFAULT 0,
-  created_at timestamptz DEFAULT now(),
-  updated_at timestamptz DEFAULT now()
-);
+**Step 1: Create the `cloudinary-proxy` edge function**
 
-ALTER TABLE public.cloudflare_r2_accounts ENABLE ROW LEVEL SECURITY;
+Create `supabase/functions/cloudinary-proxy/index.ts` that:
+- Reads Cloudinary account credentials from `cloudinary_accounts` table (using service role)
+- On `action: 'upload'` -- receives base64 file data, uploads to Cloudinary API using the account's `cloud_name`, `api_key`, and `api_secret`, returns the URL
+- On `action: 'test'` -- pings Cloudinary API with the account credentials to verify connectivity
+- Handles category-based account selection (images go to the account with `file_category = 'images'`)
+- Falls back to primary account if no category match
 
--- Only admins can manage R2 accounts
-CREATE POLICY "Admins manage R2 accounts"
-  ON public.cloudflare_r2_accounts FOR ALL TO authenticated
-  USING (public.has_role(auth.uid(), 'admin'))
-  WITH CHECK (public.has_role(auth.uid(), 'admin'));
+**Step 2: Add a `proxy-upload` action to `r2-presign` edge function (for R2 CORS bypass)**
 
--- Round-robin tracker
-CREATE TABLE public.r2_round_robin_state (
-  id int PRIMARY KEY DEFAULT 1 CHECK (id = 1),
-  last_account_id uuid REFERENCES public.cloudflare_r2_accounts(id) ON DELETE SET NULL,
-  updated_at timestamptz DEFAULT now()
-);
+Since your Cloudflare R2 bucket does not have CORS configured (and configuring CORS on R2 free tier requires using the S3 API or Wrangler), add a server-side upload path:
+- New action `proxy-upload` in the existing `r2-presign` function
+- Instead of giving the browser a presigned URL, the edge function receives the file (up to ~4.5MB via base64) and uploads it to R2 directly from the server
+- This completely bypasses the CORS issue
+- For files larger than 4.5MB, keep the presigned URL path but show a clear error if CORS blocks it
 
-INSERT INTO public.r2_round_robin_state (id) VALUES (1);
+Update `useFileUpload.ts` to:
+- Try proxy upload first for files under 4.5MB
+- Fall back to presigned URL for larger files
+- Show clear CORS error message if presigned URL upload fails
 
-ALTER TABLE public.r2_round_robin_state ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Admins manage RR state"
-  ON public.r2_round_robin_state FOR ALL TO authenticated
-  USING (public.has_role(auth.uid(), 'admin'))
-  WITH CHECK (public.has_role(auth.uid(), 'admin'));
-```
-
-#### 2. Edge Function: `r2-presign`
-
-- **Actions**: `presign` (generate upload URL), `test` (verify R2 credentials)
-- Uses `@aws-sdk/client-s3` and `@aws-sdk/s3-request-presigner` (Deno npm imports)
-- Round-robin: fetches active accounts ordered by `created_at`, picks the one after `last_account_id`, wraps around
-- Generates presigned PUT URL (1 hour expiry)
-- Returns `{ presignedUrl, publicUrl, accountId }` to frontend
-- Updates `last_account_id` and increments `upload_count`
-
-#### 3. Frontend: `useFileUpload` hook (new central upload hook)
-
-- Replaces direct use of `useCloudinaryUpload` in `MediaUploader`
-- File type checking logic:
-  - **Images** (jpg, png, gif, webp, svg, tiff) → existing Cloudinary flow
-  - **Heavy files** (pdf, mp4, mkv, avi, pptx, ppt, psd, ai, zip, rar, doc, docx, xls, xlsx, mov, webm) → R2 presigned flow
-- R2 flow: call edge function → get presigned URL → `fetch(PUT)` directly to R2 → return public URL
-- Progress tracking via `XMLHttpRequest` for upload progress bar
-
-#### 4. Admin UI: `CloudflareR2SettingsTab.tsx`
-
-- Identical design pattern to `CloudinarySettingsTab.tsx`
-- Fields: Nickname, Access Key ID, Secret Access Key, Endpoint URL, Bucket Name, Public Domain URL, Status toggle
-- Test button calls edge function `r2-presign` with `action: 'test'`
-- CRUD via Supabase `cloudflare_r2_accounts` table
-- Stats cards: Total Accounts, Active, Upload Count
-
-#### 5. Sidebar & Routing Updates
-
-- **AdminSidebar.tsx**: Add `{ title: 'Cloudflare R2', url: '/admin/setup/cloudflare-r2', icon: HardDrive }` to `setupSubItems`
-- **AdminSetup.tsx**: Register `'cloudflare-r2': CloudflareR2SettingsTab` in `tabComponents` and `tabTitles`
-
-#### 6. Update `MediaUploader.tsx`
-
-- Replace `useCloudinaryUpload` with new `useFileUpload` hook
-- The hook internally routes to Cloudinary or R2 based on file type
-- No other component changes needed — the hook abstracts the routing
-
-#### 7. Ebook Reader Compatibility
-
-- The EbookReader already fetches PDFs via the `ebook-secure-access` edge function which streams bytes
-- For R2-hosted ebooks, the edge function will fetch from the R2 public URL (already supports any HTTP URL)
-- CORS: R2 public domains serve with permissive CORS by default; the presigned URL approach avoids CORS issues during upload
-- Download links: existing material download buttons use direct URLs — R2 public URLs work identically
-
-### Files to Create/Edit
+### Files Changed
 
 | Action | File |
 |--------|------|
-| Create | `supabase/functions/r2-presign/index.ts` |
-| Create | `src/pages/admin/setup/CloudflareR2SettingsTab.tsx` |
-| Create | `src/hooks/useFileUpload.ts` |
-| Edit | `src/pages/admin/AdminSetup.tsx` (add R2 tab) |
-| Edit | `src/components/layout/AdminSidebar.tsx` (add menu item) |
-| Edit | `src/components/instructor/MediaUploader.tsx` (use new hook) |
-| Migration | Create `cloudflare_r2_accounts` + `r2_round_robin_state` tables |
+| Create | `supabase/functions/cloudinary-proxy/index.ts` |
+| Edit | `supabase/functions/r2-presign/index.ts` (add proxy-upload action) |
+| Edit | `src/hooks/useFileUpload.ts` (add proxy upload path for small R2 files) |
 
-### Security Notes
-- R2 secret keys stored in DB (encrypted at rest by Supabase), accessed only by edge function (service role)
-- Presigned URLs expire in 1 hour, are single-use for PUT
-- Admin-only RLS on the accounts table using existing `has_role()` function
+### Technical Details
+
+The cloudinary-proxy function will use Cloudinary's upload API (`https://api.cloudinary.com/v1_1/{cloud_name}/auto/upload`) with signed uploads using `api_key` and `api_secret` from the database. The signature is generated server-side using SHA-1 as required by Cloudinary.
+
+The R2 proxy upload encodes the file as base64 in the request body to the edge function, which then uses the S3 `PutObjectCommand` with the actual file bytes. This avoids any browser CORS requirements.
 
