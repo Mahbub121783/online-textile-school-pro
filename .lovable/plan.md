@@ -1,53 +1,55 @@
 
 
-## Plan: Fix Image Uploads (Missing Edge Function) + R2 CORS Issue
+## Plan: Media Library Picker System for All Upload Areas
 
-### Root Cause Found
+### What We're Building
 
-**The `cloudinary-proxy` edge function does not exist.** The project has only one edge function (`r2-presign`). When you upload an image:
+A reusable `MediaPickerModal` component that replaces (or wraps) the current `MediaUploader` everywhere except the Admin Media page. When a user clicks to upload, they get a modal with two tabs:
 
-1. `useFileUpload` detects it's an image and routes to `useCloudinaryUpload`
-2. `useCloudinaryUpload` calls `supabase.functions.invoke('cloudinary-proxy', ...)`
-3. That function doesn't exist, so the call fails silently
-4. The image "vanishes" because it was never uploaded anywhere
+1. **Upload Files** — the existing drag-and-drop upload (which also saves to `media_library`)
+2. **Media Library** — browse/search/filter already-uploaded media and select one
 
-For R2 (PDFs/videos): The presigned URL is generated server-side, but the browser PUT to R2 is blocked by **missing CORS on your R2 bucket**. The upload_count of 2 in the database was from a previous code version that didn't have proper verification.
+This matches the pattern shown in the screenshot (the "Select OG / Share Image" dialog with Upload Files + Media Library tabs, All/Image filters, search, and Cancel/Select buttons).
 
-### Fix (2 steps)
+### Files to Create/Edit
 
-**Step 1: Create the `cloudinary-proxy` edge function**
+| Action | File | Purpose |
+|--------|------|---------|
+| Create | `src/components/shared/MediaPickerModal.tsx` | Reusable modal with Upload + Media Library tabs |
+| Edit | `src/components/instructor/MediaUploader.tsx` | Add a "Media Library" button that opens the picker modal; auto-save uploads to `media_library` table |
+| No change | `src/pages/admin/AdminMedia.tsx` | Excluded per user request |
 
-Create `supabase/functions/cloudinary-proxy/index.ts` that:
-- Reads Cloudinary account credentials from `cloudinary_accounts` table (using service role)
-- On `action: 'upload'` -- receives base64 file data, uploads to Cloudinary API using the account's `cloud_name`, `api_key`, and `api_secret`, returns the URL
-- On `action: 'test'` -- pings Cloudinary API with the account credentials to verify connectivity
-- Handles category-based account selection (images go to the account with `file_category = 'images'`)
-- Falls back to primary account if no category match
+### How It Works
 
-**Step 2: Add a `proxy-upload` action to `r2-presign` edge function (for R2 CORS bypass)**
+**MediaPickerModal** component:
+- Props: `open`, `onClose`, `onSelect(url: string)`, `accept?: string` (to filter file types)
+- Two tabs: "Upload Files" and "Media Library"
+- **Upload Files tab**: Drag-and-drop zone using `useFileUpload`, automatically inserts into `media_library` table on success
+- **Media Library tab**: Queries `media_library` table, shows grid of thumbnails (images) and file icons (non-images), with type filter buttons (All / Image / Document / Video) and search input
+- Cancel and Select buttons at the bottom
+- Selected item highlighted with a ring/border
 
-Since your Cloudflare R2 bucket does not have CORS configured (and configuring CORS on R2 free tier requires using the S3 API or Wrangler), add a server-side upload path:
-- New action `proxy-upload` in the existing `r2-presign` function
-- Instead of giving the browser a presigned URL, the edge function receives the file (up to ~4.5MB via base64) and uploads it to R2 directly from the server
-- This completely bypasses the CORS issue
-- For files larger than 4.5MB, keep the presigned URL path but show a clear error if CORS blocks it
+**MediaUploader changes**:
+- When no value is set, show the existing upload drop zone PLUS a small "or choose from Media Library" button
+- Clicking that button opens `MediaPickerModal`
+- On file upload via drag-and-drop, also insert into `media_library` (so future uploads appear in the library)
+- The `accept` prop is passed through to filter the library view
 
-Update `useFileUpload.ts` to:
-- Try proxy upload first for files under 4.5MB
-- Fall back to presigned URL for larger files
-- Show clear CORS error message if presigned URL upload fails
+### All Usage Locations (auto-covered via MediaUploader)
 
-### Files Changed
-
-| Action | File |
-|--------|------|
-| Create | `supabase/functions/cloudinary-proxy/index.ts` |
-| Edit | `supabase/functions/r2-presign/index.ts` (add proxy-upload action) |
-| Edit | `src/hooks/useFileUpload.ts` (add proxy upload path for small R2 files) |
+Since all upload areas use `MediaUploader`, updating it once covers:
+- `CourseBuilder.tsx` — featured image, video, OG image
+- `LessonModal.tsx` — video upload, attachments
+- `MaterialUploadModal.tsx` — material file upload
+- `AdminAppearance.tsx` — site logos, favicons, OG images
+- `LessonMakerTab.tsx` — lesson media
 
 ### Technical Details
 
-The cloudinary-proxy function will use Cloudinary's upload API (`https://api.cloudinary.com/v1_1/{cloud_name}/auto/upload`) with signed uploads using `api_key` and `api_secret` from the database. The signature is generated server-side using SHA-1 as required by Cloudinary.
-
-The R2 proxy upload encodes the file as base64 in the request body to the edge function, which then uses the S3 `PutObjectCommand` with the actual file bytes. This avoids any browser CORS requirements.
+- Queries: `supabase.from('media_library').select('*').order('created_at', { ascending: false })`
+- Filter by type: client-side filter on `file_type` column (starts with `image/`, `video/`, `application/pdf`, etc.)
+- Search: client-side filter on `file_name`
+- Upload-to-library insert: `supabase.from('media_library').insert({ file_url, file_name, file_type, file_size, uploaded_by })`
+- Uses existing `useAuth` for `uploaded_by` user ID
+- Total new files: 1. Total edited files: 1.
 
