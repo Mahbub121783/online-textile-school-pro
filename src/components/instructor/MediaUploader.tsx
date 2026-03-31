@@ -1,10 +1,13 @@
 import { useState, useRef } from 'react';
-import { Upload, X, Loader2 } from 'lucide-react';
+import { Upload, X, Loader2, Library } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { useFileUpload } from '@/hooks/useFileUpload';
 import { handleImgError } from '@/lib/cloudinaryUrl';
 import { Progress } from '@/components/ui/progress';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
+import MediaPickerModal from '@/components/shared/MediaPickerModal';
 
 interface MediaUploaderProps {
   value?: string;
@@ -17,14 +20,26 @@ interface MediaUploaderProps {
 const MediaUploader = ({ value, onChange, accept = 'image/*', label = 'Upload Image', aspectRatio }: MediaUploaderProps) => {
   const [dragOver, setDragOver] = useState(false);
   const [fallbackUrl, setFallbackUrl] = useState<string | undefined>();
+  const [pickerOpen, setPickerOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const { upload, uploading, progress } = useFileUpload();
+  const { user } = useAuth();
 
   const handleUpload = async (file: File) => {
     try {
       const result = await upload(file);
       onChange(result.url);
       if (result.fallbackUrl) setFallbackUrl(result.fallbackUrl);
+
+      // Auto-save to media_library
+      await supabase.from('media_library').insert({
+        file_url: result.url,
+        file_name: file.name,
+        file_type: file.type || 'application/octet-stream',
+        file_size: file.size,
+        uploaded_by: user?.id || null,
+      });
+
       toast.success('Uploaded!');
     } catch {
       // error already toasted by hook
@@ -71,27 +86,47 @@ const MediaUploader = ({ value, onChange, accept = 'image/*', label = 'Upload Im
   }
 
   return (
-    <div
-      className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors ${
-        dragOver ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50'
-      }`}
-      onClick={() => inputRef.current?.click()}
-      onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-      onDragLeave={() => setDragOver(false)}
-      onDrop={handleDrop}
-    >
-      <input ref={inputRef} type="file" accept={accept} className="hidden" onChange={handleChange} />
-      {uploading ? (
-        <div className="space-y-2">
-          <Loader2 className="h-8 w-8 mx-auto mb-2 animate-spin text-muted-foreground" />
-          <Progress value={progress} className="h-2 max-w-[200px] mx-auto" />
-        </div>
-      ) : (
-        <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
-      )}
-      <p className="text-sm font-medium text-muted-foreground">{uploading ? `Uploading... ${progress}%` : label}</p>
-      <p className="text-xs text-muted-foreground mt-1">Drag & drop or click to browse</p>
-    </div>
+    <>
+      <div
+        className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors ${
+          dragOver ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50'
+        }`}
+        onClick={() => inputRef.current?.click()}
+        onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={handleDrop}
+      >
+        <input ref={inputRef} type="file" accept={accept} className="hidden" onChange={handleChange} />
+        {uploading ? (
+          <div className="space-y-2">
+            <Loader2 className="h-8 w-8 mx-auto mb-2 animate-spin text-muted-foreground" />
+            <Progress value={progress} className="h-2 max-w-[200px] mx-auto" />
+          </div>
+        ) : (
+          <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+        )}
+        <p className="text-sm font-medium text-muted-foreground">{uploading ? `Uploading... ${progress}%` : label}</p>
+        <p className="text-xs text-muted-foreground mt-1">Drag & drop or click to browse</p>
+      </div>
+
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="mt-2 w-full gap-1.5"
+        onClick={(e) => { e.stopPropagation(); setPickerOpen(true); }}
+      >
+        <Library className="h-3.5 w-3.5" />
+        Choose from Media Library
+      </Button>
+
+      <MediaPickerModal
+        open={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        onSelect={(url) => onChange(url)}
+        accept={accept}
+      />
+    </>
   );
 };
 
