@@ -39,8 +39,9 @@ export function useNotifications() {
 
   useEffect(() => {
     if (!user) return;
+    const channelName = `notifications-${user.id}-${Date.now()}`;
     const channel = supabase
-      .channel(`notifications-${user.id}`)
+      .channel(channelName)
       .on('postgres_changes', {
         event: 'INSERT',
         schema: 'public',
@@ -51,7 +52,7 @@ export function useNotifications() {
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [user, queryClient]);
+  }, [user?.id, queryClient]);
 
   const markAsRead = useMutation({
     mutationFn: async (id: string) => {
