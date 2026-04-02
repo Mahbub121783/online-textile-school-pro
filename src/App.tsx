@@ -65,6 +65,8 @@ const AdminCertificates = lazy(() => import("./pages/admin/AdminCertificates"));
 const AdminSetup = lazy(() => import("./pages/admin/AdminSetup"));
 const AdminOrders = lazy(() => import("./pages/admin/AdminOrders"));
 const AdminPayment = lazy(() => import("./pages/admin/AdminPayment"));
+const AdminManagement = lazy(() => import("./pages/admin/AdminManagement"));
+const SystemControls = lazy(() => import("./pages/admin/SystemControls"));
 const AdminEbooks = lazy(() => import("./pages/admin/AdminEbooks"));
 const PageEditor = lazy(() => import("./pages/admin/PageEditor"));
 const LessonPlayer = lazy(() => import("./pages/learn/LessonPlayer"));
