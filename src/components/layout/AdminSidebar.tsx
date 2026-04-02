@@ -1,4 +1,4 @@
-import { LayoutDashboard, Users, BookOpen, Image, Activity, LogOut, GraduationCap, Tag, Wallet, FileText, PenTool, ImageIcon, Menu, Palette, Video, HelpCircle, ClipboardList, Award, Settings, ChevronDown, BarChart3, UserCog, CheckSquare, DollarSign, Shield, MessageSquare, Wrench, Mail, CreditCard, ReceiptText, Cloud, Bell, ShoppingCart, HardDrive } from 'lucide-react';
+import { LayoutDashboard, Users, BookOpen, Image, Activity, LogOut, GraduationCap, Tag, Wallet, FileText, PenTool, ImageIcon, Menu, Palette, Video, HelpCircle, ClipboardList, Award, Settings, ChevronDown, BarChart3, UserCog, CheckSquare, DollarSign, Shield, MessageSquare, Wrench, Mail, CreditCard, ReceiptText, Cloud, Bell, ShoppingCart, HardDrive, Crown, Server } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
@@ -8,6 +8,7 @@ import {
   SidebarMenuSubButton, SidebarFooter, useSidebar,
 } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
 const topItems = [
@@ -116,7 +117,7 @@ export function AdminSidebar() {
   const { state } = useSidebar();
   const collapsed = state === 'collapsed';
   const navigate = useNavigate();
-  const { signOut, profile } = useAuth();
+  const { signOut, profile, isSuperAdmin, roles } = useAuth();
 
   const renderNavItem = (item: { title: string; url: string; icon: any }) => (
     <SidebarMenuItem key={item.title}>
@@ -135,11 +136,13 @@ export function AdminSidebar() {
         <SidebarGroup>
           {!collapsed && (
             <div className="p-4 border-b">
-              <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-heading font-bold text-lg">
-                {profile?.full_name?.[0]?.toUpperCase() || 'A'}
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center font-heading font-bold text-lg ${isSuperAdmin ? 'bg-amber-500 text-white' : 'bg-primary text-primary-foreground'}`}>
+                {isSuperAdmin ? <Crown className="h-5 w-5" /> : (profile?.full_name?.[0]?.toUpperCase() || 'A')}
               </div>
               <p className="mt-2 font-heading font-semibold text-sm truncate">{profile?.full_name || 'Admin'}</p>
-              <p className="text-xs text-muted-foreground">Admin Panel</p>
+              <Badge variant={isSuperAdmin ? 'default' : 'secondary'} className={`mt-1 text-[10px] ${isSuperAdmin ? 'bg-amber-500 hover:bg-amber-600' : ''}`}>
+                {isSuperAdmin ? 'Super Admin' : 'Admin'}
+              </Badge>
             </div>
           )}
           <SidebarGroupLabel>Administration</SidebarGroupLabel>
@@ -151,6 +154,18 @@ export function AdminSidebar() {
               <CollapsibleMenu label="Setup" icon={Wrench} items={setupSubItems} basePath="/admin/setup" collapsed={collapsed} groupClass="group/collapsible-setup" />
               <CollapsibleMenu label="Payment" icon={CreditCard} items={paymentSubItems} basePath="/admin/payment" collapsed={collapsed} groupClass="group/collapsible-pay" />
               {bottomItems.map(renderNavItem)}
+              {isSuperAdmin && (
+                <>
+                  <SidebarMenuItem>
+                    <div className="px-3 pt-3 pb-1">
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-amber-500">System</span>
+                    </div>
+                  </SidebarMenuItem>
+                  {renderNavItem({ title: 'Admin Management', url: '/admin/admin-management', icon: Shield })}
+                  {renderNavItem({ title: 'System Controls', url: '/admin/system-controls', icon: Server })}
+                </>
+              )}
+              {renderNavItem({ title: 'Wallets', url: '/admin/wallets', icon: Wallet })}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

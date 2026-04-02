@@ -65,6 +65,8 @@ const AdminCertificates = lazy(() => import("./pages/admin/AdminCertificates"));
 const AdminSetup = lazy(() => import("./pages/admin/AdminSetup"));
 const AdminOrders = lazy(() => import("./pages/admin/AdminOrders"));
 const AdminPayment = lazy(() => import("./pages/admin/AdminPayment"));
+const AdminManagement = lazy(() => import("./pages/admin/AdminManagement"));
+const SystemControls = lazy(() => import("./pages/admin/SystemControls"));
 const AdminEbooks = lazy(() => import("./pages/admin/AdminEbooks"));
 const PageEditor = lazy(() => import("./pages/admin/PageEditor"));
 const LessonPlayer = lazy(() => import("./pages/learn/LessonPlayer"));
@@ -182,6 +184,8 @@ const App = () => (
                   <Route path="settings" element={<AdminSettings />} />
                   <Route path="notifications" element={<NotificationsPage />} />
                   <Route path="activity" element={<AdminActivity />} />
+                  <Route path="admin-management" element={<AdminManagement />} />
+                  <Route path="system-controls" element={<SystemControls />} />
                 </Route>
                 <Route path="/learn/:courseSlug/:lessonId" element={<LessonPlayer />} />
                 <Route path="/quiz/:quizId" element={<QuizPlayer />} />
