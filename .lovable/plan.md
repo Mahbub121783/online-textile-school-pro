@@ -1,57 +1,71 @@
 
 
-## Plan: Redesign Student ID Card — Premium University-Grade Design with Logo
+## Plan: Redesign ID Card — Clean, Professional, Properly Aligned
 
-### Problems
+### Problems with Current Design
 
-1. **Canvas design is basic** — flat header, plain Arial text, no visual hierarchy or branding polish
-2. **The uploaded OTS logo is not embedded** — needs to be copied into the project and used as the default/fallback logo on the card
-3. **StudentIdCard component wrapper is plain** — just a basic Card with no interactivity
-4. **No visual flair** — no gradients, no decorative patterns, no shadow/depth effects on the canvas
+1. **Photo too small** (155x190) relative to 1012x638 card — looks lost
+2. **Fields cramped** — 40px line height with 11px labels and 17px values doesn't leave enough breathing room
+3. **Signature and validity pill float awkwardly** — not aligned to any grid
+4. **Hex pattern watermark is distracting** — real university cards are clean
+5. **Too much empty space** at the bottom, barcode area oversized
+6. **Overall feels like a decorated web card, not a real ID card**
 
-### Design Overhaul
+### Design Reference: Standard CR80 University ID Card
 
-#### ID Card Canvas (`src/lib/idCardRenderer.ts`) — Complete Redesign
+Real university ID cards (Oxford, MIT, etc.) follow a simple, clean structure:
 
-**Header:**
-- Gradient header bar (deep navy to teal) instead of flat color
-- Larger logo (90×90) with white circular backdrop for contrast
-- University name in bold 32px, location in 20px — both properly centered beside logo
-- "STUDENT ID CARD" badge styled as a pill/rounded rect with semi-transparent white background
+```text
+┌─────────────────────────────────────────────────────┐
+│  [LOGO]  ONLINE TEXTILE SCHOOL        STUDENT ID    │
+│          Dhaka, Bangladesh              CARD        │
+├─────────────────────────────────────────────────────┤
+│                                                     │
+│  ┌──────────┐   NAME:       Md. Mahbubul Alam      │
+│  │          │   ROLL:       OTS-181033              │
+│  │  PHOTO   │   BLOOD:      A+                      │
+│  │ (square) │   DOB:        08 Feb 2000             │
+│  │          │   ADDRESS:    Barisal                  │
+│  └──────────┘                                       │
+│                                                     │
+│  Valid: Sep 2027    ────────────    [Signature]      │
+│                                    Authority Name   │
+│  ▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌  OTS-ID-448960             │
+│━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━│
+└─────────────────────────────────────────────────────┘
+```
 
-**Body:**
-- Photo: larger (180×220 portrait ratio), rounded corners with a colored border glow/shadow effect
-- Fields use a two-column layout: labels in small caps gray, values in bold dark — cleaner spacing
-- Add subtle horizontal divider lines between fields
-- Decorative geometric pattern (hexagonal, matching the logo) as a faint watermark in the bottom-right
+### Key Design Changes
 
-**Footer:**
-- Validity dates in a styled colored pill bar
-- Signature section with a thin line above for "Authorized Signature" label
-- Barcode section with card number in spaced monospace
-- Thin colored bottom strip matching the header gradient
+**Header (compact, 100px):**
+- Logo 60x60, not clipped to circle — show full logo with transparent bg
+- University name bold 26px, location 14px — left-aligned beside logo
+- "STUDENT ID CARD" text right-aligned in header, no pill/badge — just clean white text
 
-#### StudentIdCard Component (`src/components/student/StudentIdCard.tsx`) — Interactive Wrapper
+**Body (clean grid, no decorative patterns):**
+- Remove ALL hex watermark patterns
+- Photo: 160x200 with simple 2px border, rounded 8px corners, no glow/shadow effects
+- Fields: proper vertical spacing (44px per row), label 12px in muted color, value 16px bold
+- Labels right-padded and colon-separated for clean alignment
 
-- Flip card animation: front shows the ID card canvas, click to flip and see a "back" with barcode enlarged, card number, validity details, and a QR-like element
-- Hover glow effect with CSS shadow transition
-- Status badge with pulse animation when active
-- Download button with dropdown: PDF or PNG options
-- Card tilts slightly on mouse move (3D perspective effect via CSS transforms)
-- Responsive: full width on mobile, centered max-width on desktop
+**Footer (compact):**
+- Left: validity text (small, simple)
+- Right: signature line with name/position below
+- Center bottom: barcode (narrower, 280px wide, 38px tall) with card number below
+- Thin 4px bottom accent bar
 
-#### Copy Logo to Project
+**What's removed:**
+- Hex patterns everywhere
+- Glow/shadow on photo
+- Gradient pill badges
+- Oversized barcode area
+- Excessive spacing
 
-- Copy `user-uploads://OTS_LOGO.png` → `src/assets/OTS_LOGO.png`
-- Use as fallback in the renderer when `settings.logo_url` is empty
-
-### File Summary
+### File Changes
 
 | File | Action |
 |------|--------|
-| `src/assets/OTS_LOGO.png` | Copy from user upload |
-| `src/lib/idCardRenderer.ts` | Complete redesign — gradient header, larger photo, watermark pattern, styled footer |
-| `src/components/student/StudentIdCard.tsx` | Interactive wrapper — 3D tilt, flip animation, hover glow, PNG/PDF download, responsive |
+| `src/lib/idCardRenderer.ts` | Rewrite `renderIdCard` — clean layout, proper alignment, no decorative noise |
 
-No migration needed. 3 file changes total.
+Single file edit. No other changes needed.
 
