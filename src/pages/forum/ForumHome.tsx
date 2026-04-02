@@ -11,11 +11,11 @@ import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { Search, Plus, MessageSquare, Heart, Eye, Pin, Lock, Trophy } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import SEOHead from '@/components/SEOHead';
-
-const EMOJIS = ['❤️', '👍', '🎉', '🔥', '💡'];
 
 const ForumHome = () => {
   const { user } = useAuth();
@@ -75,7 +75,6 @@ const ForumHome = () => {
     },
   });
 
-  // Leaderboard
   const { data: leaderboard = [] } = useQuery({
     queryKey: ['forum-leaderboard'],
     queryFn: async () => {
@@ -136,135 +135,147 @@ const ForumHome = () => {
       <SEOHead title="Support Forum - Online Textile School" description="Ask questions, share knowledge, and connect with the textile community." />
       <Header />
       <div className="min-h-screen bg-background">
-        <div className="container py-8">
-          <div className="flex flex-col md:flex-row gap-6">
-            {/* Main Content */}
-            <div className="flex-1 space-y-6">
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                <div>
-                  <h1 className="text-3xl font-heading font-bold">Support Forum</h1>
-                  <p className="text-muted-foreground">Ask questions, share knowledge, earn points</p>
-                </div>
-                {user && (
-                  <Button onClick={() => navigate('/forum/new')} className="gap-2">
-                    <Plus className="h-4 w-4" /> New Post
-                  </Button>
-                )}
-              </div>
-
-              {/* Search */}
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search forum posts, solutions, discussions..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-
-              {/* Category Tabs */}
-              <Tabs value={selectedCategory} onValueChange={setSelectedCategory}>
-                <TabsList className="flex-wrap h-auto gap-1">
-                  <TabsTrigger value="all">All</TabsTrigger>
-                  {categories.map((cat: any) => (
-                    <TabsTrigger key={cat.id} value={cat.id}>{cat.name}</TabsTrigger>
-                  ))}
-                </TabsList>
-              </Tabs>
-
-              {/* Posts */}
-              <div className="space-y-3">
-                {posts.length === 0 && (
-                  <Card className="p-8 text-center text-muted-foreground">
-                    No posts found. {user ? 'Be the first to ask a question!' : 'Login to start a discussion.'}
-                  </Card>
-                )}
-                {posts.map((post: any) => {
-                  const author = profileMap[post.user_id];
-                  const cCount = commentCountMap[post.id] || 0;
-                  const postReactions = reactionMap[post.id] || {};
-                  const totalReactions = Object.values(postReactions).reduce((a: number, b: any) => a + (b as number), 0);
-
-                  return (
-                    <Card key={post.id} className="p-4 hover:shadow-md transition-shadow">
-                      <Link to={`/forum/${post.id}`} className="block">
-                        <div className="flex items-start gap-3">
-                          <Avatar className="h-10 w-10 shrink-0">
-                            <AvatarImage src={author?.avatar_url} />
-                            <AvatarFallback>{author?.full_name?.[0]?.toUpperCase() || '?'}</AvatarFallback>
-                          </Avatar>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              {post.is_pinned && <Pin className="h-3.5 w-3.5 text-primary" />}
-                              {post.is_closed && <Lock className="h-3.5 w-3.5 text-muted-foreground" />}
-                              <h3 className="font-semibold text-base truncate">{post.title}</h3>
-                            </div>
-                            <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground flex-wrap">
-                              <span className="font-medium text-foreground flex items-center gap-1">
-                                {author?.full_name || 'Unknown'} {getRankBadge(post.user_id)}
-                              </span>
-                              <span>·</span>
-                              <span>{formatDistanceToNow(new Date(post.created_at), { addSuffix: true })}</span>
-                              {post.category_id && categoryMap[post.category_id] && (
-                                <>
-                                  <span>·</span>
-                                  <Badge variant="secondary" className="text-[10px]">{categoryMap[post.category_id]}</Badge>
-                                </>
-                              )}
-                            </div>
-                            <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{post.content}</p>
-                            <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
-                              <span className="flex items-center gap-1"><MessageSquare className="h-3.5 w-3.5" /> {cCount}</span>
-                              <span className="flex items-center gap-1"><Heart className="h-3.5 w-3.5" /> {totalReactions}</span>
-                              <span className="flex items-center gap-1"><Eye className="h-3.5 w-3.5" /> {post.view_count || 0}</span>
-                              {Object.entries(postReactions).slice(0, 3).map(([emoji, count]) => (
-                                <span key={emoji} className="text-xs">{emoji} {count as number}</span>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-                      </Link>
-                    </Card>
-                  );
-                })}
-              </div>
+        <div className="container py-6 px-4 sm:px-6 max-w-4xl mx-auto">
+          {/* Header Row */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-6">
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-heading font-bold">Support Forum</h1>
+              <p className="text-sm text-muted-foreground">Ask questions, share knowledge, connect</p>
             </div>
+            <div className="flex items-center gap-2">
+              {/* Leaderboard Sheet */}
+              <Sheet>
+                <SheetTrigger asChild>
+                  <Button variant="outline" size="sm" className="gap-1.5">
+                    <Trophy className="h-4 w-4 text-amber-500" /> Top Contributors
+                  </Button>
+                </SheetTrigger>
+                <SheetContent side="right" className="w-[320px] sm:w-[380px]">
+                  <SheetHeader>
+                    <SheetTitle className="flex items-center gap-2">
+                      <Trophy className="h-5 w-5 text-amber-500" /> Top Contributors
+                    </SheetTitle>
+                  </SheetHeader>
+                  <div className="mt-6 space-y-3">
+                    {leaderboard.length === 0 && (
+                      <p className="text-sm text-muted-foreground text-center py-8">No contributors yet. Be the first!</p>
+                    )}
+                    {leaderboard.map((entry: any) => (
+                      <div key={entry.user_id} className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors">
+                        <span className="text-lg font-bold w-8 text-center shrink-0">
+                          {entry.rank === 1 ? '🥇' : entry.rank === 2 ? '🥈' : entry.rank === 3 ? '🥉' : `#${entry.rank}`}
+                        </span>
+                        <Avatar className="h-9 w-9 shrink-0">
+                          <AvatarImage src={entry.avatar_url} />
+                          <AvatarFallback className="text-xs">{entry.full_name?.[0]?.toUpperCase()}</AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">{entry.full_name}</p>
+                        </div>
+                        <Badge variant="secondary" className="text-xs shrink-0">{entry.points} pts</Badge>
+                      </div>
+                    ))}
+                  </div>
+                </SheetContent>
+              </Sheet>
 
-            {/* Sidebar — Leaderboard */}
-            <div className="w-full md:w-72 shrink-0 space-y-4">
-              <Card className="p-4">
-                <h3 className="font-heading font-semibold flex items-center gap-2 mb-3"><Trophy className="h-4 w-4 text-amber-500" /> Top Contributors</h3>
-                {leaderboard.length === 0 && <p className="text-xs text-muted-foreground">No contributors yet.</p>}
-                <div className="space-y-2">
-                  {leaderboard.slice(0, 5).map((entry: any) => (
-                    <div key={entry.user_id} className="flex items-center gap-2">
-                      <span className="text-sm font-bold w-6 text-center">
-                        {entry.rank === 1 ? '🥇' : entry.rank === 2 ? '🥈' : entry.rank === 3 ? '🥉' : `#${entry.rank}`}
-                      </span>
-                      <Avatar className="h-7 w-7">
-                        <AvatarImage src={entry.avatar_url} />
-                        <AvatarFallback className="text-[10px]">{entry.full_name?.[0]?.toUpperCase()}</AvatarFallback>
+              {user && (
+                <Button onClick={() => navigate('/forum/new')} size="sm" className="gap-1.5">
+                  <Plus className="h-4 w-4" /> New Post
+                </Button>
+              )}
+            </div>
+          </div>
+
+          {/* Search */}
+          <div className="relative mb-4">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search forum posts, solutions, discussions..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+
+          {/* Category Tabs — horizontal scroll */}
+          <ScrollArea className="w-full mb-6">
+            <Tabs value={selectedCategory} onValueChange={setSelectedCategory}>
+              <TabsList className="inline-flex w-max gap-1">
+                <TabsTrigger value="all">All</TabsTrigger>
+                {categories.map((cat: any) => (
+                  <TabsTrigger key={cat.id} value={cat.id}>{cat.name}</TabsTrigger>
+                ))}
+              </TabsList>
+            </Tabs>
+            <ScrollBar orientation="horizontal" />
+          </ScrollArea>
+
+          {/* Posts */}
+          <div className="space-y-3">
+            {posts.length === 0 && (
+              <Card className="p-12 text-center">
+                <MessageSquare className="h-12 w-12 mx-auto text-muted-foreground/40 mb-3" />
+                <h3 className="font-semibold text-lg mb-1">No posts found</h3>
+                <p className="text-sm text-muted-foreground">
+                  {user ? 'Be the first to ask a question or start a discussion!' : 'Login to start a discussion.'}
+                </p>
+              </Card>
+            )}
+            {posts.map((post: any) => {
+              const author = profileMap[post.user_id];
+              const cCount = commentCountMap[post.id] || 0;
+              const postReactions = reactionMap[post.id] || {};
+              const totalReactions = Object.values(postReactions).reduce((a: number, b: any) => a + (b as number), 0);
+
+              return (
+                <Link key={post.id} to={`/forum/${post.id}`} className="block group">
+                  <Card className="p-4 border-l-4 border-l-transparent group-hover:border-l-primary group-hover:shadow-md transition-all duration-200 group-hover:scale-[1.005]">
+                    <div className="flex items-start gap-3">
+                      <Avatar className="h-9 w-9 shrink-0 mt-0.5">
+                        <AvatarImage src={author?.avatar_url} />
+                        <AvatarFallback className="text-xs">{author?.full_name?.[0]?.toUpperCase() || '?'}</AvatarFallback>
                       </Avatar>
                       <div className="flex-1 min-w-0">
-                        <p className="text-xs font-medium truncate">{entry.full_name}</p>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {post.is_pinned && <Pin className="h-3.5 w-3.5 text-primary shrink-0" />}
+                          {post.is_closed && <Lock className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
+                          <h3 className="font-semibold text-sm sm:text-base truncate">{post.title}</h3>
+                        </div>
+                        <div className="flex items-center gap-1.5 mt-1 text-xs text-muted-foreground flex-wrap">
+                          <span className="font-medium text-foreground inline-flex items-center gap-1">
+                            {author?.full_name || 'Unknown'} {getRankBadge(post.user_id)}
+                          </span>
+                          <span>·</span>
+                          <span>{formatDistanceToNow(new Date(post.created_at), { addSuffix: true })}</span>
+                          {post.category_id && categoryMap[post.category_id] && (
+                            <>
+                              <span>·</span>
+                              <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{categoryMap[post.category_id]}</Badge>
+                            </>
+                          )}
+                        </div>
+                        <p className="text-sm text-muted-foreground mt-1.5 line-clamp-2">{post.content}</p>
+                        <div className="flex items-center gap-3 mt-2">
+                          <span className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors">
+                            <MessageSquare className="h-3.5 w-3.5" /> {cCount}
+                          </span>
+                          <span className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors">
+                            <Heart className="h-3.5 w-3.5" /> {totalReactions}
+                          </span>
+                          <span className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors">
+                            <Eye className="h-3.5 w-3.5" /> {post.view_count || 0}
+                          </span>
+                          {Object.entries(postReactions).slice(0, 3).map(([emoji, count]) => (
+                            <span key={emoji} className="text-xs">{emoji} {count as number}</span>
+                          ))}
+                        </div>
                       </div>
-                      <Badge variant="outline" className="text-[10px]">{entry.points} pts</Badge>
                     </div>
-                  ))}
-                </div>
-              </Card>
-
-              <Card className="p-4">
-                <h3 className="font-heading font-semibold text-sm mb-2">How Points Work</h3>
-                <div className="space-y-1 text-xs text-muted-foreground">
-                  <p>📝 Create a post: <strong className="text-foreground">+10 pts</strong></p>
-                  <p>💬 Reply/Comment: <strong className="text-foreground">+5 pts</strong></p>
-                  <p>❤️ React: <strong className="text-foreground">+1 pt</strong></p>
-                  <p>🎁 Admin Rewards: <strong className="text-foreground">Bonus</strong></p>
-                </div>
-              </Card>
-            </div>
+                  </Card>
+                </Link>
+              );
+            })}
           </div>
         </div>
       </div>
