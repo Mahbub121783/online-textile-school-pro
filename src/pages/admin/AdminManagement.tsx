@@ -88,7 +88,7 @@ const AdminManagement = () => {
         return;
       }
 
-      const { error } = await supabase.from('user_roles').insert({ user_id: profile.id, role });
+      const { error } = await supabase.from('user_roles').insert({ user_id: profile.id, role } as any);
       if (error) {
         if (error.code === '23505') throw new Error('User already has this role');
         throw error;
