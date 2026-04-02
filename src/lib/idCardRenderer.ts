@@ -173,13 +173,13 @@ export async function renderIdCard(
   fields.forEach((f, i) => {
     const y = startY + i * rowH;
 
-    // Label — 14px semi-bold slate
-    ctx.font = '600 14px "Segoe UI", Arial, sans-serif';
+    // Label — 16px semi-bold slate
+    ctx.font = '600 16px "Segoe UI", Arial, sans-serif';
     ctx.fillStyle = '#64748b';
     ctx.fillText(f.label + ' :', fieldX, y + 18);
 
-    // Value — 18px bold dark
-    ctx.font = 'bold 18px "Segoe UI", Arial, sans-serif';
+    // Value — 20px bold dark
+    ctx.font = 'bold 20px "Segoe UI", Arial, sans-serif';
     ctx.fillStyle = '#1e293b';
     ctx.fillText(truncate(ctx, f.value, maxValW), valueX, y + 18);
   });
