@@ -1,12 +1,16 @@
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { DollarSign, TrendingUp, Users, BookOpen } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { format } from 'date-fns';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { format, subDays, isAfter } from 'date-fns';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
 const RevenueDashboard = () => {
   const { user } = useAuth();
+  const [range, setRange] = useState('30');
 
   const { data: courses = [] } = useQuery({
     queryKey: ['instructor-courses-revenue', user?.id],
@@ -35,9 +39,12 @@ const RevenueDashboard = () => {
     },
   });
 
-  // Calculate revenue per course
+  const cutoff = subDays(new Date(), Number(range));
+  const filteredEnrollments = enrollments.filter((e: any) => isAfter(new Date(e.enrolled_at), cutoff));
+
+  // Revenue per course
   const courseRevenue = courses.map((course: any) => {
-    const courseEnrollments = enrollments.filter((e: any) => e.course_id === course.id);
+    const courseEnrollments = filteredEnrollments.filter((e: any) => e.course_id === course.id);
     const pricePerStudent = course.discount_price || course.price || 0;
     const sharePct = (course.revenue_share_pct || 70) / 100;
     const gross = courseEnrollments.length * pricePerStudent;
@@ -47,7 +54,21 @@ const RevenueDashboard = () => {
 
   const totalGross = courseRevenue.reduce((s, c) => s + c.gross, 0);
   const totalNet = courseRevenue.reduce((s, c) => s + c.net, 0);
-  const totalStudents = enrollments.length;
+  const totalStudents = filteredEnrollments.length;
+
+  // Monthly revenue chart
+  const chartMap: Record<string, number> = {};
+  for (let i = Number(range) - 1; i >= 0; i--) {
+    const day = format(subDays(new Date(), i), 'MMM dd');
+    chartMap[day] = 0;
+  }
+  filteredEnrollments.forEach((e: any) => {
+    const day = format(new Date(e.enrolled_at), 'MMM dd');
+    const course = courses.find((c: any) => c.id === e.course_id);
+    const price = course?.discount_price || course?.price || 0;
+    if (chartMap[day] !== undefined) chartMap[day] += price * ((course?.revenue_share_pct || 70) / 100);
+  });
+  const chartData = Object.entries(chartMap).map(([date, revenue]) => ({ date, revenue: Math.round(revenue) }));
 
   // Recent enrollments
   const recentEnrollments = enrollments.slice(0, 10).map((e: any) => {
@@ -57,14 +78,25 @@ const RevenueDashboard = () => {
 
   const stats = [
     { label: 'Gross Revenue', value: `৳${totalGross.toLocaleString()}`, icon: DollarSign, color: 'text-primary' },
-    { label: 'Your Earnings (70%)', value: `৳${Math.round(totalNet).toLocaleString()}`, icon: TrendingUp, color: 'text-accent' },
-    { label: 'Total Students', value: totalStudents, icon: Users, color: 'text-primary' },
+    { label: 'Your Earnings', value: `৳${Math.round(totalNet).toLocaleString()}`, icon: TrendingUp, color: 'text-accent' },
+    { label: 'Students', value: totalStudents, icon: Users, color: 'text-primary' },
     { label: 'Active Courses', value: courses.length, icon: BookOpen, color: 'text-accent' },
   ];
 
   return (
     <div className="space-y-6">
-      <h2 className="font-heading text-2xl font-bold">Revenue Dashboard</h2>
+      <div className="flex items-center justify-between flex-wrap gap-4">
+        <h2 className="font-heading text-2xl font-bold">Revenue Dashboard</h2>
+        <Select value={range} onValueChange={setRange}>
+          <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="7">Last 7 days</SelectItem>
+            <SelectItem value="30">Last 30 days</SelectItem>
+            <SelectItem value="90">Last 90 days</SelectItem>
+            <SelectItem value="365">All time</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {stats.map((s) => (
@@ -82,9 +114,22 @@ const RevenueDashboard = () => {
         ))}
       </div>
 
+      {/* Revenue chart */}
+      <div className="bg-card border rounded-xl p-6">
+        <h3 className="font-heading font-bold text-sm mb-4">Revenue Trend</h3>
+        <ResponsiveContainer width="100%" height={220}>
+          <BarChart data={chartData}>
+            <XAxis dataKey="date" tick={{ fontSize: 10 }} interval={Math.max(0, Math.floor(chartData.length / 7) - 1)} />
+            <YAxis tick={{ fontSize: 11 }} />
+            <Tooltip formatter={(v: any) => [`৳${v}`, 'Revenue']} />
+            <Bar dataKey="revenue" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+
       {/* Revenue by course */}
       <div className="bg-card border rounded-xl p-6">
-        <h3 className="font-heading font-bold text-lg mb-4">Revenue by Course</h3>
+        <h3 className="font-heading font-bold text-sm mb-4">Revenue by Course</h3>
         {courseRevenue.length === 0 ? (
           <p className="text-center py-8 text-muted-foreground">No published courses yet.</p>
         ) : (
@@ -122,7 +167,7 @@ const RevenueDashboard = () => {
 
       {/* Recent enrollments */}
       <div className="bg-card border rounded-xl p-6">
-        <h3 className="font-heading font-bold text-lg mb-4">Recent Enrollments</h3>
+        <h3 className="font-heading font-bold text-sm mb-4">Recent Enrollments</h3>
         {recentEnrollments.length === 0 ? (
           <p className="text-center py-8 text-muted-foreground">No enrollments yet.</p>
         ) : (
