@@ -18,6 +18,7 @@ const AuthContext = createContext<AuthContextType>({
   loading: true,
   profile: null,
   roles: [],
+  isSuperAdmin: false,
   signOut: async () => {},
 });
 
