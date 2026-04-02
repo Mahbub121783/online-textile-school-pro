@@ -104,6 +104,72 @@ export default function AdminStudents() {
     onError: (e: any) => toast.error(e.message),
   });
 
+  const { data: allCourses = [] } = useQuery({
+    queryKey: ['all-courses-bulk'],
+    queryFn: async () => {
+      const { data } = await supabase.from('courses').select('id, title').eq('is_published', true);
+      return data ?? [];
+    },
+  });
+
+  const { data: allEbooks = [] } = useQuery({
+    queryKey: ['all-ebooks-bulk'],
+    queryFn: async () => {
+      const { data } = await supabase.from('ebooks').select('id, title').eq('is_published', true);
+      return data ?? [];
+    },
+  });
+
+  const bulkAssignCourse = useMutation({
+    mutationFn: async (courseId: string) => {
+      const ids = Array.from(selectedIds);
+      const { data: existing } = await supabase.from('enrollments').select('user_id').eq('course_id', courseId).in('user_id', ids);
+      const existingSet = new Set((existing ?? []).map(e => e.user_id));
+      const toInsert = ids.filter(uid => !existingSet.has(uid)).map(uid => ({ user_id: uid, course_id: courseId }));
+      if (toInsert.length) {
+        const { error } = await supabase.from('enrollments').insert(toInsert);
+        if (error) throw error;
+      }
+      const adminId = (await supabase.auth.getUser()).data.user!.id;
+      await supabase.from('admin_activity_log').insert({ admin_id: adminId, action: 'bulk_assign_course', target_type: 'course', target_id: courseId, details: { student_count: toInsert.length, skipped: ids.length - toInsert.length } });
+      return { assigned: toInsert.length, skipped: ids.length - toInsert.length };
+    },
+    onSuccess: (result) => {
+      toast.success(`Course assigned to ${result.assigned} student(s)${result.skipped ? `, ${result.skipped} already enrolled` : ''}`);
+      qc.invalidateQueries({ queryKey: ['admin-students'] });
+      setBulkAssignCourseOpen(false);
+      setSelectedIds(new Set());
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const bulkAssignEbook = useMutation({
+    mutationFn: async (ebookId: string) => {
+      const ids = Array.from(selectedIds);
+      const { data: existingOrders } = await supabase.from('orders').select('id, user_id, order_items(item_id)').in('user_id', ids).eq('status', 'completed');
+      const alreadyHas = new Set<string>();
+      (existingOrders ?? []).forEach((o: any) => {
+        (o.order_items ?? []).forEach((i: any) => { if (i.item_id === ebookId) alreadyHas.add(o.user_id); });
+      });
+      const toGrant = ids.filter(uid => !alreadyHas.has(uid));
+      for (const uid of toGrant) {
+        const { data: order, error: oErr } = await supabase.from('orders').insert({ user_id: uid, total: 0, status: 'completed', payment_method: 'admin_grant' }).select('id').single();
+        if (oErr) throw oErr;
+        await supabase.from('order_items').insert({ order_id: order.id, item_id: ebookId, item_type: 'ebook', price: 0 });
+      }
+      const adminId = (await supabase.auth.getUser()).data.user!.id;
+      await supabase.from('admin_activity_log').insert({ admin_id: adminId, action: 'bulk_assign_ebook', target_type: 'ebook', target_id: ebookId, details: { student_count: toGrant.length, skipped: ids.length - toGrant.length } });
+      return { assigned: toGrant.length, skipped: ids.length - toGrant.length };
+    },
+    onSuccess: (result) => {
+      toast.success(`Ebook assigned to ${result.assigned} student(s)${result.skipped ? `, ${result.skipped} already owned` : ''}`);
+      qc.invalidateQueries({ queryKey: ['admin-students'] });
+      setBulkAssignEbookOpen(false);
+      setSelectedIds(new Set());
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
   const filtered = useMemo(() => {
     let list = students.filter((s: any) => {
       if (statusFilter === 'active' && s.is_active === false) return false;
