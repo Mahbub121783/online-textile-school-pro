@@ -176,8 +176,8 @@ export async function renderIdCard(
   const fieldX = photoX + photoW + 40;
   const labelW = 200;
   const valueX = fieldX + labelW;
-  const rowH = 52;
-  const startY = bodyY + 10;
+  const rowH = 50;
+  const startY = photoY;
   const maxValW = CARD_W - valueX - 40;
 
   ctx.textAlign = 'left';
