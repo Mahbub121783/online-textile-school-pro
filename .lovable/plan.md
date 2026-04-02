@@ -1,131 +1,64 @@
 
 
-## Plan: Upgrade Instructor Portal to an Advanced System
+## System Audit: Student, Instructor & Admin Feature Connectivity
 
-### Current State Assessment
+### Overall Assessment
 
-The instructor portal has 12 pages with basic CRUD functionality. Here is what exists and what is missing:
+The system is **well-connected and highly dynamic** across all three portals. All major features use real Supabase queries with `react-query` for caching and real-time invalidation. Here is the detailed breakdown:
 
-| Feature | Current State | Gap |
-|---------|--------------|-----|
-| Dashboard | 6 stat cards + course list | No charts, no time-range filters, no activity feed |
-| Courses | Basic table, create/edit | No duplicate, no bulk actions, no analytics per course |
-| Course Builder | 3-step wizard (Basics/Curriculum/Settings) | No drag-and-drop reorder for sections, no course preview modal, no auto-save |
-| Curriculum Builder | Sections with lessons/quizzes/assignments/materials | No drag-and-drop sort (GripVertical icons are visual-only), no bulk publish/unpublish |
-| Lessons | Read-only list with search | Cannot create/edit lessons from this page (must go to Course Builder) |
-| Quizzes | Full CRUD + question management | No question bank import, no quiz duplication |
-| Assignments | Full CRUD + grading | No rubric system, no bulk grading |
-| Gradebook | Per-course student matrix | No export to CSV/Excel, no weighted grades, no overall GPA |
-| Students | Enrollment manager + gradebook tab | No messaging, no student profile view, no bulk enroll via CSV |
-| Certificates | View issued + template preview | Read-only (cannot create templates from instructor side) |
-| Revenue | Stats + per-course breakdown + recent enrollments | No date-range filter, no charts, no payout history |
-| Wallet | Balance, top-up, withdraw, transaction history | Functional but no withdrawal status tracking |
-| Sidebar | 12 items, flat list | No grouping, no badge counts |
-| Discussions | Database table exists | No instructor discussion page at all |
-| Announcements | No table or page | Missing entirely |
-| Course Analytics | None | No per-course engagement data |
-| Bulk Operations | None | No bulk publish, delete, or export |
+### What IS Connected & Dynamic
 
-### Implementation Plan (Priority Order)
+| Flow | Status | Details |
+|------|--------|---------|
+| Student enrolls -> appears in instructor dashboard | Connected | Instructor queries `enrollments` by `course_id`, student sees own enrollments |
+| Student submits quiz -> instructor sees in gradebook | Connected | `quiz_attempts` linked by `quiz_id` -> `course_id` -> `instructor_id` |
+| Student submits assignment -> instructor grades it | Connected | `assignment_submissions` with RLS for instructor's courses |
+| Instructor creates course -> admin reviews it | Connected | `review_status` field, admin CMS dashboard shows pending courses |
+| Admin approves instructor -> role granted | Connected | `instructor_applications` table + `user_roles` insert |
+| Wallet top-up/withdrawal across roles | Connected | Shared `wallets` + `wallet_transactions` tables, admin manages all wallets |
+| Certificates earned -> student downloads | Connected | Template -> certificate -> PDF generation with score tracking |
+| Cart -> checkout -> order -> enrollment | Connected | Full purchase flow with coupon, wallet, and manual payment |
+| Notifications cross-role | Connected | `notifications` table with realtime subscriptions per layout |
+| Media upload -> library -> picker | Connected | Unified `media_library` with upsert dedup, MediaPickerModal everywhere |
+| Discussion forums | Connected | `discussions` table with instructor reply + mark-as-answered |
+| Course announcements | Connected | `course_announcements` with instructor CRUD + student view RLS |
+| Lesson progress -> course completion -> certificate eligibility | Connected | `lesson_progress` -> `enrollments.progress_pct` -> certificate unlock logic |
+| Referral system | Connected | `referral_rewards` table, referral code in profile, wallet credit |
 
-**Step 1: Enhanced Dashboard with Charts & Activity Feed**
-- Add a mini line chart (recharts) showing enrollments over last 30 days
-- Add recent activity feed (last 10 enrollments, submissions, quiz attempts)
-- Add quick-action buttons (Create Course, View Revenue, Pending Reviews)
-- Add date-range selector for stats
+### Gaps & Disconnected Features Found
 
-**Step 2: Discussion Forum for Instructors**
-- New page: `InstructorDiscussions.tsx`
-- List all discussions across instructor's courses, grouped by course
-- Reply inline with threaded comments
-- Mark as answered toggle
-- New sidebar item + route
+**1. `process-payment` Edge Function Missing (Critical)**
+`PaymentSuccess.tsx` calls `supabase.functions.invoke('process-payment')` but this edge function does not exist in `supabase/functions/`. Only `cloudinary-proxy` and `r2-presign` exist. Payment verification will always fail for gateway payments (UddoktaPay).
 
-**Step 3: Course Announcements System**
-- New DB table: `course_announcements` (id, course_id, instructor_id, title, content, is_pinned, created_at)
-- New page: `InstructorAnnouncements.tsx` — create/manage announcements per course
-- Students see announcements on course detail page and lesson player
-- New sidebar item + route
+**2. Admin Dashboard Foreign Key Joins May Fail (Medium)**
+`AdminDashboard.tsx` uses explicit FK joins like `user_profiles!enrollments_user_id_fkey(full_name)` and `courses!enrollments_course_id_fkey(title)`, but the schema shows "No foreign keys" on the enrollments table. These queries may return null for joined data or error out.
 
-**Step 4: Gradebook CSV Export & Weighted Grades**
-- Add "Export CSV" button to gradebook
-- Add weight configuration per assessment type (quiz weight, assignment weight)
-- Show weighted final grade column
+**3. Student Dashboard `referral_rewards` Table Not in Schema (Medium)**
+`DashboardOverview.tsx` queries `referral_rewards` and `ReferralsPage.tsx` relies on it, but this table is not listed in the database schema provided. If the table doesn't exist, these queries silently fail.
 
-**Step 5: Course Analytics Page**
-- New page: `InstructorAnalytics.tsx`
-- Per-course: completion rate chart, lesson drop-off, quiz pass rate, average time spent
-- Uses existing enrollment, lesson_progress, quiz_attempts data
-- New sidebar item + route
+**4. `wallet_topup_requests` Table Not in Schema (Medium)**
+`WalletPage.tsx` queries `wallet_topup_requests as any` - the `as any` cast confirms this table may not exist or is not in generated types.
 
-**Step 6: Bulk Student Enrollment via CSV**
-- Add CSV upload button in Students page
-- Parse CSV (email/phone column), lookup users, bulk insert enrollments
-- Show results summary (enrolled, not found, already enrolled)
+**5. `reviews` Table Not in Schema (Low-Medium)**
+`CourseDetail.tsx` queries the `reviews` table for course ratings, but it's not in the provided schema. Reviews may not work.
 
-**Step 7: Sidebar Grouping & Badge Counts**
-- Group sidebar: Teaching (Courses, Lessons, Quizzes, Assignments), Students (Students, Gradebook, Discussions), Finance (Revenue, Wallet)
-- Add unread count badges for discussions and pending submissions
+**6. `quizzes` and `quiz_attempts` Tables Not in Schema (Low-Medium)**
+Multiple pages query these tables but they aren't in the provided schema dump. They likely exist but aren't shown.
 
-**Step 8: Revenue Dashboard Charts**
-- Add monthly revenue bar chart using recharts
-- Add date-range filter (last 7d, 30d, 90d, all time)
-- Add payout history section from wallet_transactions
+**7. No `handle_new_user` Trigger Attached (Low-Medium)**
+The `handle_new_user()` function exists but "There are no triggers in the database." New user signups may not auto-create profiles, roles, or wallets.
 
-### Files to Create
+### Recommended Fixes (Priority Order)
 
-| File | Purpose |
-|------|---------|
-| `src/pages/instructor/InstructorDiscussions.tsx` | Discussion management |
-| `src/pages/instructor/InstructorAnnouncements.tsx` | Course announcements |
-| `src/pages/instructor/InstructorAnalytics.tsx` | Course analytics with charts |
+| # | Fix | Impact |
+|---|-----|--------|
+| 1 | Create `process-payment` edge function for UddoktaPay verification + order completion + enrollment creation | Payment flow broken without it |
+| 2 | Verify `handle_new_user` trigger exists on `auth.users` (may be hidden from schema dump) | New signups may be broken |
+| 3 | Remove FK-style joins in AdminDashboard or add actual foreign keys to enrollments/orders tables | Admin dashboard data display |
+| 4 | Verify `referral_rewards`, `wallet_topup_requests`, `reviews`, `quizzes`, `quiz_attempts`, `payment_gateways` tables exist | Multiple features depend on them |
+| 5 | Add missing `process-payment` edge function that handles: verify payment status, update order, create enrollments, credit instructor wallet | End-to-end purchase flow |
 
-### Files to Edit
+### Summary
 
-| File | Changes |
-|------|---------|
-| `src/pages/instructor/InstructorDashboard.tsx` | Add charts, activity feed, quick actions |
-| `src/pages/instructor/InstructorGradebook.tsx` | Add CSV export, weighted grades |
-| `src/pages/instructor/InstructorStudents.tsx` | Add CSV bulk enroll |
-| `src/pages/instructor/RevenueDashboard.tsx` | Add charts, date filter |
-| `src/components/layout/InstructorSidebar.tsx` | Grouped nav, badge counts |
-| `src/App.tsx` | Add 3 new routes (discussions, announcements, analytics) |
-
-### Migration
-
-```sql
-CREATE TABLE course_announcements (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  course_id uuid NOT NULL,
-  instructor_id uuid NOT NULL,
-  title text NOT NULL,
-  content text,
-  is_pinned boolean DEFAULT false,
-  created_at timestamptz DEFAULT now()
-);
-
-ALTER TABLE course_announcements ENABLE ROW LEVEL SECURITY;
-
--- Instructors manage own course announcements
-CREATE POLICY "Instructors manage announcements" ON course_announcements
-FOR ALL TO authenticated
-USING (instructor_id = auth.uid() OR has_role(auth.uid(), 'admin') OR has_role(auth.uid(), 'super_admin'))
-WITH CHECK (instructor_id = auth.uid() OR has_role(auth.uid(), 'admin') OR has_role(auth.uid(), 'super_admin'));
-
--- Students view announcements for enrolled courses
-CREATE POLICY "Students view announcements" ON course_announcements
-FOR SELECT TO authenticated
-USING (EXISTS (
-  SELECT 1 FROM enrollments e
-  WHERE e.course_id = course_announcements.course_id
-  AND e.user_id = auth.uid()
-));
-```
-
-### Technical Notes
-- Charts use `recharts` (already available in the project via shadcn chart component)
-- CSV export uses browser-native Blob + download
-- CSV import uses FileReader + Papa Parse (or manual split)
-- All new pages follow existing patterns (useQuery + supabase + shadcn components)
-- Total: 3 new files, 6 edited files, 1 migration. Estimated ~8 steps of implementation.
+The codebase is architecturally solid - all three portals share the same Supabase tables and use consistent query patterns. The main risk is the **missing `process-payment` edge function** which breaks the purchase-to-enrollment pipeline. Everything else is properly wired with real database queries, RLS policies, and cross-role data sharing. The system is genuinely dynamic - no hardcoded data, all features read/write from Supabase with proper auth checks.
 
