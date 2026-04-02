@@ -43,6 +43,9 @@ const InstructorWallet = lazy(() => import("./pages/instructor/InstructorWallet"
 const InstructorLessons = lazy(() => import("./pages/instructor/InstructorLessons"));
 const InstructorGradebook = lazy(() => import("./pages/instructor/InstructorGradebook"));
 const InstructorCertificates = lazy(() => import("./pages/instructor/InstructorCertificates"));
+const InstructorDiscussions = lazy(() => import("./pages/instructor/InstructorDiscussions"));
+const InstructorAnnouncements = lazy(() => import("./pages/instructor/InstructorAnnouncements"));
+const InstructorAnalytics = lazy(() => import("./pages/instructor/InstructorAnalytics"));
 const AdminLayout = lazy(() => import("./pages/admin/AdminLayout"));
 const AdminDashboard = lazy(() => import("./pages/admin/AdminDashboard"));
 const AdminUsers = lazy(() => import("./pages/admin/AdminUsers"));
