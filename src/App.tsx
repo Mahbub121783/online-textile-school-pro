@@ -145,6 +145,8 @@ const App = () => (
                   <Route path="referrals" element={<ReferralsPage />} />
                   <Route path="notifications" element={<NotificationsPage />} />
                   <Route path="wallet" element={<WalletPage />} />
+                  <Route path="wishlist" element={<WishlistPage />} />
+                  <Route path="leaderboard" element={<LeaderboardPage />} />
                   <Route path="settings" element={<SettingsPage />} />
                 </Route>
                 {/* Instructor Portal */}
