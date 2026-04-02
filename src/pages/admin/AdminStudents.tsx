@@ -29,6 +29,10 @@ export default function AdminStudents() {
   const [page, setPage] = useState(1);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [confirmAction, setConfirmAction] = useState<{ type: 'block' | 'activate' | 'block-bulk' | 'activate-bulk'; ids: string[] } | null>(null);
+  const [bulkAssignCourseOpen, setBulkAssignCourseOpen] = useState(false);
+  const [bulkAssignEbookOpen, setBulkAssignEbookOpen] = useState(false);
+  const [courseSearch, setCourseSearch] = useState('');
+  const [ebookSearch, setEbookSearch] = useState('');
   const navigate = useNavigate();
   const qc = useQueryClient();
 
