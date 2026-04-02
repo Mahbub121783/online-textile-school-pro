@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { BookOpen, Award, Wallet, Settings, LogOut, CheckCircle2, AlertCircle } from 'lucide-react';
 import UtilityBar from '@/components/layout/UtilityBar';
+import StudentIdCard from '@/components/student/StudentIdCard';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import BottomNav from '@/components/layout/BottomNav';
