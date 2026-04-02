@@ -57,6 +57,15 @@ function truncate(ctx: CanvasRenderingContext2D, text: string, maxW: number): st
   return t + '…';
 }
 
+function drawInitial(ctx: CanvasRenderingContext2D, name: string, x: number, y: number, w: number, h: number) {
+  ctx.fillStyle = '#e2e8f0';
+  ctx.fillRect(x, y, w, h);
+  ctx.fillStyle = '#64748b';
+  ctx.font = 'bold 56px "Segoe UI", Arial, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(name?.[0]?.toUpperCase() || '?', x + w / 2, y + h / 2 + 18);
+}
+
 export async function renderIdCard(
   canvas: HTMLCanvasElement,
   data: IdCardData,
@@ -67,21 +76,23 @@ export async function renderIdCard(
   const ctx = canvas.getContext('2d')!;
   const primary = settings.card_bg_color || '#0f2557';
 
-  // ── Card background ──
+  // ── Card background with rounded corners ──
   roundRect(ctx, 0, 0, CARD_W, CARD_H, 16);
   ctx.fillStyle = '#ffffff';
   ctx.fill();
   ctx.save();
   ctx.clip();
 
-  // ── Header ──
-  const hH = 100;
+  // ══════════════════════════════════════════
+  // HEADER — 110px, dark background
+  // ══════════════════════════════════════════
+  const hH = 110;
   ctx.fillStyle = primary;
   ctx.fillRect(0, 0, CARD_W, hH);
 
-  // Logo (no circle clip — show full logo)
-  const logoSize = 60;
-  const logoX = 28;
+  // Logo 70x70
+  const logoSize = 70;
+  const logoX = 30;
   const logoY = (hH - logoSize) / 2;
   const logoSrc = settings.logo_url || otsLogoUrl;
   try {
@@ -89,34 +100,38 @@ export async function renderIdCard(
     ctx.drawImage(logo, logoX, logoY, logoSize, logoSize);
   } catch { /* skip */ }
 
-  // University name + location
-  const textX = logoX + logoSize + 18;
+  // University name — 34px bold
+  const textX = logoX + logoSize + 20;
   ctx.fillStyle = '#ffffff';
   ctx.textAlign = 'left';
-  ctx.font = 'bold 26px "Segoe UI", Arial, sans-serif';
-  ctx.fillText(settings.university_name || 'Online Textile School', textX, hH / 2 - 4);
-  ctx.font = '14px "Segoe UI", Arial, sans-serif';
-  ctx.fillStyle = 'rgba(255,255,255,0.75)';
-  ctx.fillText(settings.location || 'Dhaka, Bangladesh', textX, hH / 2 + 18);
+  ctx.font = 'bold 34px "Segoe UI", Arial, sans-serif';
+  ctx.fillText(settings.university_name || 'Online Textile School', textX, hH / 2 - 6);
 
-  // "STUDENT ID CARD" right-aligned
+  // Location — 16px
+  ctx.font = '16px "Segoe UI", Arial, sans-serif';
+  ctx.fillStyle = 'rgba(255,255,255,0.7)';
+  ctx.fillText(settings.location || 'Dhaka, Bangladesh', textX, hH / 2 + 20);
+
+  // "STUDENT ID CARD" — right-aligned, 20px bold
   ctx.textAlign = 'right';
-  ctx.font = 'bold 16px "Segoe UI", Arial, sans-serif';
+  ctx.font = 'bold 20px "Segoe UI", Arial, sans-serif';
   ctx.fillStyle = 'rgba(255,255,255,0.9)';
-  ctx.fillText('STUDENT ID CARD', CARD_W - 30, hH / 2 + 6);
+  ctx.fillText('STUDENT ID CARD', CARD_W - 34, hH / 2 + 7);
 
-  // ── Thin accent line below header ──
+  // ── Teal accent line ──
   ctx.fillStyle = '#0d9488';
-  ctx.fillRect(0, hH, CARD_W, 3);
+  ctx.fillRect(0, hH, CARD_W, 4);
 
-  // ── Body ──
-  const bodyY = hH + 24;
-  const photoW = 160;
-  const photoH = 200;
+  // ══════════════════════════════════════════
+  // BODY — Photo + Fields
+  // ══════════════════════════════════════════
+  const bodyY = hH + 20;
+  const photoW = 170;
+  const photoH = 210;
   const photoX = 40;
   const photoY = bodyY;
 
-  // Photo with simple border
+  // Photo
   ctx.save();
   roundRect(ctx, photoX, photoY, photoW, photoH, 8);
   ctx.clip();
@@ -131,18 +146,19 @@ export async function renderIdCard(
     drawInitial(ctx, data.studentName, photoX, photoY, photoW, photoH);
   }
   ctx.restore();
-  // Border
+
+  // Photo border
   ctx.strokeStyle = primary;
   ctx.lineWidth = 2;
   roundRect(ctx, photoX, photoY, photoW, photoH, 8);
   ctx.stroke();
 
   // ── Fields ──
-  const fieldX = photoX + photoW + 36;
-  const labelW = 140;
+  const fieldX = photoX + photoW + 40;
+  const labelW = 160;
   const valueX = fieldX + labelW;
-  const rowH = 44;
-  const startY = bodyY + 16;
+  const rowH = 46;
+  const startY = bodyY + 20;
   const maxValW = CARD_W - valueX - 40;
 
   ctx.textAlign = 'left';
@@ -157,19 +173,22 @@ export async function renderIdCard(
   fields.forEach((f, i) => {
     const y = startY + i * rowH;
 
-    // Label
-    ctx.font = '600 12px "Segoe UI", Arial, sans-serif';
-    ctx.fillStyle = '#94a3b8';
-    ctx.fillText(f.label + ' :', fieldX, y + 16);
+    // Label — 14px semi-bold slate
+    ctx.font = '600 14px "Segoe UI", Arial, sans-serif';
+    ctx.fillStyle = '#64748b';
+    ctx.fillText(f.label + ' :', fieldX, y + 18);
 
-    // Value
-    ctx.font = 'bold 16px "Segoe UI", Arial, sans-serif';
+    // Value — 18px bold dark
+    ctx.font = 'bold 18px "Segoe UI", Arial, sans-serif';
     ctx.fillStyle = '#1e293b';
-    ctx.fillText(truncate(ctx, f.value, maxValW), valueX, y + 16);
+    ctx.fillText(truncate(ctx, f.value, maxValW), valueX, y + 18);
   });
 
-  // ── Footer area ──
-  const footerY = CARD_H - 130;
+  // ══════════════════════════════════════════
+  // FOOTER — Validity + Signature
+  // ══════════════════════════════════════════
+  const barcodeBarH = 70;
+  const footerY = CARD_H - barcodeBarH - 80;
 
   // Thin separator
   ctx.strokeStyle = '#e2e8f0';
@@ -180,75 +199,75 @@ export async function renderIdCard(
   ctx.stroke();
 
   // Left: validity
-  ctx.font = '13px "Segoe UI", Arial, sans-serif';
-  ctx.fillStyle = '#64748b';
+  ctx.font = '14px "Segoe UI", Arial, sans-serif';
+  ctx.fillStyle = '#475569';
   ctx.textAlign = 'left';
-  ctx.fillText(`Valid Until: ${data.validUntil}`, 40, footerY + 22);
+  ctx.fillText(`Valid Until: ${data.validUntil}`, 40, footerY + 24);
 
   // Right: signature
-  const sigCenterX = CARD_W - 160;
+  const sigCenterX = CARD_W - 170;
 
   if (settings.signature_url) {
     try {
       const sig = await loadImage(settings.signature_url);
-      ctx.drawImage(sig, sigCenterX - 60, footerY + 2, 120, 32);
+      ctx.drawImage(sig, sigCenterX - 70, footerY + 4, 140, 34);
     } catch { /* skip */ }
   }
 
-  // Signature line
+  // Signature line — 160px wide
   ctx.strokeStyle = '#94a3b8';
   ctx.lineWidth = 1;
   ctx.beginPath();
-  ctx.moveTo(sigCenterX - 70, footerY + 38);
-  ctx.lineTo(sigCenterX + 70, footerY + 38);
+  ctx.moveTo(sigCenterX - 80, footerY + 42);
+  ctx.lineTo(sigCenterX + 80, footerY + 42);
   ctx.stroke();
 
+  // Authority name — 14px bold
   ctx.textAlign = 'center';
   if (settings.authority_name) {
-    ctx.font = 'bold 12px "Segoe UI", Arial, sans-serif';
+    ctx.font = 'bold 14px "Segoe UI", Arial, sans-serif';
     ctx.fillStyle = '#1e293b';
-    ctx.fillText(settings.authority_name, sigCenterX, footerY + 54);
+    ctx.fillText(settings.authority_name, sigCenterX, footerY + 58);
   }
+  // Authority position — 12px
   if (settings.authority_position) {
-    ctx.font = '11px "Segoe UI", Arial, sans-serif';
+    ctx.font = '12px "Segoe UI", Arial, sans-serif';
     ctx.fillStyle = '#64748b';
-    ctx.fillText(settings.authority_position, sigCenterX, footerY + 68);
+    ctx.fillText(settings.authority_position, sigCenterX, footerY + 74);
   }
 
-  // ── Barcode (centered bottom) ──
+  // ══════════════════════════════════════════
+  // BARCODE BAR — Oxford-style full-width dark strip
+  // ══════════════════════════════════════════
+  const barY = CARD_H - barcodeBarH;
+  ctx.fillStyle = primary;
+  ctx.fillRect(0, barY, CARD_W, barcodeBarH);
+
+  // Generate barcode
   const barcodeCanvas = document.createElement('canvas');
   JsBarcode(barcodeCanvas, data.cardNumber, {
     format: 'CODE128',
     width: 2,
-    height: 38,
+    height: 50,
     displayValue: false,
     margin: 0,
+    background: 'transparent',
+    lineColor: '#ffffff',
   });
-  const barcodeW = 280;
-  const barcodeH = 38;
-  const barcodeY = footerY + 80;
-  ctx.drawImage(barcodeCanvas, (CARD_W - barcodeW) / 2, barcodeY, barcodeW, barcodeH);
 
-  // Card number
-  ctx.font = 'bold 11px "Courier New", monospace';
-  ctx.fillStyle = '#475569';
+  // Draw barcode centered, 70% width
+  const barcodeW = CARD_W * 0.7;
+  const barcodeH = 42;
+  const barcodeX = (CARD_W - barcodeW) / 2;
+  ctx.drawImage(barcodeCanvas, barcodeX, barY + 6, barcodeW, barcodeH);
+
+  // Card number in white monospace
+  ctx.font = 'bold 12px "Courier New", monospace';
+  ctx.fillStyle = 'rgba(255,255,255,0.85)';
   ctx.textAlign = 'center';
-  ctx.fillText(data.cardNumber.split('').join(' '), CARD_W / 2, barcodeY + barcodeH + 14);
-
-  // ── Bottom accent bar ──
-  ctx.fillStyle = primary;
-  ctx.fillRect(0, CARD_H - 4, CARD_W, 4);
+  ctx.fillText(data.cardNumber.split('').join(' '), CARD_W / 2, barY + barcodeH + 20);
 
   ctx.restore();
-}
-
-function drawInitial(ctx: CanvasRenderingContext2D, name: string, x: number, y: number, w: number, h: number) {
-  ctx.fillStyle = '#e2e8f0';
-  ctx.fillRect(x, y, w, h);
-  ctx.fillStyle = '#64748b';
-  ctx.font = 'bold 52px "Segoe UI", Arial, sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillText(name?.[0]?.toUpperCase() || '?', x + w / 2, y + h / 2 + 16);
 }
 
 export async function downloadIdCardPdf(
