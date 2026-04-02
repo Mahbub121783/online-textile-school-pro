@@ -1,67 +1,66 @@
 
 
-## Plan: Student Management System for Admin & Instructor
+## Plan: Advanced Student Management System with Full Dynamic Profile
 
-### Problem
-There is no dedicated "Student Management" section. The current `AdminUsers` page shows all users in a flat table with no purchase data, no detail view, and no ability to grant course/ebook access. Instructors have a basic students list but no rich profile view either.
+### Problems Found
 
-### What We're Building
+1. **Ebooks tab shows raw UUID** instead of ebook title (line 266 of StudentDetail.tsx)
+2. **No full profile section** — missing fields like university, batch, blood group, district, division, occupation, company, DOB, username, referral code, language preference, active status
+3. **No quiz/assignment stats** in activity tab
+4. **No wallet transaction history** — just shows balance
+5. **No reading progress data** for ebooks
+6. **Student list page is basic** — no status filter, no sort options, no export
+7. **Profile data is not real-time** — no realtime subscription for `user_profiles` changes
 
-**A new Student Management page** (`/admin/students`) and a **Student Detail page** (`/admin/students/:id`) accessible from the Admin sidebar. The instructor sidebar will also get a link to `/admin/students` (or we enhance the existing `/instructor/students` with a detail drawer).
+### Changes
 
-### New Files
+#### File 1: `src/pages/admin/StudentDetail.tsx` (Full Rewrite)
 
-| File | Purpose |
-|------|---------|
-| `src/pages/admin/AdminStudents.tsx` | Student list with avatar, name, courses purchased count, ebooks purchased count, total spend. Search + filters. Click row opens detail page. |
-| `src/pages/admin/StudentDetail.tsx` | Full student profile: avatar, name, phone, roll ID, join date, activity summary. Tabs for: Purchased Courses, Purchased Ebooks, Wallet/Transactions, Forum Activity, Certificates. Admin can grant free course or ebook access directly from here. |
+**Fix ebook names:**
+- Change orders query to also fetch ebook titles: query `ebooks` table with the item_ids from order_items and build a name map
 
-### Edited Files
+**Add full profile section** as the first tab or a dedicated "Profile" tab showing all user_profiles fields in a clean grid layout:
+- Full Name, Username, Phone, Roll ID, DOB, Blood Group
+- University, Batch, Graduation Year, Occupation
+- Company Name, Business Type, Professional Role, Current Job
+- District, Division, Country
+- Referral Code, Language Preference, Active Status
+- All fields auto-update via react-query with realtime invalidation
 
-| File | Changes |
-|------|---------|
-| `src/App.tsx` | Add routes: `/admin/students` and `/admin/students/:id` |
-| `src/components/layout/AdminSidebar.tsx` | Add "Students" nav item under top items (with `GraduationCap` icon) |
-| `src/components/layout/InstructorSidebar.tsx` | Add "All Students" link pointing to `/admin/students` (only visible if user also has admin role, otherwise keep existing instructor students page) |
+**Add quiz attempts + assignment submissions to Activity tab:**
+- Query `quiz_attempts` count for this user
+- Query `assignment_submissions` count for this user
 
-### AdminStudents.tsx — Student List
+**Add wallet transaction history:**
+- Query `wallet_transactions` via wallet_id and show a table with date, type, amount, description
 
-- Query `user_roles` for all users with role `student`
-- Join with `user_profiles` for avatar, name, phone, roll_id
-- Count enrollments per student (courses purchased)
-- Count ebook purchases from `orders` table (items with ebook type)
-- Display in a responsive card grid (mobile) / table (desktop)
-- Each card shows: avatar, name, roll ID, courses count, ebooks count, join date
-- Search by name, filter by active/inactive
-- Click navigates to `/admin/students/:id`
+**Add ebook reading progress:**
+- Query `ebook_reading_progress` for this user and show progress alongside each ebook
 
-### StudentDetail.tsx — Full Profile + Admin Actions
+**Add more summary stat cards:**
+- Quiz attempts, Assignment submissions, Forum contributor points
 
-**Header section:**
-- Large avatar, full name, roll ID, phone, join date, active status badge
-- "Grant Course Access" button — opens dialog to select a course and create enrollment
-- "Grant Ebook Access" button — opens dialog to select an ebook and create order
+#### File 2: `src/pages/admin/AdminStudents.tsx` (Enhanced)
 
-**Tabs:**
-1. **Courses** — List of enrolled courses with progress %, enrollment date, completion status
-2. **Ebooks** — List of purchased ebooks with purchase date
-3. **Expenses** — Orders table showing all orders with amounts, dates, payment status
-4. **Activity** — Forum posts count, quiz attempts, assignment submissions, certificates earned
-5. **Wallet** — Current balance, recent transactions
+**Add features:**
+- Status filter (Active/Inactive) using `is_active` from profile
+- Sort toggle (by name, join date, total spend)
+- Quiz count and Certificate count columns in desktop table
+- Better search: also search by phone number
+- Total stats bar at top: total students, active, total revenue from students
 
-**Grant Access feature:**
-- "Grant Course" — Select from all published courses → insert into `enrollments` with `user_id` and `course_id`
-- "Grant Ebook" — Select from all published ebooks → insert into `orders` with item_type `ebook`, price 0, status `completed`
+#### File 3: `src/hooks/useRealtime.ts` (Edit)
 
-### Sidebar Changes
+- Add `user_profiles` changes to admin-realtime channel to invalidate `student-profile` and `admin-students` queries — ensures when student updates their profile, admin sees it instantly
 
-AdminSidebar gets a new item right after "Users":
-```
-{ title: 'Students', url: '/admin/students', icon: GraduationCap }
-```
+### File Summary
 
-### Technical Notes
-- No migration needed — all data exists in current tables (`user_roles`, `user_profiles`, `enrollments`, `orders`, `ebooks`, `courses`, `certificates`, `forum_posts`, `quiz_attempts`, `assignment_submissions`, `wallets`, `wallet_transactions`)
-- Grant access inserts use existing RLS policies (admin can insert enrollments per existing policy)
-- Total: 2 new files, 3 edited files, 0 migrations
+| File | Action |
+|------|--------|
+| `src/pages/admin/StudentDetail.tsx` | Major rewrite — profile tab, ebook names, quiz/assignment stats, wallet txns, reading progress |
+| `src/pages/admin/AdminStudents.tsx` | Enhanced — filters, sort, phone search, stats bar, certificate/quiz counts |
+| `src/hooks/useRealtime.ts` | Add `admin-students` and `student-profile` invalidation on `user_profiles` changes |
+
+### No migration needed
+All data exists in current tables.
 
