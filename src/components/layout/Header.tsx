@@ -31,9 +31,10 @@ const Header = () => {
   const navLinks = [
     { label: 'Home', href: '/' },
     { label: 'Courses', href: '/courses', hasMega: true },
+    { label: 'Learning Paths', href: '/learning-paths' },
     { label: 'eBooks', href: '/ebooks' },
-    { label: 'Live Classes', href: '/live-classes' },
-    { label: 'Community', href: '/community' },
+    { label: 'Departments', href: '/departments' },
+    { label: 'Events', href: '/events' },
     { label: 'Blog', href: '/blog' },
     { label: 'About', href: '/about' },
   ];
