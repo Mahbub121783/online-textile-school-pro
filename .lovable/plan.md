@@ -1,99 +1,141 @@
 
 
-## Plan: Advanced eBook System Overhaul
+## Plan: Advanced Support Forum System with Contributor Points & Leaderboard
 
-### Critical Issues Found
+### What We're Building
 
-| Issue | Severity | Details |
-|-------|----------|---------|
-| **`ebook-secure-access` edge function does not exist** | CRITICAL | The reader calls `supabase.functions.invoke('ebook-secure-access')` but this function was never created. This is the 100% loading issue — every reader attempt fails |
-| **No streaming/chunking** | High | The reader downloads the entire PDF into memory via `arrayBuffer()` — huge files hang the browser |
-| **Reader not responsive on mobile** | High | Canvas-based rendering doesn't adapt well; notes panel overlaps on small screens |
-| **No admin ebook upload integration with MediaUploader** | Medium | Admin uses raw `<input type="file">` instead of the reusable `MediaUploader` component |
-| **No profile progress widget in dashboard** | Medium | `useProfileCompleteness` hook exists but no visible widget in student dashboard |
-| **No reviews/ratings on ebooks** | Medium | Course reviews exist but no ebook review system |
+A full-featured Support Forum accessible to all authenticated users (students, instructors, admins) with:
+- Post creation with categories (auto-suggest existing ones)
+- Reactions with dynamic counts on posts and comments
+- Threaded comments with replies and reactions
+- Forum close/lock by post creator
+- Full-text search across all content
+- Admin full control (delete, pin, manage categories, remove replies)
+- Contributor points system (10pts/post, 5pts/reply, 1pt/react) with Gold/Silver/Bronze ranks
+- Real-time leaderboard with admin reward system
+- Profile display on all interactions
 
-### Implementation Plan
+### Database Changes (1 Migration)
 
-**Phase 1: Fix the Critical Loading Issue (ebook-secure-access edge function)**
+**New Tables:**
 
-Create `supabase/functions/ebook-secure-access/index.ts`:
-- **`generate_token` action**: Verifies user purchased the ebook (checks `order_items` + `orders`), creates a short-lived token in `ebook_access_tokens` table (expires in 10 min)
-- **`stream_file` action**: Validates token, fetches `file_url` from `ebooks` table using service role, proxies the file bytes back to the client with proper headers (`Content-Type: application/pdf`, `X-Ebook-Title`)
-- Uses range request support so the browser can load pages incrementally
-- Includes DRM headers: `Cache-Control: no-store`, `X-Content-Type-Options: nosniff`
+```text
+forum_categories
+├── id (uuid PK)
+├── name (text, unique)
+├── slug (text, unique)
+├── sort_order (int, default 0)
+├── created_at (timestamptz)
 
-**Phase 2: Responsive Reader Improvements**
+forum_posts
+├── id (uuid PK)
+├── user_id (uuid)
+├── category_id (uuid FK → forum_categories)
+├── title (text)
+├── content (text)
+├── is_pinned (boolean, default false)
+├── is_closed (boolean, default false)
+├── view_count (int, default 0)
+├── search_vector (tsvector) — generated from title + content
+├── created_at, updated_at (timestamptz)
 
-Edit `src/pages/ebooks/EbookReader.tsx`:
-- Mobile: hide notes panel by default, show as bottom sheet overlay instead of sidebar
-- Add pinch-to-zoom support on mobile
-- Show loading skeleton per-page instead of blank screen
-- Add table of contents / page thumbnail navigation drawer
-- Fix canvas sizing: use `ResizeObserver` to re-render on viewport change
-- Add "scroll mode" option (continuous scroll vs page-by-page)
+forum_comments
+├── id (uuid PK)
+├── post_id (uuid FK → forum_posts)
+├── parent_id (uuid FK → self, nullable)
+├── user_id (uuid)
+├── content (text)
+├── created_at (timestamptz)
 
-**Phase 3: Admin eBook Upload Upgrade**
+forum_reactions
+├── id (uuid PK)
+├── user_id (uuid)
+├── target_type (text) — 'post' or 'comment'
+├── target_id (uuid)
+├── emoji (text, default '❤️')
+├── created_at (timestamptz)
+├── UNIQUE(user_id, target_type, target_id, emoji)
 
-Edit `src/pages/admin/AdminEbooks.tsx`:
-- Replace raw `<input type="file">` with `MediaUploader` component for cover image
-- Add upload progress indicator for PDF file uploads
-- Add drag-and-drop for gallery images
-- Add bulk publish/unpublish
+forum_contributor_points
+├── id (uuid PK)
+├── user_id (uuid)
+├── action (text) — 'post', 'reply', 'react'
+├── reference_id (uuid)
+├── points (int)
+├── created_at (timestamptz)
 
-**Phase 4: Profile Progress Widget**
-
-Create `src/components/ProfileCompletenessWidget.tsx` (if not exists, or verify):
-- Circular progress ring showing completion percentage
-- List of missing fields with links to profile page
-- Add to `DashboardOverview.tsx`
-
-**Phase 5: eBook Store Enhancements**
-
-Edit `src/pages/ebooks/EbookCatalog.tsx`:
-- Add sort options (price, newest, popular, rating)
-- Add price range filter
-- Add grid/list view toggle
-- Add pagination (currently loads all ebooks at once)
-
-Edit `src/pages/ebooks/EbookDetail.tsx`:
-- Add related ebooks section
-- Add review/rating system for purchased users (reuse `course_reviews` pattern → new `ebook_reviews` or extend existing)
-- Add share buttons
-- Add "preview first 3 pages" for non-purchased users
-
-### Database Changes
-
-```sql
--- No new tables needed. The ebook_access_tokens table already exists.
--- We only need the edge function.
+forum_rewards (admin-granted)
+├── id (uuid PK)
+├── user_id (uuid)
+├── granted_by (uuid)
+├── points (int)
+├── reason (text)
+├── created_at (timestamptz)
 ```
 
-### Files to Create
+**Search index:** `GIN` index on `forum_posts.search_vector` with trigger to auto-update from `title || content`. Also a DB function `search_forum(query text)` using `ts_rank` for ranked results.
+
+**RLS Policies:**
+- Categories: anyone can read, admins can manage
+- Posts: authenticated users can read/create, owner+admin can update, admin can delete
+- Comments: authenticated can read/create, owner+admin can delete
+- Reactions: authenticated can insert/delete own
+- Points/Rewards: users read own, admins read all
+
+### New Files
 
 | File | Purpose |
 |------|---------|
-| `supabase/functions/ebook-secure-access/index.ts` | Secure token generation + file streaming proxy |
+| `src/pages/forum/ForumHome.tsx` | Main forum page — category filter tabs, search bar, post list with reactions/comment counts, contributor badges |
+| `src/pages/forum/ForumPost.tsx` | Single post view — full content, threaded comments with replies, reactions, close button for owner |
+| `src/pages/forum/CreatePost.tsx` | New post form — title, content (rich text), category picker with auto-suggest |
+| `src/pages/admin/AdminForum.tsx` | Admin forum management — category CRUD, pinned posts, delete posts/comments, leaderboard view, reward granting |
 
-### Files to Edit
+### Edited Files
 
 | File | Changes |
 |------|---------|
-| `src/pages/ebooks/EbookReader.tsx` | Mobile responsive, scroll mode, ResizeObserver, TOC drawer |
-| `src/pages/ebooks/EbookCatalog.tsx` | Sort, filter, pagination, grid/list toggle |
-| `src/pages/ebooks/EbookDetail.tsx` | Related ebooks, preview pages, share |
-| `src/pages/admin/AdminEbooks.tsx` | MediaUploader integration, bulk actions |
-| `src/pages/dashboard/DashboardOverview.tsx` | Add ProfileCompletenessWidget |
-| `src/pages/dashboard/MyEbooks.tsx` | Add reading stats summary |
+| `src/App.tsx` | Add routes: `/forum`, `/forum/:postId`, `/forum/new`, `/admin/forum` |
+| `src/components/layout/Header.tsx` | Add "Forum" to nav links |
+| `src/components/layout/DashboardSidebar.tsx` | Add "Forum" nav item |
+| `src/components/layout/InstructorSidebar.tsx` | Add "Forum" nav item |
+| `src/components/layout/AdminSidebar.tsx` | Add "Forum" nav item |
+| `src/hooks/useRealtime.ts` | Add forum tables to realtime subscriptions |
 
-### Implementation Order
+### Key Features
 
-1. **Step 1**: Create `ebook-secure-access` edge function (fixes 100% loading — highest priority)
-2. **Step 2**: Rewrite EbookReader for responsive + scroll mode + TOC
-3. **Step 3**: Upgrade EbookCatalog with filters/sort/pagination
-4. **Step 4**: Upgrade EbookDetail with preview + reviews + related
-5. **Step 5**: Upgrade AdminEbooks with MediaUploader + bulk actions
-6. **Step 6**: Add ProfileCompletenessWidget to dashboard
+**Advanced Search**
+- PostgreSQL full-text search with `tsvector` + `GIN` index
+- Every word in title and content is indexed
+- Client-side instant filter + server-side ranked results
+- Search highlights matching terms
 
-Total: 1 new file, 6 edited files. ~6 implementation steps.
+**Contributor Points & Leaderboard**
+- Points auto-inserted via client-side logic after post/reply/react
+- Aggregated leaderboard query: SUM points from `forum_contributor_points` + `forum_rewards`
+- Top 3 get Gold 🥇, Silver 🥈, Bronze 🥉 badges displayed on their profile avatar in forum
+- Each user's profile card shows total contributor points
+- Admin sees full leaderboard with reward button
+
+**Real-time**
+- Realtime subscriptions on `forum_posts`, `forum_comments`, `forum_reactions` for live updates
+- New comments/reactions appear instantly without refresh
+
+**Admin Controls**
+- Pin/unpin posts
+- Delete any post or comment
+- Create/edit/delete categories
+- View full contributor leaderboard
+- Grant bonus reward points to any user with reason
+
+### Implementation Steps
+
+1. **Migration** — Create all 6 tables, search index, trigger, RLS policies
+2. **ForumHome.tsx** — Category tabs, search, post cards with user profiles, reaction counts, comment counts, contributor badges
+3. **ForumPost.tsx** — Post detail with threaded comments, reactions, close/lock, admin controls
+4. **CreatePost.tsx** — Form with category auto-suggest from existing categories
+5. **AdminForum.tsx** — Category management, leaderboard, rewards, moderation
+6. **Wire up** — Routes, sidebar links, realtime subscriptions
+
+Total: 1 migration, 4 new files, 6 edited files.
 
