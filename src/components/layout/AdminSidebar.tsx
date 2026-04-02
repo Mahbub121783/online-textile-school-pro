@@ -40,6 +40,7 @@ const setupSubItems = [
   { title: 'Email Templates', url: '/admin/setup/email-templates', icon: FileText },
   { title: 'Cloudinary', url: '/admin/setup/cloudinary', icon: Cloud },
   { title: 'Cloudflare R2', url: '/admin/setup/cloudflare-r2', icon: HardDrive },
+  { title: 'ID Card Settings', url: '/admin/id-card-settings', icon: CreditCard },
 ];
 
 const paymentSubItems = [

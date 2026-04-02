@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useMemo } from 'react';
 import ProfileCompletenessWidget from '@/components/ProfileCompletenessWidget';
+import StudentIdCard from '@/components/student/StudentIdCard';
 
 const DashboardOverview = () => {
   const { user } = useAuth();
@@ -110,6 +111,9 @@ const DashboardOverview = () => {
           </div>
         ))}
       </div>
+
+      {/* Student ID Card */}
+      <StudentIdCard />
 
       <div className="bg-card border rounded-xl p-6">
         <h3 className="font-heading font-bold text-lg mb-4">Continue Learning</h3>

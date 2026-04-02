@@ -15,7 +15,8 @@ import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
-import { ArrowLeft, BookOpen, Book, Gift, Wallet, MessageSquare, Award, ClipboardList, FileQuestion, ShoppingCart, User, GraduationCap, Briefcase, MapPin, Ban, Bell, Trash2, XCircle } from 'lucide-react';
+import { ArrowLeft, BookOpen, Book, Gift, Wallet, MessageSquare, Award, ClipboardList, FileQuestion, ShoppingCart, User, GraduationCap, Briefcase, MapPin, Ban, Bell, Trash2, XCircle, CreditCard } from 'lucide-react';
+import StudentIdCard from '@/components/student/StudentIdCard';
 import { Progress } from '@/components/ui/progress';
 
 function ProfileField({ label, value }: { label: string; value: string | null | undefined }) {
@@ -24,6 +25,100 @@ function ProfileField({ label, value }: { label: string; value: string | null | 
       <p className="text-xs font-medium text-muted-foreground">{label}</p>
       <p className="text-sm font-medium">{value || '—'}</p>
     </div>
+  );
+}
+
+function IdCardAdminControls({ userId }: { userId: string }) {
+  const qc = useQueryClient();
+  const { data: idCard, refetch } = useQuery({
+    queryKey: ['student-id-card', userId],
+    queryFn: async () => {
+      const { data } = await supabase.from('student_id_cards').select('*').eq('user_id', userId).maybeSingle();
+      return data;
+    },
+    enabled: !!userId,
+  });
+
+  const { data: paidEnrollments = [] } = useQuery({
+    queryKey: ['paid-enrollments-count', userId],
+    queryFn: async () => {
+      const { data } = await supabase.from('enrollments').select('id, enrolled_at').eq('user_id', userId).not('payment_id', 'is', null);
+      return data ?? [];
+    },
+    enabled: !!userId,
+  });
+
+  const generateCard = useMutation({
+    mutationFn: async () => {
+      const months = paidEnrollments.length * 6;
+      if (!months) throw new Error('No paid enrollments found');
+      const validUntil = new Date();
+      validUntil.setMonth(validUntil.getMonth() + months);
+      const seq = Math.floor(Math.random() * 999999);
+      const cardNumber = `OTS-ID-${String(seq).padStart(6, '0')}`;
+      const { error } = await supabase.from('student_id_cards').upsert({
+        user_id: userId,
+        card_number: idCard?.card_number || cardNumber,
+        valid_from: idCard?.valid_from || new Date().toISOString(),
+        valid_until: validUntil.toISOString(),
+        is_active: true,
+      }, { onConflict: 'user_id' });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success('ID card generated/updated');
+      refetch();
+      qc.invalidateQueries({ queryKey: ['student-id-card', userId] });
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const toggleActive = useMutation({
+    mutationFn: async (active: boolean) => {
+      if (!idCard) return;
+      const { error } = await supabase.from('student_id_cards').update({ is_active: active }).eq('id', idCard.id);
+      if (error) throw error;
+    },
+    onSuccess: () => { toast.success('ID card status updated'); refetch(); },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const extendValidity = useMutation({
+    mutationFn: async (months: number) => {
+      if (!idCard) return;
+      const current = new Date(idCard.valid_until);
+      current.setMonth(current.getMonth() + months);
+      const { error } = await supabase.from('student_id_cards').update({ valid_until: current.toISOString() }).eq('id', idCard.id);
+      if (error) throw error;
+    },
+    onSuccess: () => { toast.success('Validity extended'); refetch(); },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  return (
+    <Card>
+      <CardHeader className="pb-3"><CardTitle className="text-sm">ID Card Management</CardTitle></CardHeader>
+      <CardContent className="space-y-3">
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" onClick={() => generateCard.mutate()} disabled={generateCard.isPending || !paidEnrollments.length}>
+            {idCard ? 'Recalculate Validity' : 'Generate ID Card'}
+          </Button>
+          {idCard && (
+            <>
+              <Button size="sm" variant="outline" onClick={() => extendValidity.mutate(6)}>
+                +6 Months
+              </Button>
+              <Button size="sm" variant={idCard.is_active ? 'destructive' : 'default'} onClick={() => toggleActive.mutate(!idCard.is_active)}>
+                {idCard.is_active ? 'Deactivate' : 'Reactivate'}
+              </Button>
+            </>
+          )}
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Paid enrollments: {paidEnrollments.length} (= {paidEnrollments.length * 6} months validity)
+        </p>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -417,6 +512,7 @@ export default function StudentDetail() {
           <TabsTrigger value="profile" className="gap-1"><User className="h-3.5 w-3.5" /> Profile</TabsTrigger>
           <TabsTrigger value="courses" className="gap-1"><BookOpen className="h-3.5 w-3.5" /> Courses</TabsTrigger>
           <TabsTrigger value="ebooks" className="gap-1"><Book className="h-3.5 w-3.5" /> Ebooks</TabsTrigger>
+          <TabsTrigger value="id-card" className="gap-1"><CreditCard className="h-3.5 w-3.5" /> ID Card</TabsTrigger>
           <TabsTrigger value="expenses" className="gap-1"><ShoppingCart className="h-3.5 w-3.5" /> Expenses</TabsTrigger>
           <TabsTrigger value="activity" className="gap-1"><MessageSquare className="h-3.5 w-3.5" /> Activity</TabsTrigger>
           <TabsTrigger value="wallet" className="gap-1"><Wallet className="h-3.5 w-3.5" /> Wallet</TabsTrigger>
@@ -557,6 +653,14 @@ export default function StudentDetail() {
               </TableBody>
             </Table>
           </Card>
+        </TabsContent>
+
+        {/* ID Card Tab */}
+        <TabsContent value="id-card">
+          <div className="space-y-4">
+            <StudentIdCard userId={id} />
+            <IdCardAdminControls userId={id!} />
+          </div>
         </TabsContent>
 
         <TabsContent value="expenses">

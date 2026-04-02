@@ -1279,6 +1279,42 @@ export type Database = {
         }
         Relationships: []
       }
+      id_card_settings: {
+        Row: {
+          authority_name: string | null
+          authority_position: string | null
+          card_bg_color: string | null
+          id: string
+          location: string
+          logo_url: string | null
+          signature_url: string | null
+          university_name: string
+          updated_at: string | null
+        }
+        Insert: {
+          authority_name?: string | null
+          authority_position?: string | null
+          card_bg_color?: string | null
+          id?: string
+          location?: string
+          logo_url?: string | null
+          signature_url?: string | null
+          university_name?: string
+          updated_at?: string | null
+        }
+        Update: {
+          authority_name?: string | null
+          authority_position?: string | null
+          card_bg_color?: string | null
+          id?: string
+          location?: string
+          logo_url?: string | null
+          signature_url?: string | null
+          university_name?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       instructor_applications: {
         Row: {
           admin_notes: string | null
@@ -2325,6 +2361,47 @@ export type Database = {
           value?: string | null
         }
         Relationships: []
+      }
+      student_id_cards: {
+        Row: {
+          card_number: string
+          created_at: string | null
+          id: string
+          is_active: boolean
+          updated_at: string | null
+          user_id: string
+          valid_from: string
+          valid_until: string
+        }
+        Insert: {
+          card_number: string
+          created_at?: string | null
+          id?: string
+          is_active?: boolean
+          updated_at?: string | null
+          user_id: string
+          valid_from?: string
+          valid_until: string
+        }
+        Update: {
+          card_number?: string
+          created_at?: string | null
+          id?: string
+          is_active?: boolean
+          updated_at?: string | null
+          user_id?: string
+          valid_from?: string
+          valid_until?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "student_id_cards_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       success_stories: {
         Row: {

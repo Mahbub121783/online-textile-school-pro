@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { BookOpen, Award, Wallet, Settings, LogOut, CheckCircle2, AlertCircle } from 'lucide-react';
 import UtilityBar from '@/components/layout/UtilityBar';
+import StudentIdCard from '@/components/student/StudentIdCard';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import BottomNav from '@/components/layout/BottomNav';
@@ -88,7 +89,12 @@ const Profile = () => {
             ))}
           </div>
 
-          <div className="bg-card border rounded-xl p-6">
+          {/* Student ID Card */}
+          <div className="mt-6">
+            <StudentIdCard />
+          </div>
+
+          <div className="bg-card border rounded-xl p-6 mt-6">
             <h2 className="font-heading text-lg font-bold mb-4">Continue Learning</h2>
             <div className="text-center py-8 text-muted-foreground">
               <BookOpen className="h-12 w-12 mx-auto mb-3 text-muted" />
