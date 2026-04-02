@@ -12,9 +12,11 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Search, BookOpen, Book, DollarSign, Users, UserCheck, FileQuestion, Award, ArrowUpDown, MoreHorizontal, Ban, CheckCircle, Download, Eye, UserX, ChevronLeft, ChevronRight, ShieldAlert, CalendarPlus } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Search, BookOpen, Book, DollarSign, Users, UserCheck, FileQuestion, Award, ArrowUpDown, MoreHorizontal, Ban, CheckCircle, Download, Eye, UserX, ChevronLeft, ChevronRight, ShieldAlert, CalendarPlus, Gift } from 'lucide-react';
 import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from '@/components/ui/command';
 
 type SortKey = 'name' | 'joined' | 'spend';
 const PER_PAGE = 25;
@@ -27,6 +29,10 @@ export default function AdminStudents() {
   const [page, setPage] = useState(1);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [confirmAction, setConfirmAction] = useState<{ type: 'block' | 'activate' | 'block-bulk' | 'activate-bulk'; ids: string[] } | null>(null);
+  const [bulkAssignCourseOpen, setBulkAssignCourseOpen] = useState(false);
+  const [bulkAssignEbookOpen, setBulkAssignEbookOpen] = useState(false);
+  const [courseSearch, setCourseSearch] = useState('');
+  const [ebookSearch, setEbookSearch] = useState('');
   const navigate = useNavigate();
   const qc = useQueryClient();
 
@@ -94,6 +100,72 @@ export default function AdminStudents() {
       qc.invalidateQueries({ queryKey: ['admin-students'] });
       setSelectedIds(new Set());
       setConfirmAction(null);
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const { data: allCourses = [] } = useQuery({
+    queryKey: ['all-courses-bulk'],
+    queryFn: async () => {
+      const { data } = await supabase.from('courses').select('id, title').eq('is_published', true);
+      return data ?? [];
+    },
+  });
+
+  const { data: allEbooks = [] } = useQuery({
+    queryKey: ['all-ebooks-bulk'],
+    queryFn: async () => {
+      const { data } = await supabase.from('ebooks').select('id, title').eq('is_published', true);
+      return data ?? [];
+    },
+  });
+
+  const bulkAssignCourse = useMutation({
+    mutationFn: async (courseId: string) => {
+      const ids = Array.from(selectedIds);
+      const { data: existing } = await supabase.from('enrollments').select('user_id').eq('course_id', courseId).in('user_id', ids);
+      const existingSet = new Set((existing ?? []).map(e => e.user_id));
+      const toInsert = ids.filter(uid => !existingSet.has(uid)).map(uid => ({ user_id: uid, course_id: courseId }));
+      if (toInsert.length) {
+        const { error } = await supabase.from('enrollments').insert(toInsert);
+        if (error) throw error;
+      }
+      const adminId = (await supabase.auth.getUser()).data.user!.id;
+      await supabase.from('admin_activity_log').insert({ admin_id: adminId, action: 'bulk_assign_course', target_type: 'course', target_id: courseId, details: { student_count: toInsert.length, skipped: ids.length - toInsert.length } });
+      return { assigned: toInsert.length, skipped: ids.length - toInsert.length };
+    },
+    onSuccess: (result) => {
+      toast.success(`Course assigned to ${result.assigned} student(s)${result.skipped ? `, ${result.skipped} already enrolled` : ''}`);
+      qc.invalidateQueries({ queryKey: ['admin-students'] });
+      setBulkAssignCourseOpen(false);
+      setSelectedIds(new Set());
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const bulkAssignEbook = useMutation({
+    mutationFn: async (ebookId: string) => {
+      const ids = Array.from(selectedIds);
+      const { data: existingOrders } = await supabase.from('orders').select('id, user_id, order_items(item_id)').in('user_id', ids).eq('status', 'completed');
+      const alreadyHas = new Set<string>();
+      (existingOrders ?? []).forEach((o: any) => {
+        (o.order_items ?? []).forEach((i: any) => { if (i.item_id === ebookId) alreadyHas.add(o.user_id); });
+      });
+      const toGrant = ids.filter(uid => !alreadyHas.has(uid));
+      for (const uid of toGrant) {
+        const { data: order, error: oErr } = await supabase.from('orders').insert({ user_id: uid, total: 0, status: 'completed', payment_method: 'admin_grant' }).select('id').single();
+        if (oErr) throw oErr;
+        await supabase.from('order_items').insert({ order_id: order.id, item_id: ebookId, item_type: 'ebook', price: 0 });
+      }
+      const adminId = (await supabase.auth.getUser()).data.user!.id;
+      await supabase.from('admin_activity_log').insert({ admin_id: adminId, action: 'bulk_assign_ebook', target_type: 'ebook', target_id: ebookId, details: { student_count: toGrant.length, skipped: ids.length - toGrant.length } });
+      return { assigned: toGrant.length, skipped: ids.length - toGrant.length };
+    },
+    onSuccess: (result) => {
+      toast.success(`Ebook assigned to ${result.assigned} student(s)${result.skipped ? `, ${result.skipped} already owned` : ''}`);
+      qc.invalidateQueries({ queryKey: ['admin-students'] });
+      setBulkAssignEbookOpen(false);
+      setSelectedIds(new Set());
     },
     onError: (e: any) => toast.error(e.message),
   });
@@ -212,6 +284,12 @@ export default function AdminStudents() {
             </Button>
             <Button size="sm" variant="default" className="gap-1" onClick={() => setConfirmAction({ type: 'activate-bulk', ids: Array.from(selectedIds) })}>
               <CheckCircle className="h-3.5 w-3.5" /> Activate Selected
+            </Button>
+            <Button size="sm" variant="secondary" className="gap-1" onClick={() => setBulkAssignCourseOpen(true)}>
+              <BookOpen className="h-3.5 w-3.5" /> Assign Course
+            </Button>
+            <Button size="sm" variant="secondary" className="gap-1" onClick={() => setBulkAssignEbookOpen(true)}>
+              <Book className="h-3.5 w-3.5" /> Assign Ebook
             </Button>
             <Button size="sm" variant="ghost" onClick={() => setSelectedIds(new Set())}>Clear</Button>
           </CardContent>
@@ -385,6 +463,50 @@ export default function AdminStudents() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Bulk Assign Course Dialog */}
+      <Dialog open={bulkAssignCourseOpen} onOpenChange={setBulkAssignCourseOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Assign Course to {selectedIds.size} Student(s)</DialogTitle></DialogHeader>
+          <Command className="border rounded-lg">
+            <CommandInput placeholder="Search courses..." value={courseSearch} onValueChange={setCourseSearch} />
+            <CommandList>
+              <CommandEmpty>No courses found</CommandEmpty>
+              <CommandGroup>
+                {allCourses.map((c: any) => (
+                  <CommandItem key={c.id} value={c.title} onSelect={() => bulkAssignCourse.mutate(c.id)} className="cursor-pointer gap-2">
+                    <BookOpen className="h-4 w-4 text-primary" />
+                    <span>{c.title}</span>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+          {bulkAssignCourse.isPending && <p className="text-sm text-muted-foreground text-center">Assigning...</p>}
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Assign Ebook Dialog */}
+      <Dialog open={bulkAssignEbookOpen} onOpenChange={setBulkAssignEbookOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Assign Ebook to {selectedIds.size} Student(s)</DialogTitle></DialogHeader>
+          <Command className="border rounded-lg">
+            <CommandInput placeholder="Search ebooks..." value={ebookSearch} onValueChange={setEbookSearch} />
+            <CommandList>
+              <CommandEmpty>No ebooks found</CommandEmpty>
+              <CommandGroup>
+                {allEbooks.map((e: any) => (
+                  <CommandItem key={e.id} value={e.title} onSelect={() => bulkAssignEbook.mutate(e.id)} className="cursor-pointer gap-2">
+                    <Book className="h-4 w-4 text-primary" />
+                    <span>{e.title}</span>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+          {bulkAssignEbook.isPending && <p className="text-sm text-muted-foreground text-center">Assigning...</p>}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

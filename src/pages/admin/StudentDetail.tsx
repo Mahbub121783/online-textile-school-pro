@@ -488,7 +488,14 @@ export default function StudentDetail() {
                     <TableCell className="font-medium">{(e.courses as any)?.title || 'Unknown'}</TableCell>
                     <TableCell><div className="flex items-center gap-2"><Progress value={e.progress_pct || 0} className="h-2 w-20" /><span className="text-xs">{e.progress_pct || 0}%</span></div></TableCell>
                     <TableCell className="text-sm text-muted-foreground">{e.enrolled_at ? new Date(e.enrolled_at).toLocaleDateString() : '—'}</TableCell>
-                    <TableCell><Badge variant={e.completed_at ? 'default' : 'secondary'}>{e.completed_at ? 'Completed' : 'In Progress'}</Badge></TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-1.5">
+                        <Badge variant={e.completed_at ? 'default' : 'secondary'}>{e.completed_at ? 'Completed' : 'In Progress'}</Badge>
+                        <Badge variant="outline" className={`text-[10px] ${e.payment_id ? 'border-green-500 text-green-700' : 'border-amber-500 text-amber-700'}`}>
+                          {e.payment_id ? 'Purchased' : 'Granted'}
+                        </Badge>
+                      </div>
+                    </TableCell>
                     <TableCell>
                       <Button variant="ghost" size="sm" className="text-destructive h-7 px-2 gap-1" onClick={() => setRevokeTarget({ type: 'enrollment', id: e.id, name: (e.courses as any)?.title || 'this course' })}>
                         <XCircle className="h-3.5 w-3.5" /> Revoke
@@ -516,12 +523,19 @@ export default function StudentDetail() {
                 {ebookItems.map((i: any, idx: number) => {
                   const ebook = (ebookNameMap as any)[i.item_id];
                   const progress = readingMap[i.item_id];
+                  const parentOrder = orders.find((o: any) => (o.order_items ?? []).some((oi: any) => oi.item_id === i.item_id && oi.item_type === 'ebook'));
+                  const isGranted = parentOrder && (parentOrder.total === 0 || parentOrder.payment_method === 'admin_grant');
                   return (
                     <TableRow key={idx}>
                       <TableCell>
                         <div className="flex items-center gap-3">
                           {ebook?.cover_url && <img src={ebook.cover_url} className="h-10 w-8 object-cover rounded" alt="" />}
-                          <span className="font-medium">{ebook?.title || i.item_id.slice(0, 8)}</span>
+                          <div>
+                            <span className="font-medium">{ebook?.title || i.item_id.slice(0, 8)}</span>
+                            <Badge variant="outline" className={`ml-2 text-[10px] ${isGranted ? 'border-amber-500 text-amber-700' : 'border-green-500 text-green-700'}`}>
+                              {isGranted ? 'Granted' : 'Purchased'}
+                            </Badge>
+                          </div>
                         </div>
                       </TableCell>
                       <TableCell>
