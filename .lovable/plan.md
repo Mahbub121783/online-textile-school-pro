@@ -1,64 +1,84 @@
 
 
-## System Audit: Student, Instructor & Admin Feature Connectivity
+## Plan: Upgrade Super Admin to Full-Control Owner Dashboard
 
-### Overall Assessment
+### Current State
 
-The system is **well-connected and highly dynamic** across all three portals. All major features use real Supabase queries with `react-query` for caching and real-time invalidation. Here is the detailed breakdown:
+Right now, `admin` and `super_admin` have **identical access**. The `AdminLayout` checks `roles.includes('admin') || roles.includes('super_admin')` but nothing differentiates them. There is no super_admin-exclusive section, no system health view, no ability to manage other admins, and no global override controls.
 
-### What IS Connected & Dynamic
+### What's Missing for a True Super Admin (System Owner)
 
-| Flow | Status | Details |
-|------|--------|---------|
-| Student enrolls -> appears in instructor dashboard | Connected | Instructor queries `enrollments` by `course_id`, student sees own enrollments |
-| Student submits quiz -> instructor sees in gradebook | Connected | `quiz_attempts` linked by `quiz_id` -> `course_id` -> `instructor_id` |
-| Student submits assignment -> instructor grades it | Connected | `assignment_submissions` with RLS for instructor's courses |
-| Instructor creates course -> admin reviews it | Connected | `review_status` field, admin CMS dashboard shows pending courses |
-| Admin approves instructor -> role granted | Connected | `instructor_applications` table + `user_roles` insert |
-| Wallet top-up/withdrawal across roles | Connected | Shared `wallets` + `wallet_transactions` tables, admin manages all wallets |
-| Certificates earned -> student downloads | Connected | Template -> certificate -> PDF generation with score tracking |
-| Cart -> checkout -> order -> enrollment | Connected | Full purchase flow with coupon, wallet, and manual payment |
-| Notifications cross-role | Connected | `notifications` table with realtime subscriptions per layout |
-| Media upload -> library -> picker | Connected | Unified `media_library` with upsert dedup, MediaPickerModal everywhere |
-| Discussion forums | Connected | `discussions` table with instructor reply + mark-as-answered |
-| Course announcements | Connected | `course_announcements` with instructor CRUD + student view RLS |
-| Lesson progress -> course completion -> certificate eligibility | Connected | `lesson_progress` -> `enrollments.progress_pct` -> certificate unlock logic |
-| Referral system | Connected | `referral_rewards` table, referral code in profile, wallet credit |
+| Gap | Impact |
+|-----|--------|
+| No distinction between admin vs super_admin permissions | Any admin can do everything a super_admin can |
+| No system health / server status overview | Owner has no visibility into edge function health, DB size, storage usage |
+| No admin management (can't see/revoke other admins) | No control over who has admin access |
+| Dashboard lacks revenue charts, growth trends | Owner can't see business trajectory at a glance |
+| No global system controls (maintenance mode toggle, cache clear) from dashboard | Must navigate deep into settings |
+| No bulk data export (users, orders, revenue CSV) | Owner can't extract business data |
+| Sidebar doesn't show super_admin badge or distinguish the role | No visual identity |
+| Settings page is minimal (7 fields) | Missing many site-wide controls |
+| No "impersonate user" or "login as" capability | Can't debug user issues |
+| Wallets page works but no summary analytics | No financial overview |
 
-### Gaps & Disconnected Features Found
+### Implementation Plan
 
-**1. `process-payment` Edge Function Missing (Critical)**
-`PaymentSuccess.tsx` calls `supabase.functions.invoke('process-payment')` but this edge function does not exist in `supabase/functions/`. Only `cloudinary-proxy` and `r2-presign` exist. Payment verification will always fail for gateway payments (UddoktaPay).
+**Step 1: Enhanced Super Admin Dashboard** (replace AdminDashboard for super_admin)
+- Revenue trend line chart (last 30 days) using recharts
+- User growth chart (signups per day)
+- System health cards: total DB records, active edge functions, storage bucket size
+- Quick-action grid: Maintenance toggle, Export Users CSV, Export Orders CSV, Manage Admins
+- Pending items summary: pending orders, pending instructor apps, pending withdrawals with direct links
+- Recent signups feed alongside existing enrollments/orders/activity
 
-**2. Admin Dashboard Foreign Key Joins May Fail (Medium)**
-`AdminDashboard.tsx` uses explicit FK joins like `user_profiles!enrollments_user_id_fkey(full_name)` and `courses!enrollments_course_id_fkey(title)`, but the schema shows "No foreign keys" on the enrollments table. These queries may return null for joined data or error out.
+**Step 2: Admin Management Page** (super_admin only)
+- New page: list all users with admin/super_admin roles
+- Grant/revoke admin role (super_admin cannot be removed by regular admin)
+- View last login time, activity count per admin
+- Guard: only super_admin can access this page
 
-**3. Student Dashboard `referral_rewards` Table Not in Schema (Medium)**
-`DashboardOverview.tsx` queries `referral_rewards` and `ReferralsPage.tsx` relies on it, but this table is not listed in the database schema provided. If the table doesn't exist, these queries silently fail.
+**Step 3: System Controls Panel** (super_admin only)
+- Maintenance mode toggle (instant, from dashboard)
+- Clear query caches button
+- Export buttons: Users CSV, Orders CSV, Revenue Report CSV
+- Edge function status list (shows deployed functions)
+- Database table row counts
 
-**4. `wallet_topup_requests` Table Not in Schema (Medium)**
-`WalletPage.tsx` queries `wallet_topup_requests as any` - the `as any` cast confirms this table may not exist or is not in generated types.
+**Step 4: Sidebar & Layout Upgrades**
+- Show role badge in sidebar header (Super Admin vs Admin)
+- Add "System" group in sidebar for super_admin only: Admin Management, System Controls
+- Add "Wallets" to existing sidebar items
+- Visual distinction: gold/amber accent for super_admin badge
 
-**5. `reviews` Table Not in Schema (Low-Medium)**
-`CourseDetail.tsx` queries the `reviews` table for course ratings, but it's not in the provided schema. Reviews may not work.
+**Step 5: Role-Based Access Guards**
+- Create `isSuperAdmin` helper in useAuth
+- Wrap super_admin-only routes with a guard component
+- Regular admins see a "Super Admin Only" message if they navigate to restricted pages
 
-**6. `quizzes` and `quiz_attempts` Tables Not in Schema (Low-Medium)**
-Multiple pages query these tables but they aren't in the provided schema dump. They likely exist but aren't shown.
+### Files to Create
 
-**7. No `handle_new_user` Trigger Attached (Low-Medium)**
-The `handle_new_user()` function exists but "There are no triggers in the database." New user signups may not auto-create profiles, roles, or wallets.
+| File | Purpose |
+|------|---------|
+| `src/pages/admin/AdminManagement.tsx` | Admin user management (super_admin only) |
+| `src/pages/admin/SystemControls.tsx` | System health, exports, maintenance controls |
 
-### Recommended Fixes (Priority Order)
+### Files to Edit
 
-| # | Fix | Impact |
-|---|-----|--------|
-| 1 | Create `process-payment` edge function for UddoktaPay verification + order completion + enrollment creation | Payment flow broken without it |
-| 2 | Verify `handle_new_user` trigger exists on `auth.users` (may be hidden from schema dump) | New signups may be broken |
-| 3 | Remove FK-style joins in AdminDashboard or add actual foreign keys to enrollments/orders tables | Admin dashboard data display |
-| 4 | Verify `referral_rewards`, `wallet_topup_requests`, `reviews`, `quizzes`, `quiz_attempts`, `payment_gateways` tables exist | Multiple features depend on them |
-| 5 | Add missing `process-payment` edge function that handles: verify payment status, update order, create enrollments, credit instructor wallet | End-to-end purchase flow |
+| File | Changes |
+|------|---------|
+| `src/pages/admin/AdminDashboard.tsx` | Add revenue/user charts, system health cards, quick actions |
+| `src/components/layout/AdminSidebar.tsx` | Add role badge, System group for super_admin, Wallets link |
+| `src/hooks/useAuth.tsx` | Add `isSuperAdmin` boolean to context |
+| `src/App.tsx` | Add 2 new admin routes |
+| `src/pages/admin/AdminLayout.tsx` | Pass role info to outlet context for child route guards |
 
-### Summary
+### No Migration Needed
+All data already exists in current tables. No new DB tables required.
 
-The codebase is architecturally solid - all three portals share the same Supabase tables and use consistent query patterns. The main risk is the **missing `process-payment` edge function** which breaks the purchase-to-enrollment pipeline. Everything else is properly wired with real database queries, RLS policies, and cross-role data sharing. The system is genuinely dynamic - no hardcoded data, all features read/write from Supabase with proper auth checks.
+### Technical Notes
+- Charts use `recharts` (already available via shadcn chart)
+- CSV export uses browser-native `Blob` + download anchor pattern
+- System health data comes from existing Supabase queries (count queries on major tables)
+- Role guard is client-side only (RLS already blocks unauthorized DB access server-side)
+- Total: 2 new files, 5 edited files
 
