@@ -90,10 +90,11 @@ export async function renderIdCard(
   ctx.fillStyle = primary;
   ctx.fillRect(0, 0, CARD_W, hH);
 
-  // Logo 76x76
+  // Logo 76x76 — with 10px top padding
   const logoSize = 76;
   const logoX = 30;
-  const logoY = (hH - logoSize) / 2;
+  const headerPadTop = 10;
+  const logoY = headerPadTop + (hH - headerPadTop - logoSize) / 2;
   const logoSrc = settings.logo_url || otsLogoUrl;
   try {
     const logo = await loadImage(logoSrc);
@@ -102,25 +103,43 @@ export async function renderIdCard(
 
   // University name — 38px bold
   const textX = logoX + logoSize + 20;
+  const headerCenterY = headerPadTop + (hH - headerPadTop) / 2;
   ctx.fillStyle = '#ffffff';
   ctx.textAlign = 'left';
   ctx.font = 'bold 38px "Segoe UI", Arial, sans-serif';
-  ctx.fillText(settings.university_name || 'Online Textile School', textX, hH / 2 - 6);
+  ctx.fillText(settings.university_name || 'Online Textile School', textX, headerCenterY - 6);
 
   // Location — 20px
   ctx.font = '20px "Segoe UI", Arial, sans-serif';
   ctx.fillStyle = 'rgba(255,255,255,0.75)';
-  ctx.fillText(settings.location || 'Dhaka, Bangladesh', textX, hH / 2 + 22);
+  ctx.fillText(settings.location || 'Dhaka, Bangladesh', textX, headerCenterY + 22);
 
   // "STUDENT ID CARD" — right-aligned, 22px bold
   ctx.textAlign = 'right';
   ctx.font = 'bold 22px "Segoe UI", Arial, sans-serif';
   ctx.fillStyle = 'rgba(255,255,255,0.9)';
-  ctx.fillText('STUDENT ID CARD', CARD_W - 34, hH / 2 + 8);
+  ctx.fillText('STUDENT ID CARD', CARD_W - 34, headerCenterY + 8);
 
   // ── Teal accent line ──
   ctx.fillStyle = '#0d9488';
   ctx.fillRect(0, hH, CARD_W, 4);
+
+  // ══════════════════════════════════════════
+  // WATERMARK — 5% opacity logo centered on body area
+  // ══════════════════════════════════════════
+  const barcodeBarH = 70;
+  const bodyAreaTop = hH + 4;
+  const bodyAreaBottom = CARD_H - barcodeBarH;
+  const watermarkSize = 300;
+  const wmX = (CARD_W - watermarkSize) / 2;
+  const wmY = bodyAreaTop + ((bodyAreaBottom - bodyAreaTop) - watermarkSize) / 2;
+  try {
+    const wmLogo = await loadImage(logoSrc);
+    ctx.save();
+    ctx.globalAlpha = 0.05;
+    ctx.drawImage(wmLogo, wmX, wmY, watermarkSize, watermarkSize);
+    ctx.restore();
+  } catch { /* skip watermark */ }
 
   // ══════════════════════════════════════════
   // BODY — Photo + Fields
@@ -187,7 +206,6 @@ export async function renderIdCard(
   // ══════════════════════════════════════════
   // FOOTER — Validity + Signature (between body and barcode bar)
   // ══════════════════════════════════════════
-  const barcodeBarH = 70;
 
   // Valid Until — 10px below photo bottom, left-aligned under photo
   const validY = photoY + photoH + 10;
@@ -228,6 +246,15 @@ export async function renderIdCard(
     ctx.fillStyle = '#64748b';
     ctx.fillText(settings.authority_position, sigCenterX, sigBaseY + 68);
   }
+
+  // ══════════════════════════════════════════
+  // WEBSITE — centered in gap between signature and barcode
+  // ══════════════════════════════════════════
+  const websiteY = CARD_H - barcodeBarH - 30;
+  ctx.font = 'bold 18px "Segoe UI", Arial, sans-serif';
+  ctx.fillStyle = primary;
+  ctx.textAlign = 'center';
+  ctx.fillText('Official Website : www.onlinetextileschool.com', CARD_W / 2, websiteY);
 
   // ══════════════════════════════════════════
   // BARCODE BAR — Oxford-style full-width dark strip
