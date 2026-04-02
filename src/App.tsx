@@ -147,6 +147,9 @@ const App = () => (
                   <Route path="revenue" element={<RevenueDashboard />} />
                   <Route path="wallet" element={<InstructorWallet />} />
                   <Route path="students" element={<InstructorStudents />} />
+                  <Route path="discussions" element={<InstructorDiscussions />} />
+                  <Route path="announcements" element={<InstructorAnnouncements />} />
+                  <Route path="analytics" element={<InstructorAnalytics />} />
                   <Route path="notifications" element={<NotificationsPage />} />
                 </Route>
                 {/* Admin Panel */}

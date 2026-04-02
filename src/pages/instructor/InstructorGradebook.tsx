@@ -66,7 +66,29 @@ const InstructorGradebook = () => {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-4">
-        <h2 className="font-heading text-2xl font-bold">Gradebook</h2>
+        <div className="flex items-center gap-3">
+          <h2 className="font-heading text-2xl font-bold">Gradebook</h2>
+          {enrollments.length > 0 && (
+            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => {
+              const headers = ['Student', 'Progress', 'Quiz Avg', 'Assignments Graded', 'Status'];
+              const rows = enrollments.map((enr: any) => {
+                const sq = quizAttempts.filter((a: any) => a.user_id === enr.user_id && a.completed_at);
+                const avg = sq.length > 0 ? Math.round(sq.reduce((s: number, a: any) => s + (a.percentage || 0), 0) / sq.length) : '';
+                const sa = assignSubs.filter((s: any) => s.user_id === enr.user_id);
+                const graded = sa.filter((s: any) => s.status === 'graded');
+                return [enr.user_profiles?.full_name || 'Student', `${enr.progress_pct || 0}%`, avg ? `${avg}%` : 'N/A', `${graded.length}/${sa.length}`, enr.completed_at ? 'Completed' : 'In Progress'];
+              });
+              const csv = [headers, ...rows].map(r => r.join(',')).join('\n');
+              const blob = new Blob([csv], { type: 'text/csv' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url; a.download = 'gradebook.csv'; a.click();
+              URL.revokeObjectURL(url);
+            }}>
+              <Download className="h-4 w-4" /> Export CSV
+            </Button>
+          )}
+        </div>
         <Select value={courseId || ''} onValueChange={setSelectedCourse}>
           <SelectTrigger className="w-64">
             <SelectValue placeholder="Select course" />
