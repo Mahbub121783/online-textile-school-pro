@@ -1,71 +1,72 @@
 
 
-## Plan: Redesign ID Card — Clean, Professional, Properly Aligned
+## Plan: Redesign ID Card — Oxford-Style with Full-Width Barcode Bar & Larger Typography
 
-### Problems with Current Design
+### What's Wrong (comparing screenshots)
 
-1. **Photo too small** (155x190) relative to 1012x638 card — looks lost
-2. **Fields cramped** — 40px line height with 11px labels and 17px values doesn't leave enough breathing room
-3. **Signature and validity pill float awkwardly** — not aligned to any grid
-4. **Hex pattern watermark is distracting** — real university cards are clean
-5. **Too much empty space** at the bottom, barcode area oversized
-6. **Overall feels like a decorated web card, not a real ID card**
+| Issue | Current | Target |
+|-------|---------|--------|
+| **Header text too small** | University name 26px, location 14px, "STUDENT ID CARD" 16px | University name ~34px bold, "STUDENT ID CARD" ~20px bold |
+| **Barcode is tiny and centered** | 280x38px barcode floating in white space | Full-width dark bar across the bottom ~70% width with barcode + card number — like Oxford card |
+| **Signature area weak** | Small signature image + thin line, tucked into corner | Proper signature line with clear authority name/position, well-spaced |
+| **Footer wastes space** | Large empty gap between fields and barcode | Compact validity + signature row, then full barcode bar at bottom |
+| **Label font too small** | 12px labels barely readable | 14px labels in a distinct color with colon styling |
 
-### Design Reference: Standard CR80 University ID Card
-
-Real university ID cards (Oxford, MIT, etc.) follow a simple, clean structure:
+### Redesigned Layout
 
 ```text
-┌─────────────────────────────────────────────────────┐
-│  [LOGO]  ONLINE TEXTILE SCHOOL        STUDENT ID    │
-│          Dhaka, Bangladesh              CARD        │
-├─────────────────────────────────────────────────────┤
-│                                                     │
-│  ┌──────────┐   NAME:       Md. Mahbubul Alam      │
-│  │          │   ROLL:       OTS-181033              │
-│  │  PHOTO   │   BLOOD:      A+                      │
-│  │ (square) │   DOB:        08 Feb 2000             │
-│  │          │   ADDRESS:    Barisal                  │
-│  └──────────┘                                       │
-│                                                     │
-│  Valid: Sep 2027    ────────────    [Signature]      │
-│                                    Authority Name   │
-│  ▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌  OTS-ID-448960             │
-│━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━│
-└─────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────┐
+│ [LOGO 70x70]  Online Textile School      STUDENT ID     │  ← Header 110px
+│               Dhaka, Bangladesh             CARD        │     Name 34px, badge 20px
+├─── teal accent 4px ────────────────────────────────────-┤
+│                                                         │
+│  ┌────────┐   NAME :        Md. Mahbubul Alam           │  ← Fields 14px label, 18px value
+│  │        │   ROLL :        OTS-181033                  │
+│  │ PHOTO  │   BLOOD GROUP : A+                          │
+│  │170x210 │   DATE OF BIRTH: 08 Feb 2000                │
+│  │        │   ADDRESS :     Barisal                     │
+│  └────────┘                                             │
+│                                                         │
+│  Valid Until: Sep 2027          ─────────────────        │  ← Signature area
+│                                 Authority Name          │
+│                                 Position                │
+│▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓│  ← Dark barcode bar
+│         ▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌   OTS-ID-448960            │     70% width, 60px tall
+│▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓│
+└─────────────────────────────────────────────────────────┘
 ```
 
-### Key Design Changes
+### Key Changes in `src/lib/idCardRenderer.ts`
 
-**Header (compact, 100px):**
-- Logo 60x60, not clipped to circle — show full logo with transparent bg
-- University name bold 26px, location 14px — left-aligned beside logo
-- "STUDENT ID CARD" text right-aligned in header, no pill/badge — just clean white text
+**Header (110px):**
+- Logo increased to 70x70
+- University name: bold 34px (was 26px)
+- Location: 16px (was 14px)
+- "STUDENT ID CARD": bold 20px (was 16px)
+- Teal accent line: 4px (was 3px)
 
-**Body (clean grid, no decorative patterns):**
-- Remove ALL hex watermark patterns
-- Photo: 160x200 with simple 2px border, rounded 8px corners, no glow/shadow effects
-- Fields: proper vertical spacing (44px per row), label 12px in muted color, value 16px bold
-- Labels right-padded and colon-separated for clean alignment
+**Body:**
+- Photo: 170x210 (slightly larger)
+- Labels: 14px semi-bold in slate color with " :" suffix
+- Values: 18px bold dark
+- Row height: 46px for breathing room
 
-**Footer (compact):**
-- Left: validity text (small, simple)
-- Right: signature line with name/position below
-- Center bottom: barcode (narrower, 280px wide, 38px tall) with card number below
-- Thin 4px bottom accent bar
+**Footer — Signature area:**
+- Validity text left-aligned, 14px
+- Signature image + line on right side, wider (160px line)
+- Authority name 14px bold, position 12px — both clearly visible
 
-**What's removed:**
-- Hex patterns everywhere
-- Glow/shadow on photo
-- Gradient pill badges
-- Oversized barcode area
-- Excessive spacing
+**Barcode bar (Oxford-style bottom strip):**
+- Dark background strip (matching header color) spanning full card width, 70px tall
+- Barcode rendered white-on-dark, 70% of card width (~700px), 50px tall
+- Card number in white monospace text below barcode, centered
+- This replaces the floating barcode + accent bar
 
-### File Changes
+### File Summary
 
 | File | Action |
 |------|--------|
-| `src/lib/idCardRenderer.ts` | Rewrite `renderIdCard` — clean layout, proper alignment, no decorative noise |
+| `src/lib/idCardRenderer.ts` | Rewrite layout — bigger header text, Oxford-style full-width barcode bar, improved signature area |
 
-Single file edit. No other changes needed.
+Single file edit.
 
