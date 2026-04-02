@@ -1,4 +1,5 @@
 import { lazy, Suspense } from 'react';
+import ChatWidget from '@/components/chat/ChatWidget';
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes, Navigate } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -68,6 +69,9 @@ const AdminPayment = lazy(() => import("./pages/admin/AdminPayment"));
 const AdminManagement = lazy(() => import("./pages/admin/AdminManagement"));
 const SystemControls = lazy(() => import("./pages/admin/SystemControls"));
 const AdminEbooks = lazy(() => import("./pages/admin/AdminEbooks"));
+const AdminEvents = lazy(() => import("./pages/admin/AdminEvents"));
+const AdminSuccessStories = lazy(() => import("./pages/admin/AdminSuccessStories"));
+const AdminLearningPaths = lazy(() => import("./pages/admin/AdminLearningPaths"));
 const PageEditor = lazy(() => import("./pages/admin/PageEditor"));
 const LessonPlayer = lazy(() => import("./pages/learn/LessonPlayer"));
 const QuizPlayer = lazy(() => import("./pages/quiz/QuizPlayer"));
@@ -75,6 +79,13 @@ const AssignmentSubmit = lazy(() => import("./pages/assignment/AssignmentSubmit"
 const EbookCatalog = lazy(() => import("./pages/ebooks/EbookCatalog"));
 const EbookDetail = lazy(() => import("./pages/ebooks/EbookDetail"));
 const EbookReader = lazy(() => import("./pages/ebooks/EbookReader"));
+const LearningPaths = lazy(() => import("./pages/courses/LearningPaths"));
+const LearningPathDetail = lazy(() => import("./pages/courses/LearningPathDetail"));
+const WishlistPage = lazy(() => import("./pages/dashboard/WishlistPage"));
+const LeaderboardPage = lazy(() => import("./pages/dashboard/LeaderboardPage"));
+const DepartmentsPage = lazy(() => import("./pages/static/DepartmentsPage"));
+const EventsPage = lazy(() => import("./pages/static/EventsPage"));
+const AlumniPage = lazy(() => import("./pages/static/AlumniPage"));
 const PaymentSuccess = lazy(() => import("./pages/payment/PaymentSuccess"));
 const PaymentCancel = lazy(() => import("./pages/payment/PaymentCancel"));
 const DynamicPage = lazy(() => import("./pages/cms/DynamicPage"));
@@ -109,6 +120,8 @@ const App = () => (
                 <Route path="/courses/:slug" element={<CourseDetail />} />
                 <Route path="/ebooks" element={<EbookCatalog />} />
                 <Route path="/ebooks/:slug" element={<EbookDetail />} />
+                <Route path="/learning-paths" element={<LearningPaths />} />
+                <Route path="/learning-paths/:slug" element={<LearningPathDetail />} />
                 <Route path="/cart" element={<CartPage />} />
                 <Route path="/checkout" element={<Checkout />} />
                 <Route path="/payment/success" element={<PaymentSuccess />} />
@@ -133,6 +146,8 @@ const App = () => (
                   <Route path="referrals" element={<ReferralsPage />} />
                   <Route path="notifications" element={<NotificationsPage />} />
                   <Route path="wallet" element={<WalletPage />} />
+                  <Route path="wishlist" element={<WishlistPage />} />
+                  <Route path="leaderboard" element={<LeaderboardPage />} />
                   <Route path="settings" element={<SettingsPage />} />
                 </Route>
                 {/* Instructor Portal */}
@@ -186,6 +201,9 @@ const App = () => (
                   <Route path="activity" element={<AdminActivity />} />
                   <Route path="admin-management" element={<AdminManagement />} />
                   <Route path="system-controls" element={<SystemControls />} />
+                  <Route path="events" element={<AdminEvents />} />
+                  <Route path="success-stories" element={<AdminSuccessStories />} />
+                  <Route path="learning-paths" element={<AdminLearningPaths />} />
                 </Route>
                 <Route path="/learn/:courseSlug/:lessonId" element={<LessonPlayer />} />
                 <Route path="/quiz/:quizId" element={<QuizPlayer />} />
@@ -197,11 +215,15 @@ const App = () => (
                 <Route path="/privacy" element={<PrivacyPage />} />
                 <Route path="/terms" element={<TermsPage />} />
                 <Route path="/become-instructor" element={<BecomeInstructor />} />
+                <Route path="/departments" element={<DepartmentsPage />} />
+                <Route path="/events" element={<EventsPage />} />
+                <Route path="/alumni" element={<AlumniPage />} />
                 {/* Dynamic CMS pages - must be before 404 */}
                 <Route path="/:slug" element={<DynamicPage />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </Suspense>
+            <ChatWidget />
           </BrowserRouter>
         </TooltipProvider>
       </AuthProvider>

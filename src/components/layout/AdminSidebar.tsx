@@ -50,6 +50,9 @@ const paymentSubItems = [
 
 const bottomItems = [
   { title: 'E-Books', url: '/admin/ebooks', icon: BookOpen },
+  { title: 'Learning Paths', url: '/admin/learning-paths', icon: GraduationCap },
+  { title: 'Events', url: '/admin/events', icon: Activity },
+  { title: 'Success Stories', url: '/admin/success-stories', icon: Users },
   { title: 'Coupons', url: '/admin/coupons', icon: Tag },
   { title: 'Pages', url: '/admin/pages', icon: FileText },
   { title: 'Blog Posts', url: '/admin/posts', icon: PenTool },

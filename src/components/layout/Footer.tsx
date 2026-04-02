@@ -46,10 +46,13 @@ const Footer = () => {
             <ul className="space-y-2">
               {[
                 { label: 'About Us', href: '/about' },
+                { label: 'Departments', href: '/departments' },
+                { label: 'Learning Paths', href: '/learning-paths' },
+                { label: 'Events', href: '/events' },
+                { label: 'Alumni Stories', href: '/alumni' },
                 { label: 'Blog', href: '/blog' },
                 { label: 'Contact', href: '/contact' },
                 { label: 'Privacy Policy', href: '/privacy' },
-                { label: 'Terms of Service', href: '/terms' },
                 { label: 'Become an Instructor', href: '/become-instructor' },
               ].map((link) => (
                 <li key={link.href}>

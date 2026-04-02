@@ -288,6 +288,33 @@ export type Database = {
           },
         ]
       }
+      chat_messages: {
+        Row: {
+          created_at: string | null
+          id: string
+          is_read: boolean | null
+          message: string
+          receiver_id: string
+          sender_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          is_read?: boolean | null
+          message: string
+          receiver_id: string
+          sender_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          is_read?: boolean | null
+          message?: string
+          receiver_id?: string
+          sender_id?: string
+        }
+        Relationships: []
+      }
       cloudflare_r2_accounts: {
         Row: {
           access_key_id: string
@@ -564,6 +591,7 @@ export type Database = {
           meta_description: string | null
           meta_title: string | null
           og_image_url: string | null
+          prerequisite_course_ids: string[] | null
           price: number | null
           rejection_reason: string | null
           revenue_share_pct: number | null
@@ -599,6 +627,7 @@ export type Database = {
           meta_description?: string | null
           meta_title?: string | null
           og_image_url?: string | null
+          prerequisite_course_ids?: string[] | null
           price?: number | null
           rejection_reason?: string | null
           revenue_share_pct?: number | null
@@ -634,6 +663,7 @@ export type Database = {
           meta_description?: string | null
           meta_title?: string | null
           og_image_url?: string | null
+          prerequisite_course_ids?: string[] | null
           price?: number | null
           rejection_reason?: string | null
           revenue_share_pct?: number | null
@@ -2063,6 +2093,63 @@ export type Database = {
           key?: string
           updated_at?: string | null
           value?: string | null
+        }
+        Relationships: []
+      }
+      success_stories: {
+        Row: {
+          course_title: string | null
+          created_at: string | null
+          graduation_year: number | null
+          id: string
+          is_featured: boolean | null
+          job_title: string | null
+          name: string
+          photo_url: string | null
+          story: string
+        }
+        Insert: {
+          course_title?: string | null
+          created_at?: string | null
+          graduation_year?: number | null
+          id?: string
+          is_featured?: boolean | null
+          job_title?: string | null
+          name: string
+          photo_url?: string | null
+          story: string
+        }
+        Update: {
+          course_title?: string | null
+          created_at?: string | null
+          graduation_year?: number | null
+          id?: string
+          is_featured?: boolean | null
+          job_title?: string | null
+          name?: string
+          photo_url?: string | null
+          story?: string
+        }
+        Relationships: []
+      }
+      user_badges: {
+        Row: {
+          badge_type: string
+          earned_at: string | null
+          id: string
+          user_id: string
+        }
+        Insert: {
+          badge_type: string
+          earned_at?: string | null
+          id?: string
+          user_id: string
+        }
+        Update: {
+          badge_type?: string
+          earned_at?: string | null
+          id?: string
+          user_id?: string
         }
         Relationships: []
       }
