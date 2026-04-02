@@ -90,10 +90,11 @@ export async function renderIdCard(
   ctx.fillStyle = primary;
   ctx.fillRect(0, 0, CARD_W, hH);
 
-  // Logo 76x76
+  // Logo 76x76 — with 10px top padding
   const logoSize = 76;
   const logoX = 30;
-  const logoY = (hH - logoSize) / 2;
+  const headerPadTop = 10;
+  const logoY = headerPadTop + (hH - headerPadTop - logoSize) / 2;
   const logoSrc = settings.logo_url || otsLogoUrl;
   try {
     const logo = await loadImage(logoSrc);
