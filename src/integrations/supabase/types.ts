@@ -475,6 +475,36 @@ export type Database = {
         }
         Relationships: []
       }
+      course_announcements: {
+        Row: {
+          content: string | null
+          course_id: string
+          created_at: string | null
+          id: string
+          instructor_id: string
+          is_pinned: boolean | null
+          title: string
+        }
+        Insert: {
+          content?: string | null
+          course_id: string
+          created_at?: string | null
+          id?: string
+          instructor_id: string
+          is_pinned?: boolean | null
+          title: string
+        }
+        Update: {
+          content?: string | null
+          course_id?: string
+          created_at?: string | null
+          id?: string
+          instructor_id?: string
+          is_pinned?: boolean | null
+          title?: string
+        }
+        Relationships: []
+      }
       course_sections: {
         Row: {
           course_id: string
