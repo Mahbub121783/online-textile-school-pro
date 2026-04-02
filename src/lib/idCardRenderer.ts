@@ -84,14 +84,14 @@ export async function renderIdCard(
   ctx.clip();
 
   // ══════════════════════════════════════════
-  // HEADER — 110px, dark background
+  // HEADER — 116px (~5% bigger), dark background
   // ══════════════════════════════════════════
-  const hH = 110;
+  const hH = 116;
   ctx.fillStyle = primary;
   ctx.fillRect(0, 0, CARD_W, hH);
 
-  // Logo 70x70
-  const logoSize = 70;
+  // Logo 76x76
+  const logoSize = 76;
   const logoX = 30;
   const logoY = (hH - logoSize) / 2;
   const logoSrc = settings.logo_url || otsLogoUrl;
@@ -100,23 +100,23 @@ export async function renderIdCard(
     ctx.drawImage(logo, logoX, logoY, logoSize, logoSize);
   } catch { /* skip */ }
 
-  // University name — 34px bold
+  // University name — 38px bold
   const textX = logoX + logoSize + 20;
   ctx.fillStyle = '#ffffff';
   ctx.textAlign = 'left';
-  ctx.font = 'bold 34px "Segoe UI", Arial, sans-serif';
+  ctx.font = 'bold 38px "Segoe UI", Arial, sans-serif';
   ctx.fillText(settings.university_name || 'Online Textile School', textX, hH / 2 - 6);
 
-  // Location — 16px
-  ctx.font = '16px "Segoe UI", Arial, sans-serif';
-  ctx.fillStyle = 'rgba(255,255,255,0.7)';
-  ctx.fillText(settings.location || 'Dhaka, Bangladesh', textX, hH / 2 + 20);
+  // Location — 20px
+  ctx.font = '20px "Segoe UI", Arial, sans-serif';
+  ctx.fillStyle = 'rgba(255,255,255,0.75)';
+  ctx.fillText(settings.location || 'Dhaka, Bangladesh', textX, hH / 2 + 22);
 
-  // "STUDENT ID CARD" — right-aligned, 20px bold
+  // "STUDENT ID CARD" — right-aligned, 22px bold
   ctx.textAlign = 'right';
-  ctx.font = 'bold 20px "Segoe UI", Arial, sans-serif';
+  ctx.font = 'bold 22px "Segoe UI", Arial, sans-serif';
   ctx.fillStyle = 'rgba(255,255,255,0.9)';
-  ctx.fillText('STUDENT ID CARD', CARD_W - 34, hH / 2 + 7);
+  ctx.fillText('STUDENT ID CARD', CARD_W - 34, hH / 2 + 8);
 
   // ── Teal accent line ──
   ctx.fillStyle = '#0d9488';
@@ -173,13 +173,13 @@ export async function renderIdCard(
   fields.forEach((f, i) => {
     const y = startY + i * rowH;
 
-    // Label — 14px semi-bold slate
-    ctx.font = '600 14px "Segoe UI", Arial, sans-serif';
+    // Label — 16px semi-bold slate
+    ctx.font = '600 16px "Segoe UI", Arial, sans-serif';
     ctx.fillStyle = '#64748b';
     ctx.fillText(f.label + ' :', fieldX, y + 18);
 
-    // Value — 18px bold dark
-    ctx.font = 'bold 18px "Segoe UI", Arial, sans-serif';
+    // Value — 20px bold dark
+    ctx.font = 'bold 20px "Segoe UI", Arial, sans-serif';
     ctx.fillStyle = '#1e293b';
     ctx.fillText(truncate(ctx, f.value, maxValW), valueX, y + 18);
   });
@@ -198,11 +198,11 @@ export async function renderIdCard(
   ctx.lineTo(CARD_W - 30, footerY);
   ctx.stroke();
 
-  // Left: validity
-  ctx.font = '14px "Segoe UI", Arial, sans-serif';
+  // Left: validity — 40% bigger than body text (20px body → 28px)
+  ctx.font = 'bold 28px "Segoe UI", Arial, sans-serif';
   ctx.fillStyle = '#475569';
   ctx.textAlign = 'left';
-  ctx.fillText(`Valid Until: ${data.validUntil}`, 40, footerY + 24);
+  ctx.fillText(`Valid Until: ${data.validUntil}`, 40, footerY + 28);
 
   // Right: signature
   const sigCenterX = CARD_W - 170;
@@ -222,16 +222,16 @@ export async function renderIdCard(
   ctx.lineTo(sigCenterX + 80, footerY + 42);
   ctx.stroke();
 
-  // Authority name — 14px bold
+  // Authority name — 16px bold (same as body label size)
   ctx.textAlign = 'center';
   if (settings.authority_name) {
-    ctx.font = 'bold 14px "Segoe UI", Arial, sans-serif';
+    ctx.font = 'bold 16px "Segoe UI", Arial, sans-serif';
     ctx.fillStyle = '#1e293b';
     ctx.fillText(settings.authority_name, sigCenterX, footerY + 58);
   }
-  // Authority position — 12px
+  // Authority position — 14px
   if (settings.authority_position) {
-    ctx.font = '12px "Segoe UI", Arial, sans-serif';
+    ctx.font = '14px "Segoe UI", Arial, sans-serif';
     ctx.fillStyle = '#64748b';
     ctx.fillText(settings.authority_position, sigCenterX, footerY + 74);
   }
