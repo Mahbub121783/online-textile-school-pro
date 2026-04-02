@@ -126,8 +126,8 @@ export async function renderIdCard(
   // BODY — Photo + Fields
   // ══════════════════════════════════════════
   const bodyY = hH + 14;
-  const photoW = 187;
-  const photoH = 231;
+  const photoW = 210;
+  const photoH = 270;
   const photoX = 40;
   const photoY = bodyY;
 
@@ -155,9 +155,9 @@ export async function renderIdCard(
 
   // ── Fields ──
   const fieldX = photoX + photoW + 40;
-  const labelW = 160;
+  const labelW = 200;
   const valueX = fieldX + labelW;
-  const rowH = 46;
+  const rowH = 52;
   const startY = bodyY + 10;
   const maxValW = CARD_W - valueX - 40;
 
@@ -173,15 +173,15 @@ export async function renderIdCard(
   fields.forEach((f, i) => {
     const y = startY + i * rowH;
 
-    // Label — 16px semi-bold slate
-    ctx.font = '600 16px "Segoe UI", Arial, sans-serif';
-    ctx.fillStyle = '#64748b';
-    ctx.fillText(f.label + ' :', fieldX, y + 18);
-
-    // Value — 20px bold dark
+    // Label — 20px bold slate
     ctx.font = 'bold 20px "Segoe UI", Arial, sans-serif';
+    ctx.fillStyle = '#64748b';
+    ctx.fillText(f.label + ' :', fieldX, y + 22);
+
+    // Value — 24px bold dark
+    ctx.font = 'bold 24px "Segoe UI", Arial, sans-serif';
     ctx.fillStyle = '#1e293b';
-    ctx.fillText(truncate(ctx, f.value, maxValW), valueX, y + 18);
+    ctx.fillText(truncate(ctx, f.value, maxValW), valueX, y + 22);
   });
 
   // ══════════════════════════════════════════
@@ -192,7 +192,7 @@ export async function renderIdCard(
   // Valid Until — 10px below photo bottom, left-aligned under photo
   const validY = photoY + photoH + 10;
   ctx.font = 'bold 28px "Segoe UI", Arial, sans-serif';
-  ctx.fillStyle = '#475569';
+  ctx.fillStyle = primary;
   ctx.textAlign = 'left';
   ctx.fillText(`Valid Until: ${data.validUntil}`, photoX, validY + 22);
 
@@ -255,7 +255,7 @@ export async function renderIdCard(
   ctx.drawImage(barcodeCanvas, barcodeX, barY + 6, barcodeW, barcodeH);
 
   // Card number in white monospace
-  ctx.font = 'bold 12px "Courier New", monospace';
+  ctx.font = 'bold 14px "Courier New", monospace';
   ctx.fillStyle = 'rgba(255,255,255,0.85)';
   ctx.textAlign = 'center';
   ctx.fillText(data.cardNumber.split('').join(' '), CARD_W / 2, barY + barcodeH + 20);
