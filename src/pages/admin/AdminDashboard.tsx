@@ -77,12 +77,21 @@ const AdminDashboard = () => {
   const { data: recentOrders } = useQuery({
     queryKey: ['admin-recent-orders-dash'],
     queryFn: async () => {
-      const { data } = await supabase
+      const { data: orders } = await supabase
         .from('orders')
-        .select('*, user_profiles!orders_user_id_fkey(full_name)')
+        .select('*')
         .order('created_at', { ascending: false })
         .limit(5);
-      return data ?? [];
+      if (!orders || orders.length === 0) return [];
+      
+      const userIds = [...new Set(orders.map(o => o.user_id))];
+      const { data: profiles } = await supabase.from('user_profiles').select('id, full_name').in('id', userIds);
+      const profileMap = Object.fromEntries((profiles || []).map(p => [p.id, p]));
+      
+      return orders.map(o => ({
+        ...o,
+        user_profiles: profileMap[o.user_id] || null,
+      }));
     },
   });
 
