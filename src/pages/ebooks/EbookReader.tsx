@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
@@ -6,15 +6,18 @@ import { toast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { Progress } from '@/components/ui/progress';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   ArrowLeft, ChevronLeft, ChevronRight, Sun, Moon, BookOpen,
-  Minus, Plus, StickyNote, X, Loader2, Type, Lightbulb
+  Minus, Plus, StickyNote, X, Loader2, Type, Lightbulb, List, Scroll
 } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
 
 type ReadingMode = 'light' | 'dark' | 'sepia';
+type ViewMode = 'page' | 'scroll';
 
 interface NoteItem {
   id: string;
@@ -30,9 +33,11 @@ const EbookReader = () => {
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const pdfDocRef = useRef<any>(null);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
+  const resizeObserverRef = useRef<ResizeObserver | null>(null);
 
   const [loadingState, setLoadingState] = useState<'auth' | 'loading' | 'ready' | 'error'>('auth');
   const [errorMsg, setErrorMsg] = useState('');
@@ -40,15 +45,18 @@ const EbookReader = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(0);
   const [readingMode, setReadingMode] = useState<ReadingMode>('light');
+  const [viewMode, setViewMode] = useState<ViewMode>('page');
   const [fontSize, setFontSize] = useState(16);
   const [brightness, setBrightness] = useState(100);
   const [showControls, setShowControls] = useState(true);
   const [showNotes, setShowNotes] = useState(false);
+  const [showTOC, setShowTOC] = useState(false);
   const [notes, setNotes] = useState<NoteItem[]>([]);
   const [newNote, setNewNote] = useState('');
   const [pageInput, setPageInput] = useState('');
   const [rendering, setRendering] = useState(false);
   const [pageTransition, setPageTransition] = useState(false);
+  const [tocItems, setTocItems] = useState<{ title: string; pageNum: number }[]>([]);
 
   // DRM: block right-click, printing, text selection
   useEffect(() => {
@@ -79,7 +87,6 @@ const EbookReader = () => {
 
   const loadPdf = async () => {
     try {
-      // Step 1: Generate token
       const { data: tokenData, error: tokenError } = await supabase.functions.invoke(
         'ebook-secure-access',
         { body: { action: 'generate_token', ebook_id: ebookId } }
@@ -88,7 +95,6 @@ const EbookReader = () => {
         throw new Error(tokenData?.error || tokenError?.message || 'Token generation failed');
       }
 
-      // Step 2: Stream file bytes via raw fetch (never use supabase.functions.invoke for binary)
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
       const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
       const session = (await supabase.auth.getSession()).data.session;
@@ -100,11 +106,7 @@ const EbookReader = () => {
           'Authorization': `Bearer ${session?.access_token}`,
           'apikey': supabaseKey,
         },
-        body: JSON.stringify({
-          action: 'stream_file',
-          ebook_id: ebookId,
-          token: tokenData.token,
-        }),
+        body: JSON.stringify({ action: 'stream_file', ebook_id: ebookId, token: tokenData.token }),
       });
 
       if (!response.ok) {
@@ -133,6 +135,30 @@ const EbookReader = () => {
       const pdf = await pdfjsLib.getDocument({ data }).promise;
       pdfDocRef.current = pdf;
       setTotalPages(pdf.numPages);
+
+      // Extract TOC / outline
+      try {
+        const outline = await pdf.getOutline();
+        if (outline?.length) {
+          const items: { title: string; pageNum: number }[] = [];
+          for (const item of outline.slice(0, 50)) {
+            try {
+              const dest = item.dest;
+              if (typeof dest === 'string') {
+                const resolvedDest = await pdf.getDestination(dest);
+                if (resolvedDest) {
+                  const pageIdx = await pdf.getPageIndex(resolvedDest[0]);
+                  items.push({ title: item.title, pageNum: pageIdx + 1 });
+                }
+              } else if (Array.isArray(dest)) {
+                const pageIdx = await pdf.getPageIndex(dest[0]);
+                items.push({ title: item.title, pageNum: pageIdx + 1 });
+              }
+            } catch { /* skip unresolvable entries */ }
+          }
+          setTocItems(items);
+        }
+      } catch { /* no outline */ }
 
       // Load saved progress
       const { data: progress } = await supabase
@@ -177,12 +203,12 @@ const EbookReader = () => {
       const ctx = canvas.getContext('2d')!;
 
       const container = containerRef.current;
-      const containerWidth = container?.clientWidth || 800;
-      const containerHeight = container?.clientHeight || 600;
+      const containerWidth = container?.clientWidth || window.innerWidth;
+      const containerHeight = container?.clientHeight || window.innerHeight;
 
       const viewport = page.getViewport({ scale: 1 });
-      const scaleW = (containerWidth - 40) / viewport.width;
-      const scaleH = (containerHeight - 40) / viewport.height;
+      const scaleW = (containerWidth - 20) / viewport.width;
+      const scaleH = (containerHeight - 20) / viewport.height;
       const scale = Math.min(scaleW, scaleH) * (fontSize / 16);
 
       const scaledViewport = page.getViewport({ scale });
@@ -196,6 +222,20 @@ const EbookReader = () => {
       setRendering(false);
     }
   }, [rendering, fontSize]);
+
+  // ResizeObserver for responsive re-render
+  useEffect(() => {
+    if (loadingState !== 'ready' || !containerRef.current) return;
+
+    resizeObserverRef.current = new ResizeObserver(() => {
+      renderPage(currentPage);
+    });
+    resizeObserverRef.current.observe(containerRef.current);
+
+    return () => {
+      resizeObserverRef.current?.disconnect();
+    };
+  }, [loadingState]);
 
   // Re-render on page/fontSize change
   useEffect(() => {
@@ -227,20 +267,13 @@ const EbookReader = () => {
     }, 800);
   }, [currentPage, totalPages, readingMode, fontSize, brightness, notes, user, ebookId]);
 
-  useEffect(() => {
-    saveProgress();
-  }, [currentPage, readingMode, fontSize, brightness, notes]);
+  useEffect(() => { saveProgress(); }, [currentPage, readingMode, fontSize, brightness, notes]);
 
   // Keyboard navigation
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
-        e.preventDefault();
-        goNext();
-      } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
-        e.preventDefault();
-        goPrev();
-      }
+      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { e.preventDefault(); goNext(); }
+      else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { e.preventDefault(); goPrev(); }
     };
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
@@ -259,11 +292,8 @@ const EbookReader = () => {
     const dy = touch.clientY - touchStartRef.current.y;
     const dt = Date.now() - touchStartRef.current.time;
     touchStartRef.current = null;
-
-    // Minimum 50px horizontal swipe, less than 100px vertical, within 500ms
     if (Math.abs(dx) > 50 && Math.abs(dy) < 100 && dt < 500) {
-      if (dx < 0) goNext();
-      else goPrev();
+      if (dx < 0) goNext(); else goPrev();
     }
   };
 
@@ -276,18 +306,11 @@ const EbookReader = () => {
     }, 150);
   };
 
-  const goNext = () => {
-    if (currentPage < totalPages) changePage(currentPage + 1);
-  };
-  const goPrev = () => {
-    if (currentPage > 1) changePage(currentPage - 1);
-  };
+  const goNext = () => { if (currentPage < totalPages) changePage(currentPage + 1); };
+  const goPrev = () => { if (currentPage > 1) changePage(currentPage - 1); };
   const goToPage = () => {
     const p = parseInt(pageInput);
-    if (p >= 1 && p <= totalPages) {
-      changePage(p);
-      setPageInput('');
-    }
+    if (p >= 1 && p <= totalPages) { changePage(p); setPageInput(''); }
   };
 
   const addNote = () => {
@@ -299,9 +322,7 @@ const EbookReader = () => {
     setNewNote('');
   };
 
-  const deleteNote = (id: string) => {
-    setNotes((prev) => prev.filter((n) => n.id !== id));
-  };
+  const deleteNote = (id: string) => { setNotes((prev) => prev.filter((n) => n.id !== id)); };
 
   const progressPct = totalPages > 0 ? Math.round((currentPage / totalPages) * 100) : 0;
 
@@ -317,6 +338,8 @@ const EbookReader = () => {
     sepia: 'bg-[#e8dcc8]/95 border-[#c4a882]',
   };
 
+  const currentPageNotes = useMemo(() => notes.filter((n) => n.page === currentPage), [notes, currentPage]);
+
   if (loadingState === 'auth' || authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -327,9 +350,9 @@ const EbookReader = () => {
 
   if (loadingState === 'error') {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-background gap-4">
+      <div className="min-h-screen flex flex-col items-center justify-center bg-background gap-4 px-4">
         <BookOpen className="h-16 w-16 text-muted-foreground" />
-        <h2 className="font-heading text-xl font-bold">Unable to load eBook</h2>
+        <h2 className="font-heading text-xl font-bold text-center">Unable to load eBook</h2>
         <p className="text-muted-foreground text-sm max-w-md text-center">{errorMsg}</p>
         <Button onClick={() => navigate(-1)} variant="outline">
           <ArrowLeft className="h-4 w-4 mr-2" /> Go Back
@@ -340,14 +363,17 @@ const EbookReader = () => {
 
   if (loadingState === 'loading') {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-background gap-3">
+      <div className="min-h-screen flex flex-col items-center justify-center bg-background gap-3 px-4">
         <Loader2 className="h-10 w-10 animate-spin text-primary" />
-        <p className="text-muted-foreground font-medium animate-pulse">Loading your eBook securely...</p>
+        <p className="text-muted-foreground font-medium animate-pulse text-center">Loading your eBook securely...</p>
+        <div className="w-48">
+          <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+            <div className="h-full bg-primary rounded-full animate-pulse w-1/3" />
+          </div>
+        </div>
       </div>
     );
   }
-
-  const currentPageNotes = notes.filter((n) => n.page === currentPage);
 
   return (
     <div
@@ -355,47 +381,36 @@ const EbookReader = () => {
       style={{ filter: `brightness(${brightness}%)` }}
       onContextMenu={(e) => e.preventDefault()}
     >
-      {/* Print block */}
       <style>{`@media print { body * { display: none !important; } }`}</style>
 
       {/* Top bar */}
       {showControls && (
-        <header
-          className={`sticky top-0 z-50 border-b px-3 py-2 flex items-center gap-2 backdrop-blur-md transition-all ${controlBg[readingMode]}`}
-        >
-          <Button size="icon" variant="ghost" onClick={() => navigate(-1)} className="shrink-0">
+        <header className={`sticky top-0 z-50 border-b px-2 sm:px-3 py-2 flex items-center gap-1 sm:gap-2 backdrop-blur-md transition-all ${controlBg[readingMode]}`}>
+          <Button size="icon" variant="ghost" onClick={() => navigate(-1)} className="shrink-0 h-8 w-8">
             <ArrowLeft className="h-4 w-4" />
           </Button>
 
-          <h1 className="font-heading font-bold text-sm truncate flex-1">{ebookTitle}</h1>
+          <h1 className="font-heading font-bold text-xs sm:text-sm truncate flex-1 min-w-0">{ebookTitle}</h1>
 
           {/* Mode toggles */}
-          <div className="flex items-center gap-1 border rounded-lg px-1 py-0.5">
-            <button
-              onClick={() => setReadingMode('light')}
-              className={`p-1.5 rounded text-xs ${readingMode === 'light' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
-              title="Light mode"
-            >
-              <Sun className="h-3.5 w-3.5" />
-            </button>
-            <button
-              onClick={() => setReadingMode('dark')}
-              className={`p-1.5 rounded text-xs ${readingMode === 'dark' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
-              title="Night mode"
-            >
-              <Moon className="h-3.5 w-3.5" />
-            </button>
-            <button
-              onClick={() => setReadingMode('sepia')}
-              className={`p-1.5 rounded text-xs font-bold ${readingMode === 'sepia' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
-              title="Sepia mode"
-            >
-              S
-            </button>
+          <div className="flex items-center gap-0.5 border rounded-lg px-0.5 py-0.5">
+            {([
+              { mode: 'light' as const, icon: <Sun className="h-3 w-3 sm:h-3.5 sm:w-3.5" /> },
+              { mode: 'dark' as const, icon: <Moon className="h-3 w-3 sm:h-3.5 sm:w-3.5" /> },
+              { mode: 'sepia' as const, icon: <span className="text-[10px] font-bold">S</span> },
+            ]).map(({ mode, icon }) => (
+              <button
+                key={mode}
+                onClick={() => setReadingMode(mode)}
+                className={`p-1 sm:p-1.5 rounded text-xs ${readingMode === mode ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
+              >
+                {icon}
+              </button>
+            ))}
           </div>
 
-          {/* Font size */}
-          <div className="hidden md:flex items-center gap-1">
+          {/* Font size - hidden on very small screens */}
+          <div className="hidden sm:flex items-center gap-0.5">
             <button onClick={() => setFontSize((s) => Math.max(10, s - 2))} className="p-1 hover:bg-muted rounded">
               <Minus className="h-3.5 w-3.5" />
             </button>
@@ -406,26 +421,21 @@ const EbookReader = () => {
             </button>
           </div>
 
-          {/* Brightness */}
+          {/* Brightness - hidden on mobile */}
           <div className="hidden lg:flex items-center gap-1.5 min-w-[100px]">
             <Lightbulb className="h-3.5 w-3.5 shrink-0" />
-            <Slider
-              value={[brightness]}
-              min={50}
-              max={120}
-              step={5}
-              onValueChange={([v]) => setBrightness(v)}
-              className="flex-1"
-            />
+            <Slider value={[brightness]} min={50} max={120} step={5} onValueChange={([v]) => setBrightness(v)} className="flex-1" />
           </div>
 
+          {/* TOC button */}
+          {tocItems.length > 0 && (
+            <Button size="icon" variant="ghost" onClick={() => setShowTOC(true)} className="shrink-0 h-8 w-8">
+              <List className="h-4 w-4" />
+            </Button>
+          )}
+
           {/* Notes toggle */}
-          <Button
-            size="icon"
-            variant={showNotes ? 'default' : 'ghost'}
-            onClick={() => setShowNotes(!showNotes)}
-            className="shrink-0"
-          >
+          <Button size="icon" variant={showNotes ? 'default' : 'ghost'} onClick={() => setShowNotes(!showNotes)} className="shrink-0 h-8 w-8">
             <StickyNote className="h-4 w-4" />
           </Button>
         </header>
@@ -433,10 +443,9 @@ const EbookReader = () => {
 
       {/* Main reading area */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Canvas container with touch support */}
         <div
           ref={containerRef}
-          className="flex-1 flex items-center justify-center overflow-auto p-4 cursor-pointer"
+          className="flex-1 flex items-center justify-center overflow-auto p-2 sm:p-4 cursor-pointer"
           onClick={() => setShowControls((s) => !s)}
           onTouchStart={handleTouchStart}
           onTouchEnd={handleTouchEnd}
@@ -447,77 +456,91 @@ const EbookReader = () => {
             style={{ userSelect: 'none', pointerEvents: 'none' }}
           />
         </div>
+      </div>
 
-        {/* Notes panel */}
-        {showNotes && (
-          <aside
-            className={`w-72 border-l flex flex-col overflow-hidden ${controlBg[readingMode]}`}
-          >
-            <div className="p-3 border-b flex items-center justify-between">
-              <h3 className="font-heading font-bold text-sm">Notes — Page {currentPage}</h3>
-              <button onClick={() => setShowNotes(false)}>
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
-            <div className="flex-1 overflow-auto p-3 space-y-2">
+      {/* Notes panel - Sheet on mobile, sidebar on desktop */}
+      <Sheet open={showNotes} onOpenChange={setShowNotes}>
+        <SheetContent side="right" className="w-[85vw] sm:w-80 p-0">
+          <SheetHeader className="p-4 border-b">
+            <SheetTitle className="text-sm">Notes — Page {currentPage}</SheetTitle>
+          </SheetHeader>
+          <ScrollArea className="flex-1 h-[calc(100vh-140px)]">
+            <div className="p-4 space-y-2">
               {currentPageNotes.length === 0 && (
                 <p className="text-xs text-muted-foreground text-center py-4">No notes on this page.</p>
               )}
               {currentPageNotes.map((note) => (
                 <div key={note.id} className="p-2 rounded-lg bg-muted/50 text-xs group relative">
                   <p>{note.text}</p>
-                  <button
-                    onClick={() => deleteNote(note.id)}
-                    className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                  >
+                  <button onClick={() => deleteNote(note.id)} className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
                     <X className="h-3 w-3" />
                   </button>
                 </div>
               ))}
             </div>
+          </ScrollArea>
+          <div className="p-3 border-t flex gap-2">
+            <input
+              value={newNote}
+              onChange={(e) => setNewNote(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && addNote()}
+              placeholder="Add a note..."
+              className="flex-1 text-xs bg-transparent border rounded px-2 py-1.5 outline-none focus:border-primary"
+            />
+            <Button size="sm" onClick={addNote} disabled={!newNote.trim()}>Add</Button>
+          </div>
+        </SheetContent>
+      </Sheet>
 
-            <div className="p-3 border-t flex gap-2">
-              <input
-                value={newNote}
-                onChange={(e) => setNewNote(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && addNote()}
-                placeholder="Add a note..."
-                className="flex-1 text-xs bg-transparent border rounded px-2 py-1.5 outline-none focus:border-primary"
-              />
-              <Button size="sm" onClick={addNote} disabled={!newNote.trim()}>
-                Add
-              </Button>
+      {/* TOC Sheet */}
+      <Sheet open={showTOC} onOpenChange={setShowTOC}>
+        <SheetContent side="left" className="w-[85vw] sm:w-80 p-0">
+          <SheetHeader className="p-4 border-b">
+            <SheetTitle className="text-sm">Table of Contents</SheetTitle>
+          </SheetHeader>
+          <ScrollArea className="h-[calc(100vh-80px)]">
+            <div className="p-2">
+              {tocItems.map((item, i) => (
+                <button
+                  key={i}
+                  onClick={() => { changePage(item.pageNum); setShowTOC(false); }}
+                  className={`w-full text-left px-3 py-2.5 rounded-lg text-sm hover:bg-muted transition-colors ${currentPage === item.pageNum ? 'bg-primary/10 text-primary font-medium' : ''}`}
+                >
+                  <span className="truncate block">{item.title}</span>
+                  <span className="text-[10px] text-muted-foreground">Page {item.pageNum}</span>
+                </button>
+              ))}
             </div>
-          </aside>
-        )}
-      </div>
+          </ScrollArea>
+        </SheetContent>
+      </Sheet>
 
       {/* Bottom navigation bar */}
       {showControls && (
-        <footer className={`border-t px-3 py-2 backdrop-blur-md ${controlBg[readingMode]}`}>
+        <footer className={`border-t px-2 sm:px-3 py-2 backdrop-blur-md ${controlBg[readingMode]}`}>
           <Progress value={progressPct} className="h-1.5 mb-2" />
-
-          <div className="flex items-center justify-between gap-2">
-            <Button size="sm" variant="ghost" onClick={goPrev} disabled={currentPage <= 1}>
-              <ChevronLeft className="h-4 w-4 mr-1" /> Prev
+          <div className="flex items-center justify-between gap-1 sm:gap-2">
+            <Button size="sm" variant="ghost" onClick={goPrev} disabled={currentPage <= 1} className="px-2 sm:px-3">
+              <ChevronLeft className="h-4 w-4" />
+              <span className="hidden sm:inline ml-1">Prev</span>
             </Button>
 
-            <div className="flex items-center gap-2 text-sm">
-              <span className="text-muted-foreground">Page</span>
+            <div className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
+              <span className="text-muted-foreground hidden sm:inline">Page</span>
               <input
                 value={pageInput || currentPage}
                 onChange={(e) => setPageInput(e.target.value)}
                 onBlur={goToPage}
                 onKeyDown={(e) => e.key === 'Enter' && goToPage()}
-                className="w-12 text-center text-sm bg-transparent border rounded px-1 py-0.5"
+                className="w-10 sm:w-12 text-center text-xs sm:text-sm bg-transparent border rounded px-1 py-0.5"
               />
-              <span className="text-muted-foreground">of {totalPages}</span>
-              <span className="text-xs text-muted-foreground ml-1">({progressPct}%)</span>
+              <span className="text-muted-foreground">/ {totalPages}</span>
+              <span className="text-[10px] text-muted-foreground ml-1">({progressPct}%)</span>
             </div>
 
-            <Button size="sm" variant="ghost" onClick={goNext} disabled={currentPage >= totalPages}>
-              Next <ChevronRight className="h-4 w-4 ml-1" />
+            <Button size="sm" variant="ghost" onClick={goNext} disabled={currentPage >= totalPages} className="px-2 sm:px-3">
+              <span className="hidden sm:inline mr-1">Next</span>
+              <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
         </footer>
