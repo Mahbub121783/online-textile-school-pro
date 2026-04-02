@@ -1,72 +1,57 @@
 
 
-## Plan: Redesign ID Card — Oxford-Style with Full-Width Barcode Bar & Larger Typography
+## Plan: Perfect ID Card Layout — Bigger Photo, Tight Spacing, Professional Template
 
-### What's Wrong (comparing screenshots)
+### Current Problems (from screenshot analysis)
 
-| Issue | Current | Target |
-|-------|---------|--------|
-| **Header text too small** | University name 26px, location 14px, "STUDENT ID CARD" 16px | University name ~34px bold, "STUDENT ID CARD" ~20px bold |
-| **Barcode is tiny and centered** | 280x38px barcode floating in white space | Full-width dark bar across the bottom ~70% width with barcode + card number — like Oxford card |
-| **Signature area weak** | Small signature image + thin line, tucked into corner | Proper signature line with clear authority name/position, well-spaced |
-| **Footer wastes space** | Large empty gap between fields and barcode | Compact validity + signature row, then full barcode bar at bottom |
-| **Label font too small** | 12px labels barely readable | 14px labels in a distinct color with colon styling |
+| Issue | Detail |
+|-------|--------|
+| **Photo too small** | 170x210 on a 1012x638 canvas — needs 10% increase to 187x231 |
+| **"Valid Until" floating in footer** | Currently at footerY+28, far from photo — needs to be 10px below the photo |
+| **Too much empty space** | Gap between fields/photo and footer is wasted |
+| **Signature area cramped** | Authority text too small relative to body |
+| **Layout not tight enough** | Elements don't fill the card efficiently |
 
 ### Redesigned Layout
 
 ```text
-┌─────────────────────────────────────────────────────────┐
-│ [LOGO 70x70]  Online Textile School      STUDENT ID     │  ← Header 110px
-│               Dhaka, Bangladesh             CARD        │     Name 34px, badge 20px
-├─── teal accent 4px ────────────────────────────────────-┤
-│                                                         │
-│  ┌────────┐   NAME :        Md. Mahbubul Alam           │  ← Fields 14px label, 18px value
-│  │        │   ROLL :        OTS-181033                  │
-│  │ PHOTO  │   BLOOD GROUP : A+                          │
-│  │170x210 │   DATE OF BIRTH: 08 Feb 2000                │
-│  │        │   ADDRESS :     Barisal                     │
-│  └────────┘                                             │
-│                                                         │
-│  Valid Until: Sep 2027          ─────────────────        │  ← Signature area
-│                                 Authority Name          │
-│                                 Position                │
-│▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓│  ← Dark barcode bar
-│         ▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌   OTS-ID-448960            │     70% width, 60px tall
-│▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓│
-└─────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────┐
+│ [LOGO 76x76]  ONLINE TEXTILE SCHOOL       STUDENT ID    │  ← Header 116px
+│               Dhaka, Bangladesh              CARD       │     38px / 20px / 22px
+├─── teal 4px ─────────────────────────────────────────────┤
+│                                                          │
+│  ┌──────────┐   NAME :        Md. Mahbubul Alam         │  ← 16px label / 20px value
+│  │          │   ROLL :        OTS-181033                 │     rowH = 46px
+│  │  PHOTO   │   BLOOD GROUP : A+                        │
+│  │ 187x231  │   DATE OF BIRTH: 08 Feb 2000              │
+│  │          │   ADDRESS :     Barisal                    │
+│  └──────────┘                                 ─────────  │  ← Signature line right-aligned
+│  Valid Until: Sep 2027        Authority Name             │  ← 10px below photo
+│                               Director, OTS              │
+│▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓│  ← Dark barcode bar 70px
+│         ▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌   O T S - I D - 4 4 8 9    │
+└──────────────────────────────────────────────────────────┘
 ```
 
 ### Key Changes in `src/lib/idCardRenderer.ts`
 
-**Header (110px):**
-- Logo increased to 70x70
-- University name: bold 34px (was 26px)
-- Location: 16px (was 14px)
-- "STUDENT ID CARD": bold 20px (was 16px)
-- Teal accent line: 4px (was 3px)
+1. **Photo 10% bigger**: 170x210 → 187x231
+2. **"Valid Until" repositioned**: Placed exactly 10px below the photo bottom (`photoY + photoH + 10`), left-aligned under the photo — 28px bold as before
+3. **Signature section moved up**: Right-aligned, vertically aligned with the "Valid Until" text — signature line + authority name + position all in the space between fields end and barcode bar
+4. **Remove floating footer separator line**: No more arbitrary `footerY` calculation — validity and signature sit naturally between body content and barcode bar
+5. **Fields start higher**: `startY = bodyY + 10` (was +20) to reduce top gap in body
+6. **Body gap reduced**: `bodyY = hH + 14` (was +20)
 
-**Body:**
-- Photo: 170x210 (slightly larger)
-- Labels: 14px semi-bold in slate color with " :" suffix
-- Values: 18px bold dark
-- Row height: 46px for breathing room
-
-**Footer — Signature area:**
-- Validity text left-aligned, 14px
-- Signature image + line on right side, wider (160px line)
-- Authority name 14px bold, position 12px — both clearly visible
-
-**Barcode bar (Oxford-style bottom strip):**
-- Dark background strip (matching header color) spanning full card width, 70px tall
-- Barcode rendered white-on-dark, 70% of card width (~700px), 50px tall
-- Card number in white monospace text below barcode, centered
-- This replaces the floating barcode + accent bar
+### What stays the same
+- Header: 116px, 38px university name, 20px location, 22px "STUDENT ID CARD" — all good per last approval
+- Barcode bar: 70px full-width dark strip at bottom with 70% width barcode
+- All font sizes for labels (16px) and values (20px)
 
 ### File Summary
 
 | File | Action |
 |------|--------|
-| `src/lib/idCardRenderer.ts` | Rewrite layout — bigger header text, Oxford-style full-width barcode bar, improved signature area |
+| `src/lib/idCardRenderer.ts` | Adjust photo size, reposition Valid Until below photo, tighten spacing, move signature inline |
 
-Single file edit.
+Single file edit. No other changes needed.
 
