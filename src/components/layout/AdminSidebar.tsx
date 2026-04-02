@@ -153,6 +153,18 @@ export function AdminSidebar() {
               <CollapsibleMenu label="Setup" icon={Wrench} items={setupSubItems} basePath="/admin/setup" collapsed={collapsed} groupClass="group/collapsible-setup" />
               <CollapsibleMenu label="Payment" icon={CreditCard} items={paymentSubItems} basePath="/admin/payment" collapsed={collapsed} groupClass="group/collapsible-pay" />
               {bottomItems.map(renderNavItem)}
+              {isSuperAdmin && (
+                <>
+                  <SidebarMenuItem>
+                    <div className="px-3 pt-3 pb-1">
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-amber-500">System</span>
+                    </div>
+                  </SidebarMenuItem>
+                  {renderNavItem({ title: 'Admin Management', url: '/admin/admin-management', icon: Shield })}
+                  {renderNavItem({ title: 'System Controls', url: '/admin/system-controls', icon: Server })}
+                </>
+              )}
+              {renderNavItem({ title: 'Wallets', url: '/admin/wallets', icon: Wallet })}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

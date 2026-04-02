@@ -184,6 +184,8 @@ const App = () => (
                   <Route path="settings" element={<AdminSettings />} />
                   <Route path="notifications" element={<NotificationsPage />} />
                   <Route path="activity" element={<AdminActivity />} />
+                  <Route path="admin-management" element={<AdminManagement />} />
+                  <Route path="system-controls" element={<SystemControls />} />
                 </Route>
                 <Route path="/learn/:courseSlug/:lessonId" element={<LessonPlayer />} />
                 <Route path="/quiz/:quizId" element={<QuizPlayer />} />
