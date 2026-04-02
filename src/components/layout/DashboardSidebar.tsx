@@ -29,6 +29,7 @@ const navItems = [
   { title: 'Leaderboard', url: '/dashboard/leaderboard', icon: Trophy },
   { title: 'Invoices', url: '/dashboard/invoices', icon: FileText },
   { title: 'Referrals', url: '/dashboard/referrals', icon: Users },
+  { title: 'Forum', url: '/forum', icon: MessageSquare },
   { title: 'Notifications', url: '/dashboard/notifications', icon: Bell },
   { title: 'Wallet', url: '/dashboard/wallet', icon: Wallet },
   { title: 'Settings', url: '/dashboard/settings', icon: Settings },

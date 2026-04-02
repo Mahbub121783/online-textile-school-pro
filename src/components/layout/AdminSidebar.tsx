@@ -61,6 +61,7 @@ const bottomItems = [
   { title: 'Appearance', url: '/admin/appearance', icon: Palette },
   { title: 'Hero Slides', url: '/admin/hero-slides', icon: Image },
   { title: 'Notifications', url: '/admin/notifications', icon: Bell },
+  { title: 'Forum', url: '/admin/forum', icon: MessageSquare },
   { title: 'Activity Log', url: '/admin/activity', icon: Activity },
 ];
 

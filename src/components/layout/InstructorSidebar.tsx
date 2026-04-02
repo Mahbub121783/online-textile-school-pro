@@ -43,6 +43,12 @@ const navGroups = [
     ],
   },
   {
+    label: 'Community',
+    items: [
+      { title: 'Forum', url: '/forum', icon: MessageSquare },
+    ],
+  },
+  {
     label: 'Finance',
     items: [
       { title: 'Revenue', url: '/instructor/revenue', icon: DollarSign },

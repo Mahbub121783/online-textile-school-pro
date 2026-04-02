@@ -208,6 +208,7 @@ const App = () => (
                   <Route path="events" element={<AdminEvents />} />
                   <Route path="success-stories" element={<AdminSuccessStories />} />
                   <Route path="learning-paths" element={<AdminLearningPaths />} />
+                  <Route path="forum" element={<AdminForum />} />
                 </Route>
                 <Route path="/learn/:courseSlug/:lessonId" element={<LessonPlayer />} />
                 <Route path="/quiz/:quizId" element={<QuizPlayer />} />
