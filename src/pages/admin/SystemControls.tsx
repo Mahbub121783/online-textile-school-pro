@@ -76,9 +76,9 @@ const SystemControls = () => {
       let csvContent = '';
       
       if (type === 'users') {
-        const { data } = await supabase.from('user_profiles').select('id, full_name, phone, bio, created_at').limit(5000);
-        csvContent = 'ID,Name,Phone,Bio,Created At\n';
-        csvContent += (data || []).map(u => `"${u.id}","${u.full_name || ''}","${u.phone || ''}","${(u.bio || '').replace(/"/g, '""')}","${u.created_at || ''}"`).join('\n');
+        const { data } = await supabase.from('user_profiles').select('id, full_name, phone, created_at').limit(5000);
+        csvContent = 'ID,Name,Phone,Created At\n';
+        csvContent += ((data || []) as any[]).map((u: any) => `"${u.id}","${u.full_name || ''}","${u.phone || ''}","${u.created_at || ''}"`).join('\n');
       } else if (type === 'orders') {
         const { data } = await supabase.from('orders').select('id, user_id, total, status, payment_method, coupon_code, created_at').limit(5000);
         csvContent = 'ID,User ID,Total,Status,Payment Method,Coupon,Created At\n';
