@@ -418,6 +418,7 @@ export default function StudentDetail() {
           <TabsTrigger value="profile" className="gap-1"><User className="h-3.5 w-3.5" /> Profile</TabsTrigger>
           <TabsTrigger value="courses" className="gap-1"><BookOpen className="h-3.5 w-3.5" /> Courses</TabsTrigger>
           <TabsTrigger value="ebooks" className="gap-1"><Book className="h-3.5 w-3.5" /> Ebooks</TabsTrigger>
+          <TabsTrigger value="id-card" className="gap-1"><CreditCard className="h-3.5 w-3.5" /> ID Card</TabsTrigger>
           <TabsTrigger value="expenses" className="gap-1"><ShoppingCart className="h-3.5 w-3.5" /> Expenses</TabsTrigger>
           <TabsTrigger value="activity" className="gap-1"><MessageSquare className="h-3.5 w-3.5" /> Activity</TabsTrigger>
           <TabsTrigger value="wallet" className="gap-1"><Wallet className="h-3.5 w-3.5" /> Wallet</TabsTrigger>
