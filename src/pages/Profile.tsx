@@ -89,7 +89,12 @@ const Profile = () => {
             ))}
           </div>
 
-          <div className="bg-card border rounded-xl p-6">
+          {/* Student ID Card */}
+          <div className="mt-6">
+            <StudentIdCard />
+          </div>
+
+          <div className="bg-card border rounded-xl p-6 mt-6">
             <h2 className="font-heading text-lg font-bold mb-4">Continue Learning</h2>
             <div className="text-center py-8 text-muted-foreground">
               <BookOpen className="h-12 w-12 mx-auto mb-3 text-muted" />
