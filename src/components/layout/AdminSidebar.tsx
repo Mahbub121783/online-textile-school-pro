@@ -14,6 +14,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 const topItems = [
   { title: 'Dashboard', url: '/admin', icon: LayoutDashboard },
   { title: 'Users', url: '/admin/users', icon: Users },
+  { title: 'Students', url: '/admin/students', icon: GraduationCap },
 ];
 
 const instructorSubItems = [

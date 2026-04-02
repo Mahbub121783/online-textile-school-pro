@@ -90,6 +90,8 @@ const ForumHome = lazy(() => import("./pages/forum/ForumHome"));
 const ForumPost = lazy(() => import("./pages/forum/ForumPost"));
 const CreateForumPost = lazy(() => import("./pages/forum/CreatePost"));
 const AdminForum = lazy(() => import("./pages/admin/AdminForum"));
+const AdminStudents = lazy(() => import("./pages/admin/AdminStudents"));
+const StudentDetail = lazy(() => import("./pages/admin/StudentDetail"));
 const PaymentSuccess = lazy(() => import("./pages/payment/PaymentSuccess"));
 const PaymentCancel = lazy(() => import("./pages/payment/PaymentCancel"));
 const DynamicPage = lazy(() => import("./pages/cms/DynamicPage"));
@@ -209,6 +211,8 @@ const App = () => (
                   <Route path="success-stories" element={<AdminSuccessStories />} />
                   <Route path="learning-paths" element={<AdminLearningPaths />} />
                   <Route path="forum" element={<AdminForum />} />
+                  <Route path="students" element={<AdminStudents />} />
+                  <Route path="students/:id" element={<StudentDetail />} />
                 </Route>
                 <Route path="/learn/:courseSlug/:lessonId" element={<LessonPlayer />} />
                 <Route path="/quiz/:quizId" element={<QuizPlayer />} />
