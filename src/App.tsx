@@ -214,6 +214,9 @@ const App = () => (
                 <Route path="/privacy" element={<PrivacyPage />} />
                 <Route path="/terms" element={<TermsPage />} />
                 <Route path="/become-instructor" element={<BecomeInstructor />} />
+                <Route path="/departments" element={<DepartmentsPage />} />
+                <Route path="/events" element={<EventsPage />} />
+                <Route path="/alumni" element={<AlumniPage />} />
                 {/* Dynamic CMS pages - must be before 404 */}
                 <Route path="/:slug" element={<DynamicPage />} />
                 <Route path="*" element={<NotFound />} />
