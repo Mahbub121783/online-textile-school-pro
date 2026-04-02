@@ -1,182 +1,79 @@
 
 
-## Plan: Student ID Card System with Barcode, Validation & Admin Management
+## Plan: Fix ID Card Auto-Generation on Paid Enrollment
 
-### Overview
+### Root Cause
 
-A university-style ID card system where paid course enrollment triggers ID card generation with automatic expiry calculation (6 months per course), landscape design with barcode authentication, preview/download on student profile, and full admin management.
+The `student_id_cards` table is empty despite the student having 3 paid enrollments (all with `payment_id` set). The ID card is **never auto-generated** — it only exists as a manual admin action in `IdCardAdminControls`. There is no trigger anywhere in the payment flow, enrollment flow, or student-facing code that creates the card.
 
-### Database Migration
+### Fix Strategy
 
-**New table: `student_id_cards`**
+Make the `StudentIdCard` component self-healing: when it detects the student has paid enrollments but no ID card, it auto-generates one. Additionally, trigger ID card creation/update after successful payment verification.
 
-| Column | Type | Details |
-|--------|------|---------|
-| id | uuid | PK |
-| user_id | uuid | References user_profiles |
-| card_number | text | Unique, auto-generated (e.g. OTS-ID-000123) |
-| valid_from | timestamptz | Date of first paid enrollment |
-| valid_until | timestamptz | Calculated: 6 months per paid course |
-| is_active | boolean | Default true |
-| created_at | timestamptz | |
-| updated_at | timestamptz | |
+### Changes
 
-**New table: `id_card_settings`** (admin-configurable)
+#### File 1: `src/components/student/StudentIdCard.tsx`
 
-| Column | Type | Details |
-|--------|------|---------|
-| id | uuid | PK, single row |
-| university_name | text | Default "Online Textile School" |
-| location | text | Default "Dhaka, Bangladesh" |
-| authority_name | text | Signer name |
-| authority_position | text | Signer title |
-| signature_url | text | Uploaded signature image |
-| logo_url | text | University logo |
-| card_bg_color | text | Background/accent color |
-| updated_at | timestamptz | |
+Add auto-generation logic:
+- Query paid enrollments (`enrollments` where `payment_id IS NOT NULL`) for the target user
+- If paid enrollments exist but no `idCard` record, automatically create one:
+  - Calculate `valid_until` = now + (6 months × paid enrollment count)
+  - Generate `card_number` = `OTS-ID-XXXXXX`
+  - Insert into `student_id_cards`
+  - Refetch the card query
+- This makes it self-healing — any student with paid courses will get their card on first view
 
-RLS: Admins can manage both tables; students can SELECT their own ID card row.
+#### File 2: `src/pages/payment/PaymentSuccess.tsx`
 
-### ID Card Design (Landscape, Standard CR80 — 3.375" x 2.125")
+After payment verification succeeds (`status === 'success'`):
+- Call a helper function that checks if the logged-in user has an ID card
+- If not, create one; if yes, recalculate `valid_until` based on total paid enrollments
+- This ensures the card is generated/extended immediately after purchase
 
-```text
-+----------------------------------------------------+
-| [Logo]  ONLINE TEXTILE SCHOOL                      |
-|         Dhaka, Bangladesh                          |
-|----------------------------------------------------|
-|                                                    |
-|  +--------+   Name: Md. Mahbub Alam               |
-|  |        |   Roll: OTS-123456                     |
-|  | PHOTO  |   Blood Group: B+                      |
-|  |        |   Date of Birth: 01 Jan 1995           |
-|  +--------+   Address: Mirpur, Dhaka               |
-|                                                    |
-|  Valid Until: December 2026                        |
-|                         [Signature Image]          |
-|                         Authority Name             |
-|                         Position Title             |
-|----------------------------------------------------|
-|  ||||||||||||||||| BARCODE |||||||||||||||||        |
-|  OTS-ID-000123                                     |
-+----------------------------------------------------+
+#### File 3: `src/hooks/useEnrollments.ts` (or inline in PaymentSuccess)
+
+Add a reusable `ensureStudentIdCard(userId)` function:
+- Count paid enrollments for the user
+- If count > 0: upsert into `student_id_cards` with calculated validity
+- This function can be called from both PaymentSuccess and StudentIdCard
+
+### Implementation Detail
+
+```
+ensureStudentIdCard(userId):
+  1. SELECT enrollments WHERE user_id = userId AND payment_id IS NOT NULL
+  2. If count = 0, return (no paid courses)
+  3. SELECT student_id_cards WHERE user_id = userId
+  4. months = count × 6
+  5. valid_until = earliest enrolled_at + months (or now + months if no card)
+  6. If no card: INSERT with new card_number, valid_from = earliest enrollment date
+  7. If card exists: UPDATE valid_until only if new value is greater
 ```
 
-### Expiry Calculation Logic
-
-- Each **paid** enrollment (where `payment_id IS NOT NULL`) adds 6 months
-- If a student has 2 paid courses: 12 months from first enrollment
-- On new enrollment, recalculate `valid_until` and update the card
-- Admin-granted (free) enrollments do NOT extend validity
-
-### New Files
-
-| File | Purpose |
-|------|---------|
-| `src/lib/idCardRenderer.ts` | Canvas-based ID card renderer + PDF download using jsPDF (similar pattern to `certificateRenderer.ts`) |
-| `src/components/student/StudentIdCard.tsx` | Preview component showing the rendered card with download button |
-| `src/pages/admin/AdminIdCardSettings.tsx` | Admin page: configure authority name/position, upload signature, set university name/location |
-
-### Modified Files
+### File Summary
 
 | File | Change |
 |------|--------|
-| `src/pages/admin/StudentDetail.tsx` | Add "ID Card" tab showing card preview, validity dates, manual extend/revoke controls |
-| `src/pages/admin/AdminStudents.tsx` | Add ID card status column (Active/Expired/None), bulk issue ID cards action |
-| `src/pages/dashboard/DashboardOverview.tsx` | Add ID card preview widget if student has active card |
-| `src/pages/Profile.tsx` | Add ID card section with preview and PDF download |
-| `src/components/layout/AdminSidebar.tsx` | Add "ID Card Settings" link under setup or settings |
-| `src/App.tsx` | Add route for `/admin/id-card-settings` |
+| `src/components/student/StudentIdCard.tsx` | Add auto-generation on mount when paid enrollments exist but no card |
+| `src/pages/payment/PaymentSuccess.tsx` | Call ensureStudentIdCard after successful payment |
+| `src/lib/idCardRenderer.ts` | No changes needed (renderer works fine) |
 
-### Implementation Details
+No migration needed — tables and RLS policies already exist and support student self-insert (students can view their own cards, and the existing RLS allows authenticated inserts... actually need to check this).
 
-**ID Card Renderer (`idCardRenderer.ts`):**
-- Uses HTML Canvas to draw the card at 2x resolution (1012 x 638 px for CR80)
-- Draws header with university name and location
-- Places student photo (square, from `avatar_url`)
-- Renders fields: Name, Roll ID, Blood Group, DOB, Address (district + division)
-- Draws expiry date and authority signature section
-- Generates barcode using the card number (Code128 via a lightweight canvas barcode lib, or custom drawn)
-- Exports to PDF via jsPDF at exact CR80 dimensions
+**RLS Check**: The `student_id_cards` table only has policies for student SELECT and admin ALL. Students cannot INSERT their own card. This needs a new migration to add a student INSERT policy, OR the auto-generation must happen via an admin-level operation. Best approach: add an INSERT policy for students on their own row.
 
-**Auto-generation trigger:**
-- When a student makes a paid enrollment, check if ID card exists:
-  - If no: create new card with `valid_from = now()`, `valid_until = now() + 6 months`
-  - If yes: update `valid_until += 6 months`
-- This logic runs client-side when viewing the card or can be triggered from admin
-
-**Barcode:**
-- Encode the `card_number` as Code128 barcode drawn directly on canvas (no external lib needed — simple Code128 implementation or use `JsBarcode` library)
-
-**Admin ID Card Management:**
-- Settings page: edit university name, location, authority details, upload signature image
-- StudentDetail: view/preview any student's ID card, manually extend validity, deactivate card
-- AdminStudents: see card status column, bulk generate cards for students with paid enrollments who don't have one yet
-
-**Student-facing:**
-- Profile page and Dashboard show ID card preview (canvas rendered)
-- "Download ID Card" button generates PDF at print-quality resolution
-- Card only visible if student has at least one paid enrollment
-
-### Migration SQL
+### Migration Required
 
 ```sql
-CREATE TABLE public.student_id_cards (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id uuid NOT NULL UNIQUE,
-  card_number text NOT NULL UNIQUE,
-  valid_from timestamptz NOT NULL DEFAULT now(),
-  valid_until timestamptz NOT NULL,
-  is_active boolean NOT NULL DEFAULT true,
-  created_at timestamptz DEFAULT now(),
-  updated_at timestamptz DEFAULT now()
-);
+CREATE POLICY "Students insert own id card"
+  ON public.student_id_cards FOR INSERT TO authenticated
+  WITH CHECK (auth.uid() = user_id);
 
-ALTER TABLE public.student_id_cards ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Students view own id card" ON public.student_id_cards
-  FOR SELECT TO authenticated USING (auth.uid() = user_id);
-
-CREATE POLICY "Admins manage id cards" ON public.student_id_cards
-  FOR ALL TO authenticated
-  USING (has_role(auth.uid(), 'admin'::app_role) OR has_role(auth.uid(), 'super_admin'::app_role))
-  WITH CHECK (has_role(auth.uid(), 'admin'::app_role) OR has_role(auth.uid(), 'super_admin'::app_role));
-
-CREATE TABLE public.id_card_settings (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  university_name text NOT NULL DEFAULT 'Online Textile School',
-  location text NOT NULL DEFAULT 'Dhaka, Bangladesh',
-  authority_name text DEFAULT '',
-  authority_position text DEFAULT '',
-  signature_url text DEFAULT '',
-  logo_url text DEFAULT '',
-  card_bg_color text DEFAULT '#1a365d',
-  updated_at timestamptz DEFAULT now()
-);
-
-ALTER TABLE public.id_card_settings ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Anyone can view id card settings" ON public.id_card_settings
-  FOR SELECT TO authenticated USING (true);
-
-CREATE POLICY "Admins manage id card settings" ON public.id_card_settings
-  FOR ALL TO authenticated
-  USING (has_role(auth.uid(), 'admin'::app_role) OR has_role(auth.uid(), 'super_admin'::app_role))
-  WITH CHECK (has_role(auth.uid(), 'admin'::app_role) OR has_role(auth.uid(), 'super_admin'::app_role));
-
--- Seed default settings row
-INSERT INTO public.id_card_settings (university_name, location) VALUES ('Online Textile School', 'Dhaka, Bangladesh');
+CREATE POLICY "Students update own id card"
+  ON public.student_id_cards FOR UPDATE TO authenticated
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
 ```
 
-### Execution Order
-
-1. Run migration (2 tables + RLS + seed)
-2. Create `idCardRenderer.ts` (canvas + barcode + PDF)
-3. Create `StudentIdCard.tsx` component
-4. Create `AdminIdCardSettings.tsx` page
-5. Update `StudentDetail.tsx` — add ID Card tab
-6. Update `AdminStudents.tsx` — add card status column + bulk generate
-7. Update `Profile.tsx` and `DashboardOverview.tsx` — add card preview/download
-8. Update `AdminSidebar.tsx` and `App.tsx` — add routes
-
-Total: 1 migration, 3 new files, 6 edited files.
+### Total: 1 migration, 2 file edits
 
