@@ -993,6 +993,203 @@ export type Database = {
           },
         ]
       }
+      forum_categories: {
+        Row: {
+          created_at: string | null
+          id: string
+          name: string
+          slug: string
+          sort_order: number | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          name: string
+          slug: string
+          sort_order?: number | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          name?: string
+          slug?: string
+          sort_order?: number | null
+        }
+        Relationships: []
+      }
+      forum_comments: {
+        Row: {
+          content: string
+          created_at: string | null
+          id: string
+          parent_id: string | null
+          post_id: string
+          user_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string | null
+          id?: string
+          parent_id?: string | null
+          post_id: string
+          user_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string | null
+          id?: string
+          parent_id?: string | null
+          post_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "forum_comments_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "forum_comments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "forum_comments_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "forum_posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      forum_contributor_points: {
+        Row: {
+          action: string
+          created_at: string | null
+          id: string
+          points: number
+          reference_id: string | null
+          user_id: string
+        }
+        Insert: {
+          action: string
+          created_at?: string | null
+          id?: string
+          points?: number
+          reference_id?: string | null
+          user_id: string
+        }
+        Update: {
+          action?: string
+          created_at?: string | null
+          id?: string
+          points?: number
+          reference_id?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      forum_posts: {
+        Row: {
+          category_id: string | null
+          content: string
+          created_at: string | null
+          id: string
+          is_closed: boolean | null
+          is_pinned: boolean | null
+          search_vector: unknown
+          title: string
+          updated_at: string | null
+          user_id: string
+          view_count: number | null
+        }
+        Insert: {
+          category_id?: string | null
+          content: string
+          created_at?: string | null
+          id?: string
+          is_closed?: boolean | null
+          is_pinned?: boolean | null
+          search_vector?: unknown
+          title: string
+          updated_at?: string | null
+          user_id: string
+          view_count?: number | null
+        }
+        Update: {
+          category_id?: string | null
+          content?: string
+          created_at?: string | null
+          id?: string
+          is_closed?: boolean | null
+          is_pinned?: boolean | null
+          search_vector?: unknown
+          title?: string
+          updated_at?: string | null
+          user_id?: string
+          view_count?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "forum_posts_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "forum_categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      forum_reactions: {
+        Row: {
+          created_at: string | null
+          emoji: string | null
+          id: string
+          target_id: string
+          target_type: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          emoji?: string | null
+          id?: string
+          target_id: string
+          target_type: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          emoji?: string | null
+          id?: string
+          target_id?: string
+          target_type?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      forum_rewards: {
+        Row: {
+          created_at: string | null
+          granted_by: string
+          id: string
+          points: number
+          reason: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          granted_by: string
+          id?: string
+          points?: number
+          reason?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          granted_by?: string
+          id?: string
+          points?: number
+          reason?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       gradebook_manual_marks: {
         Row: {
           course_id: string
@@ -2467,6 +2664,28 @@ export type Database = {
           _type: string
         }
         Returns: undefined
+      }
+      search_forum: {
+        Args: { search_query: string }
+        Returns: {
+          category_id: string | null
+          content: string
+          created_at: string | null
+          id: string
+          is_closed: boolean | null
+          is_pinned: boolean | null
+          search_vector: unknown
+          title: string
+          updated_at: string | null
+          user_id: string
+          view_count: number | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "forum_posts"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
     }
     Enums: {
