@@ -82,7 +82,7 @@ const SystemControls = () => {
       } else if (type === 'orders') {
         const { data } = await supabase.from('orders').select('id, user_id, total, status, payment_method, coupon_code, created_at').limit(5000);
         csvContent = 'ID,User ID,Total,Status,Payment Method,Coupon,Created At\n';
-        csvContent += (data || []).map(o => `"${o.id}","${o.user_id}",${o.total},"${o.status || ''}","${o.payment_method || ''}","${o.coupon_code || ''}","${o.created_at || ''}"`).join('\n');
+        csvContent += ((data || []) as any[]).map((o: any) => `"${o.id}","${o.user_id}",${o.total},"${o.status || ''}","${o.payment_method || ''}","${o.coupon_code || ''}","${o.created_at || ''}"`).join('\n');
       } else {
         const { data } = await supabase.from('orders').select('total, status, payment_method, created_at').eq('status', 'completed').limit(5000);
         csvContent = 'Total,Status,Payment Method,Date\n';
