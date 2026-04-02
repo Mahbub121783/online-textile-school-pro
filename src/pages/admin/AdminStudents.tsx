@@ -463,6 +463,50 @@ export default function AdminStudents() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Bulk Assign Course Dialog */}
+      <Dialog open={bulkAssignCourseOpen} onOpenChange={setBulkAssignCourseOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Assign Course to {selectedIds.size} Student(s)</DialogTitle></DialogHeader>
+          <Command className="border rounded-lg">
+            <CommandInput placeholder="Search courses..." value={courseSearch} onValueChange={setCourseSearch} />
+            <CommandList>
+              <CommandEmpty>No courses found</CommandEmpty>
+              <CommandGroup>
+                {allCourses.map((c: any) => (
+                  <CommandItem key={c.id} value={c.title} onSelect={() => bulkAssignCourse.mutate(c.id)} className="cursor-pointer gap-2">
+                    <BookOpen className="h-4 w-4 text-primary" />
+                    <span>{c.title}</span>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+          {bulkAssignCourse.isPending && <p className="text-sm text-muted-foreground text-center">Assigning...</p>}
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Assign Ebook Dialog */}
+      <Dialog open={bulkAssignEbookOpen} onOpenChange={setBulkAssignEbookOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Assign Ebook to {selectedIds.size} Student(s)</DialogTitle></DialogHeader>
+          <Command className="border rounded-lg">
+            <CommandInput placeholder="Search ebooks..." value={ebookSearch} onValueChange={setEbookSearch} />
+            <CommandList>
+              <CommandEmpty>No ebooks found</CommandEmpty>
+              <CommandGroup>
+                {allEbooks.map((e: any) => (
+                  <CommandItem key={e.id} value={e.title} onSelect={() => bulkAssignEbook.mutate(e.id)} className="cursor-pointer gap-2">
+                    <Book className="h-4 w-4 text-primary" />
+                    <span>{e.title}</span>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+          {bulkAssignEbook.isPending && <p className="text-sm text-muted-foreground text-center">Assigning...</p>}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
