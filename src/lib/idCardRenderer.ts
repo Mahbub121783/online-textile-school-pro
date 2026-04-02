@@ -255,7 +255,7 @@ export async function renderIdCard(
   ctx.drawImage(barcodeCanvas, barcodeX, barY + 6, barcodeW, barcodeH);
 
   // Card number in white monospace
-  ctx.font = 'bold 12px "Courier New", monospace';
+  ctx.font = 'bold 14px "Courier New", monospace';
   ctx.fillStyle = 'rgba(255,255,255,0.85)';
   ctx.textAlign = 'center';
   ctx.fillText(data.cardNumber.split('').join(' '), CARD_W / 2, barY + barcodeH + 20);
