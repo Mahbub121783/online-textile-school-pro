@@ -366,7 +366,7 @@ export default function StudentDetail() {
                 <ProfileField label="District" value={profile.district} />
                 <ProfileField label="Division" value={profile.division} />
                 <ProfileField label="Country" value={profile.country} />
-                <ProfileField label="Address" value={profile.address} />
+                <ProfileField label="Country" value={profile.country} />
               </CardContent>
             </Card>
           </div>
