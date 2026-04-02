@@ -146,9 +146,9 @@ export async function renderIdCard(
   // ══════════════════════════════════════════
   const bodyY = hH + 14;
   const photoW = 210;
-  const photoH = 270;
+  const photoH = 260;
   const photoX = 40;
-  const photoY = bodyY;
+  const photoY = hH + 19; // 15px gap below accent line (hH + 4)
 
   // Photo
   ctx.save();
@@ -176,8 +176,8 @@ export async function renderIdCard(
   const fieldX = photoX + photoW + 40;
   const labelW = 200;
   const valueX = fieldX + labelW;
-  const rowH = 52;
-  const startY = bodyY + 10;
+  const rowH = 50;
+  const startY = photoY;
   const maxValW = CARD_W - valueX - 40;
 
   ctx.textAlign = 'left';
