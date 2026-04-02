@@ -206,7 +206,6 @@ export async function renderIdCard(
   // ══════════════════════════════════════════
   // FOOTER — Validity + Signature (between body and barcode bar)
   // ══════════════════════════════════════════
-  const barcodeBarH = 70;
 
   // Valid Until — 10px below photo bottom, left-aligned under photo
   const validY = photoY + photoH + 10;
@@ -247,6 +246,15 @@ export async function renderIdCard(
     ctx.fillStyle = '#64748b';
     ctx.fillText(settings.authority_position, sigCenterX, sigBaseY + 68);
   }
+
+  // ══════════════════════════════════════════
+  // WEBSITE — centered in gap between signature and barcode
+  // ══════════════════════════════════════════
+  const websiteY = CARD_H - barcodeBarH - 30;
+  ctx.font = 'bold 18px "Segoe UI", Arial, sans-serif';
+  ctx.fillStyle = primary;
+  ctx.textAlign = 'center';
+  ctx.fillText('Official Website : www.onlinetextileschool.com', CARD_W / 2, websiteY);
 
   // ══════════════════════════════════════════
   // BARCODE BAR — Oxford-style full-width dark strip
