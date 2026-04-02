@@ -332,7 +332,7 @@ export default function StudentDetail() {
                 <ProfileField label="Username" value={profile.username} />
                 <ProfileField label="Phone" value={profile.phone} />
                 <ProfileField label="Roll ID" value={profile.roll_id} />
-                <ProfileField label="Date of Birth" value={profile.dob ? new Date(profile.dob).toLocaleDateString() : null} />
+                <ProfileField label="Date of Birth" value={profile.date_of_birth ? new Date(profile.date_of_birth).toLocaleDateString() : null} />
                 <ProfileField label="Blood Group" value={profile.blood_group} />
                 <ProfileField label="Language" value={profile.language_preference} />
                 <ProfileField label="Referral Code" value={profile.referral_code} />
