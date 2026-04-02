@@ -148,7 +148,7 @@ export async function renderIdCard(
   const photoW = 210;
   const photoH = 260;
   const photoX = 40;
-  const photoY = hH + 19; // 15px gap below accent line (hH + 4)
+  const photoY = hH + 34; // 30px gap below accent line (hH + 4)
 
   // Photo
   ctx.save();
