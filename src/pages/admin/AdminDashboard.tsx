@@ -48,24 +48,50 @@ const AdminDashboard = () => {
   const { data: recentEnrollments } = useQuery({
     queryKey: ['admin-recent-enrollments'],
     queryFn: async () => {
-      const { data } = await supabase
+      const { data: enrollments } = await supabase
         .from('enrollments')
-        .select('*, user_profiles!enrollments_user_id_fkey(full_name), courses!enrollments_course_id_fkey(title)')
+        .select('*')
         .order('enrolled_at', { ascending: false })
         .limit(8);
-      return data ?? [];
+      if (!enrollments || enrollments.length === 0) return [];
+      
+      const userIds = [...new Set(enrollments.map(e => e.user_id))];
+      const courseIds = [...new Set(enrollments.map(e => e.course_id))];
+      
+      const [{ data: profiles }, { data: courses }] = await Promise.all([
+        supabase.from('user_profiles').select('id, full_name').in('id', userIds),
+        supabase.from('courses').select('id, title').in('id', courseIds),
+      ]);
+      
+      const profileMap = Object.fromEntries((profiles || []).map(p => [p.id, p]));
+      const courseMap = Object.fromEntries((courses || []).map(c => [c.id, c]));
+      
+      return enrollments.map(e => ({
+        ...e,
+        user_profiles: profileMap[e.user_id] || null,
+        courses: courseMap[e.course_id] || null,
+      }));
     },
   });
 
   const { data: recentOrders } = useQuery({
     queryKey: ['admin-recent-orders-dash'],
     queryFn: async () => {
-      const { data } = await supabase
+      const { data: orders } = await supabase
         .from('orders')
-        .select('*, user_profiles!orders_user_id_fkey(full_name)')
+        .select('*')
         .order('created_at', { ascending: false })
         .limit(5);
-      return data ?? [];
+      if (!orders || orders.length === 0) return [];
+      
+      const userIds = [...new Set(orders.map(o => o.user_id))];
+      const { data: profiles } = await supabase.from('user_profiles').select('id, full_name').in('id', userIds);
+      const profileMap = Object.fromEntries((profiles || []).map(p => [p.id, p]));
+      
+      return orders.map(o => ({
+        ...o,
+        user_profiles: profileMap[o.user_id] || null,
+      }));
     },
   });
 
