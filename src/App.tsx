@@ -43,6 +43,9 @@ const InstructorWallet = lazy(() => import("./pages/instructor/InstructorWallet"
 const InstructorLessons = lazy(() => import("./pages/instructor/InstructorLessons"));
 const InstructorGradebook = lazy(() => import("./pages/instructor/InstructorGradebook"));
 const InstructorCertificates = lazy(() => import("./pages/instructor/InstructorCertificates"));
+const InstructorDiscussions = lazy(() => import("./pages/instructor/InstructorDiscussions"));
+const InstructorAnnouncements = lazy(() => import("./pages/instructor/InstructorAnnouncements"));
+const InstructorAnalytics = lazy(() => import("./pages/instructor/InstructorAnalytics"));
 const AdminLayout = lazy(() => import("./pages/admin/AdminLayout"));
 const AdminDashboard = lazy(() => import("./pages/admin/AdminDashboard"));
 const AdminUsers = lazy(() => import("./pages/admin/AdminUsers"));
@@ -144,6 +147,9 @@ const App = () => (
                   <Route path="revenue" element={<RevenueDashboard />} />
                   <Route path="wallet" element={<InstructorWallet />} />
                   <Route path="students" element={<InstructorStudents />} />
+                  <Route path="discussions" element={<InstructorDiscussions />} />
+                  <Route path="announcements" element={<InstructorAnnouncements />} />
+                  <Route path="analytics" element={<InstructorAnalytics />} />
                   <Route path="notifications" element={<NotificationsPage />} />
                 </Route>
                 {/* Admin Panel */}

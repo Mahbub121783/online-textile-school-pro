@@ -12,7 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Textarea } from '@/components/ui/textarea';
-import { GraduationCap, Plus, MoreHorizontal, Download } from 'lucide-react';
+import { GraduationCap, Plus, MoreHorizontal, Download, Upload } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
@@ -122,6 +122,31 @@ const InstructorStudents = () => {
               {courses.map((c: any) => <SelectItem key={c.id} value={c.id}>{c.title}</SelectItem>)}
             </SelectContent>
           </Select>
+          <Button variant="outline" size="sm" className="gap-1.5" onClick={() => {
+            const input = document.createElement('input');
+            input.type = 'file'; input.accept = '.csv';
+            input.onchange = async (e: any) => {
+              const file = e.target.files?.[0];
+              if (!file || selectedCourse === 'all') { toast.error('Select a specific course first'); return; }
+              const text = await file.text();
+              const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+              const emails = lines.slice(1); // skip header
+              let enrolled = 0, notFound = 0, alreadyEnrolled = 0;
+              for (const identifier of emails) {
+                const clean = identifier.replace(/"/g, '').trim();
+                if (!clean) continue;
+                const { data: profile } = await supabase.from('user_profiles').select('id').or(`phone.eq.${clean}`).single();
+                if (!profile) { notFound++; continue; }
+                const { error } = await supabase.from('enrollments').insert({ user_id: profile.id, course_id: selectedCourse });
+                if (error) { alreadyEnrolled++; } else { enrolled++; }
+              }
+              toast.success(`Enrolled: ${enrolled}, Not found: ${notFound}, Already enrolled: ${alreadyEnrolled}`);
+              refetchEnrollments();
+            };
+            input.click();
+          }}>
+            <Upload className="h-4 w-4" /> Bulk CSV
+          </Button>
           <Button className="bg-accent hover:bg-accent-hover text-accent-foreground gap-1.5" onClick={() => setEnrollModal(true)}>
             <Plus className="h-4 w-4" /> Enroll Student
           </Button>
