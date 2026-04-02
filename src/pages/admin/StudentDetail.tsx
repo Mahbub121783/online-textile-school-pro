@@ -523,12 +523,19 @@ export default function StudentDetail() {
                 {ebookItems.map((i: any, idx: number) => {
                   const ebook = (ebookNameMap as any)[i.item_id];
                   const progress = readingMap[i.item_id];
+                  const parentOrder = orders.find((o: any) => (o.order_items ?? []).some((oi: any) => oi.item_id === i.item_id && oi.item_type === 'ebook'));
+                  const isGranted = parentOrder && (parentOrder.total === 0 || parentOrder.payment_method === 'admin_grant');
                   return (
                     <TableRow key={idx}>
                       <TableCell>
                         <div className="flex items-center gap-3">
                           {ebook?.cover_url && <img src={ebook.cover_url} className="h-10 w-8 object-cover rounded" alt="" />}
-                          <span className="font-medium">{ebook?.title || i.item_id.slice(0, 8)}</span>
+                          <div>
+                            <span className="font-medium">{ebook?.title || i.item_id.slice(0, 8)}</span>
+                            <Badge variant="outline" className={`ml-2 text-[10px] ${isGranted ? 'border-amber-500 text-amber-700' : 'border-green-500 text-green-700'}`}>
+                              {isGranted ? 'Granted' : 'Purchased'}
+                            </Badge>
+                          </div>
                         </div>
                       </TableCell>
                       <TableCell>
