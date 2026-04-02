@@ -36,6 +36,7 @@ const Header = () => {
     { label: 'Departments', href: '/departments' },
     { label: 'Events', href: '/events' },
     { label: 'Blog', href: '/blog' },
+    { label: 'Forum', href: '/forum' },
     { label: 'About', href: '/about' },
   ];
 

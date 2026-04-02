@@ -86,6 +86,10 @@ const LeaderboardPage = lazy(() => import("./pages/dashboard/LeaderboardPage"));
 const DepartmentsPage = lazy(() => import("./pages/static/DepartmentsPage"));
 const EventsPage = lazy(() => import("./pages/static/EventsPage"));
 const AlumniPage = lazy(() => import("./pages/static/AlumniPage"));
+const ForumHome = lazy(() => import("./pages/forum/ForumHome"));
+const ForumPost = lazy(() => import("./pages/forum/ForumPost"));
+const CreateForumPost = lazy(() => import("./pages/forum/CreatePost"));
+const AdminForum = lazy(() => import("./pages/admin/AdminForum"));
 const PaymentSuccess = lazy(() => import("./pages/payment/PaymentSuccess"));
 const PaymentCancel = lazy(() => import("./pages/payment/PaymentCancel"));
 const DynamicPage = lazy(() => import("./pages/cms/DynamicPage"));
@@ -204,6 +208,7 @@ const App = () => (
                   <Route path="events" element={<AdminEvents />} />
                   <Route path="success-stories" element={<AdminSuccessStories />} />
                   <Route path="learning-paths" element={<AdminLearningPaths />} />
+                  <Route path="forum" element={<AdminForum />} />
                 </Route>
                 <Route path="/learn/:courseSlug/:lessonId" element={<LessonPlayer />} />
                 <Route path="/quiz/:quizId" element={<QuizPlayer />} />
@@ -218,6 +223,10 @@ const App = () => (
                 <Route path="/departments" element={<DepartmentsPage />} />
                 <Route path="/events" element={<EventsPage />} />
                 <Route path="/alumni" element={<AlumniPage />} />
+                {/* Forum */}
+                <Route path="/forum" element={<ForumHome />} />
+                <Route path="/forum/new" element={<CreateForumPost />} />
+                <Route path="/forum/:postId" element={<ForumPost />} />
                 {/* Dynamic CMS pages - must be before 404 */}
                 <Route path="/:slug" element={<DynamicPage />} />
                 <Route path="*" element={<NotFound />} />

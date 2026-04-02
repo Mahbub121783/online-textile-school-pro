@@ -79,6 +79,18 @@ export function useAdminRealtime() {
         queryClient.invalidateQueries({ queryKey: ['quiz-attempt-counts'] });
         queryClient.invalidateQueries({ queryKey: ['quiz-results-attempts'] });
       })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'forum_posts' }, () => {
+        queryClient.invalidateQueries({ queryKey: ['forum-posts'] });
+        queryClient.invalidateQueries({ queryKey: ['admin-forum-posts'] });
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'forum_comments' }, () => {
+        queryClient.invalidateQueries({ queryKey: ['forum-comments'] });
+        queryClient.invalidateQueries({ queryKey: ['forum-comment-counts'] });
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'forum_reactions' }, () => {
+        queryClient.invalidateQueries({ queryKey: ['forum-post-reactions'] });
+        queryClient.invalidateQueries({ queryKey: ['forum-reaction-counts'] });
+      })
       .subscribe();
 
     return () => {
