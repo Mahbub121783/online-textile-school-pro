@@ -356,7 +356,7 @@ export default function StudentDetail() {
                 <ProfileField label="Company" value={profile.company_name} />
                 <ProfileField label="Business Type" value={profile.business_type} />
                 <ProfileField label="Professional Role" value={profile.professional_role} />
-                <ProfileField label="Current Job" value={profile.current_job_title} />
+                <ProfileField label="Current Job" value={profile.current_job} />
               </CardContent>
             </Card>
 
