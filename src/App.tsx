@@ -222,6 +222,10 @@ const App = () => (
                 <Route path="/departments" element={<DepartmentsPage />} />
                 <Route path="/events" element={<EventsPage />} />
                 <Route path="/alumni" element={<AlumniPage />} />
+                {/* Forum */}
+                <Route path="/forum" element={<ForumHome />} />
+                <Route path="/forum/new" element={<CreateForumPost />} />
+                <Route path="/forum/:postId" element={<ForumPost />} />
                 {/* Dynamic CMS pages - must be before 404 */}
                 <Route path="/:slug" element={<DynamicPage />} />
                 <Route path="*" element={<NotFound />} />
