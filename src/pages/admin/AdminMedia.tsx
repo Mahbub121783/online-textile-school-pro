@@ -53,13 +53,13 @@ const AdminMedia = () => {
       try {
         const result = await fileUpload(file);
 
-        await supabase.from('media_library').insert({
+        await supabase.from('media_library').upsert({
           file_url: result.url,
           file_name: file.name,
           file_type: file.type,
           file_size: file.size,
           uploaded_by: user?.id,
-        });
+        }, { onConflict: 'file_url' });
       } catch {
         toast.error(`Failed to upload ${file.name}`);
       }
