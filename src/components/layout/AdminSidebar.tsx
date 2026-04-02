@@ -135,11 +135,13 @@ export function AdminSidebar() {
         <SidebarGroup>
           {!collapsed && (
             <div className="p-4 border-b">
-              <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-heading font-bold text-lg">
-                {profile?.full_name?.[0]?.toUpperCase() || 'A'}
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center font-heading font-bold text-lg ${isSuperAdmin ? 'bg-amber-500 text-white' : 'bg-primary text-primary-foreground'}`}>
+                {isSuperAdmin ? <Crown className="h-5 w-5" /> : (profile?.full_name?.[0]?.toUpperCase() || 'A')}
               </div>
               <p className="mt-2 font-heading font-semibold text-sm truncate">{profile?.full_name || 'Admin'}</p>
-              <p className="text-xs text-muted-foreground">Admin Panel</p>
+              <Badge variant={isSuperAdmin ? 'default' : 'secondary'} className={`mt-1 text-[10px] ${isSuperAdmin ? 'bg-amber-500 hover:bg-amber-600' : ''}`}>
+                {isSuperAdmin ? 'Super Admin' : 'Admin'}
+              </Badge>
             </div>
           )}
           <SidebarGroupLabel>Administration</SidebarGroupLabel>
