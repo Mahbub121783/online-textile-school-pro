@@ -222,16 +222,16 @@ export async function renderIdCard(
   ctx.lineTo(sigCenterX + 80, footerY + 42);
   ctx.stroke();
 
-  // Authority name — 14px bold
+  // Authority name — 16px bold (same as body label size)
   ctx.textAlign = 'center';
   if (settings.authority_name) {
-    ctx.font = 'bold 14px "Segoe UI", Arial, sans-serif';
+    ctx.font = 'bold 16px "Segoe UI", Arial, sans-serif';
     ctx.fillStyle = '#1e293b';
     ctx.fillText(settings.authority_name, sigCenterX, footerY + 58);
   }
-  // Authority position — 12px
+  // Authority position — 14px
   if (settings.authority_position) {
-    ctx.font = '12px "Segoe UI", Arial, sans-serif';
+    ctx.font = '14px "Segoe UI", Arial, sans-serif';
     ctx.fillStyle = '#64748b';
     ctx.fillText(settings.authority_position, sigCenterX, footerY + 74);
   }
