@@ -561,6 +561,14 @@ export default function StudentDetail() {
           </Card>
         </TabsContent>
 
+        {/* ID Card Tab */}
+        <TabsContent value="id-card">
+          <div className="space-y-4">
+            <StudentIdCard userId={id} />
+            <IdCardAdminControls userId={id!} />
+          </div>
+        </TabsContent>
+
         <TabsContent value="expenses">
           <Card>
             <Table>
