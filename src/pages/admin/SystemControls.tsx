@@ -86,7 +86,7 @@ const SystemControls = () => {
       } else {
         const { data } = await supabase.from('orders').select('total, status, payment_method, created_at').eq('status', 'completed').limit(5000);
         csvContent = 'Total,Status,Payment Method,Date\n';
-        csvContent += (data || []).map(o => `${o.total},"${o.status}","${o.payment_method || ''}","${o.created_at || ''}"`).join('\n');
+        csvContent += ((data || []) as any[]).map((o: any) => `${o.total},"${o.status}","${o.payment_method || ''}","${o.created_at || ''}"`).join('\n');
       }
 
       const blob = new Blob([csvContent], { type: 'text/csv' });
