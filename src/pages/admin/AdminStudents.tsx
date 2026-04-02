@@ -285,6 +285,12 @@ export default function AdminStudents() {
             <Button size="sm" variant="default" className="gap-1" onClick={() => setConfirmAction({ type: 'activate-bulk', ids: Array.from(selectedIds) })}>
               <CheckCircle className="h-3.5 w-3.5" /> Activate Selected
             </Button>
+            <Button size="sm" variant="secondary" className="gap-1" onClick={() => setBulkAssignCourseOpen(true)}>
+              <BookOpen className="h-3.5 w-3.5" /> Assign Course
+            </Button>
+            <Button size="sm" variant="secondary" className="gap-1" onClick={() => setBulkAssignEbookOpen(true)}>
+              <Book className="h-3.5 w-3.5" /> Assign Ebook
+            </Button>
             <Button size="sm" variant="ghost" onClick={() => setSelectedIds(new Set())}>Clear</Button>
           </CardContent>
         </Card>
