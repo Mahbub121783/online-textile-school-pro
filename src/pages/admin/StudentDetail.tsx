@@ -345,7 +345,7 @@ export default function StudentDetail() {
                 <ProfileField label="University" value={profile.university} />
                 <ProfileField label="Batch" value={profile.batch} />
                 <ProfileField label="Graduation Year" value={profile.graduation_year?.toString()} />
-                <ProfileField label="Department" value={profile.department} />
+                <ProfileField label="Graduation Year" value={profile.graduation_year?.toString()} />
               </CardContent>
             </Card>
 
