@@ -8,6 +8,7 @@ interface AuthContextType {
   loading: boolean;
   profile: any | null;
   roles: string[];
+  isSuperAdmin: boolean;
   signOut: () => Promise<void>;
 }
 
