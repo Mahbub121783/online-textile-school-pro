@@ -1,105 +1,99 @@
 
 
-## Plan: Advanced Real-Time Chat with Message Request System
+## Plan: Advanced eBook System Overhaul
 
-### Current State
+### Critical Issues Found
 
-The chat widget exists with basic real-time (Supabase postgres_changes), direct messaging, user search, and unread badges. However:
+| Issue | Severity | Details |
+|-------|----------|---------|
+| **`ebook-secure-access` edge function does not exist** | CRITICAL | The reader calls `supabase.functions.invoke('ebook-secure-access')` but this function was never created. This is the 100% loading issue — every reader attempt fails |
+| **No streaming/chunking** | High | The reader downloads the entire PDF into memory via `arrayBuffer()` — huge files hang the browser |
+| **Reader not responsive on mobile** | High | Canvas-based rendering doesn't adapt well; notes panel overlaps on small screens |
+| **No admin ebook upload integration with MediaUploader** | Medium | Admin uses raw `<input type="file">` instead of the reusable `MediaUploader` component |
+| **No profile progress widget in dashboard** | Medium | `useProfileCompleteness` hook exists but no visible widget in student dashboard |
+| **No reviews/ratings on ebooks** | Medium | Course reviews exist but no ebook review system |
 
-- **No message request system** — anyone can message anyone instantly without consent
-- **No online/offline status** — no presence indicators
-- **No typing indicators** — no "typing..." feedback
-- **No message deletion** — users can't delete messages
-- **No block/report** — no safety controls
-- Real-time works but only refreshes queries (not instant push to UI)
+### Implementation Plan
 
-### What We'll Build
+**Phase 1: Fix the Critical Loading Issue (ebook-secure-access edge function)**
 
-**1. Chat Request System (Accept/Decline)**
-- New table `chat_requests` with status: `pending`, `accepted`, `declined`, `blocked`
-- When Student A searches and clicks a user, instead of opening chat directly, it sends a **message request**
-- Recipient sees pending requests tab with Accept/Decline buttons
-- Only after acceptance can both users exchange messages
-- Already-accepted contacts go straight to chat
+Create `supabase/functions/ebook-secure-access/index.ts`:
+- **`generate_token` action**: Verifies user purchased the ebook (checks `order_items` + `orders`), creates a short-lived token in `ebook_access_tokens` table (expires in 10 min)
+- **`stream_file` action**: Validates token, fetches `file_url` from `ebooks` table using service role, proxies the file bytes back to the client with proper headers (`Content-Type: application/pdf`, `X-Ebook-Title`)
+- Uses range request support so the browser can load pages incrementally
+- Includes DRM headers: `Cache-Control: no-store`, `X-Content-Type-Options: nosniff`
 
-**2. Online Presence & Typing Indicators**
-- Use Supabase Realtime Presence to track who's online
-- Green dot on avatars for online users
-- "Typing..." indicator when the other user is composing
+**Phase 2: Responsive Reader Improvements**
 
-**3. Enhanced Chat Features**
-- Delete own messages (soft delete with "Message deleted" placeholder)
-- Block user option (prevents further messages)
-- Emoji reactions (not full picker — quick react with 👍❤️😂)
-- Sound notification on new message
+Edit `src/pages/ebooks/EbookReader.tsx`:
+- Mobile: hide notes panel by default, show as bottom sheet overlay instead of sidebar
+- Add pinch-to-zoom support on mobile
+- Show loading skeleton per-page instead of blank screen
+- Add table of contents / page thumbnail navigation drawer
+- Fix canvas sizing: use `ResizeObserver` to re-render on viewport change
+- Add "scroll mode" option (continuous scroll vs page-by-page)
+
+**Phase 3: Admin eBook Upload Upgrade**
+
+Edit `src/pages/admin/AdminEbooks.tsx`:
+- Replace raw `<input type="file">` with `MediaUploader` component for cover image
+- Add upload progress indicator for PDF file uploads
+- Add drag-and-drop for gallery images
+- Add bulk publish/unpublish
+
+**Phase 4: Profile Progress Widget**
+
+Create `src/components/ProfileCompletenessWidget.tsx` (if not exists, or verify):
+- Circular progress ring showing completion percentage
+- List of missing fields with links to profile page
+- Add to `DashboardOverview.tsx`
+
+**Phase 5: eBook Store Enhancements**
+
+Edit `src/pages/ebooks/EbookCatalog.tsx`:
+- Add sort options (price, newest, popular, rating)
+- Add price range filter
+- Add grid/list view toggle
+- Add pagination (currently loads all ebooks at once)
+
+Edit `src/pages/ebooks/EbookDetail.tsx`:
+- Add related ebooks section
+- Add review/rating system for purchased users (reuse `course_reviews` pattern → new `ebook_reviews` or extend existing)
+- Add share buttons
+- Add "preview first 3 pages" for non-purchased users
 
 ### Database Changes
 
 ```sql
--- Chat requests table
-CREATE TABLE chat_requests (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  sender_id uuid NOT NULL,
-  receiver_id uuid NOT NULL,
-  status text NOT NULL DEFAULT 'pending', -- pending, accepted, declined, blocked
-  created_at timestamptz DEFAULT now(),
-  updated_at timestamptz DEFAULT now(),
-  UNIQUE(sender_id, receiver_id)
-);
-ALTER TABLE chat_requests ENABLE ROW LEVEL SECURITY;
-
--- RLS: users see their own requests, update ones they received
-CREATE POLICY "Users view own requests" ON chat_requests
-  FOR SELECT TO authenticated
-  USING (auth.uid() = sender_id OR auth.uid() = receiver_id);
-
-CREATE POLICY "Users send requests" ON chat_requests
-  FOR INSERT TO authenticated
-  WITH CHECK (auth.uid() = sender_id);
-
-CREATE POLICY "Receivers update requests" ON chat_requests
-  FOR UPDATE TO authenticated
-  USING (auth.uid() = receiver_id OR auth.uid() = sender_id);
-
--- Add soft delete to chat_messages
-ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS deleted_at timestamptz;
--- Add reaction support
-ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS reactions jsonb DEFAULT '{}';
+-- No new tables needed. The ebook_access_tokens table already exists.
+-- We only need the edge function.
 ```
 
-### Implementation
+### Files to Create
 
-**Step 1: Migration** — Create `chat_requests` table + add `deleted_at` and `reactions` columns to `chat_messages`
+| File | Purpose |
+|------|---------|
+| `supabase/functions/ebook-secure-access/index.ts` | Secure token generation + file streaming proxy |
 
-**Step 2: Rewrite ChatWidget.tsx** with these views:
-- **Conversations tab** — existing accepted chats
-- **Requests tab** — pending incoming requests with Accept/Decline/Block
-- **Sent requests** — pending outgoing requests
-- Search results now show "Send Request" button instead of opening chat directly
-- If request already accepted, open chat directly
+### Files to Edit
 
-**Step 3: Presence & Typing**
-- Join a Supabase Realtime Presence channel on widget open
-- Track online users, show green dot
-- Broadcast typing state via Presence, show "typing..." bubble
+| File | Changes |
+|------|---------|
+| `src/pages/ebooks/EbookReader.tsx` | Mobile responsive, scroll mode, ResizeObserver, TOC drawer |
+| `src/pages/ebooks/EbookCatalog.tsx` | Sort, filter, pagination, grid/list toggle |
+| `src/pages/ebooks/EbookDetail.tsx` | Related ebooks, preview pages, share |
+| `src/pages/admin/AdminEbooks.tsx` | MediaUploader integration, bulk actions |
+| `src/pages/dashboard/DashboardOverview.tsx` | Add ProfileCompletenessWidget |
+| `src/pages/dashboard/MyEbooks.tsx` | Add reading stats summary |
 
-**Step 4: Enhanced message features**
-- Long-press/right-click message → Delete (own) or React
-- Deleted messages show "This message was deleted"
-- Block option in chat header → creates/updates chat_request to `blocked`
-- Play notification sound on incoming message when chat is closed
+### Implementation Order
 
-### Files
+1. **Step 1**: Create `ebook-secure-access` edge function (fixes 100% loading — highest priority)
+2. **Step 2**: Rewrite EbookReader for responsive + scroll mode + TOC
+3. **Step 3**: Upgrade EbookCatalog with filters/sort/pagination
+4. **Step 4**: Upgrade EbookDetail with preview + reviews + related
+5. **Step 5**: Upgrade AdminEbooks with MediaUploader + bulk actions
+6. **Step 6**: Add ProfileCompletenessWidget to dashboard
 
-| File | Action |
-|------|--------|
-| Migration SQL | Create `chat_requests`, alter `chat_messages` |
-| `src/components/chat/ChatWidget.tsx` | Full rewrite with requests, presence, typing, reactions |
-
-### Technical Notes
-- Presence uses `supabase.channel('online-users').track({ user_id, name, avatar })` 
-- Typing uses same channel with `channel.send({ type: 'broadcast', event: 'typing', payload: { userId } })`
-- Chat request check before sending: query `chat_requests` for accepted status between the two users
-- Block check: if status is `blocked`, hide user from search and prevent messaging
-- Total: 1 migration, 1 file rewrite
+Total: 1 new file, 6 edited files. ~6 implementation steps.
 
