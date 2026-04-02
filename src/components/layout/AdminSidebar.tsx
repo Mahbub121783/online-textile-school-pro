@@ -116,7 +116,7 @@ export function AdminSidebar() {
   const { state } = useSidebar();
   const collapsed = state === 'collapsed';
   const navigate = useNavigate();
-  const { signOut, profile } = useAuth();
+  const { signOut, profile, isSuperAdmin, roles } = useAuth();
 
   const renderNavItem = (item: { title: string; url: string; icon: any }) => (
     <SidebarMenuItem key={item.title}>
