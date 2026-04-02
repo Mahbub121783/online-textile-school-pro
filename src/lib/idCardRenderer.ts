@@ -192,7 +192,7 @@ export async function renderIdCard(
   // Valid Until — 10px below photo bottom, left-aligned under photo
   const validY = photoY + photoH + 10;
   ctx.font = 'bold 28px "Segoe UI", Arial, sans-serif';
-  ctx.fillStyle = '#475569';
+  ctx.fillStyle = primary;
   ctx.textAlign = 'left';
   ctx.fillText(`Valid Until: ${data.validUntil}`, photoX, validY + 22);
 
