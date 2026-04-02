@@ -18,8 +18,8 @@ const SystemControls = () => {
   const { data: maintenanceMode } = useQuery({
     queryKey: ['maintenance-mode'],
     queryFn: async () => {
-      const { data } = await supabase.from('site_settings' as any).select('value').eq('key', 'maintenance_mode').single();
-      return data?.value === 'true';
+      const { data } = await supabase.from('site_settings' as any).select('*').eq('key', 'maintenance_mode').single();
+      return (data as any)?.value === 'true';
     },
     enabled: isSuperAdmin,
   });
