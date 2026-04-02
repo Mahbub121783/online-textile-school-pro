@@ -291,27 +291,60 @@ export type Database = {
       chat_messages: {
         Row: {
           created_at: string | null
+          deleted_at: string | null
           id: string
           is_read: boolean | null
           message: string
+          reactions: Json | null
           receiver_id: string
           sender_id: string
         }
         Insert: {
           created_at?: string | null
+          deleted_at?: string | null
           id?: string
           is_read?: boolean | null
           message: string
+          reactions?: Json | null
           receiver_id: string
           sender_id: string
         }
         Update: {
           created_at?: string | null
+          deleted_at?: string | null
           id?: string
           is_read?: boolean | null
           message?: string
+          reactions?: Json | null
           receiver_id?: string
           sender_id?: string
+        }
+        Relationships: []
+      }
+      chat_requests: {
+        Row: {
+          created_at: string | null
+          id: string
+          receiver_id: string
+          sender_id: string
+          status: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          receiver_id: string
+          sender_id: string
+          status?: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          receiver_id?: string
+          sender_id?: string
+          status?: string
+          updated_at?: string | null
         }
         Relationships: []
       }
