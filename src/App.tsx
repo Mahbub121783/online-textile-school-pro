@@ -72,6 +72,7 @@ const AdminEbooks = lazy(() => import("./pages/admin/AdminEbooks"));
 const AdminEvents = lazy(() => import("./pages/admin/AdminEvents"));
 const AdminSuccessStories = lazy(() => import("./pages/admin/AdminSuccessStories"));
 const AdminLearningPaths = lazy(() => import("./pages/admin/AdminLearningPaths"));
+const AdminIdCardSettings = lazy(() => import("./pages/admin/AdminIdCardSettings"));
 const PageEditor = lazy(() => import("./pages/admin/PageEditor"));
 const LessonPlayer = lazy(() => import("./pages/learn/LessonPlayer"));
 const QuizPlayer = lazy(() => import("./pages/quiz/QuizPlayer"));
