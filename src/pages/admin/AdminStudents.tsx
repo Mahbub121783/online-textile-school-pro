@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
 import { Input } from '@/components/ui/input';
@@ -9,16 +9,26 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
-import { Search, BookOpen, Book, DollarSign, Users, UserCheck, FileQuestion, Award, ArrowUpDown } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { Search, BookOpen, Book, DollarSign, Users, UserCheck, FileQuestion, Award, ArrowUpDown, MoreHorizontal, Ban, CheckCircle, Download, Eye, UserX, ChevronLeft, ChevronRight, ShieldAlert, CalendarPlus } from 'lucide-react';
+import { toast } from 'sonner';
+import { Skeleton } from '@/components/ui/skeleton';
 
 type SortKey = 'name' | 'joined' | 'spend';
+const PER_PAGE = 25;
 
 export default function AdminStudents() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [sortBy, setSortBy] = useState<SortKey>('joined');
   const [sortAsc, setSortAsc] = useState(false);
+  const [page, setPage] = useState(1);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [confirmAction, setConfirmAction] = useState<{ type: 'block' | 'activate' | 'block-bulk' | 'activate-bulk'; ids: string[] } | null>(null);
   const navigate = useNavigate();
+  const qc = useQueryClient();
 
   const { data: students = [], isLoading } = useQuery({
     queryKey: ['admin-students'],
@@ -66,13 +76,37 @@ export default function AdminStudents() {
     },
   });
 
+  const toggleStatus = useMutation({
+    mutationFn: async ({ ids, active }: { ids: string[]; active: boolean }) => {
+      for (const uid of ids) {
+        const { error } = await supabase.from('user_profiles').update({ is_active: active }).eq('id', uid);
+        if (error) throw error;
+        await supabase.from('admin_activity_log').insert({
+          admin_id: (await supabase.auth.getUser()).data.user!.id,
+          action: active ? 'activate_student' : 'block_student',
+          target_type: 'student',
+          target_id: uid,
+        });
+      }
+    },
+    onSuccess: () => {
+      toast.success('Student status updated');
+      qc.invalidateQueries({ queryKey: ['admin-students'] });
+      setSelectedIds(new Set());
+      setConfirmAction(null);
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
   const filtered = useMemo(() => {
     let list = students.filter((s: any) => {
       if (statusFilter === 'active' && s.is_active === false) return false;
       if (statusFilter === 'inactive' && s.is_active !== false) return false;
+      if (statusFilter === 'blocked' && s.is_active !== false) return false;
       if (!search) return true;
       const q = search.toLowerCase();
-      return s.full_name?.toLowerCase().includes(q) || s.roll_id?.toLowerCase().includes(q) || s.phone?.toLowerCase().includes(q);
+      return [s.full_name, s.roll_id, s.phone, s.university, s.batch, s.district, s.division, s.occupation, s.company_name, s.username]
+        .some(f => f?.toLowerCase().includes(q));
     });
 
     list.sort((a: any, b: any) => {
@@ -86,52 +120,115 @@ export default function AdminStudents() {
     return list;
   }, [students, search, statusFilter, sortBy, sortAsc]);
 
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PER_PAGE));
+  const paginated = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
+
   const activeCount = students.filter((s: any) => s.is_active !== false).length;
+  const blockedCount = students.filter((s: any) => s.is_active === false).length;
   const totalRevenue = students.reduce((s: number, st: any) => s + (st.totalSpend || 0), 0);
+  const now = new Date();
+  const newThisMonth = students.filter((s: any) => {
+    if (!s.created_at) return false;
+    const d = new Date(s.created_at);
+    return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+  }).length;
 
   const toggleSort = (key: SortKey) => {
     if (sortBy === key) setSortAsc(!sortAsc);
     else { setSortBy(key); setSortAsc(false); }
+    setPage(1);
+  };
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === paginated.length) setSelectedIds(new Set());
+    else setSelectedIds(new Set(paginated.map((s: any) => s.id)));
+  };
+
+  const exportCSV = () => {
+    const rows = filtered.map((s: any) => [
+      s.full_name || '', s.roll_id || '', s.phone || '', s.university || '',
+      s.coursesCount, s.ebooksCount, s.totalSpend, s.certsCount, s.quizCount,
+      s.is_active !== false ? 'Active' : 'Blocked',
+      s.created_at ? new Date(s.created_at).toLocaleDateString() : ''
+    ]);
+    const header = ['Name', 'Roll ID', 'Phone', 'University', 'Courses', 'Ebooks', 'Spend', 'Certs', 'Quizzes', 'Status', 'Joined'];
+    const csv = [header, ...rows].map(r => r.map((c: any) => `"${c}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `students_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    toast.success('CSV exported');
   };
 
   return (
     <div className="space-y-6">
       {/* Stats bar */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <Card><CardContent className="p-4 flex items-center gap-3"><Users className="h-8 w-8 text-primary" /><div><p className="text-2xl font-bold">{students.length}</p><p className="text-xs text-muted-foreground">Total Students</p></div></CardContent></Card>
         <Card><CardContent className="p-4 flex items-center gap-3"><UserCheck className="h-8 w-8 text-green-600" /><div><p className="text-2xl font-bold">{activeCount}</p><p className="text-xs text-muted-foreground">Active</p></div></CardContent></Card>
-        <Card><CardContent className="p-4 flex items-center gap-3"><DollarSign className="h-8 w-8 text-amber-600" /><div><p className="text-2xl font-bold">৳{totalRevenue.toLocaleString()}</p><p className="text-xs text-muted-foreground">Total Revenue</p></div></CardContent></Card>
+        <Card><CardContent className="p-4 flex items-center gap-3"><ShieldAlert className="h-8 w-8 text-destructive" /><div><p className="text-2xl font-bold">{blockedCount}</p><p className="text-xs text-muted-foreground">Blocked</p></div></CardContent></Card>
+        <Card><CardContent className="p-4 flex items-center gap-3"><CalendarPlus className="h-8 w-8 text-amber-600" /><div><p className="text-2xl font-bold">{newThisMonth}</p><p className="text-xs text-muted-foreground">New This Month</p></div></CardContent></Card>
       </div>
 
       {/* Controls */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-heading font-bold">Student Management</h1>
-          <p className="text-sm text-muted-foreground">{filtered.length} of {students.length} students</p>
+          <p className="text-sm text-muted-foreground">{filtered.length} of {students.length} students · Page {page}/{totalPages}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative w-full sm:w-64">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input placeholder="Search name, roll ID, phone..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
+            <Input placeholder="Search name, phone, university..." value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} className="pl-9" />
           </div>
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <Select value={statusFilter} onValueChange={v => { setStatusFilter(v); setPage(1); }}>
             <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Status</SelectItem>
               <SelectItem value="active">Active</SelectItem>
-              <SelectItem value="inactive">Inactive</SelectItem>
+              <SelectItem value="inactive">Blocked</SelectItem>
             </SelectContent>
           </Select>
+          <Button variant="outline" size="sm" className="gap-1" onClick={exportCSV}><Download className="h-4 w-4" /> Export</Button>
         </div>
       </div>
 
+      {/* Bulk actions */}
+      {selectedIds.size > 0 && (
+        <Card className="border-primary">
+          <CardContent className="p-3 flex items-center gap-3 flex-wrap">
+            <span className="text-sm font-medium">{selectedIds.size} selected</span>
+            <Button size="sm" variant="destructive" className="gap-1" onClick={() => setConfirmAction({ type: 'block-bulk', ids: Array.from(selectedIds) })}>
+              <Ban className="h-3.5 w-3.5" /> Block Selected
+            </Button>
+            <Button size="sm" variant="default" className="gap-1" onClick={() => setConfirmAction({ type: 'activate-bulk', ids: Array.from(selectedIds) })}>
+              <CheckCircle className="h-3.5 w-3.5" /> Activate Selected
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setSelectedIds(new Set())}>Clear</Button>
+          </CardContent>
+        </Card>
+      )}
+
       {isLoading ? (
-        <div className="text-center py-12 text-muted-foreground">Loading students...</div>
+        <div className="space-y-3">
+          {[...Array(5)].map((_, i) => (
+            <Skeleton key={i} className="h-14 w-full rounded-lg" />
+          ))}
+        </div>
       ) : (
         <>
           {/* Mobile cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:hidden">
-            {filtered.map((s: any) => (
+            {paginated.map((s: any) => (
               <Card key={s.id} className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate(`/admin/students/${s.id}`)}>
                 <CardContent className="p-4 flex items-center gap-3">
                   <Avatar className="h-12 w-12">
@@ -141,7 +238,7 @@ export default function AdminStudents() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1">
                       <p className="font-semibold truncate">{s.full_name || 'Unnamed'}</p>
-                      <Badge variant={s.is_active !== false ? 'default' : 'destructive'} className="text-[10px] h-4 px-1">{s.is_active !== false ? '●' : '○'}</Badge>
+                      <Badge variant={s.is_active !== false ? 'default' : 'destructive'} className="text-[10px] h-4 px-1">{s.is_active !== false ? 'Active' : 'Blocked'}</Badge>
                     </div>
                     <p className="text-xs text-muted-foreground">{s.roll_id || 'No Roll ID'}</p>
                     <div className="flex gap-3 mt-1 text-xs text-muted-foreground">
@@ -161,6 +258,9 @@ export default function AdminStudents() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-10">
+                      <Checkbox checked={paginated.length > 0 && selectedIds.size === paginated.length} onCheckedChange={toggleSelectAll} />
+                    </TableHead>
                     <TableHead>
                       <Button variant="ghost" size="sm" className="gap-1 -ml-3" onClick={() => toggleSort('name')}>
                         Student <ArrowUpDown className="h-3 w-3" />
@@ -173,7 +273,7 @@ export default function AdminStudents() {
                     <TableHead className="text-center">Certs</TableHead>
                     <TableHead>
                       <Button variant="ghost" size="sm" className="gap-1 -ml-3" onClick={() => toggleSort('spend')}>
-                        Total Spend <ArrowUpDown className="h-3 w-3" />
+                        Spend <ArrowUpDown className="h-3 w-3" />
                       </Button>
                     </TableHead>
                     <TableHead>
@@ -182,12 +282,16 @@ export default function AdminStudents() {
                       </Button>
                     </TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead className="w-10"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filtered.map((s: any) => (
-                    <TableRow key={s.id} className="cursor-pointer hover:bg-muted/50" onClick={() => navigate(`/admin/students/${s.id}`)}>
-                      <TableCell>
+                  {paginated.map((s: any) => (
+                    <TableRow key={s.id} className="hover:bg-muted/50">
+                      <TableCell onClick={e => e.stopPropagation()}>
+                        <Checkbox checked={selectedIds.has(s.id)} onCheckedChange={() => toggleSelect(s.id)} />
+                      </TableCell>
+                      <TableCell className="cursor-pointer" onClick={() => navigate(`/admin/students/${s.id}`)}>
                         <div className="flex items-center gap-3">
                           <Avatar className="h-9 w-9">
                             <AvatarImage src={s.avatar_url} />
@@ -208,20 +312,79 @@ export default function AdminStudents() {
                       <TableCell className="text-sm text-muted-foreground">{s.created_at ? new Date(s.created_at).toLocaleDateString() : '—'}</TableCell>
                       <TableCell>
                         <Badge variant={s.is_active !== false ? 'default' : 'destructive'} className="text-xs">
-                          {s.is_active !== false ? 'Active' : 'Inactive'}
+                          {s.is_active !== false ? 'Active' : 'Blocked'}
                         </Badge>
+                      </TableCell>
+                      <TableCell onClick={e => e.stopPropagation()}>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8"><MoreHorizontal className="h-4 w-4" /></Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => navigate(`/admin/students/${s.id}`)} className="gap-2">
+                              <Eye className="h-4 w-4" /> View Profile
+                            </DropdownMenuItem>
+                            {s.is_active !== false ? (
+                              <DropdownMenuItem className="gap-2 text-destructive" onClick={() => setConfirmAction({ type: 'block', ids: [s.id] })}>
+                                <Ban className="h-4 w-4" /> Block Student
+                              </DropdownMenuItem>
+                            ) : (
+                              <DropdownMenuItem className="gap-2" onClick={() => setConfirmAction({ type: 'activate', ids: [s.id] })}>
+                                <CheckCircle className="h-4 w-4" /> Activate Student
+                              </DropdownMenuItem>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </TableCell>
                     </TableRow>
                   ))}
-                  {filtered.length === 0 && (
-                    <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">No students found</TableCell></TableRow>
+                  {paginated.length === 0 && (
+                    <TableRow><TableCell colSpan={11} className="text-center py-8 text-muted-foreground">No students found</TableCell></TableRow>
                   )}
                 </TableBody>
               </Table>
             </Card>
           </div>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-center gap-2">
+              <Button variant="outline" size="sm" disabled={page === 1} onClick={() => setPage(p => p - 1)}>
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <span className="text-sm text-muted-foreground">Page {page} of {totalPages}</span>
+              <Button variant="outline" size="sm" disabled={page === totalPages} onClick={() => setPage(p => p + 1)}>
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
         </>
       )}
+
+      {/* Confirm Dialog */}
+      <AlertDialog open={!!confirmAction} onOpenChange={open => !open && setConfirmAction(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {confirmAction?.type.includes('block') ? 'Block Student(s)?' : 'Activate Student(s)?'}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmAction?.type.includes('block')
+                ? `This will block ${confirmAction?.ids.length} student(s). They will lose access to courses and content.`
+                : `This will re-activate ${confirmAction?.ids.length} student(s).`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className={confirmAction?.type.includes('block') ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90' : ''}
+              onClick={() => confirmAction && toggleStatus.mutate({ ids: confirmAction.ids, active: !confirmAction.type.includes('block') })}
+            >
+              {toggleStatus.isPending ? 'Processing...' : 'Confirm'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
