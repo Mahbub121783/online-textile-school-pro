@@ -125,9 +125,9 @@ export async function renderIdCard(
   // ══════════════════════════════════════════
   // BODY — Photo + Fields
   // ══════════════════════════════════════════
-  const bodyY = hH + 20;
-  const photoW = 170;
-  const photoH = 210;
+  const bodyY = hH + 14;
+  const photoW = 187;
+  const photoH = 231;
   const photoX = 40;
   const photoY = bodyY;
 
@@ -158,7 +158,7 @@ export async function renderIdCard(
   const labelW = 160;
   const valueX = fieldX + labelW;
   const rowH = 46;
-  const startY = bodyY + 20;
+  const startY = bodyY + 10;
   const maxValW = CARD_W - valueX - 40;
 
   ctx.textAlign = 'left';
@@ -185,32 +185,25 @@ export async function renderIdCard(
   });
 
   // ══════════════════════════════════════════
-  // FOOTER — Validity + Signature
+  // FOOTER — Validity + Signature (between body and barcode bar)
   // ══════════════════════════════════════════
   const barcodeBarH = 70;
-  const footerY = CARD_H - barcodeBarH - 80;
 
-  // Thin separator
-  ctx.strokeStyle = '#e2e8f0';
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(30, footerY);
-  ctx.lineTo(CARD_W - 30, footerY);
-  ctx.stroke();
-
-  // Left: validity — 40% bigger than body text (20px body → 28px)
+  // Valid Until — 10px below photo bottom, left-aligned under photo
+  const validY = photoY + photoH + 10;
   ctx.font = 'bold 28px "Segoe UI", Arial, sans-serif';
   ctx.fillStyle = '#475569';
   ctx.textAlign = 'left';
-  ctx.fillText(`Valid Until: ${data.validUntil}`, 40, footerY + 28);
+  ctx.fillText(`Valid Until: ${data.validUntil}`, photoX, validY + 22);
 
-  // Right: signature
+  // Signature — right-aligned, vertically aligned with validity area
   const sigCenterX = CARD_W - 170;
+  const sigBaseY = validY;
 
   if (settings.signature_url) {
     try {
       const sig = await loadImage(settings.signature_url);
-      ctx.drawImage(sig, sigCenterX - 70, footerY + 4, 140, 34);
+      ctx.drawImage(sig, sigCenterX - 70, sigBaseY - 2, 140, 34);
     } catch { /* skip */ }
   }
 
@@ -218,22 +211,22 @@ export async function renderIdCard(
   ctx.strokeStyle = '#94a3b8';
   ctx.lineWidth = 1;
   ctx.beginPath();
-  ctx.moveTo(sigCenterX - 80, footerY + 42);
-  ctx.lineTo(sigCenterX + 80, footerY + 42);
+  ctx.moveTo(sigCenterX - 80, sigBaseY + 36);
+  ctx.lineTo(sigCenterX + 80, sigBaseY + 36);
   ctx.stroke();
 
-  // Authority name — 16px bold (same as body label size)
+  // Authority name — 16px bold
   ctx.textAlign = 'center';
   if (settings.authority_name) {
     ctx.font = 'bold 16px "Segoe UI", Arial, sans-serif';
     ctx.fillStyle = '#1e293b';
-    ctx.fillText(settings.authority_name, sigCenterX, footerY + 58);
+    ctx.fillText(settings.authority_name, sigCenterX, sigBaseY + 52);
   }
   // Authority position — 14px
   if (settings.authority_position) {
     ctx.font = '14px "Segoe UI", Arial, sans-serif';
     ctx.fillStyle = '#64748b';
-    ctx.fillText(settings.authority_position, sigCenterX, footerY + 74);
+    ctx.fillText(settings.authority_position, sigCenterX, sigBaseY + 68);
   }
 
   // ══════════════════════════════════════════
