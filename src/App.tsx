@@ -211,6 +211,7 @@ const App = () => (
                   <Route path="events" element={<AdminEvents />} />
                   <Route path="success-stories" element={<AdminSuccessStories />} />
                   <Route path="learning-paths" element={<AdminLearningPaths />} />
+                  <Route path="id-card-settings" element={<AdminIdCardSettings />} />
                   <Route path="forum" element={<AdminForum />} />
                   <Route path="students" element={<AdminStudents />} />
                   <Route path="students/:id" element={<StudentDetail />} />
