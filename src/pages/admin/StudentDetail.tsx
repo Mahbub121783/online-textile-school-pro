@@ -9,9 +9,13 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
+import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
-import { ArrowLeft, BookOpen, Book, Gift, Wallet, MessageSquare, Award, ClipboardList, FileQuestion, ShoppingCart, User, GraduationCap, Briefcase, MapPin } from 'lucide-react';
+import { ArrowLeft, BookOpen, Book, Gift, Wallet, MessageSquare, Award, ClipboardList, FileQuestion, ShoppingCart, User, GraduationCap, Briefcase, MapPin, Ban, Bell, Trash2, XCircle } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 
 function ProfileField({ label, value }: { label: string; value: string | null | undefined }) {
@@ -31,8 +35,13 @@ export default function StudentDetail() {
   const [grantEbookOpen, setGrantEbookOpen] = useState(false);
   const [selectedCourse, setSelectedCourse] = useState('');
   const [selectedEbook, setSelectedEbook] = useState('');
+  const [revokeTarget, setRevokeTarget] = useState<{ type: 'enrollment' | 'ebook-order'; id: string; name: string } | null>(null);
+  const [blockConfirm, setBlockConfirm] = useState(false);
+  const [notifyOpen, setNotifyOpen] = useState(false);
+  const [notifyTitle, setNotifyTitle] = useState('');
+  const [notifyMsg, setNotifyMsg] = useState('');
 
-  const { data: profile } = useQuery({
+  const { data: profile, refetch: refetchProfile } = useQuery({
     queryKey: ['student-profile', id],
     queryFn: async () => {
       const { data } = await supabase.from('user_profiles').select('*').eq('id', id!).single();
@@ -117,7 +126,6 @@ export default function StudentDetail() {
     enabled: !!id,
   });
 
-  // Fetch ebook names for ebook items
   const { data: ebookNameMap = {} } = useQuery({
     queryKey: ['ebook-name-map', id],
     queryFn: async () => {
@@ -131,7 +139,6 @@ export default function StudentDetail() {
     enabled: orders.length > 0,
   });
 
-  // Fetch reading progress
   const { data: readingProgress = [] } = useQuery({
     queryKey: ['student-reading-progress', id],
     queryFn: async () => {
@@ -187,12 +194,78 @@ export default function StudentDetail() {
     onError: (e: any) => toast.error(e.message),
   });
 
+  const revokeAccess = useMutation({
+    mutationFn: async ({ type, targetId }: { type: string; targetId: string }) => {
+      if (type === 'enrollment') {
+        const { error } = await supabase.from('enrollments').delete().eq('id', targetId);
+        if (error) throw error;
+      }
+      const adminId = (await supabase.auth.getUser()).data.user!.id;
+      await supabase.from('admin_activity_log').insert({
+        admin_id: adminId,
+        action: `revoke_${type}`,
+        target_type: 'student',
+        target_id: id!,
+        details: { revoked_id: targetId },
+      });
+    },
+    onSuccess: () => {
+      toast.success('Access revoked');
+      qc.invalidateQueries({ queryKey: ['student-enrollments', id] });
+      qc.invalidateQueries({ queryKey: ['student-orders', id] });
+      setRevokeTarget(null);
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const toggleBlock = useMutation({
+    mutationFn: async (block: boolean) => {
+      const { error } = await supabase.from('user_profiles').update({ is_active: !block }).eq('id', id!);
+      if (error) throw error;
+      const adminId = (await supabase.auth.getUser()).data.user!.id;
+      await supabase.from('admin_activity_log').insert({
+        admin_id: adminId,
+        action: block ? 'block_student' : 'activate_student',
+        target_type: 'student',
+        target_id: id!,
+      });
+    },
+    onSuccess: () => {
+      toast.success('Student status updated');
+      refetchProfile();
+      qc.invalidateQueries({ queryKey: ['admin-students'] });
+      setBlockConfirm(false);
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const sendNotification = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase.from('notifications').insert({
+        user_id: id!,
+        type: 'admin',
+        title: notifyTitle,
+        message: notifyMsg,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success('Notification sent');
+      setNotifyOpen(false);
+      setNotifyTitle('');
+      setNotifyMsg('');
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
   const ebookItems = orders.flatMap((o: any) => (o.order_items ?? []).filter((i: any) => i.item_type === 'ebook'));
   const totalSpend = orders.filter((o: any) => o.status === 'completed').reduce((s: number, o: any) => s + (o.total || 0), 0);
   const readingMap: Record<string, any> = {};
   readingProgress.forEach((r: any) => { readingMap[r.ebook_id] = r; });
 
   if (!profile) return <div className="p-8 text-center text-muted-foreground">Loading...</div>;
+
+  const isBlocked = profile.is_active === false;
 
   return (
     <div className="space-y-6">
@@ -211,8 +284,8 @@ export default function StudentDetail() {
             <div className="flex-1">
               <div className="flex items-center gap-2">
                 <h1 className="text-xl font-heading font-bold">{profile.full_name || 'Unnamed Student'}</h1>
-                <Badge variant={profile.is_active !== false ? 'default' : 'destructive'}>
-                  {profile.is_active !== false ? 'Active' : 'Inactive'}
+                <Badge variant={!isBlocked ? 'default' : 'destructive'}>
+                  {!isBlocked ? 'Active' : 'Blocked'}
                 </Badge>
               </div>
               <div className="flex flex-wrap gap-2 mt-1">
@@ -220,9 +293,36 @@ export default function StudentDetail() {
                 {profile.username && <Badge variant="secondary">@{profile.username}</Badge>}
                 <Badge variant="secondary">{profile.phone || 'No Phone'}</Badge>
               </div>
-              <p className="text-xs text-muted-foreground mt-1">Joined {profile.created_at ? new Date(profile.created_at).toLocaleDateString() : '—'}</p>
+              <div className="flex gap-4 mt-1 text-xs text-muted-foreground">
+                <span>Joined {profile.created_at ? new Date(profile.created_at).toLocaleDateString() : '—'}</span>
+                <span>Last active {profile.updated_at ? new Date(profile.updated_at).toLocaleDateString() : '—'}</span>
+              </div>
             </div>
             <div className="flex flex-wrap gap-2">
+              {/* Status toggle */}
+              <div className="flex items-center gap-2 border rounded-lg px-3 py-2">
+                <span className="text-xs text-muted-foreground">Active</span>
+                <Switch checked={!isBlocked} onCheckedChange={(checked) => {
+                  if (!checked) setBlockConfirm(true);
+                  else toggleBlock.mutate(false);
+                }} />
+              </div>
+
+              {/* Send notification */}
+              <Dialog open={notifyOpen} onOpenChange={setNotifyOpen}>
+                <DialogTrigger asChild>
+                  <Button size="sm" variant="outline" className="gap-1"><Bell className="h-4 w-4" /> Notify</Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader><DialogTitle>Send Notification</DialogTitle></DialogHeader>
+                  <Input placeholder="Title" value={notifyTitle} onChange={e => setNotifyTitle(e.target.value)} />
+                  <Textarea placeholder="Message" value={notifyMsg} onChange={e => setNotifyMsg(e.target.value)} />
+                  <Button onClick={() => sendNotification.mutate()} disabled={!notifyTitle || !notifyMsg || sendNotification.isPending}>
+                    {sendNotification.isPending ? 'Sending...' : 'Send'}
+                  </Button>
+                </DialogContent>
+              </Dialog>
+
               <Dialog open={grantCourseOpen} onOpenChange={setGrantCourseOpen}>
                 <DialogTrigger asChild>
                   <Button size="sm" className="gap-1"><Gift className="h-4 w-4" /> Grant Course</Button>
@@ -345,7 +445,6 @@ export default function StudentDetail() {
                 <ProfileField label="University" value={profile.university} />
                 <ProfileField label="Batch" value={profile.batch} />
                 <ProfileField label="Graduation Year" value={profile.graduation_year?.toString()} />
-                <ProfileField label="Graduation Year" value={profile.graduation_year?.toString()} />
               </CardContent>
             </Card>
 
@@ -366,7 +465,6 @@ export default function StudentDetail() {
                 <ProfileField label="District" value={profile.district} />
                 <ProfileField label="Division" value={profile.division} />
                 <ProfileField label="Country" value={profile.country} />
-                <ProfileField label="Country" value={profile.country} />
               </CardContent>
             </Card>
           </div>
@@ -381,6 +479,7 @@ export default function StudentDetail() {
                   <TableHead className="text-center">Progress</TableHead>
                   <TableHead>Enrolled</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead className="w-20">Action</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -390,9 +489,14 @@ export default function StudentDetail() {
                     <TableCell><div className="flex items-center gap-2"><Progress value={e.progress_pct || 0} className="h-2 w-20" /><span className="text-xs">{e.progress_pct || 0}%</span></div></TableCell>
                     <TableCell className="text-sm text-muted-foreground">{e.enrolled_at ? new Date(e.enrolled_at).toLocaleDateString() : '—'}</TableCell>
                     <TableCell><Badge variant={e.completed_at ? 'default' : 'secondary'}>{e.completed_at ? 'Completed' : 'In Progress'}</Badge></TableCell>
+                    <TableCell>
+                      <Button variant="ghost" size="sm" className="text-destructive h-7 px-2 gap-1" onClick={() => setRevokeTarget({ type: 'enrollment', id: e.id, name: (e.courses as any)?.title || 'this course' })}>
+                        <XCircle className="h-3.5 w-3.5" /> Revoke
+                      </Button>
+                    </TableCell>
                   </TableRow>
                 ))}
-                {!enrollments.length && <TableRow><TableCell colSpan={4} className="text-center py-6 text-muted-foreground">No enrollments</TableCell></TableRow>}
+                {!enrollments.length && <TableRow><TableCell colSpan={5} className="text-center py-6 text-muted-foreground">No enrollments</TableCell></TableRow>}
               </TableBody>
             </Table>
           </Card>
@@ -521,6 +625,42 @@ export default function StudentDetail() {
           </div>
         </TabsContent>
       </Tabs>
+
+      {/* Block confirm */}
+      <AlertDialog open={blockConfirm} onOpenChange={setBlockConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Block this student?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Blocking will prevent the student from accessing courses and content. You can re-activate later.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => toggleBlock.mutate(true)}>
+              {toggleBlock.isPending ? 'Blocking...' : 'Block Student'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Revoke confirm */}
+      <AlertDialog open={!!revokeTarget} onOpenChange={open => !open && setRevokeTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Revoke access to "{revokeTarget?.name}"?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently remove the student's access. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => revokeTarget && revokeAccess.mutate({ type: revokeTarget.type, targetId: revokeTarget.id })}>
+              {revokeAccess.isPending ? 'Revoking...' : 'Revoke Access'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
