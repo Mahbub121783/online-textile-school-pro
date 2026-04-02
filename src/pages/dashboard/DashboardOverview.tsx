@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useMemo } from 'react';
 import ProfileCompletenessWidget from '@/components/ProfileCompletenessWidget';
+import StudentIdCard from '@/components/student/StudentIdCard';
 
 const DashboardOverview = () => {
   const { user } = useAuth();
