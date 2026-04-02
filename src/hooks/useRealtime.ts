@@ -46,6 +46,8 @@ export function useAdminRealtime() {
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'user_profiles' }, () => {
         queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+        queryClient.invalidateQueries({ queryKey: ['admin-students'] });
+        queryClient.invalidateQueries({ queryKey: ['student-profile'] });
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'refund_requests' }, () => {
         queryClient.invalidateQueries({ queryKey: ['admin-refunds-summary'] });
