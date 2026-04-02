@@ -40,6 +40,7 @@ const PaymentSuccess = () => {
       if (data?.status === 'COMPLETED') {
         setStatus('success');
         clearCart();
+        if (user?.id) ensureStudentIdCard(user.id);
       } else {
         setStatus('failed');
       }
