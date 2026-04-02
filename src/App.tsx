@@ -119,6 +119,8 @@ const App = () => (
                 <Route path="/courses/:slug" element={<CourseDetail />} />
                 <Route path="/ebooks" element={<EbookCatalog />} />
                 <Route path="/ebooks/:slug" element={<EbookDetail />} />
+                <Route path="/learning-paths" element={<LearningPaths />} />
+                <Route path="/learning-paths/:slug" element={<LearningPathDetail />} />
                 <Route path="/cart" element={<CartPage />} />
                 <Route path="/checkout" element={<Checkout />} />
                 <Route path="/payment/success" element={<PaymentSuccess />} />
