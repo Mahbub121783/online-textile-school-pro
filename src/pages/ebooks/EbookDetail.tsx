@@ -4,7 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useCartStore } from '@/stores/cartStore';
 import { Button } from '@/components/ui/button';
-import { ShoppingCart, BookOpen, ArrowLeft, Clock, CheckCircle } from 'lucide-react';
+import { ShoppingCart, BookOpen, ArrowLeft, Clock, CheckCircle, Share2, ExternalLink } from 'lucide-react';
 import SEOHead from '@/components/SEOHead';
 import UtilityBar from '@/components/layout/UtilityBar';
 import Header from '@/components/layout/Header';
@@ -18,13 +18,12 @@ const EbookDetail = () => {
   const { user } = useAuth();
   const { addItem, items } = useCartStore();
 
-  // Exclude file_url from client query — anti-piracy
   const { data: ebook, isLoading } = useQuery({
     queryKey: ['ebook', slug],
     queryFn: async () => {
       const { data } = await supabase
         .from('ebooks')
-        .select('id, title, slug, description, author, cover_url, price, discount_price, page_count, is_published, category_id, tags, sub_writers, age_restriction, categories(name)')
+        .select('id, title, slug, description, author, cover_url, price, discount_price, page_count, is_published, category_id, tags, sub_writers, age_restriction, gallery_urls, categories(name)')
         .eq('slug', slug!)
         .single();
       return data;
@@ -64,9 +63,35 @@ const EbookDetail = () => {
     },
   });
 
+  // Related ebooks (same category)
+  const { data: relatedEbooks = [] } = useQuery({
+    queryKey: ['related-ebooks', ebook?.category_id, ebook?.id],
+    enabled: !!ebook?.category_id,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('ebooks')
+        .select('id, title, slug, author, cover_url, price, discount_price')
+        .eq('is_published', true)
+        .eq('category_id', ebook!.category_id!)
+        .neq('id', ebook!.id)
+        .limit(4);
+      return data ?? [];
+    },
+  });
+
   const handleReadNow = () => {
     if (!ebook) return;
     navigate(`/read/${ebook.id}`);
+  };
+
+  const handleShare = async () => {
+    const url = window.location.href;
+    if (navigator.share) {
+      try { await navigator.share({ title: ebook?.title, url }); } catch {}
+    } else {
+      await navigator.clipboard.writeText(url);
+      toast({ title: 'Link copied!', description: 'Share link has been copied to clipboard.' });
+    }
   };
 
   if (isLoading) {
@@ -112,8 +137,7 @@ const EbookDetail = () => {
         description={ebook?.description?.slice(0, 155) || `${ebook?.title} — available as an eBook at Online Textile School.`}
         ogImage={ebook?.cover_url || undefined}
         jsonLd={ebook ? {
-          '@context': 'https://schema.org',
-          '@type': 'Book',
+          '@context': 'https://schema.org', '@type': 'Book',
           name: ebook.title,
           author: ebook.author ? { '@type': 'Person', name: ebook.author } : undefined,
           description: ebook.description,
@@ -131,11 +155,20 @@ const EbookDetail = () => {
           </Button>
 
           <div className="flex flex-col md:flex-row gap-8">
-            {/* Cover */}
-            <div className="w-full md:w-80 shrink-0">
+            {/* Cover + Gallery */}
+            <div className="w-full md:w-80 shrink-0 space-y-3">
               <div className="aspect-[3/4] bg-muted rounded-xl overflow-hidden">
                 <img src={ebook.cover_url || '/placeholder.svg'} alt={ebook.title} className="w-full h-full object-cover" />
               </div>
+              {ebook.gallery_urls && ebook.gallery_urls.length > 0 && (
+                <div className="grid grid-cols-4 gap-2">
+                  {ebook.gallery_urls.slice(0, 4).map((url: string, i: number) => (
+                    <div key={i} className="aspect-square bg-muted rounded-lg overflow-hidden">
+                      <img src={url} alt={`Preview ${i + 1}`} className="w-full h-full object-cover" loading="lazy" />
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Details */}
@@ -145,12 +178,18 @@ const EbookDetail = () => {
                   {ebook.categories.name}
                 </span>
               )}
-              <h1 className="font-heading text-3xl font-bold">{ebook.title}</h1>
+              <h1 className="font-heading text-2xl sm:text-3xl font-bold">{ebook.title}</h1>
               {ebook.author && <p className="text-muted-foreground">by <span className="font-medium text-foreground">{ebook.author}</span></p>}
               {ebook.sub_writers && ebook.sub_writers.length > 0 && (
                 <p className="text-sm text-muted-foreground">Co-authors: {ebook.sub_writers.join(', ')}</p>
               )}
-              {ebook.page_count && <p className="text-sm text-muted-foreground">{ebook.page_count} pages</p>}
+
+              <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+                {ebook.page_count && <span>{ebook.page_count} pages</span>}
+                {ebook.age_restriction && ebook.age_restriction !== 'none' && (
+                  <span className="bg-destructive/10 text-destructive px-2 py-0.5 rounded text-xs font-medium">{ebook.age_restriction}</span>
+                )}
+              </div>
 
               {ebook.tags && ebook.tags.length > 0 && (
                 <div className="flex flex-wrap gap-1">
@@ -165,13 +204,14 @@ const EbookDetail = () => {
                   <div className="inline-flex items-center gap-2 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-3 py-1.5 rounded-full text-sm font-semibold">
                     <CheckCircle className="h-4 w-4" /> Purchased
                   </div>
-                  <Button
-                    size="lg"
-                    className="bg-accent hover:bg-accent/90 text-accent-foreground gap-2 font-semibold"
-                    onClick={handleReadNow}
-                  >
-                    <BookOpen className="h-5 w-5" /> Read Now
-                  </Button>
+                  <div className="flex gap-3">
+                    <Button size="lg" className="bg-accent hover:bg-accent/90 text-accent-foreground gap-2 font-semibold" onClick={handleReadNow}>
+                      <BookOpen className="h-5 w-5" /> Read Now
+                    </Button>
+                    <Button size="lg" variant="outline" onClick={handleShare}>
+                      <Share2 className="h-4 w-4 mr-2" /> Share
+                    </Button>
+                  </div>
                 </>
               ) : hasPendingOrder ? (
                 <div className="space-y-2">
@@ -187,16 +227,18 @@ const EbookDetail = () => {
                     {ebook.discount_price && (
                       <span className="text-lg text-muted-foreground line-through">৳{ebook.price}</span>
                     )}
+                    {ebook.discount_price && ebook.price && (
+                      <span className="text-sm bg-accent/20 text-accent-foreground px-2 py-0.5 rounded font-medium">
+                        {Math.round((1 - ebook.discount_price / ebook.price) * 100)}% OFF
+                      </span>
+                    )}
                   </div>
                   <div className="flex gap-3">
-                    <Button
-                      size="lg"
-                      className="bg-accent hover:bg-accent/90 text-accent-foreground gap-2"
-                      onClick={handleAddToCart}
-                      disabled={inCart}
-                    >
-                      <ShoppingCart className="h-5 w-5" />
-                      {inCart ? 'In Cart' : 'Add to Cart'}
+                    <Button size="lg" className="bg-accent hover:bg-accent/90 text-accent-foreground gap-2" onClick={handleAddToCart} disabled={inCart}>
+                      <ShoppingCart className="h-5 w-5" /> {inCart ? 'In Cart' : 'Add to Cart'}
+                    </Button>
+                    <Button size="lg" variant="outline" onClick={handleShare}>
+                      <Share2 className="h-4 w-4 mr-2" /> Share
                     </Button>
                   </div>
                 </>
@@ -210,15 +252,33 @@ const EbookDetail = () => {
               )}
             </div>
           </div>
+
+          {/* Related eBooks */}
+          {relatedEbooks.length > 0 && (
+            <div className="mt-12 border-t pt-8">
+              <h2 className="font-heading text-xl font-bold mb-4">Related eBooks</h2>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                {relatedEbooks.map((rel: any) => (
+                  <div key={rel.id} className="bg-card border rounded-xl overflow-hidden group hover:shadow-lg transition-shadow cursor-pointer" onClick={() => navigate(`/ebooks/${rel.slug}`)}>
+                    <div className="aspect-[3/4] bg-muted overflow-hidden">
+                      <img src={rel.cover_url || '/placeholder.svg'} alt={rel.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform" loading="lazy" />
+                    </div>
+                    <div className="p-3">
+                      <h3 className="font-heading font-bold text-sm line-clamp-2 mb-1">{rel.title}</h3>
+                      <p className="text-xs text-muted-foreground">{rel.author}</p>
+                      <p className="font-bold text-sm mt-1">৳{rel.discount_price ?? rel.price}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </main>
-      {/* Fixed mobile action bar for purchased users */}
+
       {isPurchased && (
         <div className="fixed bottom-14 left-0 right-0 z-40 md:hidden bg-card border-t shadow-lg px-4 py-3">
-          <Button
-            className="w-full bg-accent hover:bg-accent/90 text-accent-foreground font-semibold gap-2"
-            onClick={handleReadNow}
-          >
+          <Button className="w-full bg-accent hover:bg-accent/90 text-accent-foreground font-semibold gap-2" onClick={handleReadNow}>
             <BookOpen className="h-4 w-4" /> Read Now
           </Button>
         </div>
