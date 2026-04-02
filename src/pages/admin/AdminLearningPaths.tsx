@@ -26,7 +26,7 @@ const AdminLearningPaths = () => {
 
   const { data: paths = [] } = useQuery({
     queryKey: ['admin-learning-paths'],
-    queryFn: async () => { const { data } = await supabase.from('learning_paths').select('*').order('created_at', { ascending: false }); return data ?? []; },
+    queryFn: async () => { const { data } = await (supabase as any).from('learning_paths').select('*').order('created_at', { ascending: false }); return data ?? []; },
   });
 
   const { data: allCourses = [] } = useQuery({
@@ -37,19 +37,19 @@ const AdminLearningPaths = () => {
   const upsert = useMutation({
     mutationFn: async () => {
       const payload = { title: form.title, slug: form.slug, description: form.description, thumbnail_url: form.thumbnail_url || null, price: parseFloat(form.price) || 0, is_published: form.is_published, course_ids: selectedCourseIds, created_by: user?.id };
-      if (editing) { await supabase.from('learning_paths').update(payload).eq('id', editing.id); }
-      else { await supabase.from('learning_paths').insert(payload); }
+      if (editing) { await (supabase as any).from('learning_paths').update(payload).eq('id', editing.id); }
+      else { await (supabase as any).from('learning_paths').insert(payload); }
     },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['admin-learning-paths'] }); setDialogOpen(false); toast({ title: editing ? 'Updated' : 'Created' }); },
   });
 
   const deletePath = useMutation({
-    mutationFn: async (id: string) => { await supabase.from('learning_paths').delete().eq('id', id); },
+    mutationFn: async (id: string) => { await (supabase as any).from('learning_paths').delete().eq('id', id); },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['admin-learning-paths'] }); toast({ title: 'Deleted' }); },
   });
 
   const openCreate = () => { setEditing(null); setForm({ title: '', slug: '', description: '', thumbnail_url: '', price: '0', is_published: false, courseSearch: '' }); setSelectedCourseIds([]); setDialogOpen(true); };
-  const openEdit = (p: any) => { setEditing(p); setForm({ title: p.title, slug: p.slug, description: p.description || '', thumbnail_url: p.thumbnail_url || '', price: p.price?.toString() || '0', is_published: p.is_published, courseSearch: '' }); setSelectedCourseIds((p.course_ids as string[]) || []); setDialogOpen(true); };
+  const openEdit = (p: any) => { setEditing(p); setForm({ title: p.title, slug: p.slug, description: p.description || '', thumbnail_url: p.thumbnail_url || '', price: p.price?.toString() || '0', is_published: p.is_published, courseSearch: '' }); setSelectedCourseIds(p.course_ids || []); setDialogOpen(true); };
 
   const filteredCourses = allCourses.filter((c: any) => !selectedCourseIds.includes(c.id) && c.title.toLowerCase().includes(form.courseSearch.toLowerCase()));
 
@@ -71,7 +71,7 @@ const AdminLearningPaths = () => {
             {paths.map((p: any) => (
               <TableRow key={p.id}>
                 <TableCell className="font-medium">{p.title}</TableCell>
-                <TableCell><Badge variant="outline">{(p.course_ids as string[])?.length || 0} courses</Badge></TableCell>
+                <TableCell><Badge variant="outline">{p.course_ids?.length || 0} courses</Badge></TableCell>
                 <TableCell>{p.price === 0 ? 'Free' : `৳${p.price}`}</TableCell>
                 <TableCell>{p.is_published ? <Badge>Published</Badge> : <Badge variant="secondary">Draft</Badge>}</TableCell>
                 <TableCell className="text-right space-x-2">
@@ -132,7 +132,7 @@ const AdminLearningPaths = () => {
         </DialogContent>
       </Dialog>
 
-      <MediaPickerModal open={mediaOpen} onOpenChange={setMediaOpen} onSelect={(url) => { setForm({ ...form, thumbnail_url: url }); setMediaOpen(false); }} accept="image/*" />
+      <MediaPickerModal open={mediaOpen} onClose={() => setMediaOpen(false)} onSelect={(url) => { setForm({ ...form, thumbnail_url: url }); setMediaOpen(false); }} />
     </div>
   );
 };

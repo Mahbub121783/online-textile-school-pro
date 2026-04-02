@@ -19,7 +19,7 @@ const WishlistPage = () => {
     queryKey: ['wishlist', user?.id],
     enabled: !!user?.id,
     queryFn: async () => {
-      const { data } = await supabase
+      const { data } = await (supabase as any)
         .from('wishlists')
         .select('*, courses(id, title, slug, thumbnail_url, price, discount_price, avg_rating, enrollment_count, categories(name))')
         .eq('user_id', user!.id)
@@ -30,7 +30,7 @@ const WishlistPage = () => {
 
   const removeWishlist = useMutation({
     mutationFn: async (id: string) => {
-      await supabase.from('wishlists').delete().eq('id', id);
+      await (supabase as any).from('wishlists').delete().eq('id', id);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['wishlist'] });
@@ -104,7 +104,7 @@ const WishlistPage = () => {
                         <Trash2 className="h-4 w-4" />
                       </Button>
                       <Button size="icon" variant="ghost" onClick={() => {
-                        addItem({ id: course.id, title: course.title, price: course.discount_price ?? course.price ?? 0, type: 'course', image: course.thumbnail_url });
+                        addItem({ id: course.id, title: course.title, price: course.discount_price ?? course.price ?? 0, type: 'course', thumbnail_url: course.thumbnail_url });
                         toast({ title: 'Added to cart' });
                       }}>
                         <ShoppingCart className="h-4 w-4" />

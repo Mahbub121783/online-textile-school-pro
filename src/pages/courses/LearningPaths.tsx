@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Link } from 'react-router-dom';
-import { GraduationCap, BookOpen } from 'lucide-react';
+import { GraduationCap } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -15,7 +15,7 @@ const LearningPaths = () => {
   const { data: paths = [], isLoading } = useQuery({
     queryKey: ['learning-paths'],
     queryFn: async () => {
-      const { data } = await supabase
+      const { data } = await (supabase as any)
         .from('learning_paths')
         .select('*')
         .eq('is_published', true)
@@ -59,7 +59,7 @@ const LearningPaths = () => {
                         <GraduationCap className="h-16 w-16 text-primary/40" />
                       </div>
                     )}
-                    <Badge className="absolute top-3 right-3 bg-primary">{(path.course_ids as string[])?.length || 0} Courses</Badge>
+                    <Badge className="absolute top-3 right-3 bg-primary">{path.course_ids?.length || 0} Courses</Badge>
                   </div>
                   <CardContent className="p-5 space-y-3">
                     <h3 className="font-heading font-bold text-lg line-clamp-2">{path.title}</h3>

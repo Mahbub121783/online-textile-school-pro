@@ -2,7 +2,7 @@ import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { GraduationCap, CheckCircle2, Circle, Lock } from 'lucide-react';
+import { CheckCircle2 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -21,13 +21,13 @@ const LearningPathDetail = () => {
   const { data: path, isLoading } = useQuery({
     queryKey: ['learning-path', slug],
     queryFn: async () => {
-      const { data } = await supabase.from('learning_paths').select('*').eq('slug', slug!).single();
+      const { data } = await (supabase as any).from('learning_paths').select('*').eq('slug', slug!).single();
       return data;
     },
     enabled: !!slug,
   });
 
-  const courseIds = (path?.course_ids as string[]) ?? [];
+  const courseIds: string[] = path?.course_ids ?? [];
 
   const { data: courses = [] } = useQuery({
     queryKey: ['path-courses', courseIds],
@@ -92,10 +92,10 @@ const LearningPathDetail = () => {
             const isCompleted = !!enrollment?.completed_at;
             const isEnrolled = !!enrollment;
             return (
-              <Card key={course.id} className={`transition-all ${isCompleted ? 'border-green-500/50 bg-green-50/50 dark:bg-green-950/20' : ''}`}>
+              <Card key={course.id} className={`transition-all ${isCompleted ? 'border-primary/50 bg-primary/5' : ''}`}>
                 <CardContent className="p-4 flex items-center gap-4">
                   <div className="flex-shrink-0 w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary">
-                    {isCompleted ? <CheckCircle2 className="h-5 w-5 text-green-600" /> : <span>{idx + 1}</span>}
+                    {isCompleted ? <CheckCircle2 className="h-5 w-5 text-primary" /> : <span>{idx + 1}</span>}
                   </div>
                   <div className="flex-1 min-w-0">
                     <Link to={`/courses/${course.slug}`} className="font-semibold hover:text-primary transition-colors line-clamp-1">{course.title}</Link>

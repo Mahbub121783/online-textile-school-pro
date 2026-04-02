@@ -3,14 +3,14 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Calendar, Plus, Edit, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { toast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
@@ -23,10 +23,10 @@ const AdminEvents = () => {
   const [form, setForm] = useState({ title: '', description: '', event_date: '', event_type: 'general', image_url: '', link: '', is_featured: false });
   const [mediaOpen, setMediaOpen] = useState(false);
 
-  const { data: events = [], isLoading } = useQuery({
+  const { data: events = [] } = useQuery({
     queryKey: ['admin-events'],
     queryFn: async () => {
-      const { data } = await supabase.from('events').select('*').order('event_date', { ascending: false });
+      const { data } = await (supabase as any).from('events').select('*').order('event_date', { ascending: false });
       return data ?? [];
     },
   });
@@ -34,9 +34,9 @@ const AdminEvents = () => {
   const upsert = useMutation({
     mutationFn: async (values: any) => {
       if (editing) {
-        await supabase.from('events').update(values).eq('id', editing.id);
+        await (supabase as any).from('events').update(values).eq('id', editing.id);
       } else {
-        await supabase.from('events').insert(values);
+        await (supabase as any).from('events').insert(values);
       }
     },
     onSuccess: () => {
@@ -48,7 +48,7 @@ const AdminEvents = () => {
   });
 
   const deleteEvent = useMutation({
-    mutationFn: async (id: string) => { await supabase.from('events').delete().eq('id', id); },
+    mutationFn: async (id: string) => { await (supabase as any).from('events').delete().eq('id', id); },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['admin-events'] }); toast({ title: 'Event deleted' }); },
   });
 
@@ -129,7 +129,7 @@ const AdminEvents = () => {
         </DialogContent>
       </Dialog>
 
-      <MediaPickerModal open={mediaOpen} onOpenChange={setMediaOpen} onSelect={(url) => { setForm({ ...form, image_url: url }); setMediaOpen(false); }} accept="image/*" />
+      <MediaPickerModal open={mediaOpen} onClose={() => setMediaOpen(false)} onSelect={(url) => { setForm({ ...form, image_url: url }); setMediaOpen(false); }} />
     </div>
   );
 };

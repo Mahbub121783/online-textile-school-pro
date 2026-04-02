@@ -23,20 +23,20 @@ const AdminSuccessStories = () => {
 
   const { data: stories = [] } = useQuery({
     queryKey: ['admin-stories'],
-    queryFn: async () => { const { data } = await supabase.from('success_stories').select('*').order('created_at', { ascending: false }); return data ?? []; },
+    queryFn: async () => { const { data } = await (supabase as any).from('success_stories').select('*').order('created_at', { ascending: false }); return data ?? []; },
   });
 
   const upsert = useMutation({
     mutationFn: async (values: any) => {
       const payload = { ...values, graduation_year: values.graduation_year ? parseInt(values.graduation_year) : null };
-      if (editing) { await supabase.from('success_stories').update(payload).eq('id', editing.id); }
-      else { await supabase.from('success_stories').insert(payload); }
+      if (editing) { await (supabase as any).from('success_stories').update(payload).eq('id', editing.id); }
+      else { await (supabase as any).from('success_stories').insert(payload); }
     },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['admin-stories'] }); setDialogOpen(false); toast({ title: editing ? 'Updated' : 'Created' }); },
   });
 
   const deleteStory = useMutation({
-    mutationFn: async (id: string) => { await supabase.from('success_stories').delete().eq('id', id); },
+    mutationFn: async (id: string) => { await (supabase as any).from('success_stories').delete().eq('id', id); },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['admin-stories'] }); toast({ title: 'Deleted' }); },
   });
 
@@ -96,7 +96,7 @@ const AdminSuccessStories = () => {
         </DialogContent>
       </Dialog>
 
-      <MediaPickerModal open={mediaOpen} onOpenChange={setMediaOpen} onSelect={(url) => { setForm({ ...form, photo_url: url }); setMediaOpen(false); }} accept="image/*" />
+      <MediaPickerModal open={mediaOpen} onClose={() => setMediaOpen(false)} onSelect={(url) => { setForm({ ...form, photo_url: url }); setMediaOpen(false); }} />
     </div>
   );
 };

@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { Calendar, MapPin, ExternalLink, Clock } from 'lucide-react';
+import { Calendar, ExternalLink, Clock } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -12,18 +12,18 @@ import Footer from '@/components/layout/Footer';
 import BottomNav from '@/components/layout/BottomNav';
 
 const eventTypeColors: Record<string, string> = {
-  webinar: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
-  workshop: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
-  exam_schedule: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
-  deadline: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200',
-  general: 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200',
+  webinar: 'bg-primary/10 text-primary',
+  workshop: 'bg-accent/10 text-accent-foreground',
+  exam_schedule: 'bg-destructive/10 text-destructive',
+  deadline: 'bg-secondary text-secondary-foreground',
+  general: 'bg-muted text-muted-foreground',
 };
 
 const EventsPage = () => {
   const { data: events = [], isLoading } = useQuery({
     queryKey: ['events-public'],
     queryFn: async () => {
-      const { data } = await supabase.from('events').select('*').order('event_date', { ascending: true });
+      const { data } = await (supabase as any).from('events').select('*').order('event_date', { ascending: true });
       return data ?? [];
     },
   });
