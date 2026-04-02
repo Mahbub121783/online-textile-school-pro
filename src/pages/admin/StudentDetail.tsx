@@ -15,7 +15,8 @@ import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
-import { ArrowLeft, BookOpen, Book, Gift, Wallet, MessageSquare, Award, ClipboardList, FileQuestion, ShoppingCart, User, GraduationCap, Briefcase, MapPin, Ban, Bell, Trash2, XCircle } from 'lucide-react';
+import { ArrowLeft, BookOpen, Book, Gift, Wallet, MessageSquare, Award, ClipboardList, FileQuestion, ShoppingCart, User, GraduationCap, Briefcase, MapPin, Ban, Bell, Trash2, XCircle, CreditCard } from 'lucide-react';
+import StudentIdCard from '@/components/student/StudentIdCard';
 import { Progress } from '@/components/ui/progress';
 
 function ProfileField({ label, value }: { label: string; value: string | null | undefined }) {
