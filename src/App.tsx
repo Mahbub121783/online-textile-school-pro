@@ -78,6 +78,13 @@ const AssignmentSubmit = lazy(() => import("./pages/assignment/AssignmentSubmit"
 const EbookCatalog = lazy(() => import("./pages/ebooks/EbookCatalog"));
 const EbookDetail = lazy(() => import("./pages/ebooks/EbookDetail"));
 const EbookReader = lazy(() => import("./pages/ebooks/EbookReader"));
+const LearningPaths = lazy(() => import("./pages/courses/LearningPaths"));
+const LearningPathDetail = lazy(() => import("./pages/courses/LearningPathDetail"));
+const WishlistPage = lazy(() => import("./pages/dashboard/WishlistPage"));
+const LeaderboardPage = lazy(() => import("./pages/dashboard/LeaderboardPage"));
+const DepartmentsPage = lazy(() => import("./pages/static/DepartmentsPage"));
+const EventsPage = lazy(() => import("./pages/static/EventsPage"));
+const AlumniPage = lazy(() => import("./pages/static/AlumniPage"));
 const PaymentSuccess = lazy(() => import("./pages/payment/PaymentSuccess"));
 const PaymentCancel = lazy(() => import("./pages/payment/PaymentCancel"));
 const DynamicPage = lazy(() => import("./pages/cms/DynamicPage"));
