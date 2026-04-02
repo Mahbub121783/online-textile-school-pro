@@ -80,10 +80,10 @@ const AdminManagement = () => {
           .select('id')
           .limit(1000);
         
-        const match = allProfiles?.find((p: any) => p.id === email);
+        const match = (allProfiles as any[])?.find((p: any) => p.id === email);
         if (!match) throw new Error('User not found. Try searching by name or user ID.');
         
-        const { error } = await supabase.from('user_roles').insert({ user_id: match.id, role });
+        const { error } = await supabase.from('user_roles').insert({ user_id: match.id, role } as any);
         if (error) throw error;
         return;
       }
