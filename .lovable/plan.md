@@ -1,57 +1,48 @@
 
 
-## Plan: Perfect ID Card Layout — Bigger Photo, Tight Spacing, Professional Template
+## Plan: Fill the ID Card — Larger Fonts, Bigger Photo, No Wasted Space
 
-### Current Problems (from screenshot analysis)
+### Problems from Screenshot
 
-| Issue | Detail |
-|-------|--------|
-| **Photo too small** | 170x210 on a 1012x638 canvas — needs 10% increase to 187x231 |
-| **"Valid Until" floating in footer** | Currently at footerY+28, far from photo — needs to be 10px below the photo |
-| **Too much empty space** | Gap between fields/photo and footer is wasted |
-| **Signature area cramped** | Authority text too small relative to body |
-| **Layout not tight enough** | Elements don't fill the card efficiently |
+| Issue | Current Value | Fix |
+|-------|--------------|-----|
+| **Photo too small** | 187x231, doesn't fill vertical space | Increase to **210x270** — fills from header to near validity line |
+| **Labels tiny** | 16px semi-bold | Increase to **20px** bold |
+| **Values small** | 20px bold | Increase to **24px** bold |
+| **Label column too narrow** | labelW=160px, wastes right side | Increase to **200px** |
+| **Huge gap between validity and barcode** | ~175px empty space | Photo expansion + tighter bodyY eliminates this |
+| **"Valid Until" could be bolder** | 28px | Keep 28px but make it primary color instead of slate |
+| **Barcode card number too small** | 12px | Increase to **14px** |
+| **Field row height cramped for new size** | 46px | Increase to **52px** for 5 fields spanning the photo height |
 
-### Redesigned Layout
+### Revised Layout Math
 
-```text
-┌──────────────────────────────────────────────────────────┐
-│ [LOGO 76x76]  ONLINE TEXTILE SCHOOL       STUDENT ID    │  ← Header 116px
-│               Dhaka, Bangladesh              CARD       │     38px / 20px / 22px
-├─── teal 4px ─────────────────────────────────────────────┤
-│                                                          │
-│  ┌──────────┐   NAME :        Md. Mahbubul Alam         │  ← 16px label / 20px value
-│  │          │   ROLL :        OTS-181033                 │     rowH = 46px
-│  │  PHOTO   │   BLOOD GROUP : A+                        │
-│  │ 187x231  │   DATE OF BIRTH: 08 Feb 2000              │
-│  │          │   ADDRESS :     Barisal                    │
-│  └──────────┘                                 ─────────  │  ← Signature line right-aligned
-│  Valid Until: Sep 2027        Authority Name             │  ← 10px below photo
-│                               Director, OTS              │
-│▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓│  ← Dark barcode bar 70px
-│         ▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌   O T S - I D - 4 4 8 9    │
-└──────────────────────────────────────────────────────────┘
-```
+Canvas: 1012x638
+
+- Header: 116px (unchanged)
+- Teal line: 4px at y=116
+- Body starts: y=130 (hH + 14)
+- Photo: 210x270 at x=40, y=130 → bottom at y=400
+- 5 fields at rowH=52: spans 260px (130+10 to 400) — aligns with photo height
+- Valid Until: y=410 (photo bottom + 10)
+- Signature area: y=410-460, right-aligned
+- Barcode bar: y=568 to 638 (70px) — gap between signature (~460) and barcode (568) is ~108px which is reasonable with the bigger elements
 
 ### Key Changes in `src/lib/idCardRenderer.ts`
 
-1. **Photo 10% bigger**: 170x210 → 187x231
-2. **"Valid Until" repositioned**: Placed exactly 10px below the photo bottom (`photoY + photoH + 10`), left-aligned under the photo — 28px bold as before
-3. **Signature section moved up**: Right-aligned, vertically aligned with the "Valid Until" text — signature line + authority name + position all in the space between fields end and barcode bar
-4. **Remove floating footer separator line**: No more arbitrary `footerY` calculation — validity and signature sit naturally between body content and barcode bar
-5. **Fields start higher**: `startY = bodyY + 10` (was +20) to reduce top gap in body
-6. **Body gap reduced**: `bodyY = hH + 14` (was +20)
-
-### What stays the same
-- Header: 116px, 38px university name, 20px location, 22px "STUDENT ID CARD" — all good per last approval
-- Barcode bar: 70px full-width dark strip at bottom with 70% width barcode
-- All font sizes for labels (16px) and values (20px)
+1. **Photo**: 187x231 → **210x270**
+2. **Labels**: 16px → **20px** bold, color stays `#64748b`
+3. **Values**: 20px → **24px** bold
+4. **Label column width**: 160 → **200px**
+5. **Row height**: 46 → **52px**
+6. **Card number font**: 12px → **14px**
+7. **Valid Until color**: `#475569` → use `primary` color for emphasis
 
 ### File Summary
 
 | File | Action |
 |------|--------|
-| `src/lib/idCardRenderer.ts` | Adjust photo size, reposition Valid Until below photo, tighten spacing, move signature inline |
+| `src/lib/idCardRenderer.ts` | Adjust dimensions and font sizes — photo, labels, values, row height, label column width |
 
-Single file edit. No other changes needed.
+Single file edit.
 
