@@ -125,9 +125,9 @@ export async function renderIdCard(
   // ══════════════════════════════════════════
   // BODY — Photo + Fields
   // ══════════════════════════════════════════
-  const bodyY = hH + 20;
-  const photoW = 170;
-  const photoH = 210;
+  const bodyY = hH + 14;
+  const photoW = 187;
+  const photoH = 231;
   const photoX = 40;
   const photoY = bodyY;
 
