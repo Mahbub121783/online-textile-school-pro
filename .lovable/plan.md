@@ -1,46 +1,88 @@
 
 
-## Plan: Bulk Assign Courses & Ebooks + Show Assigned Content
+## Plan: Advanced Student Management System with Block/Remove, Global Search & Enhanced Interactivity
 
-### What's Missing
+### What's Missing Now
 
-1. **No bulk assign** — Admin can only grant course/ebook to one student at a time from the StudentDetail page. No way to select multiple students from the list and assign a course or ebook to all of them at once.
-2. **Assigned content not visible** — After granting access, there's no indication on the student list which courses/ebooks were assigned (admin-granted vs purchased).
+| Gap | Details |
+|-----|---------|
+| **No Block/Suspend/Remove** | Admin cannot deactivate, block, or remove a student |
+| **No global search** | Search only checks name, roll ID, phone — no email, university, batch, district |
+| **No bulk actions** | Cannot select multiple students for bulk operations |
+| **No CSV export** | No way to export student data |
+| **No last active / login tracking** | No visibility into when student was last active |
+| **No email column** | Student email not shown anywhere (need to query auth or add to profile display) |
+| **No admin notes** | Admin cannot leave notes on a student profile |
+| **No enrollment revoke** | Admin can grant course but cannot remove enrollment |
+| **Duplicate fields** in StudentDetail (Graduation Year shown twice, Country shown twice) |
+| **No confirmation dialogs** for destructive actions |
 
 ### Changes
 
-#### File 1: `src/pages/admin/AdminStudents.tsx`
+#### File 1: `src/pages/admin/AdminStudents.tsx` (Major Rewrite)
 
-**Add to bulk actions bar** (alongside existing Block/Activate buttons):
-- **"Assign Course"** button — opens a dialog with a course dropdown. On confirm, creates an enrollment for each selected student (skips if already enrolled).
-- **"Assign Ebook"** button — opens a dialog with an ebook dropdown. On confirm, creates an order + order_item for each selected student (skips if already has access).
+**New features:**
+- **Global search**: Search across name, roll_id, phone, university, batch, district, division, occupation, company_name — every text field in user_profiles
+- **Bulk select**: Checkbox column to select multiple students
+- **Bulk actions toolbar**: Appears when students selected — options: Block Selected, Activate Selected, Export Selected
+- **CSV Export button**: Export filtered students list as CSV (name, roll ID, phone, courses, ebooks, spend, status, joined date)
+- **More stats cards**: Add Blocked count, New This Month count (4 cards instead of 3)
+- **Row actions dropdown**: On each row, a `...` menu with View Profile, Block/Unblock, Deactivate options (without navigating away)
+- **Block/Unblock**: Sets `is_active = false` on user_profiles + shows confirmation dialog
+- **Pagination**: Show 25 per page with page controls (currently shows all which won't scale)
+- **Visual improvements**: Skeleton loading states, animated stat cards, row highlight on hover with border accent
 
-**New queries needed:**
-- Fetch all published courses (`courses` where `is_published = true`) for the assign dialog
-- Fetch all published ebooks (`ebooks` where `is_published = true`) for the assign dialog
+#### File 2: `src/pages/admin/StudentDetail.tsx` (Enhanced)
 
-**New mutations:**
-- `bulkAssignCourse`: loops through selected student IDs, inserts enrollment for each. Uses `upsert` or checks existing to skip duplicates.
-- `bulkAssignEbook`: loops through selected student IDs, creates order + order_item for each.
+**New features:**
+- **Admin action bar** at top: Block Student, Deactivate Student, Remove All Enrollments — each with confirmation AlertDialog
+- **Revoke enrollment**: Each course row gets a "Revoke" button that deletes enrollment with confirmation
+- **Revoke ebook access**: Each ebook row gets a "Revoke" button
+- **Admin Notes section**: A textarea where admin can add/edit notes about the student (stored in `user_profiles.admin_notes` — new column needed but since we can't add it without migration, we'll use a local `admin_activity_log` entry with target_type='student_note')
+- **Fix duplicate fields**: Remove duplicate Graduation Year and Country fields
+- **Last login indicator**: Show `updated_at` from profile as approximate last activity
+- **Status toggle**: A Switch component to toggle `is_active` directly from the profile header
+- **Send notification**: Button to send a direct notification to the student
 
-**New UI elements:**
-- Two `Dialog` components in the bulk actions bar with `Select` dropdowns for choosing course/ebook
-- Success toast showing count of assignments made
+### Implementation Details
 
-#### File 2: `src/pages/admin/StudentDetail.tsx`
+**Block/Deactivate flow:**
+- Uses `supabase.from('user_profiles').update({ is_active: false })` 
+- Shows AlertDialog confirmation before action
+- Invalidates query cache after mutation
+- Logs action to `admin_activity_log`
 
-**Courses tab enhancement:**
-- Add a small badge "Admin Granted" on enrollments where `payment_id` is null (indicating free/admin grant vs paid enrollment)
+**Revoke enrollment:**
+- Currently RLS blocks DELETE on enrollments. Instead of migration, we'll update enrollment's `completed_at` to mark it, or we add a migration to allow admin DELETE on enrollments.
+- **Migration needed**: Add DELETE policy on `enrollments` for admins
 
-**Ebooks tab enhancement:**
-- Add "Admin Granted" badge on orders where `payment_method = 'admin_grant'`
+**CSV Export:**
+- Browser-native: build CSV string from filtered data, create Blob, trigger download via anchor click
+
+**Global search implementation:**
+- Existing search checks 3 fields. Expand to check: `full_name`, `roll_id`, `phone`, `university`, `batch`, `district`, `division`, `occupation`, `company_name`, `username`
+
+**Pagination:**
+- Client-side pagination with `page` and `perPage` state, slice filtered array
+
+### Migration
+
+```sql
+-- Allow admins to delete enrollments (for revoking access)
+CREATE POLICY "Admins can delete enrollments"
+ON public.enrollments
+FOR DELETE
+TO authenticated
+USING (has_role(auth.uid(), 'admin'::app_role) OR has_role(auth.uid(), 'super_admin'::app_role));
+```
 
 ### File Summary
 
-| File | Change |
+| File | Action |
 |------|--------|
-| `src/pages/admin/AdminStudents.tsx` | Add bulk assign course/ebook dialogs in bulk actions bar, new mutations |
-| `src/pages/admin/StudentDetail.tsx` | Add "Admin Granted" badges on assigned content |
+| `src/pages/admin/AdminStudents.tsx` | Major rewrite — global search, bulk actions, CSV export, pagination, row actions, block/unblock |
+| `src/pages/admin/StudentDetail.tsx` | Enhanced — admin action bar, revoke enrollment/ebook, status toggle, fix duplicates, send notification |
+| Migration | Add DELETE policy on enrollments for admins |
 
-No migration needed — uses existing tables and RLS policies (admin can insert enrollments and orders).
+Total: 2 file rewrites, 1 migration.
 
