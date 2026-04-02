@@ -1,66 +1,88 @@
 
 
-## Plan: Advanced Student Management System with Full Dynamic Profile
+## Plan: Advanced Student Management System with Block/Remove, Global Search & Enhanced Interactivity
 
-### Problems Found
+### What's Missing Now
 
-1. **Ebooks tab shows raw UUID** instead of ebook title (line 266 of StudentDetail.tsx)
-2. **No full profile section** — missing fields like university, batch, blood group, district, division, occupation, company, DOB, username, referral code, language preference, active status
-3. **No quiz/assignment stats** in activity tab
-4. **No wallet transaction history** — just shows balance
-5. **No reading progress data** for ebooks
-6. **Student list page is basic** — no status filter, no sort options, no export
-7. **Profile data is not real-time** — no realtime subscription for `user_profiles` changes
+| Gap | Details |
+|-----|---------|
+| **No Block/Suspend/Remove** | Admin cannot deactivate, block, or remove a student |
+| **No global search** | Search only checks name, roll ID, phone — no email, university, batch, district |
+| **No bulk actions** | Cannot select multiple students for bulk operations |
+| **No CSV export** | No way to export student data |
+| **No last active / login tracking** | No visibility into when student was last active |
+| **No email column** | Student email not shown anywhere (need to query auth or add to profile display) |
+| **No admin notes** | Admin cannot leave notes on a student profile |
+| **No enrollment revoke** | Admin can grant course but cannot remove enrollment |
+| **Duplicate fields** in StudentDetail (Graduation Year shown twice, Country shown twice) |
+| **No confirmation dialogs** for destructive actions |
 
 ### Changes
 
-#### File 1: `src/pages/admin/StudentDetail.tsx` (Full Rewrite)
+#### File 1: `src/pages/admin/AdminStudents.tsx` (Major Rewrite)
 
-**Fix ebook names:**
-- Change orders query to also fetch ebook titles: query `ebooks` table with the item_ids from order_items and build a name map
+**New features:**
+- **Global search**: Search across name, roll_id, phone, university, batch, district, division, occupation, company_name — every text field in user_profiles
+- **Bulk select**: Checkbox column to select multiple students
+- **Bulk actions toolbar**: Appears when students selected — options: Block Selected, Activate Selected, Export Selected
+- **CSV Export button**: Export filtered students list as CSV (name, roll ID, phone, courses, ebooks, spend, status, joined date)
+- **More stats cards**: Add Blocked count, New This Month count (4 cards instead of 3)
+- **Row actions dropdown**: On each row, a `...` menu with View Profile, Block/Unblock, Deactivate options (without navigating away)
+- **Block/Unblock**: Sets `is_active = false` on user_profiles + shows confirmation dialog
+- **Pagination**: Show 25 per page with page controls (currently shows all which won't scale)
+- **Visual improvements**: Skeleton loading states, animated stat cards, row highlight on hover with border accent
 
-**Add full profile section** as the first tab or a dedicated "Profile" tab showing all user_profiles fields in a clean grid layout:
-- Full Name, Username, Phone, Roll ID, DOB, Blood Group
-- University, Batch, Graduation Year, Occupation
-- Company Name, Business Type, Professional Role, Current Job
-- District, Division, Country
-- Referral Code, Language Preference, Active Status
-- All fields auto-update via react-query with realtime invalidation
+#### File 2: `src/pages/admin/StudentDetail.tsx` (Enhanced)
 
-**Add quiz attempts + assignment submissions to Activity tab:**
-- Query `quiz_attempts` count for this user
-- Query `assignment_submissions` count for this user
+**New features:**
+- **Admin action bar** at top: Block Student, Deactivate Student, Remove All Enrollments — each with confirmation AlertDialog
+- **Revoke enrollment**: Each course row gets a "Revoke" button that deletes enrollment with confirmation
+- **Revoke ebook access**: Each ebook row gets a "Revoke" button
+- **Admin Notes section**: A textarea where admin can add/edit notes about the student (stored in `user_profiles.admin_notes` — new column needed but since we can't add it without migration, we'll use a local `admin_activity_log` entry with target_type='student_note')
+- **Fix duplicate fields**: Remove duplicate Graduation Year and Country fields
+- **Last login indicator**: Show `updated_at` from profile as approximate last activity
+- **Status toggle**: A Switch component to toggle `is_active` directly from the profile header
+- **Send notification**: Button to send a direct notification to the student
 
-**Add wallet transaction history:**
-- Query `wallet_transactions` via wallet_id and show a table with date, type, amount, description
+### Implementation Details
 
-**Add ebook reading progress:**
-- Query `ebook_reading_progress` for this user and show progress alongside each ebook
+**Block/Deactivate flow:**
+- Uses `supabase.from('user_profiles').update({ is_active: false })` 
+- Shows AlertDialog confirmation before action
+- Invalidates query cache after mutation
+- Logs action to `admin_activity_log`
 
-**Add more summary stat cards:**
-- Quiz attempts, Assignment submissions, Forum contributor points
+**Revoke enrollment:**
+- Currently RLS blocks DELETE on enrollments. Instead of migration, we'll update enrollment's `completed_at` to mark it, or we add a migration to allow admin DELETE on enrollments.
+- **Migration needed**: Add DELETE policy on `enrollments` for admins
 
-#### File 2: `src/pages/admin/AdminStudents.tsx` (Enhanced)
+**CSV Export:**
+- Browser-native: build CSV string from filtered data, create Blob, trigger download via anchor click
 
-**Add features:**
-- Status filter (Active/Inactive) using `is_active` from profile
-- Sort toggle (by name, join date, total spend)
-- Quiz count and Certificate count columns in desktop table
-- Better search: also search by phone number
-- Total stats bar at top: total students, active, total revenue from students
+**Global search implementation:**
+- Existing search checks 3 fields. Expand to check: `full_name`, `roll_id`, `phone`, `university`, `batch`, `district`, `division`, `occupation`, `company_name`, `username`
 
-#### File 3: `src/hooks/useRealtime.ts` (Edit)
+**Pagination:**
+- Client-side pagination with `page` and `perPage` state, slice filtered array
 
-- Add `user_profiles` changes to admin-realtime channel to invalidate `student-profile` and `admin-students` queries — ensures when student updates their profile, admin sees it instantly
+### Migration
+
+```sql
+-- Allow admins to delete enrollments (for revoking access)
+CREATE POLICY "Admins can delete enrollments"
+ON public.enrollments
+FOR DELETE
+TO authenticated
+USING (has_role(auth.uid(), 'admin'::app_role) OR has_role(auth.uid(), 'super_admin'::app_role));
+```
 
 ### File Summary
 
 | File | Action |
 |------|--------|
-| `src/pages/admin/StudentDetail.tsx` | Major rewrite — profile tab, ebook names, quiz/assignment stats, wallet txns, reading progress |
-| `src/pages/admin/AdminStudents.tsx` | Enhanced — filters, sort, phone search, stats bar, certificate/quiz counts |
-| `src/hooks/useRealtime.ts` | Add `admin-students` and `student-profile` invalidation on `user_profiles` changes |
+| `src/pages/admin/AdminStudents.tsx` | Major rewrite — global search, bulk actions, CSV export, pagination, row actions, block/unblock |
+| `src/pages/admin/StudentDetail.tsx` | Enhanced — admin action bar, revoke enrollment/ebook, status toggle, fix duplicates, send notification |
+| Migration | Add DELETE policy on enrollments for admins |
 
-### No migration needed
-All data exists in current tables.
+Total: 2 file rewrites, 1 migration.
 
