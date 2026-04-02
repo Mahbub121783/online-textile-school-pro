@@ -103,21 +103,22 @@ export async function renderIdCard(
 
   // University name — 38px bold
   const textX = logoX + logoSize + 20;
+  const headerCenterY = headerPadTop + (hH - headerPadTop) / 2;
   ctx.fillStyle = '#ffffff';
   ctx.textAlign = 'left';
   ctx.font = 'bold 38px "Segoe UI", Arial, sans-serif';
-  ctx.fillText(settings.university_name || 'Online Textile School', textX, hH / 2 - 6);
+  ctx.fillText(settings.university_name || 'Online Textile School', textX, headerCenterY - 6);
 
   // Location — 20px
   ctx.font = '20px "Segoe UI", Arial, sans-serif';
   ctx.fillStyle = 'rgba(255,255,255,0.75)';
-  ctx.fillText(settings.location || 'Dhaka, Bangladesh', textX, hH / 2 + 22);
+  ctx.fillText(settings.location || 'Dhaka, Bangladesh', textX, headerCenterY + 22);
 
   // "STUDENT ID CARD" — right-aligned, 22px bold
   ctx.textAlign = 'right';
   ctx.font = 'bold 22px "Segoe UI", Arial, sans-serif';
   ctx.fillStyle = 'rgba(255,255,255,0.9)';
-  ctx.fillText('STUDENT ID CARD', CARD_W - 34, hH / 2 + 8);
+  ctx.fillText('STUDENT ID CARD', CARD_W - 34, headerCenterY + 8);
 
   // ── Teal accent line ──
   ctx.fillStyle = '#0d9488';
