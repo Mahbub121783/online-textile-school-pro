@@ -4,7 +4,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { GraduationCap, BookOpen } from 'lucide-react';
+import { GraduationCap, BookOpen, Download } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { useState } from 'react';
 
 const InstructorGradebook = () => {
