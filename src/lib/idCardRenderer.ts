@@ -198,11 +198,11 @@ export async function renderIdCard(
   ctx.lineTo(CARD_W - 30, footerY);
   ctx.stroke();
 
-  // Left: validity
-  ctx.font = '14px "Segoe UI", Arial, sans-serif';
+  // Left: validity — 40% bigger than body text (20px body → 28px)
+  ctx.font = 'bold 28px "Segoe UI", Arial, sans-serif';
   ctx.fillStyle = '#475569';
   ctx.textAlign = 'left';
-  ctx.fillText(`Valid Until: ${data.validUntil}`, 40, footerY + 24);
+  ctx.fillText(`Valid Until: ${data.validUntil}`, 40, footerY + 28);
 
   // Right: signature
   const sigCenterX = CARD_W - 170;
