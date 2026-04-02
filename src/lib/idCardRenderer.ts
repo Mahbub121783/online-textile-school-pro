@@ -125,6 +125,23 @@ export async function renderIdCard(
   ctx.fillRect(0, hH, CARD_W, 4);
 
   // ══════════════════════════════════════════
+  // WATERMARK — 5% opacity logo centered on body area
+  // ══════════════════════════════════════════
+  const barcodeBarH = 70;
+  const bodyAreaTop = hH + 4;
+  const bodyAreaBottom = CARD_H - barcodeBarH;
+  const watermarkSize = 300;
+  const wmX = (CARD_W - watermarkSize) / 2;
+  const wmY = bodyAreaTop + ((bodyAreaBottom - bodyAreaTop) - watermarkSize) / 2;
+  try {
+    const wmLogo = await loadImage(logoSrc);
+    ctx.save();
+    ctx.globalAlpha = 0.05;
+    ctx.drawImage(wmLogo, wmX, wmY, watermarkSize, watermarkSize);
+    ctx.restore();
+  } catch { /* skip watermark */ }
+
+  // ══════════════════════════════════════════
   // BODY — Photo + Fields
   // ══════════════════════════════════════════
   const bodyY = hH + 14;
