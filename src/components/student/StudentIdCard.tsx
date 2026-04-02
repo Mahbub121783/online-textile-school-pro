@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { renderIdCard, downloadIdCardPdf, IdCardData, IdCardSettings } from '@/lib/idCardRenderer';
+import { ensureStudentIdCard } from '@/lib/ensureStudentIdCard';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -17,7 +18,9 @@ export default function StudentIdCard({ userId }: Props) {
   const { user, profile } = useAuth();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [downloading, setDownloading] = useState(false);
+  const [autoGenerating, setAutoGenerating] = useState(false);
   const targetId = userId || user?.id;
+  const qc = useQueryClient();
 
   const { data: targetProfile } = useQuery({
     queryKey: ['id-card-profile', targetId],
@@ -37,6 +40,21 @@ export default function StudentIdCard({ userId }: Props) {
     },
     enabled: !!targetId,
   });
+
+  // Auto-generate ID card if paid enrollments exist but no card
+  useEffect(() => {
+    if (isLoading || idCard || autoGenerating || !targetId) return;
+    // Only auto-generate for the logged-in user viewing their own card
+    if (userId && userId !== user?.id) return;
+    
+    setAutoGenerating(true);
+    ensureStudentIdCard(targetId).then((created) => {
+      if (created) {
+        qc.invalidateQueries({ queryKey: ['student-id-card', targetId] });
+      }
+      setAutoGenerating(false);
+    });
+  }, [isLoading, idCard, targetId, userId, user?.id]);
 
   const { data: settings } = useQuery({
     queryKey: ['id-card-settings'],

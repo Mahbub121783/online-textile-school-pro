@@ -9,21 +9,24 @@ import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import BottomNav from '@/components/layout/BottomNav';
 import { useCartStore } from '@/stores/cartStore';
+import { useAuth } from '@/hooks/useAuth';
+import { ensureStudentIdCard } from '@/lib/ensureStudentIdCard';
 
 const PaymentSuccess = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const [status, setStatus] = useState<'verifying' | 'success' | 'failed'>('verifying');
   const { clearCart } = useCartStore();
+  const { user } = useAuth();
 
   useEffect(() => {
     const invoiceId = searchParams.get('invoice_id');
     if (invoiceId) {
       verifyPayment(invoiceId);
     } else {
-      // No invoice_id means direct success (free order)
       setStatus('success');
       clearCart();
+      if (user?.id) ensureStudentIdCard(user.id);
     }
   }, []);
 
@@ -37,6 +40,7 @@ const PaymentSuccess = () => {
       if (data?.status === 'COMPLETED') {
         setStatus('success');
         clearCart();
+        if (user?.id) ensureStudentIdCard(user.id);
       } else {
         setStatus('failed');
       }
