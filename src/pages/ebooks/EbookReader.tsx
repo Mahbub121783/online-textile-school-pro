@@ -297,10 +297,13 @@ const EbookReader = () => {
   };
 
   // ===== Render page with canvas + text layer + watermark =====
+  const renderingRef = useRef(false);
+
   const renderPage = useCallback(async (pageNum: number, pdf?: any) => {
     const doc = pdf || pdfDocRef.current;
-    if (!doc || !canvasRef.current || rendering) return;
+    if (!doc || !canvasRef.current || renderingRef.current) return;
 
+    renderingRef.current = true;
     setRendering(true);
     setSelectionToolbar(null);
 
@@ -314,8 +317,11 @@ const EbookReader = () => {
       const containerHeight = container?.clientHeight || window.innerHeight;
 
       const viewport = page.getViewport({ scale: 1 });
-      // Fit to container width for full readable view — allow vertical scroll
-      const scale = ((containerWidth - 16) / viewport.width) * (fontSize / 16);
+      // Fit to width but cap so it doesn't exceed container height — whichever gives a bigger readable view
+      const scaleW = (containerWidth - 16) / viewport.width;
+      const scaleH = (containerHeight - 16) / viewport.height;
+      // Use width-fit but cap to avoid oversized pages that cause scroll jumps
+      const scale = Math.min(scaleW, Math.max(scaleH, scaleW * 0.95)) * (fontSize / 16);
 
       const scaledViewport = page.getViewport({ scale });
       canvas.width = scaledViewport.width;
@@ -363,9 +369,10 @@ const EbookReader = () => {
     } catch (err) {
       console.error('Render error:', err);
     } finally {
+      renderingRef.current = false;
       setRendering(false);
     }
-  }, [rendering, fontSize, user, highlights]);
+  }, [fontSize, user, highlights]);
 
   // ===== Apply highlights to text layer spans =====
   const applyHighlightsToTextLayer = useCallback((pageNum: number, container: HTMLDivElement) => {
