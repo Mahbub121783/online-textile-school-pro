@@ -1,9 +1,10 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { S3Client, GetObjectCommand } from "npm:@aws-sdk/client-s3@3.525.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
+    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
 Deno.serve(async (req) => {
@@ -117,15 +118,51 @@ Deno.serve(async (req) => {
         return jsonResponse({ error: "Ebook file not found" }, 404);
       }
 
-      // Fetch the file from storage (Cloudflare R2 or wherever it is)
-      const fileResponse = await fetch(ebook.file_url, {
-        headers: {
-          Range: req.headers.get("Range") || "",
-        },
-      });
+      console.log(`[ebook-secure-access] Fetching file_url: ${ebook.file_url}`);
 
-      if (!fileResponse.ok && fileResponse.status !== 206) {
-        return jsonResponse({ error: "Failed to fetch ebook file" }, 502);
+      // Try public URL fetch first
+      let fileResponse: Response | null = null;
+      let fetchError: string | null = null;
+
+      try {
+        fileResponse = await fetch(ebook.file_url, {
+          headers: {
+            Range: req.headers.get("Range") || "",
+          },
+        });
+        if (!fileResponse.ok && fileResponse.status !== 206) {
+          fetchError = `Public fetch failed: status ${fileResponse.status}`;
+          console.warn(`[ebook-secure-access] ${fetchError} for URL: ${ebook.file_url}`);
+          fileResponse = null;
+        }
+      } catch (e) {
+        fetchError = `Public fetch error: ${e instanceof Error ? e.message : String(e)}`;
+        console.warn(`[ebook-secure-access] ${fetchError}`);
+        fileResponse = null;
+      }
+
+      // If public fetch failed and URL looks like R2, try S3 direct fetch
+      if (!fileResponse && isR2Url(ebook.file_url)) {
+        console.log("[ebook-secure-access] Attempting S3 direct fetch fallback...");
+        try {
+          fileResponse = await fetchFromR2Direct(admin, ebook.file_url);
+        } catch (e) {
+          const s3Error = e instanceof Error ? e.message : String(e);
+          console.error(`[ebook-secure-access] S3 fallback failed: ${s3Error}`);
+          return jsonResponse({
+            error: "Failed to fetch ebook file",
+            details: `Public: ${fetchError}. S3 fallback: ${s3Error}`,
+            url_domain: new URL(ebook.file_url).hostname,
+          }, 502);
+        }
+      }
+
+      if (!fileResponse) {
+        return jsonResponse({
+          error: "Failed to fetch ebook file",
+          details: fetchError || "Unknown error",
+          url_domain: safeHostname(ebook.file_url),
+        }, 502);
       }
 
       const fileBody = fileResponse.body;
@@ -163,6 +200,8 @@ Deno.serve(async (req) => {
   }
 });
 
+// ---------- Helpers ----------
+
 function jsonResponse(data: Record<string, unknown>, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
@@ -171,4 +210,95 @@ function jsonResponse(data: Record<string, unknown>, status = 200) {
       "Content-Type": "application/json",
     },
   });
+}
+
+function isR2Url(url: string): boolean {
+  try {
+    const hostname = new URL(url).hostname;
+    return hostname.includes("r2.cloudflarestorage.com") ||
+           hostname.includes("r2.dev") ||
+           hostname.includes("pub-"); // common R2 public domain prefix
+  } catch {
+    return false;
+  }
+}
+
+function safeHostname(url: string): string {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return "unknown";
+  }
+}
+
+/**
+ * Fallback: fetch file directly from R2 via S3 SDK using stored credentials.
+ * Extracts the file key from the public URL and finds the matching R2 account.
+ */
+async function fetchFromR2Direct(
+  admin: ReturnType<typeof createClient>,
+  fileUrl: string
+): Promise<Response> {
+  // Get all active R2 accounts
+  const { data: accounts, error: accErr } = await admin
+    .from("cloudflare_r2_accounts")
+    .select("*")
+    .eq("status", "active");
+
+  if (accErr || !accounts?.length) {
+    throw new Error("No active R2 accounts found");
+  }
+
+  const urlObj = new URL(fileUrl);
+  const urlPath = urlObj.pathname.replace(/^\//, ""); // remove leading slash
+
+  // Try to match account by public domain
+  let matchedAccount = accounts.find((a: any) => {
+    try {
+      const pubDomain = new URL(a.public_domain_url).hostname;
+      return urlObj.hostname === pubDomain;
+    } catch {
+      return false;
+    }
+  });
+
+  // If no match by domain, use the first active account
+  if (!matchedAccount) {
+    console.warn("[ebook-secure-access] No R2 account matched by domain, using first active");
+    matchedAccount = accounts[0];
+  }
+
+  const s3 = new S3Client({
+    region: "auto",
+    endpoint: matchedAccount.endpoint_url,
+    credentials: {
+      accessKeyId: matchedAccount.access_key_id,
+      secretAccessKey: matchedAccount.secret_access_key,
+    },
+  });
+
+  const command = new GetObjectCommand({
+    Bucket: matchedAccount.bucket_name,
+    Key: urlPath,
+  });
+
+  const s3Response = await s3.send(command);
+
+  if (!s3Response.Body) {
+    throw new Error("S3 returned empty body");
+  }
+
+  // Convert S3 readable stream to web ReadableStream
+  const stream = s3Response.Body as ReadableStream;
+  const contentType = s3Response.ContentType || "application/pdf";
+  const contentLength = s3Response.ContentLength?.toString();
+
+  const headers: Record<string, string> = {
+    "Content-Type": contentType,
+  };
+  if (contentLength) {
+    headers["Content-Length"] = contentLength;
+  }
+
+  return new Response(stream, { status: 200, headers });
 }

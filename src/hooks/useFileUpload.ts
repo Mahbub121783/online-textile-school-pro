@@ -62,13 +62,14 @@ export function useFileUpload() {
   const [progress, setProgress] = useState(0);
   const cloudinary = useCloudinaryUpload();
 
-  const upload = async (file: File): Promise<UploadResult> => {
+  const upload = async (file: File, options?: { forceR2?: boolean }): Promise<UploadResult> => {
     setUploading(true);
     setProgress(0);
 
     try {
       // Route: images → Cloudinary, heavy files → R2
-      if (isImageFile(file) && !isHeavyFile(file)) {
+      // forceR2 bypasses image detection (used for ebook files, documents, etc.)
+      if (!options?.forceR2 && isImageFile(file) && !isHeavyFile(file)) {
         const result = await cloudinary.upload(file);
         setProgress(100);
         return {

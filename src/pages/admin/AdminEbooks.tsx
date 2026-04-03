@@ -154,7 +154,9 @@ const AdminEbooks = () => {
     const file = e.target.files?.[0];
     if (!file) return;
     try {
-      const result = await upload(file);
+      // Ebook files (PDF/DOCX) must always go to R2; cover/gallery images go to Cloudinary
+      const forceR2 = field === 'file_url';
+      const result = await upload(file, { forceR2 });
       if (field === 'cover_url') setForm(p => ({ ...p, cover_url: result.url }));
       else if (field === 'file_url') {
         const ext = file.name.split('.').pop()?.toLowerCase() || 'pdf';
