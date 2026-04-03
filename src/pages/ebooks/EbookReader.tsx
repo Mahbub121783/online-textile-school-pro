@@ -8,9 +8,11 @@ import { Slider } from '@/components/ui/slider';
 import { Progress } from '@/components/ui/progress';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Textarea } from '@/components/ui/textarea';
 import {
   ArrowLeft, ChevronLeft, ChevronRight, Sun, Moon, BookOpen,
-  Minus, Plus, StickyNote, X, Loader2, Type, Lightbulb, List, Scroll
+  Minus, Plus, StickyNote, X, Loader2, Type, Lightbulb, List,
+  Highlighter, MessageSquare, Palette, Trash2
 } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist';
 
@@ -21,7 +23,18 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
 ).toString();
 
 type ReadingMode = 'light' | 'dark' | 'sepia';
-type ViewMode = 'page' | 'scroll';
+type HighlightColor = 'yellow' | 'green' | 'blue' | 'pink';
+
+interface HighlightItem {
+  id: string;
+  page: number;
+  text: string;
+  color: HighlightColor;
+  startOffset: number;
+  endOffset: number;
+  note?: string;
+  createdAt: string;
+}
 
 interface NoteItem {
   id: string;
@@ -30,18 +43,34 @@ interface NoteItem {
   createdAt: string;
 }
 
+interface ReaderData {
+  highlights: HighlightItem[];
+  notes: NoteItem[];
+}
+
+const HIGHLIGHT_COLORS: { color: HighlightColor; bg: string; label: string }[] = [
+  { color: 'yellow', bg: 'rgba(250, 204, 21, 0.4)', label: 'Yellow' },
+  { color: 'green', bg: 'rgba(74, 222, 128, 0.4)', label: 'Green' },
+  { color: 'blue', bg: 'rgba(96, 165, 250, 0.4)', label: 'Blue' },
+  { color: 'pink', bg: 'rgba(244, 114, 182, 0.4)', label: 'Pink' },
+];
+
+const getHighlightBg = (color: HighlightColor) =>
+  HIGHLIGHT_COLORS.find((c) => c.color === color)?.bg || 'rgba(250, 204, 21, 0.4)';
+
 const EbookReader = () => {
   const { ebookId } = useParams();
   const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const textLayerRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const pdfDocRef = useRef<any>(null);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
+  const pageLabelsRef = useRef<string[] | null>(null);
 
   const [loadingState, setLoadingState] = useState<'auth' | 'loading' | 'ready' | 'error'>('auth');
   const [loadingProgress, setLoadingProgress] = useState(0);
@@ -50,12 +79,12 @@ const EbookReader = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(0);
   const [readingMode, setReadingMode] = useState<ReadingMode>('light');
-  const [viewMode, setViewMode] = useState<ViewMode>('page');
   const [fontSize, setFontSize] = useState(16);
   const [brightness, setBrightness] = useState(100);
   const [showControls, setShowControls] = useState(true);
   const [showNotes, setShowNotes] = useState(false);
   const [showTOC, setShowTOC] = useState(false);
+  const [highlights, setHighlights] = useState<HighlightItem[]>([]);
   const [notes, setNotes] = useState<NoteItem[]>([]);
   const [newNote, setNewNote] = useState('');
   const [pageInput, setPageInput] = useState('');
@@ -63,24 +92,56 @@ const EbookReader = () => {
   const [pageTransition, setPageTransition] = useState(false);
   const [tocItems, setTocItems] = useState<{ title: string; pageNum: number }[]>([]);
   const [fileFormat, setFileFormat] = useState<string>('pdf');
+  const [isBlurred, setIsBlurred] = useState(false);
 
-  // DRM: block right-click, printing, text selection
+  // Highlight toolbar state
+  const [selectionToolbar, setSelectionToolbar] = useState<{
+    x: number; y: number; text: string; startOffset: number; endOffset: number;
+  } | null>(null);
+  const [highlightNoteMode, setHighlightNoteMode] = useState<{
+    color: HighlightColor; text: string; startOffset: number; endOffset: number; noteText: string;
+  } | null>(null);
+
+  // ===== DRM: block right-click, printing, copy, screenshots, drag =====
   useEffect(() => {
     const blockCtxMenu = (e: MouseEvent) => e.preventDefault();
+    const blockCopy = (e: ClipboardEvent) => e.preventDefault();
+    const blockDrag = (e: DragEvent) => e.preventDefault();
     const blockKeys = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && (e.key === 'p' || e.key === 's' || e.key === 'P' || e.key === 'S')) {
+      // Block print, save, copy, screenshot combos
+      if ((e.ctrlKey || e.metaKey) && ['p', 's', 'c', 'P', 'S', 'C'].includes(e.key)) {
+        e.preventDefault();
+      }
+      // Block PrtScn, Ctrl+Shift+S, Ctrl+Shift+I
+      if (e.key === 'PrintScreen') e.preventDefault();
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && ['s', 'S', 'i', 'I'].includes(e.key)) {
         e.preventDefault();
       }
     };
+
     document.addEventListener('contextmenu', blockCtxMenu);
     document.addEventListener('keydown', blockKeys);
+    document.addEventListener('copy', blockCopy);
+    document.addEventListener('dragstart', blockDrag);
+
     return () => {
       document.removeEventListener('contextmenu', blockCtxMenu);
       document.removeEventListener('keydown', blockKeys);
+      document.removeEventListener('copy', blockCopy);
+      document.removeEventListener('dragstart', blockDrag);
     };
   }, []);
 
-  // Load PDF via GET-based streaming with reusable token
+  // ===== Visibility API: blur content when tab loses focus =====
+  useEffect(() => {
+    const handleVisibility = () => {
+      setIsBlurred(document.hidden);
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, []);
+
+  // ===== Load PDF via GET-based streaming =====
   useEffect(() => {
     if (authLoading) return;
     if (!user) {
@@ -94,7 +155,6 @@ const EbookReader = () => {
 
   const loadPdf = async () => {
     try {
-      // Step 1: Generate a reusable access token
       setLoadingProgress(10);
       const { data: tokenData, error: tokenError } = await supabase.functions.invoke(
         'ebook-secure-access',
@@ -104,7 +164,6 @@ const EbookReader = () => {
         throw new Error(tokenData?.error || tokenError?.message || 'Token generation failed');
       }
 
-      // Check format from token response
       const format = (tokenData.file_format || 'pdf').toLowerCase();
       setFileFormat(format);
 
@@ -117,7 +176,6 @@ const EbookReader = () => {
       setEbookTitle(tokenData.title || 'eBook');
       setLoadingProgress(20);
 
-      // Step 2: Use GET-based URL for PDF.js range loading
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
       const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
       const session = (await supabase.auth.getSession()).data.session;
@@ -126,14 +184,13 @@ const EbookReader = () => {
 
       setLoadingProgress(30);
 
-      // PDF.js opens the URL directly with auth headers, enabling range requests
       const loadingTask = pdfjsLib.getDocument({
         url: streamUrl,
         httpHeaders: {
           'Authorization': `Bearer ${session?.access_token}`,
           'apikey': supabaseKey,
         },
-        rangeChunkSize: 65536, // 64KB chunks for fast first-page render
+        rangeChunkSize: 65536,
         disableAutoFetch: false,
         disableStream: false,
       });
@@ -160,6 +217,14 @@ const EbookReader = () => {
       pdfDocRef.current = pdf;
       setTotalPages(pdf.numPages);
 
+      // Get page labels for proper page numbering
+      try {
+        const labels = await pdf.getPageLabels();
+        pageLabelsRef.current = labels;
+      } catch {
+        pageLabelsRef.current = null;
+      }
+
       // Extract TOC / outline
       try {
         const outline = await pdf.getOutline();
@@ -178,7 +243,7 @@ const EbookReader = () => {
                 const pageIdx = await pdf.getPageIndex(dest[0]);
                 items.push({ title: item.title, pageNum: pageIdx + 1 });
               }
-            } catch { /* skip unresolvable entries */ }
+            } catch { /* skip */ }
           }
           setTocItems(items);
         }
@@ -197,7 +262,21 @@ const EbookReader = () => {
       setReadingMode((progress?.reading_mode as ReadingMode) || 'light');
       setFontSize(progress?.font_size || 16);
       setBrightness(progress?.brightness || 100);
-      setNotes((progress?.notes as unknown as NoteItem[]) || []);
+
+      // Parse saved data — highlights are stored alongside notes
+      const savedData = progress?.notes as unknown as ReaderData | NoteItem[] | null;
+      if (savedData && 'highlights' in (savedData as any)) {
+        const rd = savedData as ReaderData;
+        setHighlights(rd.highlights || []);
+        setNotes(rd.notes || []);
+      } else if (Array.isArray(savedData)) {
+        // Legacy format — old notes array
+        setNotes(savedData as NoteItem[]);
+        setHighlights([]);
+      } else {
+        setNotes([]);
+        setHighlights([]);
+      }
 
       if (!progress) {
         await supabase.from('ebook_reading_progress').insert({
@@ -217,11 +296,14 @@ const EbookReader = () => {
     }
   };
 
+  // ===== Render page with canvas + text layer + watermark =====
   const renderPage = useCallback(async (pageNum: number, pdf?: any) => {
     const doc = pdf || pdfDocRef.current;
     if (!doc || !canvasRef.current || rendering) return;
 
     setRendering(true);
+    setSelectionToolbar(null);
+
     try {
       const page = await doc.getPage(pageNum);
       const canvas = canvasRef.current;
@@ -241,40 +323,234 @@ const EbookReader = () => {
       canvas.height = scaledViewport.height;
 
       await page.render({ canvasContext: ctx, viewport: scaledViewport }).promise;
+
+      // ===== Watermark on canvas — user email at 3% opacity =====
+      if (user?.email) {
+        ctx.save();
+        ctx.globalAlpha = 0.03;
+        ctx.font = `${Math.max(14, scaledViewport.width / 30)}px sans-serif`;
+        ctx.fillStyle = '#000000';
+        ctx.translate(scaledViewport.width / 2, scaledViewport.height / 2);
+        ctx.rotate(-Math.PI / 6);
+        const wmText = user.email;
+        const spacing = 120;
+        for (let y = -scaledViewport.height; y < scaledViewport.height; y += spacing) {
+          for (let x = -scaledViewport.width; x < scaledViewport.width; x += ctx.measureText(wmText).width + 80) {
+            ctx.fillText(wmText, x, y);
+          }
+        }
+        ctx.restore();
+      }
+
+      // ===== Render text layer =====
+      if (textLayerRef.current) {
+        const textLayerDiv = textLayerRef.current;
+        textLayerDiv.innerHTML = '';
+        textLayerDiv.style.width = `${scaledViewport.width}px`;
+        textLayerDiv.style.height = `${scaledViewport.height}px`;
+
+        const textContent = await page.getTextContent();
+
+        const textLayerInstance = new pdfjsLib.TextLayer({
+          textContentSource: textContent,
+          container: textLayerDiv,
+          viewport: scaledViewport,
+        });
+        await textLayerInstance.render();
+
+        // Re-apply highlights for this page
+        applyHighlightsToTextLayer(pageNum, textLayerDiv);
+      }
     } catch (err) {
       console.error('Render error:', err);
     } finally {
       setRendering(false);
     }
-  }, [rendering, fontSize]);
+  }, [rendering, fontSize, user, highlights]);
 
-  // ResizeObserver for responsive re-render
+  // ===== Apply highlights to text layer spans =====
+  const applyHighlightsToTextLayer = useCallback((pageNum: number, container: HTMLDivElement) => {
+    const pageHighlights = highlights.filter((h) => h.page === pageNum);
+    if (!pageHighlights.length) return;
+
+    const spans = container.querySelectorAll('span');
+    let runningOffset = 0;
+
+    spans.forEach((span) => {
+      const spanText = span.textContent || '';
+      const spanStart = runningOffset;
+      const spanEnd = runningOffset + spanText.length;
+
+      for (const hl of pageHighlights) {
+        if (hl.startOffset < spanEnd && hl.endOffset > spanStart) {
+          span.style.backgroundColor = getHighlightBg(hl.color);
+          span.style.borderRadius = '2px';
+          span.dataset.highlightId = hl.id;
+          if (hl.note) {
+            span.title = hl.note;
+          }
+        }
+      }
+      runningOffset = spanEnd;
+    });
+  }, [highlights]);
+
+  // ===== Handle text selection for highlighting =====
+  const handleTextSelection = useCallback(() => {
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed || !textLayerRef.current) {
+      setSelectionToolbar(null);
+      return;
+    }
+
+    const selectedText = sel.toString().trim();
+    if (!selectedText || selectedText.length < 2) {
+      setSelectionToolbar(null);
+      return;
+    }
+
+    // Calculate offsets within text layer
+    const spans = textLayerRef.current.querySelectorAll('span');
+    let runningOffset = 0;
+    let startOffset = 0;
+    let endOffset = 0;
+    let foundStart = false;
+
+    const range = sel.getRangeAt(0);
+
+    spans.forEach((span) => {
+      const spanText = span.textContent || '';
+      if (span.contains(range.startContainer) || span === range.startContainer) {
+        startOffset = runningOffset + range.startOffset;
+        foundStart = true;
+      }
+      if (span.contains(range.endContainer) || span === range.endContainer) {
+        endOffset = runningOffset + range.endOffset;
+      }
+      runningOffset += spanText.length;
+    });
+
+    if (!foundStart) {
+      // Fallback — use full text search
+      const fullText = Array.from(spans).map((s) => s.textContent || '').join('');
+      const idx = fullText.indexOf(selectedText);
+      if (idx >= 0) {
+        startOffset = idx;
+        endOffset = idx + selectedText.length;
+      }
+    }
+
+    // Position toolbar near selection
+    const rect = range.getBoundingClientRect();
+    const containerRect = containerRef.current?.getBoundingClientRect();
+    if (containerRect) {
+      setSelectionToolbar({
+        x: rect.left - containerRect.left + rect.width / 2,
+        y: rect.top - containerRect.top - 10,
+        text: selectedText,
+        startOffset,
+        endOffset,
+      });
+    }
+  }, []);
+
+  // Listen for mouseup on text layer
+  useEffect(() => {
+    const textLayer = textLayerRef.current;
+    if (!textLayer) return;
+
+    const onMouseUp = () => {
+      setTimeout(handleTextSelection, 50);
+    };
+    textLayer.addEventListener('mouseup', onMouseUp);
+    return () => textLayer.removeEventListener('mouseup', onMouseUp);
+  }, [handleTextSelection, loadingState]);
+
+  // ===== Add highlight =====
+  const addHighlight = (color: HighlightColor, withNote = false) => {
+    if (!selectionToolbar) return;
+
+    if (withNote) {
+      setHighlightNoteMode({
+        color,
+        text: selectionToolbar.text,
+        startOffset: selectionToolbar.startOffset,
+        endOffset: selectionToolbar.endOffset,
+        noteText: '',
+      });
+      setSelectionToolbar(null);
+      window.getSelection()?.removeAllRanges();
+      return;
+    }
+
+    const hl: HighlightItem = {
+      id: crypto.randomUUID(),
+      page: currentPage,
+      text: selectionToolbar.text,
+      color,
+      startOffset: selectionToolbar.startOffset,
+      endOffset: selectionToolbar.endOffset,
+      createdAt: new Date().toISOString(),
+    };
+
+    setHighlights((prev) => [...prev, hl]);
+    setSelectionToolbar(null);
+    window.getSelection()?.removeAllRanges();
+
+    // Re-apply to current text layer
+    if (textLayerRef.current) {
+      applyHighlightsToTextLayer(currentPage, textLayerRef.current);
+    }
+  };
+
+  const saveHighlightNote = () => {
+    if (!highlightNoteMode) return;
+
+    const hl: HighlightItem = {
+      id: crypto.randomUUID(),
+      page: currentPage,
+      text: highlightNoteMode.text,
+      color: highlightNoteMode.color,
+      startOffset: highlightNoteMode.startOffset,
+      endOffset: highlightNoteMode.endOffset,
+      note: highlightNoteMode.noteText.trim() || undefined,
+      createdAt: new Date().toISOString(),
+    };
+
+    setHighlights((prev) => [...prev, hl]);
+    setHighlightNoteMode(null);
+
+    if (textLayerRef.current) {
+      applyHighlightsToTextLayer(currentPage, textLayerRef.current);
+    }
+  };
+
+  const deleteHighlight = (id: string) => {
+    setHighlights((prev) => prev.filter((h) => h.id !== id));
+  };
+
+  // ===== ResizeObserver =====
   useEffect(() => {
     if (loadingState !== 'ready' || !containerRef.current) return;
-
     resizeObserverRef.current = new ResizeObserver(() => {
       renderPage(currentPage);
     });
     resizeObserverRef.current.observe(containerRef.current);
-
-    return () => {
-      resizeObserverRef.current?.disconnect();
-    };
+    return () => resizeObserverRef.current?.disconnect();
   }, [loadingState]);
 
   // Re-render on page/fontSize change
   useEffect(() => {
-    if (loadingState === 'ready') {
-      renderPage(currentPage);
-    }
+    if (loadingState === 'ready') renderPage(currentPage);
   }, [currentPage, fontSize, loadingState]);
 
-  // Debounced save progress
+  // ===== Debounced save progress (highlights + notes) =====
   const saveProgress = useCallback(() => {
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     saveTimeoutRef.current = setTimeout(async () => {
       if (!user || !ebookId || !totalPages) return;
       const progressPct = totalPages > 0 ? Math.round((currentPage / totalPages) * 100) : 0;
+      const readerData: ReaderData = { highlights, notes };
       await supabase
         .from('ebook_reading_progress')
         .upsert({
@@ -286,15 +562,15 @@ const EbookReader = () => {
           reading_mode: readingMode,
           font_size: fontSize,
           brightness,
-          notes: notes as unknown as any,
+          notes: readerData as unknown as any,
           updated_at: new Date().toISOString(),
         } as any, { onConflict: 'user_id,ebook_id' });
     }, 800);
-  }, [currentPage, totalPages, readingMode, fontSize, brightness, notes, user, ebookId]);
+  }, [currentPage, totalPages, readingMode, fontSize, brightness, notes, highlights, user, ebookId]);
 
-  useEffect(() => { saveProgress(); }, [currentPage, readingMode, fontSize, brightness, notes]);
+  useEffect(() => { saveProgress(); }, [currentPage, readingMode, fontSize, brightness, notes, highlights]);
 
-  // Keyboard navigation
+  // ===== Keyboard navigation =====
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
       if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { e.preventDefault(); goNext(); }
@@ -304,12 +580,11 @@ const EbookReader = () => {
     return () => window.removeEventListener('keydown', handleKey);
   }, [currentPage, totalPages]);
 
-  // Touch/swipe navigation
+  // Touch/swipe
   const handleTouchStart = (e: React.TouchEvent) => {
     const touch = e.touches[0];
     touchStartRef.current = { x: touch.clientX, y: touch.clientY, time: Date.now() };
   };
-
   const handleTouchEnd = (e: React.TouchEvent) => {
     if (!touchStartRef.current) return;
     const touch = e.changedTouches[0];
@@ -338,6 +613,7 @@ const EbookReader = () => {
     if (p >= 1 && p <= totalPages) { changePage(p); setPageInput(''); }
   };
 
+  // ===== Page-level notes =====
   const addNote = () => {
     if (!newNote.trim()) return;
     setNotes((prev) => [
@@ -346,10 +622,22 @@ const EbookReader = () => {
     ]);
     setNewNote('');
   };
+  const deleteNote = (id: string) => setNotes((prev) => prev.filter((n) => n.id !== id));
 
-  const deleteNote = (id: string) => { setNotes((prev) => prev.filter((n) => n.id !== id)); };
+  // ===== Page label logic =====
+  const getPageLabel = (pageIdx: number) => {
+    const labels = pageLabelsRef.current;
+    if (labels && labels[pageIdx - 1] && labels[pageIdx - 1] !== String(pageIdx)) {
+      return labels[pageIdx - 1];
+    }
+    return null;
+  };
 
+  const pageLabel = getPageLabel(currentPage);
   const progressPct = totalPages > 0 ? Math.round((currentPage / totalPages) * 100) : 0;
+
+  const currentPageHighlights = useMemo(() => highlights.filter((h) => h.page === currentPage), [highlights, currentPage]);
+  const currentPageNotes = useMemo(() => notes.filter((n) => n.page === currentPage), [notes, currentPage]);
 
   const modeStyles: Record<ReadingMode, string> = {
     light: 'bg-white text-foreground',
@@ -363,8 +651,7 @@ const EbookReader = () => {
     sepia: 'bg-[#e8dcc8]/95 border-[#c4a882]',
   };
 
-  const currentPageNotes = useMemo(() => notes.filter((n) => n.page === currentPage), [notes, currentPage]);
-
+  // ===== Loading / Error states =====
   if (loadingState === 'auth' || authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -405,7 +692,45 @@ const EbookReader = () => {
       style={{ filter: `brightness(${brightness}%)` }}
       onContextMenu={(e) => e.preventDefault()}
     >
-      <style>{`@media print { body * { display: none !important; } }`}</style>
+      <style>{`
+        @media print { body * { display: none !important; } }
+        .text-layer-container {
+          position: absolute;
+          left: 0;
+          top: 0;
+          opacity: 0.3;
+          line-height: 1;
+          z-index: 2;
+          overflow: hidden;
+        }
+        .text-layer-container span {
+          position: absolute;
+          white-space: pre;
+          color: transparent;
+          cursor: text;
+          -webkit-user-select: text;
+          user-select: text;
+        }
+        .text-layer-container span::selection {
+          background: rgba(96, 165, 250, 0.35);
+          color: transparent;
+        }
+        .reader-blurred .reader-content {
+          filter: blur(20px) !important;
+          pointer-events: none !important;
+        }
+      `}</style>
+
+      {/* Blur overlay when tab loses focus */}
+      {isBlurred && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm">
+          <div className="text-center text-white">
+            <BookOpen className="h-12 w-12 mx-auto mb-3 opacity-60" />
+            <p className="text-lg font-medium">Content hidden for security</p>
+            <p className="text-sm opacity-60 mt-1">Click here to continue reading</p>
+          </div>
+        </div>
+      )}
 
       {/* Top bar */}
       {showControls && (
@@ -419,8 +744,8 @@ const EbookReader = () => {
           {/* Mode toggles */}
           <div className="flex items-center gap-0.5 border rounded-lg px-0.5 py-0.5">
             {([
-              { mode: 'light' as const, icon: <Sun className="h-3 w-3 sm:h-3.5 sm:w-3.5" /> },
-              { mode: 'dark' as const, icon: <Moon className="h-3 w-3 sm:h-3.5 sm:w-3.5" /> },
+              { mode: 'light' as const, icon: <Sun className="h-3 w-3" /> },
+              { mode: 'dark' as const, icon: <Moon className="h-3 w-3" /> },
               { mode: 'sepia' as const, icon: <span className="text-[10px] font-bold">S</span> },
             ]).map(({ mode, icon }) => (
               <button
@@ -433,7 +758,7 @@ const EbookReader = () => {
             ))}
           </div>
 
-          {/* Font size - hidden on very small screens */}
+          {/* Font size */}
           <div className="hidden sm:flex items-center gap-0.5">
             <button onClick={() => setFontSize((s) => Math.max(10, s - 2))} className="p-1 hover:bg-muted rounded">
               <Minus className="h-3.5 w-3.5" />
@@ -445,20 +770,18 @@ const EbookReader = () => {
             </button>
           </div>
 
-          {/* Brightness - hidden on mobile */}
+          {/* Brightness */}
           <div className="hidden lg:flex items-center gap-1.5 min-w-[100px]">
             <Lightbulb className="h-3.5 w-3.5 shrink-0" />
             <Slider value={[brightness]} min={50} max={120} step={5} onValueChange={([v]) => setBrightness(v)} className="flex-1" />
           </div>
 
-          {/* TOC button */}
           {tocItems.length > 0 && (
             <Button size="icon" variant="ghost" onClick={() => setShowTOC(true)} className="shrink-0 h-8 w-8">
               <List className="h-4 w-4" />
             </Button>
           )}
 
-          {/* Notes toggle */}
           <Button size="icon" variant={showNotes ? 'default' : 'ghost'} onClick={() => setShowNotes(!showNotes)} className="shrink-0 h-8 w-8">
             <StickyNote className="h-4 w-4" />
           </Button>
@@ -466,41 +789,190 @@ const EbookReader = () => {
       )}
 
       {/* Main reading area */}
-      <div className="flex-1 flex overflow-hidden">
+      <div className={`flex-1 flex overflow-hidden reader-content ${isBlurred ? 'reader-blurred' : ''}`}>
         <div
           ref={containerRef}
-          className="flex-1 flex items-center justify-center overflow-auto p-2 sm:p-4 cursor-pointer"
-          onClick={() => setShowControls((s) => !s)}
+          className="flex-1 flex items-center justify-center overflow-auto p-2 sm:p-4 relative"
+          onClick={(e) => {
+            // Only toggle controls if click is not on text layer
+            if (!(e.target as HTMLElement).closest('.text-layer-container') && !selectionToolbar) {
+              setShowControls((s) => !s);
+            }
+          }}
           onTouchStart={handleTouchStart}
           onTouchEnd={handleTouchEnd}
         >
-          <canvas
-            ref={canvasRef}
-            className={`max-w-full max-h-full shadow-2xl rounded-sm transition-opacity duration-200 ${pageTransition ? 'opacity-0' : 'opacity-100'}`}
-            style={{ userSelect: 'none', pointerEvents: 'none' }}
-          />
+          <div className="relative">
+            <canvas
+              ref={canvasRef}
+              className={`max-w-full max-h-full shadow-2xl rounded-sm transition-opacity duration-200 ${pageTransition ? 'opacity-0' : 'opacity-100'}`}
+              style={{ userSelect: 'none' }}
+              onDragStart={(e) => e.preventDefault()}
+            />
+            {/* Text layer overlay */}
+            <div
+              ref={textLayerRef}
+              className="text-layer-container"
+              onCopy={(e) => e.preventDefault()}
+            />
+          </div>
+
+          {/* Highlight toolbar */}
+          {selectionToolbar && (
+            <div
+              className="absolute z-30 bg-background border rounded-lg shadow-xl p-1.5 flex items-center gap-1 animate-in fade-in zoom-in-95"
+              style={{
+                left: Math.min(selectionToolbar.x, (containerRef.current?.clientWidth || 300) - 200),
+                top: Math.max(selectionToolbar.y - 40, 10),
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {HIGHLIGHT_COLORS.map(({ color, bg }) => (
+                <button
+                  key={color}
+                  onClick={() => addHighlight(color)}
+                  className="w-6 h-6 rounded-full border-2 border-background hover:scale-110 transition-transform"
+                  style={{ backgroundColor: bg.replace('0.4', '0.8') }}
+                  title={`Highlight ${color}`}
+                />
+              ))}
+              <div className="w-px h-5 bg-border mx-0.5" />
+              <button
+                onClick={() => addHighlight('yellow', true)}
+                className="p-1 hover:bg-muted rounded"
+                title="Highlight + Note"
+              >
+                <MessageSquare className="h-4 w-4" />
+              </button>
+              <button
+                onClick={() => { setSelectionToolbar(null); window.getSelection()?.removeAllRanges(); }}
+                className="p-1 hover:bg-muted rounded"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          )}
+
+          {/* Note input modal for highlight */}
+          {highlightNoteMode && (
+            <div
+              className="absolute z-40 inset-0 flex items-center justify-center bg-black/30 backdrop-blur-sm"
+              onClick={(e) => { e.stopPropagation(); setHighlightNoteMode(null); }}
+            >
+              <div
+                className="bg-background rounded-xl shadow-2xl p-4 w-[90%] max-w-sm space-y-3"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-center gap-2">
+                  <Highlighter className="h-4 w-4 text-primary" />
+                  <span className="font-medium text-sm">Add Note to Highlight</span>
+                </div>
+                <p className="text-xs text-muted-foreground bg-muted rounded p-2 line-clamp-2">
+                  "{highlightNoteMode.text}"
+                </p>
+                <Textarea
+                  value={highlightNoteMode.noteText}
+                  onChange={(e) => setHighlightNoteMode((m) => m ? { ...m, noteText: e.target.value } : null)}
+                  placeholder="Write your note..."
+                  className="text-sm min-h-[80px]"
+                  autoFocus
+                />
+                <div className="flex gap-2 justify-end">
+                  <Button size="sm" variant="outline" onClick={() => setHighlightNoteMode(null)}>Cancel</Button>
+                  <Button size="sm" onClick={saveHighlightNote}>
+                    Save
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Notes panel - Sheet on mobile, sidebar on desktop */}
+      {/* Notes & Highlights panel */}
       <Sheet open={showNotes} onOpenChange={setShowNotes}>
         <SheetContent side="right" className="w-[85vw] sm:w-80 p-0">
           <SheetHeader className="p-4 border-b">
-            <SheetTitle className="text-sm">Notes — Page {currentPage}</SheetTitle>
+            <SheetTitle className="text-sm flex items-center gap-2">
+              <StickyNote className="h-4 w-4" />
+              Notes & Highlights
+            </SheetTitle>
           </SheetHeader>
-          <ScrollArea className="flex-1 h-[calc(100vh-140px)]">
-            <div className="p-4 space-y-2">
-              {currentPageNotes.length === 0 && (
-                <p className="text-xs text-muted-foreground text-center py-4">No notes on this page.</p>
-              )}
-              {currentPageNotes.map((note) => (
-                <div key={note.id} className="p-2 rounded-lg bg-muted/50 text-xs group relative">
-                  <p>{note.text}</p>
-                  <button onClick={() => deleteNote(note.id)} className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <X className="h-3 w-3" />
-                  </button>
+          <ScrollArea className="flex-1 h-[calc(100vh-200px)]">
+            <div className="p-3 space-y-3">
+              {/* Highlights section */}
+              {currentPageHighlights.length > 0 && (
+                <div>
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-1.5 flex items-center gap-1">
+                    <Highlighter className="h-3 w-3" /> Highlights — Page {pageLabel ? `${pageLabel} (${currentPage})` : currentPage}
+                  </p>
+                  {currentPageHighlights.map((hl) => (
+                    <div
+                      key={hl.id}
+                      className="p-2 rounded-lg text-xs group relative mb-1.5 border"
+                      style={{ borderLeftColor: getHighlightBg(hl.color).replace('0.4', '1'), borderLeftWidth: 3 }}
+                    >
+                      <p className="italic text-muted-foreground line-clamp-2">"{hl.text}"</p>
+                      {hl.note && <p className="mt-1 font-medium">{hl.note}</p>}
+                      <button onClick={() => deleteHighlight(hl.id)} className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Trash2 className="h-3 w-3 text-destructive" />
+                      </button>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              )}
+
+              {/* All highlights grouped by page */}
+              {highlights.filter((h) => h.page !== currentPage).length > 0 && (
+                <div>
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-1.5">
+                    Other Pages
+                  </p>
+                  {Array.from(new Set(highlights.filter((h) => h.page !== currentPage).map((h) => h.page)))
+                    .sort((a, b) => a - b)
+                    .map((page) => (
+                      <div key={page} className="mb-2">
+                        <button
+                          onClick={() => { changePage(page); }}
+                          className="text-[10px] text-primary hover:underline font-medium"
+                        >
+                          Page {getPageLabel(page) ? `${getPageLabel(page)} (${page})` : page}
+                        </button>
+                        {highlights.filter((h) => h.page === page).map((hl) => (
+                          <div
+                            key={hl.id}
+                            className="p-1.5 rounded text-xs ml-2 border-l-2 pl-2 mb-1 group relative"
+                            style={{ borderLeftColor: getHighlightBg(hl.color).replace('0.4', '1') }}
+                          >
+                            <p className="italic text-muted-foreground line-clamp-1">"{hl.text}"</p>
+                            {hl.note && <p className="text-[10px] mt-0.5">{hl.note}</p>}
+                            <button onClick={() => deleteHighlight(hl.id)} className="absolute top-0.5 right-0.5 opacity-0 group-hover:opacity-100">
+                              <Trash2 className="h-2.5 w-2.5 text-destructive" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    ))}
+                </div>
+              )}
+
+              {/* Page notes */}
+              <div>
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-1.5">
+                  Page Notes
+                </p>
+                {currentPageNotes.length === 0 && (
+                  <p className="text-xs text-muted-foreground text-center py-3">No notes on this page.</p>
+                )}
+                {currentPageNotes.map((note) => (
+                  <div key={note.id} className="p-2 rounded-lg bg-muted/50 text-xs group relative mb-1.5">
+                    <p>{note.text}</p>
+                    <button onClick={() => deleteNote(note.id)} className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
             </div>
           </ScrollArea>
           <div className="p-3 border-t flex gap-2">
@@ -508,7 +980,7 @@ const EbookReader = () => {
               value={newNote}
               onChange={(e) => setNewNote(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && addNote()}
-              placeholder="Add a note..."
+              placeholder="Add a page note..."
               className="flex-1 text-xs bg-transparent border rounded px-2 py-1.5 outline-none focus:border-primary"
             />
             <Button size="sm" onClick={addNote} disabled={!newNote.trim()}>Add</Button>
@@ -531,7 +1003,9 @@ const EbookReader = () => {
                   className={`w-full text-left px-3 py-2.5 rounded-lg text-sm hover:bg-muted transition-colors ${currentPage === item.pageNum ? 'bg-primary/10 text-primary font-medium' : ''}`}
                 >
                   <span className="truncate block">{item.title}</span>
-                  <span className="text-[10px] text-muted-foreground">Page {item.pageNum}</span>
+                  <span className="text-[10px] text-muted-foreground">
+                    Page {getPageLabel(item.pageNum) ? `${getPageLabel(item.pageNum)} (${item.pageNum})` : item.pageNum}
+                  </span>
                 </button>
               ))}
             </div>
@@ -550,7 +1024,13 @@ const EbookReader = () => {
             </Button>
 
             <div className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
-              <span className="text-muted-foreground hidden sm:inline">Page</span>
+              {pageLabel ? (
+                <span className="text-muted-foreground">
+                  Page <strong>{pageLabel}</strong>
+                </span>
+              ) : (
+                <span className="text-muted-foreground hidden sm:inline">Page</span>
+              )}
               <input
                 value={pageInput || currentPage}
                 onChange={(e) => setPageInput(e.target.value)}
