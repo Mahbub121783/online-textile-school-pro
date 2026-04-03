@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { Plus, Search, BarChart3, Edit, Trash2, BookOpen, Upload, X, Eye, EyeOff } from 'lucide-react';
+import { Plus, Search, BarChart3, Edit, Trash2, BookOpen, Upload, X, Eye, EyeOff, AlertTriangle, CloudOff, Cloud } from 'lucide-react';
 
 interface EbookForm {
   id?: string;
@@ -45,15 +45,32 @@ const emptyForm: EbookForm = {
   is_published: false,
 };
 
+function isCloudinaryUrl(url: string): boolean {
+  return url.includes('cloudinary.com') || url.includes('res.cloudinary');
+}
+
+function isR2Url(url: string): boolean {
+  return url.includes('r2.dev') || url.includes('r2.cloudflarestorage.com') || url.includes('pub-');
+}
+
+function getStorageSource(url: string): 'r2' | 'cloudinary' | 'unknown' {
+  if (!url) return 'unknown';
+  if (isR2Url(url)) return 'r2';
+  if (isCloudinaryUrl(url)) return 'cloudinary';
+  return 'unknown';
+}
+
 const AdminEbooks = () => {
   const qc = useQueryClient();
-  const { upload, uploading } = useFileUpload();
+  const { upload, uploading, progress } = useFileUpload();
   const [search, setSearch] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<EbookForm>(emptyForm);
   const [statsEbook, setStatsEbook] = useState<any>(null);
   const [tagInput, setTagInput] = useState('');
   const [subWriterInput, setSubWriterInput] = useState('');
+  const [fileUploadStatus, setFileUploadStatus] = useState<'idle' | 'uploading' | 'success' | 'error'>('idle');
+  const [fileUploadError, setFileUploadError] = useState('');
 
   const { data: ebooks = [], isLoading } = useQuery({
     queryKey: ['admin-ebooks'],
@@ -73,6 +90,10 @@ const AdminEbooks = () => {
 
   const saveMutation = useMutation({
     mutationFn: async (data: EbookForm) => {
+      // Block save if file_url points to Cloudinary
+      if (data.file_url && isCloudinaryUrl(data.file_url)) {
+        throw new Error('Ebook files must be stored on Cloudflare R2, not Cloudinary. Please re-upload the ebook file.');
+      }
       const { id, ...rest } = data;
       const payload = {
         ...rest,
@@ -91,6 +112,8 @@ const AdminEbooks = () => {
       qc.invalidateQueries({ queryKey: ['admin-ebooks'] });
       setShowForm(false);
       setForm(emptyForm);
+      setFileUploadStatus('idle');
+      setFileUploadError('');
     },
     onError: (e: any) => toast.error(e.message),
   });
@@ -114,7 +137,6 @@ const AdminEbooks = () => {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-ebooks'] }),
   });
 
-  // Stats query
   const { data: stats } = useQuery({
     queryKey: ['ebook-stats', statsEbook?.id],
     enabled: !!statsEbook,
@@ -147,30 +169,63 @@ const AdminEbooks = () => {
       file_format: ebook.file_format || 'pdf', page_count: ebook.page_count,
       is_published: ebook.is_published || false,
     });
+    setFileUploadStatus('idle');
+    setFileUploadError('');
     setShowForm(true);
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, field: 'cover_url' | 'file_url' | 'gallery') => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    if (field === 'file_url') {
+      setFileUploadStatus('uploading');
+      setFileUploadError('');
+    }
+
     try {
-      // Ebook files (PDF/DOCX) must always go to R2; cover/gallery images go to Cloudinary
+      // Ebook files (PDF/DOCX) MUST always go to R2
       const forceR2 = field === 'file_url';
       const result = await upload(file, { forceR2 });
-      if (field === 'cover_url') setForm(p => ({ ...p, cover_url: result.url }));
-      else if (field === 'file_url') {
+
+      if (field === 'cover_url') {
+        setForm(p => ({ ...p, cover_url: result.url }));
+      } else if (field === 'file_url') {
+        // Verify the result is actually on R2
+        if (result.source !== 'r2') {
+          setFileUploadStatus('error');
+          setFileUploadError('File was not stored on Cloudflare R2. Please check R2 configuration.');
+          toast.error('Upload went to wrong storage. Ebook files must be on Cloudflare R2.');
+          return;
+        }
         const ext = file.name.split('.').pop()?.toLowerCase() || 'pdf';
         setForm(p => ({ ...p, file_url: result.url, file_format: ext }));
+        setFileUploadStatus('success');
+        toast.success('Ebook file uploaded to Cloudflare R2');
       } else {
         setForm(p => ({ ...p, gallery_urls: [...p.gallery_urls, result.url] }));
       }
-    } catch {}
+    } catch (err: any) {
+      const msg = err?.message || 'Upload failed';
+      if (field === 'file_url') {
+        setFileUploadStatus('error');
+        setFileUploadError(msg);
+      }
+      toast.error(`Upload failed: ${msg}`);
+    }
   };
 
   const filtered = ebooks.filter((e: any) =>
     e.title?.toLowerCase().includes(search.toLowerCase()) ||
     e.author?.toLowerCase().includes(search.toLowerCase())
   );
+
+  const StorageBadge = ({ url }: { url: string }) => {
+    const source = getStorageSource(url);
+    if (source === 'r2') return <Badge className="bg-green-600 text-white text-xs">R2</Badge>;
+    if (source === 'cloudinary') return <Badge variant="destructive" className="text-xs gap-1"><AlertTriangle className="h-3 w-3" /> Cloudinary (Legacy)</Badge>;
+    return <Badge variant="secondary" className="text-xs">Unknown</Badge>;
+  };
 
   return (
     <div className="space-y-6">
@@ -179,7 +234,7 @@ const AdminEbooks = () => {
           <h1 className="font-heading text-2xl font-bold">E-Book Management</h1>
           <p className="text-sm text-muted-foreground">{ebooks.length} e-books total</p>
         </div>
-        <Button onClick={() => { setForm(emptyForm); setShowForm(true); }} className="gap-2">
+        <Button onClick={() => { setForm(emptyForm); setFileUploadStatus('idle'); setFileUploadError(''); setShowForm(true); }} className="gap-2">
           <Plus className="h-4 w-4" /> Add New E-Book
         </Button>
       </div>
@@ -202,12 +257,25 @@ const AdminEbooks = () => {
                     {ebook.is_published ? 'Published' : 'Draft'}
                   </Badge>
                 </div>
+                {/* Storage source badge for file_url */}
+                {ebook.file_url && (
+                  <div className="absolute top-2 left-2">
+                    <StorageBadge url={ebook.file_url} />
+                  </div>
+                )}
               </div>
               <CardContent className="p-4 space-y-2">
                 <h3 className="font-heading font-semibold truncate">{ebook.title}</h3>
                 <p className="text-sm text-muted-foreground">{ebook.author || 'Unknown author'}</p>
                 {ebook.categories?.name && (
                   <Badge variant="outline" className="text-xs">{ebook.categories.name}</Badge>
+                )}
+                {/* Legacy warning */}
+                {ebook.file_url && isCloudinaryUrl(ebook.file_url) && (
+                  <div className="flex items-center gap-1 text-xs text-destructive">
+                    <AlertTriangle className="h-3 w-3" />
+                    <span>Legacy: Re-upload file to R2</span>
+                  </div>
                 )}
                 <div className="flex items-baseline gap-2">
                   <span className="font-bold text-primary">৳{ebook.discount_price ?? ebook.price ?? 0}</span>
@@ -395,15 +463,42 @@ const AdminEbooks = () => {
               </div>
               <div className="space-y-2">
                 <Label>E-Book File (PDF / DOCX / EPUB)</Label>
+                <p className="text-xs text-muted-foreground">Files are uploaded to Cloudflare R2 for reliable storage</p>
                 {form.file_url && (
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 p-2 rounded border bg-muted/50">
+                    <StorageBadge url={form.file_url} />
                     <Badge variant="outline">{form.file_format.toUpperCase()}</Badge>
                     <span className="text-xs text-muted-foreground truncate max-w-[200px]">{form.file_url}</span>
+                    {isCloudinaryUrl(form.file_url) && (
+                      <span className="text-xs text-destructive font-medium ml-auto">⚠ Re-upload required</span>
+                    )}
                   </div>
                 )}
                 <Input type="file" accept=".pdf,.docx,.doc,.epub" onChange={e => handleFileUpload(e, 'file_url')} disabled={uploading} />
+                
+                {/* Upload status */}
+                {fileUploadStatus === 'uploading' && (
+                  <div className="space-y-1">
+                    <p className="text-sm text-blue-600 animate-pulse flex items-center gap-2">
+                      <Cloud className="h-4 w-4" /> Uploading to Cloudflare R2... {progress}%
+                    </p>
+                    <div className="w-full bg-muted rounded-full h-2">
+                      <div className="bg-blue-600 h-2 rounded-full transition-all" style={{ width: `${progress}%` }} />
+                    </div>
+                  </div>
+                )}
+                {fileUploadStatus === 'success' && (
+                  <p className="text-sm text-green-600 flex items-center gap-1">✓ File uploaded to Cloudflare R2</p>
+                )}
+                {fileUploadStatus === 'error' && (
+                  <div className="p-2 rounded border border-destructive bg-destructive/10">
+                    <p className="text-sm text-destructive flex items-center gap-1">
+                      <CloudOff className="h-4 w-4" /> Upload failed
+                    </p>
+                    <p className="text-xs text-destructive/80 mt-1">{fileUploadError}</p>
+                  </div>
+                )}
               </div>
-              {uploading && <p className="text-sm text-muted-foreground animate-pulse">Uploading...</p>}
             </TabsContent>
 
             <TabsContent value="seo" className="space-y-4">
@@ -420,7 +515,10 @@ const AdminEbooks = () => {
 
           <div className="flex justify-end gap-2 pt-4 border-t">
             <Button variant="outline" onClick={() => setShowForm(false)}>Cancel</Button>
-            <Button onClick={() => saveMutation.mutate(form)} disabled={!form.title || saveMutation.isPending}>
+            <Button 
+              onClick={() => saveMutation.mutate(form)} 
+              disabled={!form.title || saveMutation.isPending || (fileUploadStatus === 'uploading')}
+            >
               {saveMutation.isPending ? 'Saving...' : form.id ? 'Update' : 'Create'}
             </Button>
           </div>
