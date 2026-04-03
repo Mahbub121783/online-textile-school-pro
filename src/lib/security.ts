@@ -78,21 +78,16 @@ export function initSecurity() {
     e.preventDefault();
   }, { capture: true });
 
-  // 6. Detect devtools via debugger timing (subtle)
-  let devtoolsOpen = false;
-  const threshold = 160;
-  const check = () => {
-    const start = performance.now();
-    // eslint-disable-next-line no-debugger
-    debugger;
-    const end = performance.now();
-    if (end - start > threshold && !devtoolsOpen) {
-      devtoolsOpen = true;
-      document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;background:#0a0a0a;color:#fff;text-align:center;padding:2rem"><div><h1 style="font-size:2rem;margin-bottom:1rem">⚠️ Security Alert</h1><p style="color:#999">Developer tools detected. This session has been terminated for security reasons.</p></div></div>';
-    }
+  // 6. Detect devtools via console override check
+  const checkDevtools = () => {
+    const el = new Image();
+    Object.defineProperty(el, 'id', {
+      get: () => {
+        document.title = '⚠️ Security Warning';
+      },
+    });
   };
-  // Run check periodically but not too aggressively
-  setInterval(check, 4000);
+  setInterval(checkDevtools, 5000);
 
   // 7. Add CSS to prevent text selection on non-interactive elements
   const style = document.createElement('style');
