@@ -205,7 +205,7 @@ const LessonPlayer = () => {
   if (authLoading) return <div className="min-h-screen flex items-center justify-center animate-pulse">Loading...</div>;
   if (!user) return <Navigate to={`/auth/login?redirect=/learn/${courseSlug}/${lessonId}`} replace />;
 
-  const embedUrl = getEmbedUrl(currentLesson);
+  
 
   const hasQuizzes = linkedQuizzes.length > 0;
   const hasAssignments = linkedAssignments.length > 0;

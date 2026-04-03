@@ -44,24 +44,12 @@ const LessonPreviewModal = ({ lesson, materials, quizzes, assignments, onClose }
         ) : (
           <>
             {/* Video area */}
-            <div className="aspect-video bg-black w-full relative">
-              {embedUrl ? (
-                <>
-                  <iframe
-                    src={embedUrl}
-                    className="w-full h-full"
-                    allowFullScreen
-                    allow="autoplay; encrypted-media"
-                    sandbox="allow-scripts allow-same-origin allow-presentation"
-                  />
-                  <div className="absolute inset-0 pointer-events-none" onContextMenu={e => e.preventDefault()} />
-                </>
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-muted-foreground">
-                  <Play className="h-16 w-16 opacity-30" />
-                </div>
-              )}
-            </div>
+            <SecureMediaPlayer
+              videoUrl={lesson.video_url}
+              videoPlatform={lesson.video_platform}
+              title={lesson.title}
+              showControls={true}
+            />
 
             {/* Content tabs */}
             <div className="p-4">
