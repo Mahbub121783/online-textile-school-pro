@@ -2,19 +2,22 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useProfileCompleteness } from '@/hooks/useProfileCompleteness';
 import { renderIdCard, downloadIdCardPdf, downloadIdCardPng, IdCardData, IdCardSettings } from '@/lib/idCardRenderer';
 import { ensureStudentIdCard } from '@/lib/ensureStudentIdCard';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Download, CreditCard, RefreshCw, FileImage, FileText, ChevronDown } from 'lucide-react';
+import { Download, CreditCard, RefreshCw, FileImage, FileText, ChevronDown, AlertTriangle, ShieldX } from 'lucide-react';
 import { format } from 'date-fns';
+import { Link } from 'react-router-dom';
 
 interface Props {
   userId?: string;
