@@ -1,77 +1,104 @@
 
 
-## Plan: Advanced Hero Slides Management + Dynamic Frontend Hero Section
+## Plan: Universal Registration System
 
-### Current Problems
+### Overview
 
-1. **Frontend is hardcoded** — `HeroSlider.tsx` uses a static `SLIDES` array, completely ignoring the `hero_slides` database table
-2. **No media picker** — Admin form uses a raw "Image URL" text input instead of the existing `MediaPickerModal`
-3. **No drag-and-drop reorder** — Sort order is manual number input
-4. **CTA links are plain text** — No searchable link picker for internal pages/courses
-5. **No live preview** — Admin cannot see how the slide looks before saving
-6. **Missing advanced fields** — No text alignment, overlay opacity, gradient direction, or text color customization
-7. **No duplicate slide** — Common workflow missing
+Build a complete public registration system with no login required. Two main parts: a public-facing registration form page and a full admin management section with form builder, page customization, submissions viewer, and Excel export.
 
-### Implementation
+### Database Schema (1 migration)
 
-**1. Database migration — add advanced styling columns**
+**Table: `registration_purposes`**
+- `id` uuid PK
+- `name` text NOT NULL (e.g. "Student", "Business", "Job")
+- `slug` text UNIQUE NOT NULL
+- `is_active` boolean DEFAULT true
+- `max_entries` integer nullable
+- `photo_required` boolean DEFAULT false
+- `starts_at` timestamptz nullable
+- `ends_at` timestamptz nullable
+- `sort_order` integer DEFAULT 0
+- `custom_fields` jsonb DEFAULT '[]' — array of `{key, label, type, required, options[]}`
+- `created_at` timestamptz DEFAULT now()
 
-Add columns to `hero_slides`:
-- `gradient_from` (text, default `'primary'`) — start gradient color
-- `gradient_to` (text, default `'primary-dark'`) — end gradient color  
-- `gradient_direction` (text, default `'br'`) — gradient angle (br, r, b, bl, etc.)
-- `overlay_opacity` (integer, default `5`) — pattern overlay opacity 0-20%
-- `text_alignment` (text, default `'left'`) — left/center/right
-- `title_color` (text, nullable) — custom title color override
-- `subtitle_color` (text, nullable) — custom subtitle color override
+**Table: `registration_form_config`** (singleton settings row)
+- `id` uuid PK DEFAULT gen_random_uuid()
+- `fields_order` jsonb DEFAULT '[]' — ordered list of base field keys
+- `page_title` text DEFAULT 'Register'
+- `page_subtitle` text nullable
+- `banner_url` text nullable
+- `event_details` text nullable
+- `countdown_target` timestamptz nullable
+- `custom_css` text nullable
+- `updated_at` timestamptz DEFAULT now()
 
-**2. Admin Hero Slides page rewrite (`AdminHeroSlides.tsx`)**
+**Table: `registrations`**
+- `id` uuid PK
+- `purpose_id` uuid FK -> registration_purposes
+- `full_name` text NOT NULL
+- `email` text NOT NULL
+- `mobile` text NOT NULL
+- `blood_group` text nullable
+- `university` text nullable
+- `batch` text nullable
+- `business_name` text nullable
+- `job_area` text nullable
+- `experience_years` integer nullable
+- `photo_url` text nullable
+- `extra_fields` jsonb DEFAULT '{}'
+- `created_at` timestamptz DEFAULT now()
 
-- **Media picker integration**: Replace raw URL input with a button that opens `MediaPickerModal` for hero banner image selection. Label it "Hero Banner Image"
-- **Searchable CTA link picker**: Add a combo-box for CTA Link and Secondary Link that searches internal routes (`/courses`, `/ebooks`, `/auth/register`, etc.) plus all published courses and pages from the database. Free-text entry for external URLs
-- **Drag-and-drop reorder**: Use HTML5 drag-and-drop on the slide cards to reorder. Auto-save sort_order on drop
-- **Live preview panel**: Show a mini hero preview (16:9 aspect ratio) in the edit dialog that updates in real-time as admin changes title, subtitle, image, gradient, alignment
-- **Duplicate slide button**: Clone icon on each card
-- **Gradient customizer**: Dropdown for direction + color pickers for from/to colors (preset palette of theme colors)
-- **Text alignment toggle**: Left / Center / Right buttons
-- **Overlay opacity slider**: 0-20% range slider
-- **Countdown target field**: Date-time picker (column already exists in DB)
-- **Bulk actions**: Select multiple slides to activate/deactivate/delete
+RLS: Public INSERT (no auth needed). Admin SELECT/UPDATE/DELETE.
 
-**3. Frontend HeroSlider rewrite (`HeroSlider.tsx`)**
+### Frontend — Public Registration Page
 
-- **Fetch from database**: Replace static `SLIDES` array with a `useQuery` call to `hero_slides` table, filtered by `is_active = true`, ordered by `sort_order`
-- **Fallback**: If no DB slides exist, show the current hardcoded slides as defaults
-- **Dynamic rendering**: Apply `image_url` as background image (with gradient overlay), use DB `cta_text`/`cta_link`/`secondary_cta_text`/`secondary_cta_link`
-- **Apply styling fields**: gradient direction, text alignment, overlay opacity, custom colors
-- **Background image support**: When `image_url` is set, render it as `background-image` with the gradient as an overlay on top
-- **Countdown timer**: If `countdown_target` is set and in the future, show a live countdown badge on the slide
-- **Smooth transitions**: CSS transitions between slides with fade + slight slide animation
-- **Touch swipe**: Add touch event handlers for mobile swipe navigation
+**New file: `src/pages/registration/PublicRegistration.tsx`**
+- Route: `/register/:slug?` (optional slug filters to a specific purpose)
+- No login required
+- Top: countdown timer (fetched from `registration_form_config.countdown_target`), banner image, title/subtitle
+- Form fields rendered dynamically based on `registration_form_config.fields_order` and selected purpose
+- **Registration Purpose** dropdown: fetches active purposes where `now()` is between `starts_at`/`ends_at` and entry count < `max_entries`
+- Conditional fields: when purpose changes, show/hide Business Name, Job Area, Experience Years based on purpose slug
+- University field: combo-box that queries distinct universities from existing `registrations` for auto-suggestions
+- Photo upload: uses existing `useFileUpload` hook (Cloudinary for images)
+- On submit: inserts into `registrations` table via Supabase anon client (RLS allows public insert)
+- Success: animated confirmation card with registration number
 
-### Technical Details
+### Admin Dashboard — Universal Registration Menu
 
-**Searchable link picker** — Fetch routes from a static list + query `courses` and `pages` tables:
-```typescript
-const internalRoutes = [
-  { label: 'Courses', value: '/courses' },
-  { label: 'Ebooks', value: '/ebooks' },
-  { label: 'Register', value: '/auth/register' },
-  // ...
-];
-// + dynamic: courses.map(c => ({ label: c.title, value: `/courses/${c.id}` }))
-// + dynamic: pages.map(p => ({ label: p.title, value: `/${p.slug}` }))
-```
+**New file: `src/pages/admin/AdminRegistrations.tsx`** with 3 tabs:
 
-**Live preview** in edit dialog — a scaled-down 16:9 div rendering the same gradient/image/text as the frontend hero.
+**Tab A: Form Settings**
+- Purpose management: CRUD table for `registration_purposes` — name, slug, active toggle, max entries, date range, photo required, custom fields
+- Custom fields per purpose: inline editor to add `{label, type: text|select|number|date, required, options}`
+- Base field ordering: drag-and-drop list of the standard fields (name, email, mobile, blood group, university, batch)
+- Validation toggles: mark each base field as optional/compulsory per purpose
+
+**Tab B: Page Customization**
+- Edit `registration_form_config` singleton: page title, subtitle, countdown target (datetime picker), banner image (MediaPickerModal), event details (rich text)
+
+**Tab C: Submissions**
+- Purpose filter dropdown + search bar
+- Stats cards: total registrations, per-purpose counts
+- Data table with all submissions, sortable/filterable
+- Click row to open detail modal with all fields + photo
+- Export button: generates Excel file for filtered or all data using a client-side XLSX library (SheetJS)
+
+### Routing & Sidebar
+
+- Add `/register` and `/register/:slug` routes in `App.tsx` (public, outside admin layout)
+- Add `AdminRegistrations` lazy import and route `/admin/registrations` inside admin layout
+- Add "Registration" menu item in `AdminSidebar.tsx` with `ClipboardList` icon in the bottom items section
 
 ### File Summary
 
 | File | Action |
 |------|--------|
-| Migration | Add `gradient_from`, `gradient_to`, `gradient_direction`, `overlay_opacity`, `text_alignment`, `title_color`, `subtitle_color` to `hero_slides` |
-| `src/pages/admin/AdminHeroSlides.tsx` | Full rewrite — media picker, link search, drag reorder, live preview, gradient controls, bulk actions |
-| `src/components/features/home/HeroSlider.tsx` | Rewrite — fetch from DB, dynamic styles, background images, countdown, touch swipe |
+| Migration | Create `registration_purposes`, `registration_form_config`, `registrations` tables with RLS |
+| `src/pages/registration/PublicRegistration.tsx` | New — public form with countdown, conditional fields, photo upload |
+| `src/pages/admin/AdminRegistrations.tsx` | New — 3-tab admin management (settings, page customization, submissions + export) |
+| `src/App.tsx` | Add routes for `/register`, `/register/:slug`, `/admin/registrations` |
+| `src/components/layout/AdminSidebar.tsx` | Add Registration menu item |
 
-3 file changes + 1 migration.
+4 new/modified files + 1 migration.
 
