@@ -314,9 +314,8 @@ const EbookReader = () => {
       const containerHeight = container?.clientHeight || window.innerHeight;
 
       const viewport = page.getViewport({ scale: 1 });
-      const scaleW = (containerWidth - 20) / viewport.width;
-      const scaleH = (containerHeight - 20) / viewport.height;
-      const scale = Math.min(scaleW, scaleH) * (fontSize / 16);
+      // Fit to container width for full readable view — allow vertical scroll
+      const scale = ((containerWidth - 16) / viewport.width) * (fontSize / 16);
 
       const scaledViewport = page.getViewport({ scale });
       canvas.width = scaledViewport.width;
