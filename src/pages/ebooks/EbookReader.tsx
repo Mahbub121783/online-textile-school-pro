@@ -535,14 +535,25 @@ const EbookReader = () => {
     setHighlights((prev) => prev.filter((h) => h.id !== id));
   };
 
-  // ===== ResizeObserver =====
+  // ===== ResizeObserver — debounced to prevent render loops =====
   useEffect(() => {
     if (loadingState !== 'ready' || !containerRef.current) return;
-    resizeObserverRef.current = new ResizeObserver(() => {
-      renderPage(currentPage);
+    let resizeTimer: ReturnType<typeof setTimeout> | null = null;
+    let lastWidth = containerRef.current.clientWidth;
+
+    resizeObserverRef.current = new ResizeObserver((entries) => {
+      const newWidth = entries[0]?.contentRect?.width || 0;
+      // Only re-render on width change (height changes from canvas resize should be ignored)
+      if (Math.abs(newWidth - lastWidth) < 2) return;
+      lastWidth = newWidth;
+      if (resizeTimer) clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => renderPage(currentPage), 200);
     });
     resizeObserverRef.current.observe(containerRef.current);
-    return () => resizeObserverRef.current?.disconnect();
+    return () => {
+      if (resizeTimer) clearTimeout(resizeTimer);
+      resizeObserverRef.current?.disconnect();
+    };
   }, [loadingState]);
 
   // Re-render on page/fontSize change
