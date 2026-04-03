@@ -11,9 +11,11 @@ const HEAVY_EXTENSIONS = new Set([
   'pdf', 'mp4', 'mkv', 'avi', 'mov', 'webm', 'flv', 'wmv',
   'pptx', 'ppt', 'psd', 'ai', 'zip', 'rar', '7z', 'tar', 'gz',
   'doc', 'docx', 'xls', 'xlsx', 'csv', 'odt', 'ods', 'odp',
+  'epub',
 ]);
 
 const PROXY_UPLOAD_MAX_BYTES = 4.5 * 1024 * 1024; // 4.5MB
+const CHUNK_SIZE = 4 * 1024 * 1024; // 4MB chunks for chunked proxy
 
 function getFileExtension(fileName: string): string {
   return fileName.split('.').pop()?.toLowerCase() || '';
@@ -34,12 +36,11 @@ function isHeavyFile(file: File): boolean {
   return false;
 }
 
-function fileToBase64(file: File): Promise<string> {
+function fileToBase64(file: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => {
       const result = reader.result as string;
-      // Strip data URI prefix
       const base64 = result.split(',')[1];
       resolve(base64);
     };
@@ -67,9 +68,13 @@ export function useFileUpload() {
     setProgress(0);
 
     try {
+      // forceR2 bypasses ALL image detection — always goes to R2
+      if (options?.forceR2) {
+        return await uploadToR2Reliable(file);
+      }
+
       // Route: images → Cloudinary, heavy files → R2
-      // forceR2 bypasses image detection (used for ebook files, documents, etc.)
-      if (!options?.forceR2 && isImageFile(file) && !isHeavyFile(file)) {
+      if (isImageFile(file) && !isHeavyFile(file)) {
         const result = await cloudinary.upload(file);
         setProgress(100);
         return {
@@ -82,17 +87,26 @@ export function useFileUpload() {
       }
 
       // Heavy file → R2
-      // For files under 4.5MB, use server-side proxy (no CORS needed)
-      // For larger files, use presigned URL (requires CORS on R2 bucket)
-      if (file.size <= PROXY_UPLOAD_MAX_BYTES) {
-        return await uploadToR2Proxy(file);
-      }
-      return await uploadToR2Presigned(file);
+      return await uploadToR2Reliable(file);
     } catch (err: any) {
       throw err;
     } finally {
       setUploading(false);
     }
+  };
+
+  /**
+   * Reliable R2 upload: uses chunked server-side proxy for ALL sizes.
+   * This avoids browser CORS dependency entirely.
+   */
+  const uploadToR2Reliable = async (file: File): Promise<UploadResult> => {
+    // For files under 4.5MB, single proxy upload
+    if (file.size <= PROXY_UPLOAD_MAX_BYTES) {
+      return await uploadToR2Proxy(file);
+    }
+
+    // For larger files, use chunked proxy upload
+    return await uploadToR2Chunked(file);
   };
 
   const uploadToR2Proxy = async (file: File): Promise<UploadResult> => {
@@ -129,89 +143,87 @@ export function useFileUpload() {
     };
   };
 
-  const uploadToR2Presigned = async (file: File): Promise<UploadResult> => {
-    // Step 1: Get presigned URL from edge function
-    setProgress(5);
-    const { data: session } = await supabase.auth.getSession();
-    const token = session?.session?.access_token;
+  /**
+   * Chunked proxy upload: splits file into chunks and uploads each
+   * through the edge function, then assembles on R2.
+   * This bypasses both the 4.5MB edge function limit AND browser CORS.
+   */
+  const uploadToR2Chunked = async (file: File): Promise<UploadResult> => {
+    setProgress(2);
 
-    if (!token) {
-      toast.error('You must be logged in to upload files');
-      throw new Error('Not authenticated');
-    }
-
-    const { data, error } = await supabase.functions.invoke('r2-presign', {
+    // Step 1: Initialize chunked upload
+    const { data: initData, error: initError } = await supabase.functions.invoke('r2-presign', {
       body: {
-        action: 'presign',
+        action: 'chunked-init',
         file_name: file.name,
         file_type: file.type || 'application/octet-stream',
+        file_size: file.size,
       },
     });
 
-    if (error) {
-      toast.error('Failed to get upload URL: ' + (error.message || 'Unknown error'));
-      throw new Error(error.message || 'Failed to get presigned URL');
+    if (initError || initData?.error) {
+      const msg = initData?.error || initError?.message || 'Failed to initialize upload';
+      toast.error(msg);
+      throw new Error(msg);
     }
 
-    if (data?.error) {
-      toast.error('Upload error: ' + data.error);
-      throw new Error(data.error);
+    const { uploadId, fileKey, accountId } = initData;
+    setProgress(5);
+
+    // Step 2: Upload chunks
+    const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+    for (let i = 0; i < totalChunks; i++) {
+      const start = i * CHUNK_SIZE;
+      const end = Math.min(start + CHUNK_SIZE, file.size);
+      const chunk = file.slice(start, end);
+      const chunkBase64 = await fileToBase64(chunk);
+
+      const { data: chunkData, error: chunkError } = await supabase.functions.invoke('r2-presign', {
+        body: {
+          action: 'chunked-upload',
+          upload_id: uploadId,
+          file_key: fileKey,
+          account_id: accountId,
+          chunk_index: i,
+          chunk_base64: chunkBase64,
+          total_chunks: totalChunks,
+        },
+      });
+
+      if (chunkError || chunkData?.error) {
+        const msg = chunkData?.error || chunkError?.message || `Chunk ${i + 1} upload failed`;
+        toast.error(msg);
+        throw new Error(msg);
+      }
+
+      const pct = Math.round(5 + ((i + 1) / totalChunks) * 85);
+      setProgress(pct);
     }
 
-    const { presignedUrl, publicUrl, accountId, fileKey } = data;
-
-    // Step 2: Upload directly to R2 via presigned URL with progress
-    setProgress(10);
-
-    await new Promise<void>((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      xhr.open('PUT', presignedUrl, true);
-      xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
-
-      xhr.upload.onprogress = (e) => {
-        if (e.lengthComputable) {
-          const pct = Math.round(10 + (e.loaded / e.total) * 85);
-          setProgress(pct);
-        }
-      };
-
-      xhr.onload = () => {
-        if (xhr.status >= 200 && xhr.status < 300) {
-          setProgress(100);
-          resolve();
-        } else {
-          reject(new Error(`Upload failed with status ${xhr.status}. Your Cloudflare R2 bucket needs CORS configured for this site origin.`));
-        }
-      };
-
-      xhr.onerror = () => reject(new Error('Browser upload blocked. Your Cloudflare R2 bucket CORS does not allow this site origin. For files over 4.5MB, CORS must be configured on the R2 bucket.'));
-      xhr.ontimeout = () => reject(new Error('Upload timed out'));
-      xhr.timeout = 600000; // 10 minutes
-
-      xhr.send(file);
-    });
-
-    // Step 3: Verify upload in R2
-    const { data: completeData, error: completeError } = await supabase.functions.invoke('r2-presign', {
+    // Step 3: Finalize chunked upload
+    const { data: finalData, error: finalError } = await supabase.functions.invoke('r2-presign', {
       body: {
-        action: 'complete',
-        account_id: accountId,
+        action: 'chunked-complete',
+        upload_id: uploadId,
         file_key: fileKey,
+        account_id: accountId,
+        total_chunks: totalChunks,
       },
     });
 
-    if (completeError || completeData?.error) {
-      const errorMessage = completeData?.error || completeData?.details || completeError?.message || 'Upload could not be confirmed in R2';
-      toast.error(errorMessage);
-      throw new Error(errorMessage);
+    if (finalError || finalData?.error) {
+      const msg = finalData?.error || finalError?.message || 'Failed to finalize upload';
+      toast.error(msg);
+      throw new Error(msg);
     }
 
+    setProgress(100);
     toast.success('File uploaded to R2!');
     return {
-      url: publicUrl,
+      url: finalData.url,
       source: 'r2',
-      accountId,
-      fileKey,
+      accountId: finalData.accountId,
+      fileKey: finalData.fileKey,
     };
   };
 
