@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -18,6 +18,40 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
 import { Plus, Pencil, Trash2, Image, Copy, GripVertical, Eye, AlignLeft, AlignCenter, AlignRight, Check, ChevronsUpDown, Calendar } from 'lucide-react';
 import MediaPickerModal from '@/components/shared/MediaPickerModal';
+
+// Live countdown for admin previews
+const useAdminCountdown = (target: string | null | undefined) => {
+  const [text, setText] = useState('');
+  useEffect(() => {
+    if (!target) { setText(''); return; }
+    const end = new Date(target).getTime();
+    if (isNaN(end)) { setText(''); return; }
+    const tick = () => {
+      const diff = end - Date.now();
+      if (diff <= 0) { setText('Expired'); return; }
+      const d = Math.floor(diff / 86400000);
+      const h = Math.floor((diff % 86400000) / 3600000);
+      const m = Math.floor((diff % 3600000) / 60000);
+      const s = Math.floor((diff % 60000) / 1000);
+      setText(d > 0 ? `${d}d ${h}h ${m}m ${s}s` : `${h}h ${m}m ${s}s`);
+    };
+    tick();
+    const iv = setInterval(tick, 1000);
+    return () => clearInterval(iv);
+  }, [target]);
+  return text;
+};
+
+// Small badge showing live countdown on slide cards
+const SlideCountdownBadge = ({ target }: { target: string }) => {
+  const text = useAdminCountdown(target);
+  if (!text) return null;
+  return (
+    <Badge variant="destructive" className="text-[10px] animate-pulse shrink-0">
+      ⏰ {text}
+    </Badge>
+  );
+};
 
 const GRADIENT_DIRECTIONS = [
   { value: 'br', label: '↘ Bottom Right' },
@@ -119,13 +153,14 @@ const LinkPicker = ({ value, onChange }: { value: string; onChange: (v: string) 
   );
 };
 
-// --- Live Preview ---
+// --- Live Preview with countdown ---
 const SlidePreview = ({ slide }: { slide: any }) => {
   const dir = slide.gradient_direction || 'br';
   const from = slide.gradient_from || 'primary';
   const to = slide.gradient_to || 'primary-dark';
   const align = slide.text_alignment || 'left';
   const opacity = slide.overlay_opacity ?? 5;
+  const countdownText = useAdminCountdown(slide.countdown_target);
 
   return (
     <div className="relative w-full aspect-video rounded-lg overflow-hidden border bg-muted">
@@ -136,6 +171,13 @@ const SlidePreview = ({ slide }: { slide: any }) => {
       <div className="absolute inset-0" style={{ opacity: opacity / 100, backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(255,255,255,0.1) 10px, rgba(255,255,255,0.1) 20px)' }} />
       <div className={`relative h-full flex items-center p-4 ${align === 'center' ? 'justify-center text-center' : align === 'right' ? 'justify-end text-right' : 'justify-start text-left'}`}>
         <div className="max-w-[70%]">
+          {countdownText && countdownText !== 'Expired' && (
+            <div className={`mb-1.5 ${align === 'center' ? 'flex justify-center' : align === 'right' ? 'flex justify-end' : ''}`}>
+              <span className="inline-flex items-center gap-1 bg-destructive text-destructive-foreground text-[7px] px-1.5 py-0.5 rounded-full animate-pulse font-semibold">
+                ⏰ {countdownText}
+              </span>
+            </div>
+          )}
           <p className="font-bold text-sm text-primary-foreground leading-tight" style={{ color: slide.title_color || undefined }}>
             {slide.title || 'Slide Title'}
           </p>
@@ -146,9 +188,6 @@ const SlidePreview = ({ slide }: { slide: any }) => {
             {slide.cta_text && <span className="bg-accent text-accent-foreground text-[8px] px-2 py-0.5 rounded font-semibold">{slide.cta_text}</span>}
             {slide.secondary_cta_text && <span className="border border-primary-foreground/30 text-primary-foreground text-[8px] px-2 py-0.5 rounded">{slide.secondary_cta_text}</span>}
           </div>
-          {slide.countdown_target && new Date(slide.countdown_target) > new Date() && (
-            <span className="inline-block mt-1 bg-destructive text-destructive-foreground text-[7px] px-1.5 py-0.5 rounded">⏰ Countdown active</span>
-          )}
         </div>
       </div>
     </div>
@@ -288,6 +327,9 @@ const AdminHeroSlides = () => {
                   <p className="font-medium text-sm truncate">{s.title}</p>
                   <p className="text-xs text-muted-foreground truncate">{s.subtitle}</p>
                 </div>
+                {s.countdown_target && new Date(s.countdown_target) > new Date() && (
+                  <SlideCountdownBadge target={s.countdown_target} />
+                )}
                 <Badge variant={s.is_active ? 'default' : 'outline'} className="text-xs">{s.is_active ? 'Active' : 'Inactive'}</Badge>
                 <span className="text-xs text-muted-foreground">#{idx + 1}</span>
                 <div className="flex gap-0.5">
