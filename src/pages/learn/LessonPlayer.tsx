@@ -170,19 +170,22 @@ const LessonPlayer = () => {
     },
   });
 
-  const getEmbedUrl = (lesson: any) => {
-    if (!lesson?.video_url) return null;
-    const url = lesson.video_url;
-    if (lesson.video_platform === 'youtube' || url.includes('youtube') || url.includes('youtu.be')) {
-      const match = url.match(/(?:v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
-      return match ? `https://www.youtube.com/embed/${match[1]}` : url;
+  // Save video position periodically
+  const handleVideoProgress = useCallback((seconds: number) => {
+    if (!lessonId || !user?.id || !course?.id) return;
+    // Debounced save — only every 15 seconds
+    if (Math.floor(seconds) % 15 === 0 && seconds > 0) {
+      supabase.from('lesson_progress').upsert({
+        lesson_id: lessonId,
+        user_id: user.id,
+        last_position_seconds: Math.floor(seconds),
+      }, { onConflict: 'lesson_id,user_id' }).then(() => {});
     }
-    if (lesson.video_platform === 'vimeo' || url.includes('vimeo')) {
-      const match = url.match(/vimeo\.com\/(\d+)/);
-      return match ? `https://player.vimeo.com/video/${match[1]}` : url;
-    }
-    return url;
-  };
+  }, [lessonId, user?.id, course?.id]);
+
+  // Get saved position
+  const currentProgress = progressData.find((p: any) => p.lesson_id === lessonId);
+  const savedPosition = currentProgress?.last_position_seconds || 0;
 
   const handleMarkComplete = () => {
     if (!lessonId || !course?.id) return;
