@@ -814,10 +814,11 @@ const EbookReader = () => {
               style={{ userSelect: 'none' }}
               onDragStart={(e) => e.preventDefault()}
             />
-            {/* Text layer overlay */}
+            {/* Text layer overlay — full pointer events for selection */}
             <div
               ref={textLayerRef}
               className="text-layer-container"
+              style={{ pointerEvents: 'auto' }}
               onCopy={(e) => e.preventDefault()}
             />
           </div>
