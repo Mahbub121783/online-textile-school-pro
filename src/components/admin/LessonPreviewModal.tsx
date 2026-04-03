@@ -18,21 +18,6 @@ interface Props {
 }
 
 const LessonPreviewModal = ({ lesson, materials, quizzes, assignments, onClose }: Props) => {
-  const getEmbedUrl = (l: any) => {
-    if (!l?.video_url) return null;
-    const url = l.video_url;
-    if (l.video_platform === 'youtube' || url.includes('youtube') || url.includes('youtu.be')) {
-      const match = url.match(/(?:v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
-      return match ? `https://www.youtube.com/embed/${match[1]}` : url;
-    }
-    if (l.video_platform === 'vimeo' || url.includes('vimeo')) {
-      const match = url.match(/vimeo\.com\/(\d+)/);
-      return match ? `https://player.vimeo.com/video/${match[1]}` : url;
-    }
-    return url;
-  };
-
-  const embedUrl = getEmbedUrl(lesson);
   const linkedQuizzes = materials.filter(m => m.material_type === 'quiz');
   const linkedAssignments = materials.filter(m => m.material_type === 'assignment');
   const resources: { name: string; url: string; type: string }[] = Array.isArray(lesson.resources) ? lesson.resources : [];
