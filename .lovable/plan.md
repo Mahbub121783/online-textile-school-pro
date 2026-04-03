@@ -1,87 +1,78 @@
 
-## Plan: Fix Ebook Uploads So They Truly Save to Cloudflare R2
+Goal: fix the eBook reader so Cloudflare-hosted ebooks open fast and reliably.
 
-### What I found
-- The ebook form is already starting the upload on **Cloudflare R2**, not Cloudinary.
-- In the preview snapshot, `AdminEbooks` called `r2-presign` and got back an R2 URL like `...r2.dev/...pdf`.
-- The **Cloudinary URL you still see in the form is the old saved ebook URL**, not the new upload result.
-- The real problem is that the new R2 upload is likely **failing before completion/save**:
-  - files over **4.5MB** use the browser-to-R2 presigned upload path
-  - that path depends on **R2 bucket CORS**
-  - `AdminEbooks.tsx` currently has `catch {}` so upload failures are effectively hidden
-- Database check shows there is still **at least 1 ebook record saved with a Cloudinary raw PDF URL**, so old ebooks are still legacy Cloudinary entries.
+What I found
+- The file is already being returned successfully from `ebook-secure-access` as PDF bytes. So the main failure is not Cloudflare upload anymore.
+- The current reader breaks because `src/pages/ebooks/EbookReader.tsx` loads the PDF worker from `cdnjs`, and that worker import is failing in the browser.
+- The reader is also slow because it downloads the entire PDF with `response.arrayBuffer()` before rendering page 1.
+- The current token flow is not compatible with proper PDF.js range loading because the secure endpoint is POST-based and the token is marked `used` immediately.
 
-### Root cause
-This is no longer mainly a routing bug.  
-It is now a **silent failed R2 upload + old Cloudinary URL remains in the record** bug.
+Implementation plan
 
-### Implementation plan
+1. Fix the PDF worker failure
+- In `src/pages/ebooks/EbookReader.tsx`, stop using the external CDN worker URL.
+- Bundle the worker locally with Vite and point `pdfjsLib.GlobalWorkerOptions.workerSrc` to that local asset.
+- This removes the current “Setting up fake worker / Failed to fetch dynamically imported module” error.
 
-**1. Fix Admin Ebooks upload flow**
-- Remove the silent `catch {}`
-- Show clear states:
-  - Uploading to Cloudflare R2
-  - Upload failed
-  - Uploaded to R2
-  - Saved
-- Replace the raw URL preview with a visible storage badge: `R2` or `Cloudinary`
-- Disable `Create/Update` while ebook upload is still in progress
-- Show the real error message if R2 upload fails
+2. Switch the reader to true incremental PDF loading
+- Refactor `EbookReader` to stop doing:
+  - secure fetch
+  - `response.arrayBuffer()`
+  - `getDocument({ data })`
+- Instead, let PDF.js open the secure ebook URL directly with:
+  - a GET endpoint
+  - auth headers
+  - range loading enabled
+- Result: first page renders much faster and large PDFs no longer wait for a full download.
 
-**2. Enforce Cloudflare-only for ebook files**
-- Keep cover and gallery images on Cloudinary
-- Force ebook `file_url` uploads to R2 only
-- Add save-time validation in `AdminEbooks.tsx`:
-  - if `file_url` is Cloudinary, block save
-  - show “Ebook files must be stored on Cloudflare R2”
+3. Upgrade `ebook-secure-access` for PDF.js range requests
+- Add a GET-based streaming path in `supabase/functions/ebook-secure-access/index.ts` for PDF.js.
+- Keep purchase validation and short-lived access tokens, but make tokens reusable until expiry instead of single-use on the first request.
+- Forward and expose range-related headers properly:
+  - `Accept-Ranges`
+  - `Content-Range`
+  - `Content-Length`
+- Make the R2 S3 fallback honor incoming `Range` headers too, not just full-file fetches.
 
-**3. Make large ebook uploads reliable**
-- Add a dedicated **reliability-first ebook upload path**
-- Best fix: support **chunked/proxied R2 upload** for large PDF/DOCX/EPUB files so ebook uploads do not depend on bucket CORS
-- Keep the current presigned flow only as fallback or secondary path
-- This is the most important hardening because ebook files are commonly larger than the proxy threshold
+4. Harden reader behavior by format
+- `EbookReader` currently assumes everything is a PDF.
+- Add a clear format check using ebook metadata:
+  - PDF: open in the secure PDF reader
+  - non-PDF: show a proper unsupported-format message instead of a broken PDF error
+- In `src/pages/admin/AdminEbooks.tsx`, tighten validation so the secure reader is aligned with the formats we actually support right now.
 
-**4. Clean up legacy Cloudinary ebooks**
-- Detect old ebook records whose `file_url` points to Cloudinary
-- Mark them in admin UI as `Legacy` / `Needs R2 migration`
-- Add a fast replace workflow so admin can re-upload and overwrite the old URL with R2
-- This will fix the ebooks students currently cannot open
+5. Keep Cloudflare-only enforcement for ebook files
+- Preserve the existing R2-only validation in `AdminEbooks`.
+- Keep the legacy Cloudinary warning/badge so old ebook records are easy to identify and re-upload.
+- This prevents future mixed-storage ebook issues.
 
-**5. Improve reader-side diagnostics**
-- Keep `ebook-secure-access` tolerant for both legacy and R2 URLs during transition
-- Return clearer errors for:
-  - missing file
-  - legacy Cloudinary raw URL
-  - failed R2 fetch
-- This makes support/debugging much easier while old records are being repaired
+6. Recommended hardening for large uploads
+- The current chunked upload flow in `supabase/functions/r2-presign/index.ts` still assembles large files inside the edge function.
+- Replace that with native R2 multipart upload logic so large PDFs/docs do not depend on edge-function byte reassembly.
+- This is the “advanced” stability improvement for big ebook files.
 
-### Files to change
-- `src/pages/admin/AdminEbooks.tsx`
-  - remove silent failure
-  - show upload status/source
-  - block Cloudinary ebook URLs on save
-  - add legacy badge/filter
-- `src/hooks/useFileUpload.ts`
-  - add a dedicated robust ebook upload mode
-  - return richer status/error metadata
-- `supabase/functions/r2-presign/index.ts`
-  - add reliable large-file ebook upload support
+Technical details
+- Frontend root cause: `pdf.worker.min.mjs` is being loaded from an external CDN and fails dynamic import.
+- Performance root cause: whole-file download in the client before PDF.js starts rendering.
+- Backend compatibility gap: PDF.js expects repeated ranged GET requests, but the current secure flow is single-use-token + POST body based.
+- No database migration is required for this fix.
+
+Files to update
+- `src/pages/ebooks/EbookReader.tsx`
 - `supabase/functions/ebook-secure-access/index.ts`
-  - improve legacy/R2 diagnostics and transition support
+- `src/pages/admin/AdminEbooks.tsx`
+- `supabase/functions/r2-presign/index.ts` (recommended hardening)
 
-### Expected result
-- Images continue uploading to **Cloudinary**
-- Ebook files upload to **Cloudflare R2 only**
-- Admin can immediately see whether the ebook is really stored on R2
-- Large ebook upload failures are no longer silent
-- Old Cloudinary ebook records can be found and replaced safely
+Expected result
+- No more worker import error
+- PDF page 1 appears much faster
+- Large Cloudflare-hosted ebooks open reliably
+- Range-based reading works without re-downloading the whole file
+- Legacy Cloudinary ebook records are clearly identified instead of failing silently
 
-### File summary
-| File | Action |
-|------|--------|
-| `src/pages/admin/AdminEbooks.tsx` | Fix silent failures, show source/status, enforce R2-only save |
-| `src/hooks/useFileUpload.ts` | Add robust ebook upload mode |
-| `supabase/functions/r2-presign/index.ts` | Support reliable large ebook uploads |
-| `supabase/functions/ebook-secure-access/index.ts` | Improve legacy-file diagnostics |
-
-No migration is strictly required unless you want a dedicated `storage_provider` column for auditing.
+Verification
+- Test a small PDF and a large PDF from `/read/:ebookId`
+- Confirm page 1 loads quickly and page navigation works
+- Confirm no fake-worker warning in console
+- Confirm edge function logs show successful secure reads without 500/502 errors
+- Confirm a legacy Cloudinary ebook shows a clear admin-facing migration warning
