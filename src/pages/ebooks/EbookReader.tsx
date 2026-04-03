@@ -675,7 +675,7 @@ const EbookReader = () => {
 
   if (loadingState === 'loading') {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-background gap-3 px-4">
+      <div className="h-screen flex flex-col items-center justify-center bg-background gap-3 px-4">
         <Loader2 className="h-10 w-10 animate-spin text-primary" />
         <p className="text-muted-foreground font-medium animate-pulse text-center">Loading your eBook securely...</p>
         <div className="w-48">
