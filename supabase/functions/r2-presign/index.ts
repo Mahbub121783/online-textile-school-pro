@@ -389,21 +389,9 @@ async function handleChunkedComplete(supabase: any, body: any, headers: any) {
 
       if (!resp.Body) throw new Error(`Chunk ${i} is empty`);
 
-      // Convert stream to Uint8Array
-      const reader = (resp.Body as ReadableStream).getReader();
-      const parts: Uint8Array[] = [];
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        parts.push(value);
-      }
-      const chunkData = new Uint8Array(parts.reduce((sum, p) => sum + p.length, 0));
-      let offset = 0;
-      for (const part of parts) {
-        chunkData.set(part, offset);
-        offset += part.length;
-      }
-      chunks.push(chunkData);
+      // Convert S3 body to Uint8Array (Deno SDK returns AsyncIterable)
+      const bodyBytes = await resp.Body.transformToByteArray();
+      chunks.push(bodyBytes);
     }
 
     // Combine all chunks
