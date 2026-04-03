@@ -125,6 +125,24 @@ export async function renderIdCard(
   ctx.fillRect(0, hH, CARD_W, 4);
 
   // ══════════════════════════════════════════
+  // BACKGROUND — diagonal shapes at 3% opacity
+  // ══════════════════════════════════════════
+  ctx.save();
+  ctx.globalAlpha = 0.03;
+  ctx.fillStyle = primary;
+  // Draw diagonal stripes
+  for (let i = -CARD_H; i < CARD_W + CARD_H; i += 80) {
+    ctx.beginPath();
+    ctx.moveTo(i, 0);
+    ctx.lineTo(i + 40, 0);
+    ctx.lineTo(i + 40 + CARD_H, CARD_H);
+    ctx.lineTo(i + CARD_H, CARD_H);
+    ctx.closePath();
+    ctx.fill();
+  }
+  ctx.restore();
+
+  // ══════════════════════════════════════════
   // WATERMARK — 5% opacity logo centered on body area
   // ══════════════════════════════════════════
   const barcodeBarH = 70;
@@ -173,7 +191,7 @@ export async function renderIdCard(
   ctx.stroke();
 
   // ── Fields ──
-  const fieldX = photoX + photoW + 40;
+  const fieldX = photoX + photoW + 55;
   const labelW = 200;
   const valueX = fieldX + labelW;
   const rowH = 50;
@@ -207,8 +225,8 @@ export async function renderIdCard(
   // FOOTER — Validity + Signature (between body and barcode bar)
   // ══════════════════════════════════════════
 
-  // Valid Until — 10px below photo bottom, left-aligned under photo
-  const validY = photoY + photoH + 10;
+  // Valid Until — 15px below photo bottom, left-aligned under photo
+  const validY = photoY + photoH + 15;
   ctx.font = 'bold 28px "Segoe UI", Arial, sans-serif';
   ctx.fillStyle = primary;
   ctx.textAlign = 'left';
