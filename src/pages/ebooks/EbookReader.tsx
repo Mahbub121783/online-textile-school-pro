@@ -351,12 +351,12 @@ const EbookReader = () => {
 
         const textContent = await page.getTextContent();
 
-        const textLayer = pdfjsLib.renderTextLayer({
+        const textLayerInstance = new pdfjsLib.TextLayer({
           textContentSource: textContent,
           container: textLayerDiv,
           viewport: scaledViewport,
         });
-        await textLayer.promise;
+        await textLayerInstance.render();
 
         // Re-apply highlights for this page
         applyHighlightsToTextLayer(pageNum, textLayerDiv);
