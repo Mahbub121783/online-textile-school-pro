@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useParams, useNavigate, Navigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -10,8 +10,9 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Textarea } from '@/components/ui/textarea';
+import SecureMediaPlayer from '@/components/media/SecureMediaPlayer';
 import {
-  ChevronDown, ChevronLeft, ChevronRight, CheckCircle2, Circle, Play,
+  ChevronDown, ChevronLeft, ChevronRight, CheckCircle2, Circle,
   FileText, Download, Menu, X, BookOpen, ClipboardList, Monitor, ExternalLink, Lock, Clock, MessageSquare, Send
 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
