@@ -106,7 +106,19 @@ const TermsPage = lazy(() => import("./pages/static/TermsPage"));
 const BecomeInstructor = lazy(() => import("./pages/static/BecomeInstructor"));
 const PublicRegistration = lazy(() => import("./pages/registration/PublicRegistration"));
 const AdminRegistrations = lazy(() => import("./pages/admin/AdminRegistrations"));
-const queryClient = new QueryClient();
+
+// Optimized QueryClient with aggressive caching
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 5 * 60 * 1000,      // 5 min — data stays fresh, no refetch
+      gcTime: 30 * 60 * 1000,         // 30 min garbage collection
+      refetchOnWindowFocus: false,     // Don't refetch on tab switch
+      retry: 1,                        // Only 1 retry on failure
+      refetchOnMount: false,           // Don't refetch if data exists
+    },
+  },
+});
 
 const PageLoader = () => (
   <div className="min-h-screen flex items-center justify-center">
@@ -118,7 +130,7 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <ThemeProvider>
       <AuthProvider>
-        <TooltipProvider>
+        <TooltipProvider delayDuration={300}>
           <Toaster />
           <Sonner />
           <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
@@ -188,7 +200,6 @@ const App = () => (
                   <Route path="cms/:tab" element={<AdminCourses />} />
                   <Route path="cms/courses/new" element={<CourseBuilder />} />
                   <Route path="cms/courses/:courseId" element={<CourseBuilder />} />
-                  {/* Certificates now lives inside Courses tab, remove standalone route */}
                   <Route path="setup" element={<AdminSetup />} />
                   <Route path="setup/:tab" element={<AdminSetup />} />
                   <Route path="payment" element={<AdminPayment />} />
