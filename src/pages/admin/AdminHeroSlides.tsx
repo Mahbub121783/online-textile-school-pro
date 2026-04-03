@@ -311,6 +311,9 @@ const AdminHeroSlides = () => {
                   <p className="font-medium text-sm truncate">{s.title}</p>
                   <p className="text-xs text-muted-foreground truncate">{s.subtitle}</p>
                 </div>
+                {s.countdown_target && new Date(s.countdown_target) > new Date() && (
+                  <SlideCountdownBadge target={s.countdown_target} />
+                )}
                 <Badge variant={s.is_active ? 'default' : 'outline'} className="text-xs">{s.is_active ? 'Active' : 'Inactive'}</Badge>
                 <span className="text-xs text-muted-foreground">#{idx + 1}</span>
                 <div className="flex gap-0.5">
