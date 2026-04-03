@@ -1,1 +1,36 @@
+name: Deploy Website
+on:
+  push:
+    branches:
+      - main # Tomar branch name jodi onno kichu hoy (e.g. master), seta ekhane likhbe
 
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Install Dependencies
+        run: bun install
+
+      - name: Build Project
+        run: bun run build
+
+      - name: FTP Deploy
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.4
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          # Lovable/Vite er build folder holo dist
+          local-dir: ./dist/ 
+          # Tomar specific domain folder path
+          server-dir: ./onlinetextileschool.com/
+          # Optional: Purono file delete kore fresh deploy korte chaile nicher line-ti use koro
+          # dangerous-clean-slate: false
