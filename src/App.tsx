@@ -104,7 +104,8 @@ const ContactPage = lazy(() => import("./pages/static/ContactPage"));
 const PrivacyPage = lazy(() => import("./pages/static/PrivacyPage"));
 const TermsPage = lazy(() => import("./pages/static/TermsPage"));
 const BecomeInstructor = lazy(() => import("./pages/static/BecomeInstructor"));
-
+const PublicRegistration = lazy(() => import("./pages/registration/PublicRegistration"));
+const AdminRegistrations = lazy(() => import("./pages/admin/AdminRegistrations"));
 const queryClient = new QueryClient();
 
 const PageLoader = () => (
