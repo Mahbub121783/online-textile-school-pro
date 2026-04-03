@@ -150,9 +150,9 @@ export default function PublicRegistration() {
   const handlePhotoUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const url = await uploadFile(file);
-    if (url) setFormData(prev => ({ ...prev, photo_url: url }));
-  }, [uploadFile]);
+    const result = await upload(file);
+    if (result?.url) setFormData(prev => ({ ...prev, photo_url: result.url }));
+  }, [upload]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
