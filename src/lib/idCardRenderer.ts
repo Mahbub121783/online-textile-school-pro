@@ -225,8 +225,8 @@ export async function renderIdCard(
   // FOOTER — Validity + Signature (between body and barcode bar)
   // ══════════════════════════════════════════
 
-  // Valid Until — 10px below photo bottom, left-aligned under photo
-  const validY = photoY + photoH + 10;
+  // Valid Until — 15px below photo bottom, left-aligned under photo
+  const validY = photoY + photoH + 15;
   ctx.font = 'bold 28px "Segoe UI", Arial, sans-serif';
   ctx.fillStyle = primary;
   ctx.textAlign = 'left';
