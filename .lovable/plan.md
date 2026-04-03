@@ -1,93 +1,77 @@
 
 
-## Plan: Advanced Ebook Reader — PDF Page Labels, Text Layer, Highlights, Notes & Security
+## Plan: Advanced Hero Slides Management + Dynamic Frontend Hero Section
 
-### Problems from Screenshot
+### Current Problems
 
-| Issue | Detail |
-|-------|--------|
-| **Page mismatch** | PDF content shows "3 \| Page" but reader shows page 7 — PDF has cover/TOC pages before content numbering starts. Reader uses raw page index, not PDF's internal page labels |
-| **No text interaction** | Canvas-only rendering — no text selection, no highlighting, no word-level notes |
-| **Security gaps** | No screenshot protection (CSS), no visibility API pause, no watermark overlay |
-| **Notes are page-level only** | Cannot attach notes to specific text/words |
+1. **Frontend is hardcoded** — `HeroSlider.tsx` uses a static `SLIDES` array, completely ignoring the `hero_slides` database table
+2. **No media picker** — Admin form uses a raw "Image URL" text input instead of the existing `MediaPickerModal`
+3. **No drag-and-drop reorder** — Sort order is manual number input
+4. **CTA links are plain text** — No searchable link picker for internal pages/courses
+5. **No live preview** — Admin cannot see how the slide looks before saving
+6. **Missing advanced fields** — No text alignment, overlay opacity, gradient direction, or text color customization
+7. **No duplicate slide** — Common workflow missing
 
 ### Implementation
 
-**1. Use PDF page labels instead of raw index**
-- PDF.js supports `pdf.getPageLabels()` which returns the document's own page numbering (e.g., "i", "ii", "1", "2", "3")
-- Display the PDF's label in the bottom bar while keeping internal index for navigation
-- Show both: "Page 3 (7/54)" — label first, then position
+**1. Database migration — add advanced styling columns**
 
-**2. Add text layer for highlighting and selection**
-- Render a transparent `textLayer` div on top of the canvas using `pdfjsLib.renderTextLayer()`
-- This enables text selection (controlled), highlighting, and word-level interaction
-- Import `pdfjs-dist/web/pdf_viewer.css` for proper text layer styling
-- Text layer is invisible but selectable — text appears to be on the canvas but is actually in DOM elements
+Add columns to `hero_slides`:
+- `gradient_from` (text, default `'primary'`) — start gradient color
+- `gradient_to` (text, default `'primary-dark'`) — end gradient color  
+- `gradient_direction` (text, default `'br'`) — gradient angle (br, r, b, bl, etc.)
+- `overlay_opacity` (integer, default `5`) — pattern overlay opacity 0-20%
+- `text_alignment` (text, default `'left'`) — left/center/right
+- `title_color` (text, nullable) — custom title color override
+- `subtitle_color` (text, nullable) — custom subtitle color override
 
-**3. Text highlighting system**
-- When user selects text on the text layer, show a floating toolbar: "Highlight" (yellow/green/blue/pink) + "Add Note"
-- Store highlights as `{ id, page, startOffset, endOffset, text, color, note?, createdAt }`
-- Save highlights in `ebook_reading_progress.notes` JSON field (reuse existing column, extend schema)
-- Re-apply highlights on page render by matching text offsets
-- Highlights persist across sessions
+**2. Admin Hero Slides page rewrite (`AdminHeroSlides.tsx`)**
 
-**4. Word-based note system**
-- Extend the highlight flow: after highlighting, user can attach a note to that highlight
-- Notes panel shows all highlights+notes grouped by page
-- Click a note → jumps to that page and scrolls to the highlight
-- Each highlight can have an inline note icon that expands on click
+- **Media picker integration**: Replace raw URL input with a button that opens `MediaPickerModal` for hero banner image selection. Label it "Hero Banner Image"
+- **Searchable CTA link picker**: Add a combo-box for CTA Link and Secondary Link that searches internal routes (`/courses`, `/ebooks`, `/auth/register`, etc.) plus all published courses and pages from the database. Free-text entry for external URLs
+- **Drag-and-drop reorder**: Use HTML5 drag-and-drop on the slide cards to reorder. Auto-save sort_order on drop
+- **Live preview panel**: Show a mini hero preview (16:9 aspect ratio) in the edit dialog that updates in real-time as admin changes title, subtitle, image, gradient, alignment
+- **Duplicate slide button**: Clone icon on each card
+- **Gradient customizer**: Dropdown for direction + color pickers for from/to colors (preset palette of theme colors)
+- **Text alignment toggle**: Left / Center / Right buttons
+- **Overlay opacity slider**: 0-20% range slider
+- **Countdown target field**: Date-time picker (column already exists in DB)
+- **Bulk actions**: Select multiple slides to activate/deactivate/delete
 
-**5. Enhanced DRM / security**
-- **Screenshot deterrence**: Add a semi-transparent watermark overlay with user email/ID rendered diagonally across the page (very light, ~3% opacity) — makes screenshots traceable
-- **Visibility API**: Pause/blur content when tab loses focus (`document.visibilitychange`)
-- **CSS screenshot blocking**: Apply `-webkit-user-select: none` and `pointer-events: none` on canvas; use CSS `filter` tricks
-- **Print CSS**: Already blocks printing — keep `@media print { display: none }`
-- **Block Ctrl+Shift+S, PrtScn detection**: Expand key blocker to cover more screenshot shortcuts
-- **Watermark on canvas**: Render user email diagonally across each page at 3% opacity directly on the canvas — survives any screenshot attempt
-- **Block drag**: Prevent image drag from canvas
+**3. Frontend HeroSlider rewrite (`HeroSlider.tsx`)**
 
-**6. Disable copy but allow controlled highlight**
-- Text layer allows highlighting but blocks clipboard copy (`oncopy` preventDefault)
-- Selection is visual only — for note-taking purposes, not extraction
-- Ctrl+C / Cmd+C blocked on the reader
+- **Fetch from database**: Replace static `SLIDES` array with a `useQuery` call to `hero_slides` table, filtered by `is_active = true`, ordered by `sort_order`
+- **Fallback**: If no DB slides exist, show the current hardcoded slides as defaults
+- **Dynamic rendering**: Apply `image_url` as background image (with gradient overlay), use DB `cta_text`/`cta_link`/`secondary_cta_text`/`secondary_cta_link`
+- **Apply styling fields**: gradient direction, text alignment, overlay opacity, custom colors
+- **Background image support**: When `image_url` is set, render it as `background-image` with the gradient as an overlay on top
+- **Countdown timer**: If `countdown_target` is set and in the future, show a live countdown badge on the slide
+- **Smooth transitions**: CSS transitions between slides with fade + slight slide animation
+- **Touch swipe**: Add touch event handlers for mobile swipe navigation
 
 ### Technical Details
 
-**Page labels**: `pdf.getPageLabels()` returns `string[]` or `null`. If available, map index to label. Display logic:
-```
-Label "3" at index 6 → "Page 3 (7 of 54)"
-```
-
-**Text layer rendering**: After canvas render, call:
+**Searchable link picker** — Fetch routes from a static list + query `courses` and `pages` tables:
 ```typescript
-const textContent = await page.getTextContent();
-pdfjsLib.renderTextLayer({
-  textContentSource: textContent,
-  container: textLayerDiv,
-  viewport: scaledViewport,
-});
+const internalRoutes = [
+  { label: 'Courses', value: '/courses' },
+  { label: 'Ebooks', value: '/ebooks' },
+  { label: 'Register', value: '/auth/register' },
+  // ...
+];
+// + dynamic: courses.map(c => ({ label: c.title, value: `/courses/${c.id}` }))
+// + dynamic: pages.map(p => ({ label: p.title, value: `/${p.slug}` }))
 ```
 
-**Highlight storage** — extend the existing `notes` JSON in `ebook_reading_progress`:
-```typescript
-interface Highlight {
-  id: string;
-  page: number;
-  text: string;
-  color: 'yellow' | 'green' | 'blue' | 'pink';
-  ranges: { startOffset: number; endOffset: number; startContainer: number; endContainer: number }[];
-  note?: string;
-  createdAt: string;
-}
-```
-
-**Watermark**: After `page.render()`, draw user email diagonally on canvas at 3% opacity using `ctx.globalAlpha = 0.03`.
+**Live preview** in edit dialog — a scaled-down 16:9 div rendering the same gradient/image/text as the frontend hero.
 
 ### File Summary
 
 | File | Action |
 |------|--------|
-| `src/pages/ebooks/EbookReader.tsx` | Major rewrite — add text layer, page labels, highlight system, word notes, enhanced DRM, watermark |
+| Migration | Add `gradient_from`, `gradient_to`, `gradient_direction`, `overlay_opacity`, `text_alignment`, `title_color`, `subtitle_color` to `hero_slides` |
+| `src/pages/admin/AdminHeroSlides.tsx` | Full rewrite — media picker, link search, drag reorder, live preview, gradient controls, bulk actions |
+| `src/components/features/home/HeroSlider.tsx` | Rewrite — fetch from DB, dynamic styles, background images, countdown, touch swipe |
 
-Single file change. No migration needed — highlights stored in existing `notes` JSON column.
+3 file changes + 1 migration.
 
