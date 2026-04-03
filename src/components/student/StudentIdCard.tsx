@@ -133,6 +133,8 @@ export default function StudentIdCard({ userId }: Props) {
 
   const isExpired = new Date(idCard.valid_until) < new Date();
   const isActive = idCard.is_active && !isExpired;
+  const isDownloadBlocked = !!(idCard as any).download_blocked;
+  const canDownload = isComplete && !isDownloadBlocked;
 
   return (
     <Card className="overflow-hidden border-0 shadow-lg bg-gradient-to-br from-background to-muted/30">
@@ -151,7 +153,7 @@ export default function StudentIdCard({ userId }: Props) {
             </Badge>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button size="sm" variant="outline" disabled={downloading} className="gap-1">
+                <Button size="sm" variant="outline" disabled={downloading || !canDownload} className="gap-1">
                   {downloading ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
                   Download
                   <ChevronDown className="h-3 w-3" />
