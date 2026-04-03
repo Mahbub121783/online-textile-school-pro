@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useParams, useNavigate, Navigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -10,8 +10,9 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Textarea } from '@/components/ui/textarea';
+import SecureMediaPlayer from '@/components/media/SecureMediaPlayer';
 import {
-  ChevronDown, ChevronLeft, ChevronRight, CheckCircle2, Circle, Play,
+  ChevronDown, ChevronLeft, ChevronRight, CheckCircle2, Circle,
   FileText, Download, Menu, X, BookOpen, ClipboardList, Monitor, ExternalLink, Lock, Clock, MessageSquare, Send
 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
@@ -169,19 +170,22 @@ const LessonPlayer = () => {
     },
   });
 
-  const getEmbedUrl = (lesson: any) => {
-    if (!lesson?.video_url) return null;
-    const url = lesson.video_url;
-    if (lesson.video_platform === 'youtube' || url.includes('youtube') || url.includes('youtu.be')) {
-      const match = url.match(/(?:v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
-      return match ? `https://www.youtube.com/embed/${match[1]}` : url;
+  // Save video position periodically
+  const handleVideoProgress = useCallback((seconds: number) => {
+    if (!lessonId || !user?.id || !course?.id) return;
+    // Debounced save — only every 15 seconds
+    if (Math.floor(seconds) % 15 === 0 && seconds > 0) {
+      supabase.from('lesson_progress').upsert({
+        lesson_id: lessonId,
+        user_id: user.id,
+        last_position_seconds: Math.floor(seconds),
+      }, { onConflict: 'lesson_id,user_id' }).then(() => {});
     }
-    if (lesson.video_platform === 'vimeo' || url.includes('vimeo')) {
-      const match = url.match(/vimeo\.com\/(\d+)/);
-      return match ? `https://player.vimeo.com/video/${match[1]}` : url;
-    }
-    return url;
-  };
+  }, [lessonId, user?.id, course?.id]);
+
+  // Get saved position
+  const currentProgress = progressData.find((p: any) => p.lesson_id === lessonId);
+  const savedPosition = currentProgress?.last_position_seconds || 0;
 
   const handleMarkComplete = () => {
     if (!lessonId || !course?.id) return;
@@ -201,7 +205,7 @@ const LessonPlayer = () => {
   if (authLoading) return <div className="min-h-screen flex items-center justify-center animate-pulse">Loading...</div>;
   if (!user) return <Navigate to={`/auth/login?redirect=/learn/${courseSlug}/${lessonId}`} replace />;
 
-  const embedUrl = getEmbedUrl(currentLesson);
+  
 
   const hasQuizzes = linkedQuizzes.length > 0;
   const hasAssignments = linkedAssignments.length > 0;
@@ -236,25 +240,15 @@ const LessonPlayer = () => {
             </div>
           ) : (
             <>
-              {/* Video with anti-download overlay */}
-              <div className="aspect-video bg-black w-full relative" onContextMenu={e => e.preventDefault()}>
-                {embedUrl ? (
-                  <>
-                    <iframe
-                      src={embedUrl}
-                      className="w-full h-full"
-                      allowFullScreen
-                      allow="autoplay; encrypted-media"
-                      sandbox="allow-scripts allow-same-origin allow-presentation"
-                    />
-                    <div className="absolute inset-0 pointer-events-none" />
-                  </>
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center text-muted-foreground">
-                    <Play className="h-16 w-16 opacity-30" />
-                  </div>
-                )}
-              </div>
+              {/* Advanced Secure Media Player */}
+              <SecureMediaPlayer
+                videoUrl={currentLesson?.video_url}
+                videoPlatform={currentLesson?.video_platform}
+                title={currentLesson?.title}
+                onProgress={handleVideoProgress}
+                startPosition={savedPosition}
+                watermark={user?.email}
+              />
 
               {/* Lesson info & tabs */}
               <div className="p-4 md:p-6 space-y-4">
