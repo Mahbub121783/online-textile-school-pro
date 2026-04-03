@@ -19,6 +19,29 @@ import { toast } from 'sonner';
 import { Plus, Pencil, Trash2, Image, Copy, GripVertical, Eye, AlignLeft, AlignCenter, AlignRight, Check, ChevronsUpDown, Calendar } from 'lucide-react';
 import MediaPickerModal from '@/components/shared/MediaPickerModal';
 
+// Live countdown for admin previews
+const useAdminCountdown = (target: string | null | undefined) => {
+  const [text, setText] = useState('');
+  useEffect(() => {
+    if (!target) { setText(''); return; }
+    const end = new Date(target).getTime();
+    if (isNaN(end)) { setText(''); return; }
+    const tick = () => {
+      const diff = end - Date.now();
+      if (diff <= 0) { setText('Expired'); return; }
+      const d = Math.floor(diff / 86400000);
+      const h = Math.floor((diff % 86400000) / 3600000);
+      const m = Math.floor((diff % 3600000) / 60000);
+      const s = Math.floor((diff % 60000) / 1000);
+      setText(d > 0 ? `${d}d ${h}h ${m}m ${s}s` : `${h}h ${m}m ${s}s`);
+    };
+    tick();
+    const iv = setInterval(tick, 1000);
+    return () => clearInterval(iv);
+  }, [target]);
+  return text;
+};
+
 const GRADIENT_DIRECTIONS = [
   { value: 'br', label: '↘ Bottom Right' },
   { value: 'r', label: '→ Right' },
