@@ -314,9 +314,8 @@ const EbookReader = () => {
       const containerHeight = container?.clientHeight || window.innerHeight;
 
       const viewport = page.getViewport({ scale: 1 });
-      const scaleW = (containerWidth - 20) / viewport.width;
-      const scaleH = (containerHeight - 20) / viewport.height;
-      const scale = Math.min(scaleW, scaleH) * (fontSize / 16);
+      // Fit to container width for full readable view — allow vertical scroll
+      const scale = ((containerWidth - 16) / viewport.width) * (fontSize / 16);
 
       const scaledViewport = page.getViewport({ scale });
       canvas.width = scaledViewport.width;
@@ -797,7 +796,7 @@ const EbookReader = () => {
       <div className={`flex-1 flex overflow-hidden reader-content ${isBlurred ? 'reader-blurred' : ''}`}>
         <div
           ref={containerRef}
-          className="flex-1 flex items-center justify-center overflow-auto p-2 sm:p-4 relative"
+          className="flex-1 flex justify-center overflow-auto p-2 sm:p-4 relative"
           onClick={(e) => {
             // Only toggle controls if click is not on text layer
             if (!(e.target as HTMLElement).closest('.text-layer-container') && !selectionToolbar) {
