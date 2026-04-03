@@ -125,20 +125,24 @@ export async function renderIdCard(
   ctx.fillRect(0, hH, CARD_W, 4);
 
   // ══════════════════════════════════════════
-  // BACKGROUND — diagonal shapes at 3% opacity
+  // BACKGROUND — subtle geometric pattern at 1.5% opacity
   // ══════════════════════════════════════════
   ctx.save();
-  ctx.globalAlpha = 0.03;
-  ctx.fillStyle = primary;
-  // Draw diagonal stripes
-  for (let i = -CARD_H; i < CARD_W + CARD_H; i += 80) {
-    ctx.beginPath();
-    ctx.moveTo(i, 0);
-    ctx.lineTo(i + 40, 0);
-    ctx.lineTo(i + 40 + CARD_H, CARD_H);
-    ctx.lineTo(i + CARD_H, CARD_H);
-    ctx.closePath();
-    ctx.fill();
+  ctx.globalAlpha = 0.015;
+  ctx.strokeStyle = primary;
+  ctx.lineWidth = 1;
+  // Concentric diamond grid pattern
+  const step = 60;
+  for (let cx = -step; cx < CARD_W + step; cx += step) {
+    for (let cy = hH + 4; cy < CARD_H; cy += step) {
+      ctx.beginPath();
+      ctx.moveTo(cx, cy - step / 2);
+      ctx.lineTo(cx + step / 2, cy);
+      ctx.lineTo(cx, cy + step / 2);
+      ctx.lineTo(cx - step / 2, cy);
+      ctx.closePath();
+      ctx.stroke();
+    }
   }
   ctx.restore();
 
