@@ -43,6 +43,19 @@ const useAdminCountdown = (target: string | null | undefined) => {
 };
 
 const GRADIENT_DIRECTIONS = [
+
+// Small badge showing live countdown on slide cards
+const SlideCountdownBadge = ({ target }: { target: string }) => {
+  const text = useAdminCountdown(target);
+  if (!text) return null;
+  return (
+    <Badge variant="destructive" className="text-[10px] animate-pulse shrink-0">
+      ⏰ {text}
+    </Badge>
+  );
+};
+
+const REAL_GRADIENT_DIRECTIONS = [
   { value: 'br', label: '↘ Bottom Right' },
   { value: 'r', label: '→ Right' },
   { value: 'b', label: '↓ Bottom' },
