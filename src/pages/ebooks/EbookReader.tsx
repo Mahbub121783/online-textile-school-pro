@@ -662,7 +662,7 @@ const EbookReader = () => {
 
   if (loadingState === 'error') {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-background gap-4 px-4">
+      <div className="h-screen flex flex-col items-center justify-center bg-background gap-4 px-4">
         <BookOpen className="h-16 w-16 text-muted-foreground" />
         <h2 className="font-heading text-xl font-bold text-center">Unable to load eBook</h2>
         <p className="text-muted-foreground text-sm max-w-md text-center">{errorMsg}</p>
