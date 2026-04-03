@@ -25,6 +25,7 @@ interface Props {
 
 export default function StudentIdCard({ userId }: Props) {
   const { user, profile } = useAuth();
+  const { isComplete, incomplete, percentage } = useProfileCompleteness(profile);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const cardWrapperRef = useRef<HTMLDivElement>(null);
   const [downloading, setDownloading] = useState(false);
