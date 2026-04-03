@@ -1,55 +1,87 @@
 
+## Plan: Fix Ebook Uploads So They Truly Save to Cloudflare R2
 
-## Plan: Fix Ebook File Storage Routing & Reader Access
+### What I found
+- The ebook form is already starting the upload on **Cloudflare R2**, not Cloudinary.
+- In the preview snapshot, `AdminEbooks` called `r2-presign` and got back an R2 URL like `...r2.dev/...pdf`.
+- The **Cloudinary URL you still see in the form is the old saved ebook URL**, not the new upload result.
+- The real problem is that the new R2 upload is likely **failing before completion/save**:
+  - files over **4.5MB** use the browser-to-R2 presigned upload path
+  - that path depends on **R2 bucket CORS**
+  - `AdminEbooks.tsx` currently has `catch {}` so upload failures are effectively hidden
+- Database check shows there is still **at least 1 ebook record saved with a Cloudinary raw PDF URL**, so old ebooks are still legacy Cloudinary entries.
 
-### Problems Identified
+### Root cause
+This is no longer mainly a routing bug.  
+It is now a **silent failed R2 upload + old Cloudinary URL remains in the record** bug.
 
-1. **Upload routing is correct in code** — `useFileUpload` already routes PDFs/docs to R2 and images to Cloudinary. The hook logic is sound.
+### Implementation plan
 
-2. **Ebook reader fails with 502** — The `ebook-secure-access` edge function fetches `ebook.file_url` directly via `fetch()`. If the R2 public domain URL is misconfigured, unreachable from Deno edge functions, or if old ebooks have Cloudinary URLs that expired/changed, the fetch fails silently with "Failed to fetch ebook file".
+**1. Fix Admin Ebooks upload flow**
+- Remove the silent `catch {}`
+- Show clear states:
+  - Uploading to Cloudflare R2
+  - Upload failed
+  - Uploaded to R2
+  - Saved
+- Replace the raw URL preview with a visible storage badge: `R2` or `Cloudinary`
+- Disable `Create/Update` while ebook upload is still in progress
+- Show the real error message if R2 upload fails
 
-3. **No fallback or diagnostics** — The edge function doesn't log the URL it's trying to fetch, doesn't retry, and doesn't distinguish between R2 vs Cloudinary URLs.
+**2. Enforce Cloudflare-only for ebook files**
+- Keep cover and gallery images on Cloudinary
+- Force ebook `file_url` uploads to R2 only
+- Add save-time validation in `AdminEbooks.tsx`:
+  - if `file_url` is Cloudinary, block save
+  - show “Ebook files must be stored on Cloudflare R2”
 
-4. **Possible old data** — Ebooks uploaded before R2 was configured may have Cloudinary URLs for their `file_url`, which Cloudinary may reject for non-image files (PDFs uploaded via the auto/upload endpoint have limited access).
+**3. Make large ebook uploads reliable**
+- Add a dedicated **reliability-first ebook upload path**
+- Best fix: support **chunked/proxied R2 upload** for large PDF/DOCX/EPUB files so ebook uploads do not depend on bucket CORS
+- Keep the current presigned flow only as fallback or secondary path
+- This is the most important hardening because ebook files are commonly larger than the proxy threshold
 
-### Fixes
+**4. Clean up legacy Cloudinary ebooks**
+- Detect old ebook records whose `file_url` points to Cloudinary
+- Mark them in admin UI as `Legacy` / `Needs R2 migration`
+- Add a fast replace workflow so admin can re-upload and overwrite the old URL with R2
+- This will fix the ebooks students currently cannot open
 
-**1. Improve `ebook-secure-access` edge function** — Add robust fetching:
-- Log the `file_url` being fetched for debugging
-- If the URL is an R2 URL and public fetch fails, fall back to fetching via S3 SDK directly (server-side, no CORS issues)
-- Add proper error details in the 502 response (URL domain, status code from upstream)
-- Handle both Cloudinary and R2 URLs gracefully
+**5. Improve reader-side diagnostics**
+- Keep `ebook-secure-access` tolerant for both legacy and R2 URLs during transition
+- Return clearer errors for:
+  - missing file
+  - legacy Cloudinary raw URL
+  - failed R2 fetch
+- This makes support/debugging much easier while old records are being repaired
 
-**2. Add S3 direct-fetch fallback in the edge function** — When `file_url` points to R2 but the public domain fetch fails, use the S3 SDK with credentials from `cloudflare_r2_accounts` to fetch the file directly via `GetObjectCommand`. This bypasses any public domain or CORS issues.
+### Files to change
+- `src/pages/admin/AdminEbooks.tsx`
+  - remove silent failure
+  - show upload status/source
+  - block Cloudinary ebook URLs on save
+  - add legacy badge/filter
+- `src/hooks/useFileUpload.ts`
+  - add a dedicated robust ebook upload mode
+  - return richer status/error metadata
+- `supabase/functions/r2-presign/index.ts`
+  - add reliable large-file ebook upload support
+- `supabase/functions/ebook-secure-access/index.ts`
+  - improve legacy/R2 diagnostics and transition support
 
-**3. Enforce R2 for ebook file uploads in `AdminEbooks.tsx`** — Add an explicit check: when uploading `file_url` (not cover), force R2 routing regardless of file type. Currently the hook routes correctly, but add a safety comment and potentially a dedicated `uploadToR2` method exposed from the hook.
+### Expected result
+- Images continue uploading to **Cloudinary**
+- Ebook files upload to **Cloudflare R2 only**
+- Admin can immediately see whether the ebook is really stored on R2
+- Large ebook upload failures are no longer silent
+- Old Cloudinary ebook records can be found and replaced safely
 
-**4. Add `forceR2` option to `useFileUpload`** — Allow callers to bypass the image/heavy detection and force R2 for specific uploads (ebook files should always go to R2).
-
-### Technical Details
-
-**Edge function changes (`supabase/functions/ebook-secure-access/index.ts`):**
-- Import S3Client and GetObjectCommand (same pattern as r2-presign)
-- After initial `fetch(ebook.file_url)` fails, check if URL contains an R2 domain pattern
-- Query `cloudflare_r2_accounts` to find the matching account
-- Extract the file key from the URL and use `GetObjectCommand` to stream the file directly
-- Log the URL and failure reason for debugging
-
-**Hook changes (`src/hooks/useFileUpload.ts`):**
-- Add `forceR2?: boolean` option to the `upload` function
-- When `forceR2` is true, skip the image check and always route to R2
-- Export this option in the interface
-
-**AdminEbooks changes (`src/pages/admin/AdminEbooks.tsx`):**
-- When uploading `file_url`, pass `{ forceR2: true }` to ensure ebook files always go to R2
-
-### File Summary
-
+### File summary
 | File | Action |
 |------|--------|
-| `supabase/functions/ebook-secure-access/index.ts` | Add S3 direct-fetch fallback, better error logging |
-| `src/hooks/useFileUpload.ts` | Add `forceR2` option to upload function |
-| `src/pages/admin/AdminEbooks.tsx` | Use `forceR2: true` for ebook file uploads |
+| `src/pages/admin/AdminEbooks.tsx` | Fix silent failures, show source/status, enforce R2-only save |
+| `src/hooks/useFileUpload.ts` | Add robust ebook upload mode |
+| `supabase/functions/r2-presign/index.ts` | Support reliable large ebook uploads |
+| `supabase/functions/ebook-secure-access/index.ts` | Improve legacy-file diagnostics |
 
-3 file changes, no migration needed.
-
+No migration is strictly required unless you want a dedicated `storage_provider` column for auditing.
