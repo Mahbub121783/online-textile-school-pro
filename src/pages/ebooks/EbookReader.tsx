@@ -14,7 +14,11 @@ import {
 } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist';
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+// Use local worker bundled by Vite — no CDN dependency
+pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+  'pdfjs-dist/build/pdf.worker.min.mjs',
+  import.meta.url
+).toString();
 
 type ReadingMode = 'light' | 'dark' | 'sepia';
 type ViewMode = 'page' | 'scroll';
@@ -40,6 +44,7 @@ const EbookReader = () => {
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
 
   const [loadingState, setLoadingState] = useState<'auth' | 'loading' | 'ready' | 'error'>('auth');
+  const [loadingProgress, setLoadingProgress] = useState(0);
   const [errorMsg, setErrorMsg] = useState('');
   const [ebookTitle, setEbookTitle] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
@@ -57,6 +62,7 @@ const EbookReader = () => {
   const [rendering, setRendering] = useState(false);
   const [pageTransition, setPageTransition] = useState(false);
   const [tocItems, setTocItems] = useState<{ title: string; pageNum: number }[]>([]);
+  const [fileFormat, setFileFormat] = useState<string>('pdf');
 
   // DRM: block right-click, printing, text selection
   useEffect(() => {
@@ -74,7 +80,7 @@ const EbookReader = () => {
     };
   }, []);
 
-  // Load PDF via edge function streaming
+  // Load PDF via GET-based streaming with reusable token
   useEffect(() => {
     if (authLoading) return;
     if (!user) {
@@ -82,11 +88,14 @@ const EbookReader = () => {
       return;
     }
     setLoadingState('loading');
+    setLoadingProgress(5);
     loadPdf();
   }, [user, authLoading, ebookId]);
 
   const loadPdf = async () => {
     try {
+      // Step 1: Generate a reusable access token
+      setLoadingProgress(10);
       const { data: tokenData, error: tokenError } = await supabase.functions.invoke(
         'ebook-secure-access',
         { body: { action: 'generate_token', ebook_id: ebookId } }
@@ -95,44 +104,59 @@ const EbookReader = () => {
         throw new Error(tokenData?.error || tokenError?.message || 'Token generation failed');
       }
 
+      // Check format from token response
+      const format = (tokenData.file_format || 'pdf').toLowerCase();
+      setFileFormat(format);
+
+      if (format !== 'pdf') {
+        setLoadingState('error');
+        setErrorMsg(`This ebook is in "${format.toUpperCase()}" format. Currently only PDF ebooks can be read in the browser. Please download the file instead.`);
+        return;
+      }
+
+      setEbookTitle(tokenData.title || 'eBook');
+      setLoadingProgress(20);
+
+      // Step 2: Use GET-based URL for PDF.js range loading
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
       const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
       const session = (await supabase.auth.getSession()).data.session;
 
-      const response = await fetch(`${supabaseUrl}/functions/v1/ebook-secure-access`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
+      const streamUrl = `${supabaseUrl}/functions/v1/ebook-secure-access?action=stream&ebook_id=${ebookId}&token=${tokenData.token}`;
+
+      setLoadingProgress(30);
+
+      // PDF.js opens the URL directly with auth headers, enabling range requests
+      const loadingTask = pdfjsLib.getDocument({
+        url: streamUrl,
+        httpHeaders: {
           'Authorization': `Bearer ${session?.access_token}`,
           'apikey': supabaseKey,
         },
-        body: JSON.stringify({ action: 'stream_file', ebook_id: ebookId, token: tokenData.token }),
+        rangeChunkSize: 65536, // 64KB chunks for fast first-page render
+        disableAutoFetch: false,
+        disableStream: false,
       });
 
-      if (!response.ok) {
-        const errJson = await response.json().catch(() => ({}));
-        throw new Error(errJson.error || 'Failed to load ebook');
-      }
+      loadingTask.onProgress = (progress: { loaded: number; total: number }) => {
+        if (progress.total > 0) {
+          const pct = Math.min(90, 30 + Math.round((progress.loaded / progress.total) * 60));
+          setLoadingProgress(pct);
+        }
+      };
 
-      const contentType = response.headers.get('Content-Type') || '';
-      if (contentType.includes('application/json')) {
-        const errJson = await response.json();
-        throw new Error(errJson.error || 'Unexpected response');
-      }
-
-      const arrayBuffer = await response.arrayBuffer();
-      const title = decodeURIComponent(response.headers.get('X-Ebook-Title') || 'eBook');
-      setEbookTitle(title);
-      await initPdf(new Uint8Array(arrayBuffer));
+      const pdf = await loadingTask.promise;
+      setLoadingProgress(95);
+      await initPdf(pdf);
     } catch (err: any) {
+      console.error('EbookReader load error:', err);
       setLoadingState('error');
       setErrorMsg(err.message || 'Failed to load ebook');
     }
   };
 
-  const initPdf = async (data: Uint8Array) => {
+  const initPdf = async (pdf: any) => {
     try {
-      const pdf = await pdfjsLib.getDocument({ data }).promise;
       pdfDocRef.current = pdf;
       setTotalPages(pdf.numPages);
 
@@ -184,6 +208,7 @@ const EbookReader = () => {
         });
       }
 
+      setLoadingProgress(100);
       setLoadingState('ready');
       renderPage(startPage, pdf);
     } catch (err: any) {
@@ -367,9 +392,8 @@ const EbookReader = () => {
         <Loader2 className="h-10 w-10 animate-spin text-primary" />
         <p className="text-muted-foreground font-medium animate-pulse text-center">Loading your eBook securely...</p>
         <div className="w-48">
-          <div className="h-1.5 bg-muted rounded-full overflow-hidden">
-            <div className="h-full bg-primary rounded-full animate-pulse w-1/3" />
-          </div>
+          <Progress value={loadingProgress} className="h-2" />
+          <p className="text-xs text-muted-foreground text-center mt-1">{loadingProgress}%</p>
         </div>
       </div>
     );
