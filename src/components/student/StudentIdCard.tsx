@@ -172,6 +172,24 @@ export default function StudentIdCard({ userId }: Props) {
         </div>
       </CardHeader>
       <CardContent>
+        {!isComplete && !userId && (
+          <Alert variant="destructive" className="mb-4">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>
+              <span className="font-medium">Profile {percentage}% complete.</span> Complete your profile to download.
+              Missing: {incomplete.map(f => f.label).join(', ')}.{' '}
+              <Link to="/dashboard/settings" className="underline font-medium">Complete Profile →</Link>
+            </AlertDescription>
+          </Alert>
+        )}
+        {isDownloadBlocked && (
+          <Alert variant="destructive" className="mb-4">
+            <ShieldX className="h-4 w-4" />
+            <AlertDescription>
+              <span className="font-medium">Download blocked by administrator.</span> Contact support for assistance.
+            </AlertDescription>
+          </Alert>
+        )}
         <div className="flex justify-center">
           <div
             ref={cardWrapperRef}
