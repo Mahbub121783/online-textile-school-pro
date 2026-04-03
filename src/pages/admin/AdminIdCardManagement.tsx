@@ -44,7 +44,7 @@ export default function AdminIdCardManagement() {
       const { data: existingIds } = await supabase.from('student_id_cards').select('user_id');
       const existingUserIds = (existingIds || []).map(r => r.user_id);
       
-      let q = supabase.from('user_profiles').select('id, full_name, roll_id, email').ilike('full_name', `%${studentSearch}%`).limit(10);
+      let q = supabase.from('user_profiles').select('id, full_name, roll_id').ilike('full_name', `%${studentSearch}%`).limit(10);
       const { data } = await q;
       return (data || []).filter(s => !existingUserIds.includes(s.id));
     },
