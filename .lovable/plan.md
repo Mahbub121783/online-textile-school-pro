@@ -1,78 +1,93 @@
 
-Goal: fix the eBook reader so Cloudflare-hosted ebooks open fast and reliably.
 
-What I found
-- The file is already being returned successfully from `ebook-secure-access` as PDF bytes. So the main failure is not Cloudflare upload anymore.
-- The current reader breaks because `src/pages/ebooks/EbookReader.tsx` loads the PDF worker from `cdnjs`, and that worker import is failing in the browser.
-- The reader is also slow because it downloads the entire PDF with `response.arrayBuffer()` before rendering page 1.
-- The current token flow is not compatible with proper PDF.js range loading because the secure endpoint is POST-based and the token is marked `used` immediately.
+## Plan: Advanced Ebook Reader — PDF Page Labels, Text Layer, Highlights, Notes & Security
 
-Implementation plan
+### Problems from Screenshot
 
-1. Fix the PDF worker failure
-- In `src/pages/ebooks/EbookReader.tsx`, stop using the external CDN worker URL.
-- Bundle the worker locally with Vite and point `pdfjsLib.GlobalWorkerOptions.workerSrc` to that local asset.
-- This removes the current “Setting up fake worker / Failed to fetch dynamically imported module” error.
+| Issue | Detail |
+|-------|--------|
+| **Page mismatch** | PDF content shows "3 \| Page" but reader shows page 7 — PDF has cover/TOC pages before content numbering starts. Reader uses raw page index, not PDF's internal page labels |
+| **No text interaction** | Canvas-only rendering — no text selection, no highlighting, no word-level notes |
+| **Security gaps** | No screenshot protection (CSS), no visibility API pause, no watermark overlay |
+| **Notes are page-level only** | Cannot attach notes to specific text/words |
 
-2. Switch the reader to true incremental PDF loading
-- Refactor `EbookReader` to stop doing:
-  - secure fetch
-  - `response.arrayBuffer()`
-  - `getDocument({ data })`
-- Instead, let PDF.js open the secure ebook URL directly with:
-  - a GET endpoint
-  - auth headers
-  - range loading enabled
-- Result: first page renders much faster and large PDFs no longer wait for a full download.
+### Implementation
 
-3. Upgrade `ebook-secure-access` for PDF.js range requests
-- Add a GET-based streaming path in `supabase/functions/ebook-secure-access/index.ts` for PDF.js.
-- Keep purchase validation and short-lived access tokens, but make tokens reusable until expiry instead of single-use on the first request.
-- Forward and expose range-related headers properly:
-  - `Accept-Ranges`
-  - `Content-Range`
-  - `Content-Length`
-- Make the R2 S3 fallback honor incoming `Range` headers too, not just full-file fetches.
+**1. Use PDF page labels instead of raw index**
+- PDF.js supports `pdf.getPageLabels()` which returns the document's own page numbering (e.g., "i", "ii", "1", "2", "3")
+- Display the PDF's label in the bottom bar while keeping internal index for navigation
+- Show both: "Page 3 (7/54)" — label first, then position
 
-4. Harden reader behavior by format
-- `EbookReader` currently assumes everything is a PDF.
-- Add a clear format check using ebook metadata:
-  - PDF: open in the secure PDF reader
-  - non-PDF: show a proper unsupported-format message instead of a broken PDF error
-- In `src/pages/admin/AdminEbooks.tsx`, tighten validation so the secure reader is aligned with the formats we actually support right now.
+**2. Add text layer for highlighting and selection**
+- Render a transparent `textLayer` div on top of the canvas using `pdfjsLib.renderTextLayer()`
+- This enables text selection (controlled), highlighting, and word-level interaction
+- Import `pdfjs-dist/web/pdf_viewer.css` for proper text layer styling
+- Text layer is invisible but selectable — text appears to be on the canvas but is actually in DOM elements
 
-5. Keep Cloudflare-only enforcement for ebook files
-- Preserve the existing R2-only validation in `AdminEbooks`.
-- Keep the legacy Cloudinary warning/badge so old ebook records are easy to identify and re-upload.
-- This prevents future mixed-storage ebook issues.
+**3. Text highlighting system**
+- When user selects text on the text layer, show a floating toolbar: "Highlight" (yellow/green/blue/pink) + "Add Note"
+- Store highlights as `{ id, page, startOffset, endOffset, text, color, note?, createdAt }`
+- Save highlights in `ebook_reading_progress.notes` JSON field (reuse existing column, extend schema)
+- Re-apply highlights on page render by matching text offsets
+- Highlights persist across sessions
 
-6. Recommended hardening for large uploads
-- The current chunked upload flow in `supabase/functions/r2-presign/index.ts` still assembles large files inside the edge function.
-- Replace that with native R2 multipart upload logic so large PDFs/docs do not depend on edge-function byte reassembly.
-- This is the “advanced” stability improvement for big ebook files.
+**4. Word-based note system**
+- Extend the highlight flow: after highlighting, user can attach a note to that highlight
+- Notes panel shows all highlights+notes grouped by page
+- Click a note → jumps to that page and scrolls to the highlight
+- Each highlight can have an inline note icon that expands on click
 
-Technical details
-- Frontend root cause: `pdf.worker.min.mjs` is being loaded from an external CDN and fails dynamic import.
-- Performance root cause: whole-file download in the client before PDF.js starts rendering.
-- Backend compatibility gap: PDF.js expects repeated ranged GET requests, but the current secure flow is single-use-token + POST body based.
-- No database migration is required for this fix.
+**5. Enhanced DRM / security**
+- **Screenshot deterrence**: Add a semi-transparent watermark overlay with user email/ID rendered diagonally across the page (very light, ~3% opacity) — makes screenshots traceable
+- **Visibility API**: Pause/blur content when tab loses focus (`document.visibilitychange`)
+- **CSS screenshot blocking**: Apply `-webkit-user-select: none` and `pointer-events: none` on canvas; use CSS `filter` tricks
+- **Print CSS**: Already blocks printing — keep `@media print { display: none }`
+- **Block Ctrl+Shift+S, PrtScn detection**: Expand key blocker to cover more screenshot shortcuts
+- **Watermark on canvas**: Render user email diagonally across each page at 3% opacity directly on the canvas — survives any screenshot attempt
+- **Block drag**: Prevent image drag from canvas
 
-Files to update
-- `src/pages/ebooks/EbookReader.tsx`
-- `supabase/functions/ebook-secure-access/index.ts`
-- `src/pages/admin/AdminEbooks.tsx`
-- `supabase/functions/r2-presign/index.ts` (recommended hardening)
+**6. Disable copy but allow controlled highlight**
+- Text layer allows highlighting but blocks clipboard copy (`oncopy` preventDefault)
+- Selection is visual only — for note-taking purposes, not extraction
+- Ctrl+C / Cmd+C blocked on the reader
 
-Expected result
-- No more worker import error
-- PDF page 1 appears much faster
-- Large Cloudflare-hosted ebooks open reliably
-- Range-based reading works without re-downloading the whole file
-- Legacy Cloudinary ebook records are clearly identified instead of failing silently
+### Technical Details
 
-Verification
-- Test a small PDF and a large PDF from `/read/:ebookId`
-- Confirm page 1 loads quickly and page navigation works
-- Confirm no fake-worker warning in console
-- Confirm edge function logs show successful secure reads without 500/502 errors
-- Confirm a legacy Cloudinary ebook shows a clear admin-facing migration warning
+**Page labels**: `pdf.getPageLabels()` returns `string[]` or `null`. If available, map index to label. Display logic:
+```
+Label "3" at index 6 → "Page 3 (7 of 54)"
+```
+
+**Text layer rendering**: After canvas render, call:
+```typescript
+const textContent = await page.getTextContent();
+pdfjsLib.renderTextLayer({
+  textContentSource: textContent,
+  container: textLayerDiv,
+  viewport: scaledViewport,
+});
+```
+
+**Highlight storage** — extend the existing `notes` JSON in `ebook_reading_progress`:
+```typescript
+interface Highlight {
+  id: string;
+  page: number;
+  text: string;
+  color: 'yellow' | 'green' | 'blue' | 'pink';
+  ranges: { startOffset: number; endOffset: number; startContainer: number; endContainer: number }[];
+  note?: string;
+  createdAt: string;
+}
+```
+
+**Watermark**: After `page.render()`, draw user email diagonally on canvas at 3% opacity using `ctx.globalAlpha = 0.03`.
+
+### File Summary
+
+| File | Action |
+|------|--------|
+| `src/pages/ebooks/EbookReader.tsx` | Major rewrite — add text layer, page labels, highlight system, word notes, enhanced DRM, watermark |
+
+Single file change. No migration needed — highlights stored in existing `notes` JSON column.
+
