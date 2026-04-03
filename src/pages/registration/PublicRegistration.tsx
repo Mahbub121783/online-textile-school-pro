@@ -82,7 +82,7 @@ const CountdownUnit = ({ value, label }: { value: number; label: string }) => (
 export default function PublicRegistration() {
   const { slug } = useParams<{ slug?: string }>();
   const { toast } = useToast();
-  const { uploadFile, uploading } = useFileUpload();
+  const { upload, uploading } = useFileUpload();
 
   const [config, setConfig] = useState<FormConfig | null>(null);
   const [purposes, setPurposes] = useState<Purpose[]>([]);
