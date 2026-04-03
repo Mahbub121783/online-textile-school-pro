@@ -191,7 +191,7 @@ export async function renderIdCard(
   ctx.stroke();
 
   // ── Fields ──
-  const fieldX = photoX + photoW + 40;
+  const fieldX = photoX + photoW + 55;
   const labelW = 200;
   const valueX = fieldX + labelW;
   const rowH = 50;
