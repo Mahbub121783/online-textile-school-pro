@@ -654,7 +654,7 @@ const EbookReader = () => {
   // ===== Loading / Error states =====
   if (loadingState === 'auth' || authLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
+      <div className="h-screen flex items-center justify-center bg-background">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
@@ -662,7 +662,7 @@ const EbookReader = () => {
 
   if (loadingState === 'error') {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-background gap-4 px-4">
+      <div className="h-screen flex flex-col items-center justify-center bg-background gap-4 px-4">
         <BookOpen className="h-16 w-16 text-muted-foreground" />
         <h2 className="font-heading text-xl font-bold text-center">Unable to load eBook</h2>
         <p className="text-muted-foreground text-sm max-w-md text-center">{errorMsg}</p>
@@ -675,7 +675,7 @@ const EbookReader = () => {
 
   if (loadingState === 'loading') {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-background gap-3 px-4">
+      <div className="h-screen flex flex-col items-center justify-center bg-background gap-3 px-4">
         <Loader2 className="h-10 w-10 animate-spin text-primary" />
         <p className="text-muted-foreground font-medium animate-pulse text-center">Loading your eBook securely...</p>
         <div className="w-48">
@@ -688,7 +688,7 @@ const EbookReader = () => {
 
   return (
     <div
-      className={`min-h-screen flex flex-col select-none ${modeStyles[readingMode]} transition-colors duration-300`}
+      className={`h-screen flex flex-col select-none overflow-hidden ${modeStyles[readingMode]} transition-colors duration-300`}
       style={{ filter: `brightness(${brightness}%)` }}
       onContextMenu={(e) => e.preventDefault()}
     >
@@ -698,7 +698,7 @@ const EbookReader = () => {
           position: absolute;
           left: 0;
           top: 0;
-          opacity: 0.3;
+          opacity: 1;
           line-height: 1;
           z-index: 2;
           overflow: hidden;
@@ -710,9 +710,14 @@ const EbookReader = () => {
           cursor: text;
           -webkit-user-select: text;
           user-select: text;
+          -webkit-touch-callout: none;
         }
         .text-layer-container span::selection {
-          background: rgba(96, 165, 250, 0.35);
+          background: rgba(96, 165, 250, 0.4);
+          color: transparent;
+        }
+        .text-layer-container span::-moz-selection {
+          background: rgba(96, 165, 250, 0.4);
           color: transparent;
         }
         .reader-blurred .reader-content {
@@ -809,10 +814,11 @@ const EbookReader = () => {
               style={{ userSelect: 'none' }}
               onDragStart={(e) => e.preventDefault()}
             />
-            {/* Text layer overlay */}
+            {/* Text layer overlay — full pointer events for selection */}
             <div
               ref={textLayerRef}
               className="text-layer-container"
+              style={{ pointerEvents: 'auto' }}
               onCopy={(e) => e.preventDefault()}
             />
           </div>
