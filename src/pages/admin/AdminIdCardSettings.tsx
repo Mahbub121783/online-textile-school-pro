@@ -132,6 +132,20 @@ export default function AdminIdCardSettings() {
                 </label>
               </div>
             </div>
+            {/* Live Signature Preview */}
+            {(form.signature_url || form.authority_name) && (
+              <div className="mt-4 p-4 border rounded-lg bg-muted/30">
+                <p className="text-xs text-muted-foreground mb-3 font-medium">Preview on ID Card</p>
+                <div className="flex flex-col items-center gap-1">
+                  {form.signature_url && (
+                    <img src={form.signature_url} className="h-8 object-contain" alt="Signature preview" />
+                  )}
+                  <div className="w-24 h-px bg-border" />
+                  <p className="text-xs font-semibold">{form.authority_name || 'Authority Name'}</p>
+                  <p className="text-[10px] text-muted-foreground">{form.authority_position || 'Position'}</p>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
