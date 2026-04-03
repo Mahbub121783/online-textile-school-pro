@@ -1,84 +1,55 @@
 
 
-## Plan: ID Card Download Gate, Admin ID Card Management & Signature Management
+## Plan: Fix Ebook File Storage Routing & Reader Access
 
-### Features
+### Problems Identified
 
-1. **Profile-complete gate on download** — Students cannot download their ID card (PDF/PNG) unless profile is 100% complete. Show warning with missing fields list.
+1. **Upload routing is correct in code** — `useFileUpload` already routes PDFs/docs to R2 and images to Cloudinary. The hook logic is sound.
 
-2. **Admin ID Card Management page** — Super admins can:
-   - View all student ID cards in a searchable table
-   - Directly grant ID card access to any student (even without paid courses)
-   - Block/unblock ID card downloads per student
-   - Revoke ID cards
+2. **Ebook reader fails with 502** — The `ebook-secure-access` edge function fetches `ebook.file_url` directly via `fetch()`. If the R2 public domain URL is misconfigured, unreachable from Deno edge functions, or if old ebooks have Cloudinary URLs that expired/changed, the fetch fails silently with "Failed to fetch ebook file".
 
-3. **Enhanced Signature Management** — In the existing ID Card Settings page, improve the signature section: upload signature image + name below it, with a live preview showing how it will appear on the card.
+3. **No fallback or diagnostics** — The edge function doesn't log the URL it's trying to fetch, doesn't retry, and doesn't distinguish between R2 vs Cloudinary URLs.
 
-### Database Migration
+4. **Possible old data** — Ebooks uploaded before R2 was configured may have Cloudinary URLs for their `file_url`, which Cloudinary may reject for non-image files (PDFs uploaded via the auto/upload endpoint have limited access).
 
-Add a `download_blocked` column to `student_id_cards`:
+### Fixes
 
-```sql
-ALTER TABLE public.student_id_cards
-  ADD COLUMN download_blocked boolean NOT NULL DEFAULT false;
-```
+**1. Improve `ebook-secure-access` edge function** — Add robust fetching:
+- Log the `file_url` being fetched for debugging
+- If the URL is an R2 URL and public fetch fails, fall back to fetching via S3 SDK directly (server-side, no CORS issues)
+- Add proper error details in the 502 response (URL domain, status code from upstream)
+- Handle both Cloudinary and R2 URLs gracefully
 
-No other schema changes needed — admin can already INSERT/UPDATE via the existing "Admins manage id cards" policy.
+**2. Add S3 direct-fetch fallback in the edge function** — When `file_url` points to R2 but the public domain fetch fails, use the S3 SDK with credentials from `cloudflare_r2_accounts` to fetch the file directly via `GetObjectCommand`. This bypasses any public domain or CORS issues.
 
-### File Changes
+**3. Enforce R2 for ebook file uploads in `AdminEbooks.tsx`** — Add an explicit check: when uploading `file_url` (not cover), force R2 routing regardless of file type. Currently the hook routes correctly, but add a safety comment and potentially a dedicated `uploadToR2` method exposed from the hook.
 
-**1. `src/components/student/StudentIdCard.tsx`**
-- Import `useProfileCompleteness` hook
-- Before showing download buttons, check `isComplete` from the hook and `idCard.download_blocked`
-- If profile incomplete: disable download button, show alert with list of missing fields and link to profile page
-- If download blocked by admin: show "Download blocked by administrator" message, disable button
+**4. Add `forceR2` option to `useFileUpload`** — Allow callers to bypass the image/heavy detection and force R2 for specific uploads (ebook files should always go to R2).
 
-**2. `src/pages/admin/AdminIdCardManagement.tsx` (new file)**
-- Searchable table of all students with columns: Name, Roll ID, Card Number, Status, Download Blocked, Valid Until, Actions
-- Query `student_id_cards` joined with `user_profiles`
-- Actions per row:
-  - Toggle "Block Download" (updates `download_blocked`)
-  - Deactivate/Activate card (updates `is_active`)
-- "Grant ID Card" button opens a student search modal — admin picks a student without a card, sets validity period, and inserts a new `student_id_cards` row
-- All actions logged to `admin_activity_log`
+### Technical Details
 
-**3. `src/pages/admin/AdminIdCardSettings.tsx` (modify)**
-- Enhance the Authority/Signature card:
-  - Keep upload functionality
-  - Add a canvas-based live preview showing how the signature + name + position renders on the ID card
-  - After upload, show the formatted preview immediately
-  - Authority name and position inputs already exist — just add the live preview below
+**Edge function changes (`supabase/functions/ebook-secure-access/index.ts`):**
+- Import S3Client and GetObjectCommand (same pattern as r2-presign)
+- After initial `fetch(ebook.file_url)` fails, check if URL contains an R2 domain pattern
+- Query `cloudflare_r2_accounts` to find the matching account
+- Extract the file key from the URL and use `GetObjectCommand` to stream the file directly
+- Log the URL and failure reason for debugging
 
-**4. `src/components/layout/AdminSidebar.tsx`**
-- Add "ID Card Management" link under the Setup submenu (or as a new top-level item near Students)
+**Hook changes (`src/hooks/useFileUpload.ts`):**
+- Add `forceR2?: boolean` option to the `upload` function
+- When `forceR2` is true, skip the image check and always route to R2
+- Export this option in the interface
 
-**5. `src/App.tsx`**
-- Add route for `/admin/id-card-management` pointing to the new page
-
-### Layout: Admin ID Card Management Page
-
-```text
-+------------------------------------------+
-| ID Card Management                       |
-| [Grant ID Card]  [Search: ________]      |
-+------------------------------------------+
-| Name | Roll | Card# | Status | Blocked | |
-|------|------|-------|--------|---------|--|
-| Ali  | OTS- | OTS-ID| Active | No  [x]| ⋮|
-| Rima | OTS- | OTS-ID| Expired| Yes [x]| ⋮|
-+------------------------------------------+
-```
+**AdminEbooks changes (`src/pages/admin/AdminEbooks.tsx`):**
+- When uploading `file_url`, pass `{ forceR2: true }` to ensure ebook files always go to R2
 
 ### File Summary
 
 | File | Action |
 |------|--------|
-| Migration | Add `download_blocked` column to `student_id_cards` |
-| `src/components/student/StudentIdCard.tsx` | Add profile-complete + download-blocked gates |
-| `src/pages/admin/AdminIdCardManagement.tsx` | New admin page for managing all ID cards |
-| `src/pages/admin/AdminIdCardSettings.tsx` | Add signature live preview |
-| `src/components/layout/AdminSidebar.tsx` | Add sidebar link |
-| `src/App.tsx` | Add route |
+| `supabase/functions/ebook-secure-access/index.ts` | Add S3 direct-fetch fallback, better error logging |
+| `src/hooks/useFileUpload.ts` | Add `forceR2` option to upload function |
+| `src/pages/admin/AdminEbooks.tsx` | Use `forceR2: true` for ebook file uploads |
 
-6 file changes, 1 migration.
+3 file changes, no migration needed.
 
