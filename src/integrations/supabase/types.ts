@@ -1240,42 +1240,63 @@ export type Database = {
           created_at: string | null
           cta_link: string | null
           cta_text: string | null
+          gradient_direction: string | null
+          gradient_from: string | null
+          gradient_to: string | null
           id: string
           image_url: string | null
           is_active: boolean | null
+          overlay_opacity: number | null
           secondary_cta_link: string | null
           secondary_cta_text: string | null
           sort_order: number | null
           subtitle: string | null
+          subtitle_color: string | null
+          text_alignment: string | null
           title: string
+          title_color: string | null
         }
         Insert: {
           countdown_target?: string | null
           created_at?: string | null
           cta_link?: string | null
           cta_text?: string | null
+          gradient_direction?: string | null
+          gradient_from?: string | null
+          gradient_to?: string | null
           id?: string
           image_url?: string | null
           is_active?: boolean | null
+          overlay_opacity?: number | null
           secondary_cta_link?: string | null
           secondary_cta_text?: string | null
           sort_order?: number | null
           subtitle?: string | null
+          subtitle_color?: string | null
+          text_alignment?: string | null
           title: string
+          title_color?: string | null
         }
         Update: {
           countdown_target?: string | null
           created_at?: string | null
           cta_link?: string | null
           cta_text?: string | null
+          gradient_direction?: string | null
+          gradient_from?: string | null
+          gradient_to?: string | null
           id?: string
           image_url?: string | null
           is_active?: boolean | null
+          overlay_opacity?: number | null
           secondary_cta_link?: string | null
           secondary_cta_text?: string | null
           sort_order?: number | null
           subtitle?: string | null
+          subtitle_color?: string | null
+          text_alignment?: string | null
           title?: string
+          title_color?: string | null
         }
         Relationships: []
       }
