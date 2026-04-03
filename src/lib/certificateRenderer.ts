@@ -13,6 +13,13 @@ export interface CertificateField {
   textAlign?: 'left' | 'center' | 'right';
   visible: boolean;
   value?: string;
+  // Image element support (for signatures, stamps, logos)
+  type?: 'text' | 'image';
+  imageUrl?: string;
+  width?: number;  // percentage 0-100
+  height?: number; // percentage 0-100
+  opacity?: number; // 0-1
+  rotation?: number; // degrees
 }
 
 export interface CertificateData {
@@ -76,6 +83,62 @@ export function renderFieldsSync(
 
     const x = (field.x / 100) * width;
     const y = (field.y / 100) * height;
+
+    // Handle image elements
+    if (field.type === 'image' && field.imageUrl) {
+      const cachedImg = getCachedImage(field.imageUrl);
+      if (cachedImg) {
+        const imgW = ((field.width || 15) / 100) * width;
+        const imgH = ((field.height || 10) / 100) * height;
+        
+        ctx.save();
+        if (field.opacity != null && field.opacity < 1) {
+          ctx.globalAlpha = field.opacity;
+        }
+        if (field.rotation) {
+          ctx.translate(x, y);
+          ctx.rotate((field.rotation * Math.PI) / 180);
+          ctx.drawImage(cachedImg, -imgW / 2, -imgH / 2, imgW, imgH);
+          ctx.restore();
+        } else {
+          ctx.drawImage(cachedImg, x - imgW / 2, y - imgH / 2, imgW, imgH);
+          ctx.restore();
+        }
+      }
+
+      // Selection box for image
+      if (selectedIdx === i) {
+        const imgW = ((field.width || 15) / 100) * width;
+        const imgH = ((field.height || 10) / 100) * height;
+        ctx.strokeStyle = '#3b82f6';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([4, 3]);
+        ctx.strokeRect(x - imgW / 2 - 4, y - imgH / 2 - 4, imgW + 8, imgH + 8);
+        ctx.setLineDash([]);
+        // Resize handles
+        const corners = [
+          [x - imgW / 2, y - imgH / 2],
+          [x + imgW / 2, y - imgH / 2],
+          [x - imgW / 2, y + imgH / 2],
+          [x + imgW / 2, y + imgH / 2],
+        ];
+        ctx.fillStyle = '#3b82f6';
+        corners.forEach(([cx, cy]) => {
+          ctx.fillRect(cx - 4, cy - 4, 8, 8);
+        });
+      }
+
+      if (showLabels) {
+        const imgH = ((field.height || 10) / 100) * height;
+        ctx.font = `10px Arial, sans-serif`;
+        ctx.fillStyle = '#3b82f6';
+        ctx.textAlign = 'center';
+        ctx.fillText(field.label, x, y - imgH / 2 - 8);
+      }
+      continue;
+    }
+
+    // Text elements
     const family = field.fontFamily || 'Arial, sans-serif';
     const style = field.fontStyle === 'italic' ? 'italic ' : '';
     const weight = field.fontWeight === 'bold' ? 'bold ' : field.fontWeight === 'semibold' ? '600 ' : '';
@@ -85,8 +148,17 @@ export function renderFieldsSync(
     ctx.textAlign = (field.textAlign as CanvasTextAlign) || 'center';
     ctx.textBaseline = 'middle';
 
+    if (field.opacity != null && field.opacity < 1) {
+      ctx.save();
+      ctx.globalAlpha = field.opacity;
+    }
+
     const text = getFieldText(field, data);
     if (text) ctx.fillText(text, x, y);
+
+    if (field.opacity != null && field.opacity < 1) {
+      ctx.restore();
+    }
 
     // Selection indicator
     if (selectedIdx === i) {
@@ -142,9 +214,21 @@ export async function renderCertificateToCanvas(
     }
   }
 
+  // Preload all image fields
+  for (const f of fields) {
+    if (f.type === 'image' && f.imageUrl && f.visible) {
+      try { await loadImage(f.imageUrl); } catch {}
+    }
+  }
+
   // Scale font sizes proportionally (fields are designed for 1122x793 base)
   const scale = width / 1122;
-  const scaledFields = fields.map(f => ({ ...f, fontSize: Math.round(f.fontSize * scale) }));
+  const scaledFields = fields.map(f => ({
+    ...f,
+    fontSize: Math.round(f.fontSize * scale),
+    // Scale image dimensions too
+    ...(f.type === 'image' ? {} : {}),
+  }));
   renderFieldsSync(ctx, scaledFields, data, width, height);
 
   return canvas;

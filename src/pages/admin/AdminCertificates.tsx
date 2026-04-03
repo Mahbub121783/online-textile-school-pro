@@ -11,28 +11,61 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Award, Plus, Trash2, Eye, Upload, Save, GripVertical, Italic, AlignLeft, AlignCenter, AlignRight, Download, Type } from 'lucide-react';
+import { Award, Plus, Trash2, Eye, Upload, Save, GripVertical, Italic, AlignLeft, AlignCenter, AlignRight, Download, Type, Image as ImageIcon, Copy, RotateCcw, Move, Maximize2 } from 'lucide-react';
 import { useFileUpload } from '@/hooks/useFileUpload';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import type { CertificateField, CertificateData } from '@/lib/certificateRenderer';
 import { renderFieldsSync, preloadImage, getCachedImage, downloadCertificatePDF } from '@/lib/certificateRenderer';
 
-const FONT_FAMILIES = ['Arial, sans-serif', 'Times New Roman, serif', 'Georgia, serif', 'Courier New, monospace'];
+// ── Font system with handwritten/calligraphy fonts ──
+const FONT_FAMILIES = [
+  'Arial, sans-serif',
+  'Times New Roman, serif',
+  'Georgia, serif',
+  'Courier New, monospace',
+  "'Great Vibes', cursive",
+  "'Dancing Script', cursive",
+  "'Pacifico', cursive",
+  "'Satisfy', cursive",
+  "'Sacramento', cursive",
+  "'Allura', cursive",
+  "'Tangerine', cursive",
+  "'Pinyon Script', cursive",
+  "'Alex Brush', cursive",
+  "'Cormorant Garamond', serif",
+  "'Playfair Display', serif",
+  "'Cinzel', serif",
+];
+
 const FONT_LABELS: Record<string, string> = {
   'Arial, sans-serif': 'Arial',
   'Times New Roman, serif': 'Times New Roman',
   'Georgia, serif': 'Georgia',
   'Courier New, monospace': 'Courier New',
+  "'Great Vibes', cursive": '✍ Great Vibes',
+  "'Dancing Script', cursive": '✍ Dancing Script',
+  "'Pacifico', cursive": '✍ Pacifico',
+  "'Satisfy', cursive": '✍ Satisfy',
+  "'Sacramento', cursive": '✍ Sacramento',
+  "'Allura', cursive": '✍ Allura',
+  "'Tangerine', cursive": '✍ Tangerine',
+  "'Pinyon Script', cursive": '✍ Pinyon Script',
+  "'Alex Brush', cursive": '✍ Alex Brush',
+  "'Cormorant Garamond', serif": 'Cormorant Garamond',
+  "'Playfair Display', serif": 'Playfair Display',
+  "'Cinzel', serif": 'Cinzel',
 };
 
+const GOOGLE_FONTS_URL = 'https://fonts.googleapis.com/css2?family=Great+Vibes&family=Dancing+Script:wght@400;700&family=Pacifico&family=Satisfy&family=Sacramento&family=Allura&family=Tangerine:wght@400;700&family=Pinyon+Script&family=Alex+Brush&family=Cormorant+Garamond:ital,wght@0,400;0,700;1,400&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Cinzel:wght@400;700&display=swap';
+
 const DEFAULT_FIELDS: CertificateField[] = [
-  { key: 'custom_text', label: 'Custom Text', x: 50, y: 20, fontSize: 28, fontColor: '#1a1a1a', fontWeight: 'bold', fontStyle: 'normal', fontFamily: 'Georgia, serif', textAlign: 'center', visible: true, value: 'Certificate of Completion' },
-  { key: 'student_name', label: 'Student Name', x: 50, y: 42, fontSize: 32, fontColor: '#1a1a1a', fontWeight: 'bold', fontStyle: 'normal', fontFamily: 'Georgia, serif', textAlign: 'center', visible: true },
-  { key: 'course_title', label: 'Course Title', x: 50, y: 55, fontSize: 20, fontColor: '#333333', fontWeight: 'semibold', fontStyle: 'normal', fontFamily: 'Arial, sans-serif', textAlign: 'center', visible: true },
-  { key: 'completion_date', label: 'Completion Date', x: 50, y: 68, fontSize: 14, fontColor: '#555555', fontWeight: 'normal', fontStyle: 'normal', fontFamily: 'Arial, sans-serif', textAlign: 'center', visible: true },
-  { key: 'certificate_number', label: 'Certificate #', x: 50, y: 88, fontSize: 11, fontColor: '#888888', fontWeight: 'normal', fontStyle: 'normal', fontFamily: 'Courier New, monospace', textAlign: 'center', visible: true },
-  { key: 'instructor_signature', label: 'Instructor Signature', x: 25, y: 82, fontSize: 14, fontColor: '#333333', fontWeight: 'normal', fontStyle: 'italic', fontFamily: 'Georgia, serif', textAlign: 'center', visible: true },
+  { key: 'custom_text', label: 'Title Text', x: 50, y: 20, fontSize: 28, fontColor: '#1a1a1a', fontWeight: 'bold', fontStyle: 'normal', fontFamily: 'Georgia, serif', textAlign: 'center', visible: true, value: 'Certificate of Completion', type: 'text' },
+  { key: 'student_name', label: 'Student Name', x: 50, y: 42, fontSize: 32, fontColor: '#1a1a1a', fontWeight: 'bold', fontStyle: 'normal', fontFamily: "'Great Vibes', cursive", textAlign: 'center', visible: true, type: 'text' },
+  { key: 'course_title', label: 'Course Title', x: 50, y: 55, fontSize: 20, fontColor: '#333333', fontWeight: 'semibold', fontStyle: 'normal', fontFamily: 'Arial, sans-serif', textAlign: 'center', visible: true, type: 'text' },
+  { key: 'completion_date', label: 'Completion Date', x: 50, y: 68, fontSize: 14, fontColor: '#555555', fontWeight: 'normal', fontStyle: 'normal', fontFamily: 'Arial, sans-serif', textAlign: 'center', visible: true, type: 'text' },
+  { key: 'certificate_number', label: 'Certificate #', x: 50, y: 88, fontSize: 11, fontColor: '#888888', fontWeight: 'normal', fontStyle: 'normal', fontFamily: 'Courier New, monospace', textAlign: 'center', visible: true, type: 'text' },
+  { key: 'instructor_signature', label: 'Instructor Signature', x: 75, y: 82, fontSize: 16, fontColor: '#333333', fontWeight: 'normal', fontStyle: 'italic', fontFamily: "'Dancing Script', cursive", textAlign: 'center', visible: true, type: 'text' },
 ];
 
 const SAMPLE_DATA: CertificateData = {
@@ -60,7 +93,23 @@ const AdminCertificates = () => {
   const { upload, uploading } = useFileUpload();
 
   const [dragging, setDragging] = useState<number | null>(null);
+  const [resizing, setResizing] = useState<{ idx: number; corner: string; startX: number; startY: number; startW: number; startH: number } | null>(null);
   const [customFieldCounter, setCustomFieldCounter] = useState(1);
+  const [fontsLoaded, setFontsLoaded] = useState(false);
+
+  // Load Google Fonts
+  useEffect(() => {
+    if (document.querySelector('link[data-cert-fonts]')) { setFontsLoaded(true); return; }
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = GOOGLE_FONTS_URL;
+    link.setAttribute('data-cert-fonts', 'true');
+    link.onload = () => {
+      // Wait for fonts to actually render
+      setTimeout(() => setFontsLoaded(true), 500);
+    };
+    document.head.appendChild(link);
+  }, []);
 
   const { data: templates = [], isLoading: templatesLoading } = useQuery({
     queryKey: ['certificate-templates'],
@@ -99,6 +148,15 @@ const AdminCertificates = () => {
       renderCanvas();
     }
   }, [backgroundUrl]);
+
+  // Preload all image fields
+  useEffect(() => {
+    fields.forEach(f => {
+      if (f.type === 'image' && f.imageUrl) {
+        preloadImage(f.imageUrl).then(() => renderCanvas());
+      }
+    });
+  }, [fields]);
 
   const saveMutation = useMutation({
     mutationFn: async () => {
@@ -153,6 +211,7 @@ const AdminCertificates = () => {
     setBackgroundUrl(tpl.background_url);
     const loadedFields = (tpl.fields_config || DEFAULT_FIELDS).map((f: any) => ({
       ...f,
+      type: f.type || 'text',
       fontStyle: f.fontStyle || 'normal',
       fontFamily: f.fontFamily || 'Arial, sans-serif',
       textAlign: f.textAlign || 'center',
@@ -186,6 +245,17 @@ const AdminCertificates = () => {
     } catch {}
   };
 
+  const handleImageFieldUpload = async (e: React.ChangeEvent<HTMLInputElement>, idx: number) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const result = await upload(file);
+      updateField(idx, { imageUrl: result.url });
+      preloadImage(result.url).then(() => renderCanvas());
+      toast.success('Image uploaded');
+    } catch {}
+  };
+
   const updateField = useCallback((idx: number, updates: Partial<CertificateField>) => {
     setFields(prev => prev.map((f, i) => i === idx ? { ...f, ...updates } : f));
   }, []);
@@ -194,19 +264,39 @@ const AdminCertificates = () => {
     const newField: CertificateField = {
       key: 'custom_text',
       label: `Custom Text ${customFieldCounter + 1}`,
-      x: 50,
-      y: 50,
-      fontSize: 16,
-      fontColor: '#333333',
-      fontWeight: 'normal',
-      fontStyle: 'normal',
-      fontFamily: 'Arial, sans-serif',
-      textAlign: 'center',
-      visible: true,
-      value: 'New Text',
+      x: 50, y: 50, fontSize: 16, fontColor: '#333333',
+      fontWeight: 'normal', fontStyle: 'normal',
+      fontFamily: 'Arial, sans-serif', textAlign: 'center',
+      visible: true, value: 'New Text', type: 'text',
     };
     setFields(prev => [...prev, newField]);
     setCustomFieldCounter(prev => prev + 1);
+    setSelectedField(fields.length);
+  };
+
+  const addImageField = () => {
+    const newField: CertificateField = {
+      key: 'custom_image',
+      label: `Signature / Image`,
+      x: 25, y: 80, fontSize: 12, fontColor: '#000000',
+      fontWeight: 'normal', fontStyle: 'normal',
+      fontFamily: 'Arial, sans-serif', textAlign: 'center',
+      visible: true, type: 'image',
+      imageUrl: '', width: 15, height: 8, opacity: 1, rotation: 0,
+    };
+    setFields(prev => [...prev, newField]);
+    setSelectedField(fields.length);
+  };
+
+  const duplicateField = (idx: number) => {
+    const orig = fields[idx];
+    const clone: CertificateField = {
+      ...orig,
+      label: orig.label + ' (copy)',
+      x: Math.min(orig.x + 5, 95),
+      y: Math.min(orig.y + 5, 95),
+    };
+    setFields(prev => [...prev, clone]);
     setSelectedField(fields.length);
   };
 
@@ -215,7 +305,18 @@ const AdminCertificates = () => {
     setSelectedField(null);
   };
 
-  // ── Synchronous canvas rendering (no async in drag loop) ──
+  const moveFieldOrder = (idx: number, dir: -1 | 1) => {
+    const newIdx = idx + dir;
+    if (newIdx < 0 || newIdx >= fields.length) return;
+    setFields(prev => {
+      const arr = [...prev];
+      [arr[idx], arr[newIdx]] = [arr[newIdx], arr[idx]];
+      return arr;
+    });
+    setSelectedField(newIdx);
+  };
+
+  // ── Synchronous canvas rendering ──
   const renderCanvas = useCallback(() => {
     const canvas = canvasRef.current;
     const container = previewContainerRef.current;
@@ -227,35 +328,58 @@ const AdminCertificates = () => {
     canvas.height = displayH;
     const ctx = canvas.getContext('2d')!;
 
-    // White background
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, displayW, displayH);
 
-    // Draw cached background image synchronously
     if (bgImageRef.current) {
       ctx.drawImage(bgImageRef.current, 0, 0, displayW, displayH);
     }
 
-    // Scale font sizes for display canvas (fields designed for 1122px base)
     const scale = displayW / 1122;
     const scaledFields = fields.map(f => ({ ...f, fontSize: Math.round(f.fontSize * scale) }));
     renderFieldsSync(ctx, scaledFields, SAMPLE_DATA, displayW, displayH, selectedField, true);
   }, [fields, selectedField]);
 
-  // Re-render on fields/selection change
   useEffect(() => {
     if (activeTab === 'builder') {
       requestAnimationFrame(renderCanvas);
     }
-  }, [activeTab, renderCanvas, fields, selectedField]);
+  }, [activeTab, renderCanvas, fields, selectedField, fontsLoaded]);
 
-  // ── Drag handlers ──
-  const handleCanvasMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+  // ── Drag & Resize handlers ──
+  const getCanvasPercent = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current!;
     const rect = canvas.getBoundingClientRect();
-    const xPct = ((e.clientX - rect.left) / rect.width) * 100;
-    const yPct = ((e.clientY - rect.top) / rect.height) * 100;
+    return {
+      xPct: Math.max(2, Math.min(98, ((e.clientX - rect.left) / rect.width) * 100)),
+      yPct: Math.max(2, Math.min(98, ((e.clientY - rect.top) / rect.height) * 100)),
+    };
+  };
+
+  const handleCanvasMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const { xPct, yPct } = getCanvasPercent(e);
+
+    // Check for resize handle on selected image field
+    if (selectedField !== null) {
+      const f = fields[selectedField];
+      if (f.type === 'image' && f.visible) {
+        const hw = (f.width || 15) / 2;
+        const hh = (f.height || 8) / 2;
+        const corners = [
+          { name: 'tl', cx: f.x - hw, cy: f.y - hh },
+          { name: 'tr', cx: f.x + hw, cy: f.y - hh },
+          { name: 'bl', cx: f.x - hw, cy: f.y + hh },
+          { name: 'br', cx: f.x + hw, cy: f.y + hh },
+        ];
+        for (const c of corners) {
+          if (Math.abs(xPct - c.cx) < 2 && Math.abs(yPct - c.cy) < 2) {
+            setResizing({ idx: selectedField, corner: c.name, startX: xPct, startY: yPct, startW: f.width || 15, startH: f.height || 8 });
+            return;
+          }
+        }
+      }
+    }
+
     let closest = -1;
     let minDist = 8;
     fields.forEach((f, i) => {
@@ -266,21 +390,34 @@ const AdminCertificates = () => {
     if (closest >= 0) {
       setDragging(closest);
       setSelectedField(closest);
+    } else {
+      setSelectedField(null);
     }
   };
 
   const handleCanvasMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (resizing) {
+      const canvas = canvasRef.current!;
+      const rect = canvas.getBoundingClientRect();
+      const xPct = ((e.clientX - rect.left) / rect.width) * 100;
+      const yPct = ((e.clientY - rect.top) / rect.height) * 100;
+      const dx = xPct - resizing.startX;
+      const dy = yPct - resizing.startY;
+      let newW = resizing.startW;
+      let newH = resizing.startH;
+      if (resizing.corner.includes('r')) newW = Math.max(3, resizing.startW + dx);
+      if (resizing.corner.includes('l')) newW = Math.max(3, resizing.startW - dx);
+      if (resizing.corner.includes('b')) newH = Math.max(2, resizing.startH + dy);
+      if (resizing.corner.includes('t')) newH = Math.max(2, resizing.startH - dy);
+      setFields(prev => prev.map((f, i) => i === resizing.idx ? { ...f, width: Math.round(newW * 10) / 10, height: Math.round(newH * 10) / 10 } : f));
+      return;
+    }
     if (dragging === null) return;
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const rect = canvas.getBoundingClientRect();
-    const xPct = Math.max(2, Math.min(98, ((e.clientX - rect.left) / rect.width) * 100));
-    const yPct = Math.max(2, Math.min(98, ((e.clientY - rect.top) / rect.height) * 100));
-    // Direct state update for smooth dragging
+    const { xPct, yPct } = getCanvasPercent(e);
     setFields(prev => prev.map((f, i) => i === dragging ? { ...f, x: Math.round(xPct * 10) / 10, y: Math.round(yPct * 10) / 10 } : f));
-  }, [dragging]);
+  }, [dragging, resizing]);
 
-  const handleCanvasMouseUp = () => setDragging(null);
+  const handleCanvasMouseUp = () => { setDragging(null); setResizing(null); };
 
   const toggleCourseAssignment = (courseId: string) => {
     setAssignedCourses(prev => prev.includes(courseId) ? prev.filter(id => id !== courseId) : [...prev, courseId]);
@@ -294,6 +431,187 @@ const AdminCertificates = () => {
     } catch (e: any) {
       toast.error('PDF generation failed: ' + e.message);
     }
+  };
+
+  // ── Field Editor Panel ──
+  const renderFieldEditor = (f: CertificateField, i: number) => {
+    if (f.type === 'image') {
+      return (
+        <div className="mt-3 space-y-3 border-t pt-3">
+          <div>
+            <Label className="text-[10px]">Upload Image (Signature/Stamp/Logo)</Label>
+            <div className="flex gap-2 items-center mt-1">
+              <label className="cursor-pointer">
+                <input type="file" accept="image/*" className="hidden" onChange={e => handleImageFieldUpload(e, i)} />
+                <Button asChild size="sm" variant="outline" disabled={uploading}>
+                  <span><Upload className="h-3.5 w-3.5 mr-1" />{uploading ? 'Uploading...' : f.imageUrl ? 'Replace' : 'Upload'}</span>
+                </Button>
+              </label>
+              {f.imageUrl && <span className="text-xs text-green-600">✓ Loaded</span>}
+            </div>
+          </div>
+          {f.imageUrl && (
+            <div className="w-16 h-10 border rounded overflow-hidden bg-muted">
+              <img src={f.imageUrl} alt="" className="w-full h-full object-contain" />
+            </div>
+          )}
+          <div>
+            <Label className="text-[10px]">Label</Label>
+            <Input value={f.label} onChange={e => updateField(i, { label: e.target.value })} className="h-8 text-xs" />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <Label className="text-[10px]">Width: {f.width || 15}%</Label>
+              <Slider value={[f.width || 15]} onValueChange={v => updateField(i, { width: v[0] })} min={3} max={60} step={0.5} />
+            </div>
+            <div>
+              <Label className="text-[10px]">Height: {f.height || 8}%</Label>
+              <Slider value={[f.height || 8]} onValueChange={v => updateField(i, { height: v[0] })} min={2} max={40} step={0.5} />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <Label className="text-[10px]">X: {f.x}%</Label>
+              <Slider value={[f.x]} onValueChange={v => updateField(i, { x: v[0] })} min={0} max={100} />
+            </div>
+            <div>
+              <Label className="text-[10px]">Y: {f.y}%</Label>
+              <Slider value={[f.y]} onValueChange={v => updateField(i, { y: v[0] })} min={0} max={100} />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <Label className="text-[10px]">Opacity: {Math.round((f.opacity ?? 1) * 100)}%</Label>
+              <Slider value={[(f.opacity ?? 1) * 100]} onValueChange={v => updateField(i, { opacity: v[0] / 100 })} min={10} max={100} />
+            </div>
+            <div>
+              <Label className="text-[10px]">Rotation: {f.rotation || 0}°</Label>
+              <Slider value={[f.rotation || 0]} onValueChange={v => updateField(i, { rotation: v[0] })} min={-45} max={45} />
+            </div>
+          </div>
+          <div className="flex gap-1">
+            <Button size="sm" variant="ghost" className="text-xs h-7 gap-1" onClick={() => duplicateField(i)}>
+              <Copy className="h-3 w-3" /> Duplicate
+            </Button>
+            <Button size="sm" variant="ghost" className="text-destructive text-xs h-7 gap-1" onClick={(e) => { e.stopPropagation(); removeField(i); }}>
+              <Trash2 className="h-3 w-3" /> Remove
+            </Button>
+          </div>
+        </div>
+      );
+    }
+
+    // Text field editor
+    return (
+      <div className="mt-3 space-y-3 border-t pt-3">
+        {(f.key === 'custom_text' || f.key === 'custom_image') && (
+          <div>
+            <Label className="text-[10px]">Text Content</Label>
+            <Input value={f.value || ''} onChange={e => updateField(i, { value: e.target.value })} className="h-8 text-xs" />
+          </div>
+        )}
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <Label className="text-[10px]">X: {f.x}%</Label>
+            <Slider value={[f.x]} onValueChange={v => updateField(i, { x: v[0] })} min={0} max={100} />
+          </div>
+          <div>
+            <Label className="text-[10px]">Y: {f.y}%</Label>
+            <Slider value={[f.y]} onValueChange={v => updateField(i, { y: v[0] })} min={0} max={100} />
+          </div>
+        </div>
+        <div>
+          <Label className="text-[10px]">Font Family</Label>
+          <Select value={f.fontFamily || 'Arial, sans-serif'} onValueChange={(v) => updateField(i, { fontFamily: v })}>
+            <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <div className="px-2 py-1 text-[10px] text-muted-foreground font-semibold">Standard</div>
+              {FONT_FAMILIES.slice(0, 4).map(ff => (
+                <SelectItem key={ff} value={ff}><span style={{ fontFamily: ff }}>{FONT_LABELS[ff]}</span></SelectItem>
+              ))}
+              <div className="px-2 py-1 text-[10px] text-muted-foreground font-semibold border-t mt-1 pt-1">✍ Handwritten / Calligraphy</div>
+              {FONT_FAMILIES.slice(4, 13).map(ff => (
+                <SelectItem key={ff} value={ff}><span style={{ fontFamily: ff.replace(/'/g, '') }}>{FONT_LABELS[ff]}</span></SelectItem>
+              ))}
+              <div className="px-2 py-1 text-[10px] text-muted-foreground font-semibold border-t mt-1 pt-1">Elegant Serif</div>
+              {FONT_FAMILIES.slice(13).map(ff => (
+                <SelectItem key={ff} value={ff}><span style={{ fontFamily: ff.replace(/'/g, '') }}>{FONT_LABELS[ff]}</span></SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <Label className="text-[10px]">Font Size</Label>
+            <Input type="number" value={f.fontSize} onChange={e => updateField(i, { fontSize: Number(e.target.value) })} className="h-8 text-xs" min={8} max={72} />
+          </div>
+          <div>
+            <Label className="text-[10px]">Color</Label>
+            <input type="color" value={f.fontColor} onChange={e => updateField(i, { fontColor: e.target.value })} className="w-full h-8 rounded cursor-pointer" />
+          </div>
+        </div>
+        <div className="grid grid-cols-3 gap-2">
+          <div>
+            <Label className="text-[10px]">Weight</Label>
+            <Select value={f.fontWeight} onValueChange={(v: any) => updateField(i, { fontWeight: v })}>
+              <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="normal">Normal</SelectItem>
+                <SelectItem value="semibold">Semi Bold</SelectItem>
+                <SelectItem value="bold">Bold</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label className="text-[10px]">Style</Label>
+            <Button
+              size="sm"
+              variant={f.fontStyle === 'italic' ? 'default' : 'outline'}
+              className="h-8 w-full text-xs"
+              onClick={() => updateField(i, { fontStyle: f.fontStyle === 'italic' ? 'normal' : 'italic' })}
+            >
+              <Italic className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+          <div>
+            <Label className="text-[10px]">Align</Label>
+            <div className="flex h-8 border rounded-md overflow-hidden">
+              {([['left', AlignLeft], ['center', AlignCenter], ['right', AlignRight]] as const).map(([align, Icon]) => (
+                <button
+                  key={align}
+                  className={`flex-1 flex items-center justify-center transition-colors ${(f.textAlign || 'center') === align ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
+                  onClick={() => updateField(i, { textAlign: align })}
+                >
+                  <Icon className="h-3 w-3" />
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+        {f.opacity != null && (
+          <div>
+            <Label className="text-[10px]">Opacity: {Math.round((f.opacity ?? 1) * 100)}%</Label>
+            <Slider value={[(f.opacity ?? 1) * 100]} onValueChange={v => updateField(i, { opacity: v[0] / 100 })} min={10} max={100} />
+          </div>
+        )}
+        <div className="flex gap-1 flex-wrap">
+          <Button size="sm" variant="ghost" className="text-xs h-7 gap-1" onClick={() => duplicateField(i)}>
+            <Copy className="h-3 w-3" /> Duplicate
+          </Button>
+          {i > 0 && (
+            <Button size="sm" variant="ghost" className="text-xs h-7 gap-1" onClick={() => moveFieldOrder(i, -1)}>↑</Button>
+          )}
+          {i < fields.length - 1 && (
+            <Button size="sm" variant="ghost" className="text-xs h-7 gap-1" onClick={() => moveFieldOrder(i, 1)}>↓</Button>
+          )}
+          {(f.key === 'custom_text' || f.key === 'custom_image') && (
+            <Button size="sm" variant="ghost" className="text-destructive text-xs h-7 gap-1" onClick={(e) => { e.stopPropagation(); removeField(i); }}>
+              <Trash2 className="h-3 w-3" /> Remove
+            </Button>
+          )}
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -413,10 +731,15 @@ const AdminCertificates = () => {
               {/* Fields */}
               <div className="bg-card border rounded-xl p-5 space-y-3">
                 <div className="flex items-center justify-between">
-                  <h4 className="font-heading font-semibold text-sm">Fields</h4>
-                  <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={addCustomField}>
-                    <Type className="h-3 w-3" /> Add Text
-                  </Button>
+                  <h4 className="font-heading font-semibold text-sm">Elements</h4>
+                  <div className="flex gap-1">
+                    <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={addCustomField}>
+                      <Type className="h-3 w-3" /> Text
+                    </Button>
+                    <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={addImageField}>
+                      <ImageIcon className="h-3 w-3" /> Image
+                    </Button>
+                  </div>
                 </div>
                 {fields.map((f, i) => (
                   <div
@@ -426,102 +749,13 @@ const AdminCertificates = () => {
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <GripVertical className="h-3 w-3 text-muted-foreground" />
+                        {f.type === 'image' ? <ImageIcon className="h-3 w-3 text-muted-foreground" /> : <GripVertical className="h-3 w-3 text-muted-foreground" />}
                         <span className="font-medium">{f.label}</span>
+                        {f.type === 'image' && <Badge variant="secondary" className="text-[9px] h-4">IMG</Badge>}
                       </div>
-                      <div className="flex items-center gap-1.5">
-                        <Switch checked={f.visible} onCheckedChange={v => updateField(i, { visible: v })} />
-                      </div>
+                      <Switch checked={f.visible} onCheckedChange={v => updateField(i, { visible: v })} />
                     </div>
-                    {selectedField === i && f.visible && (
-                      <div className="mt-3 space-y-3 border-t pt-3">
-                        {f.key === 'custom_text' && (
-                          <div>
-                            <Label className="text-[10px]">Text Content</Label>
-                            <Input value={f.value || ''} onChange={e => updateField(i, { value: e.target.value })} className="h-8 text-xs" />
-                          </div>
-                        )}
-                        {/* Position */}
-                        <div className="grid grid-cols-2 gap-2">
-                          <div>
-                            <Label className="text-[10px]">X: {f.x}%</Label>
-                            <Slider value={[f.x]} onValueChange={v => updateField(i, { x: v[0] })} min={0} max={100} />
-                          </div>
-                          <div>
-                            <Label className="text-[10px]">Y: {f.y}%</Label>
-                            <Slider value={[f.y]} onValueChange={v => updateField(i, { y: v[0] })} min={0} max={100} />
-                          </div>
-                        </div>
-                        {/* Font family */}
-                        <div>
-                          <Label className="text-[10px]">Font Family</Label>
-                          <Select value={f.fontFamily || 'Arial, sans-serif'} onValueChange={(v) => updateField(i, { fontFamily: v })}>
-                            <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                              {FONT_FAMILIES.map(ff => (
-                                <SelectItem key={ff} value={ff}>{FONT_LABELS[ff]}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        {/* Font size & color */}
-                        <div className="grid grid-cols-2 gap-2">
-                          <div>
-                            <Label className="text-[10px]">Font Size</Label>
-                            <Input type="number" value={f.fontSize} onChange={e => updateField(i, { fontSize: Number(e.target.value) })} className="h-8 text-xs" min={8} max={72} />
-                          </div>
-                          <div>
-                            <Label className="text-[10px]">Color</Label>
-                            <input type="color" value={f.fontColor} onChange={e => updateField(i, { fontColor: e.target.value })} className="w-full h-8 rounded cursor-pointer" />
-                          </div>
-                        </div>
-                        {/* Weight, Style, Align row */}
-                        <div className="grid grid-cols-3 gap-2">
-                          <div>
-                            <Label className="text-[10px]">Weight</Label>
-                            <Select value={f.fontWeight} onValueChange={(v: any) => updateField(i, { fontWeight: v })}>
-                              <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="normal">Normal</SelectItem>
-                                <SelectItem value="semibold">Semi Bold</SelectItem>
-                                <SelectItem value="bold">Bold</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div>
-                            <Label className="text-[10px]">Style</Label>
-                            <Button
-                              size="sm"
-                              variant={f.fontStyle === 'italic' ? 'default' : 'outline'}
-                              className="h-8 w-full text-xs"
-                              onClick={() => updateField(i, { fontStyle: f.fontStyle === 'italic' ? 'normal' : 'italic' })}
-                            >
-                              <Italic className="h-3.5 w-3.5" />
-                            </Button>
-                          </div>
-                          <div>
-                            <Label className="text-[10px]">Align</Label>
-                            <div className="flex h-8 border rounded-md overflow-hidden">
-                              {([['left', AlignLeft], ['center', AlignCenter], ['right', AlignRight]] as const).map(([align, Icon]) => (
-                                <button
-                                  key={align}
-                                  className={`flex-1 flex items-center justify-center transition-colors ${(f.textAlign || 'center') === align ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
-                                  onClick={() => updateField(i, { textAlign: align })}
-                                >
-                                  <Icon className="h-3 w-3" />
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-                        {/* Delete custom field */}
-                        {f.key === 'custom_text' && fields.filter(ff => ff.key === 'custom_text').length > 1 && (
-                          <Button size="sm" variant="ghost" className="text-destructive text-xs h-7 gap-1" onClick={(e) => { e.stopPropagation(); removeField(i); }}>
-                            <Trash2 className="h-3 w-3" /> Remove Field
-                          </Button>
-                        )}
-                      </div>
-                    )}
+                    {selectedField === i && f.visible && renderFieldEditor(f, i)}
                   </div>
                 ))}
               </div>
@@ -540,13 +774,13 @@ const AdminCertificates = () => {
             {/* Right Panel: Visual Preview */}
             <div ref={previewContainerRef} className="flex flex-col">
               <p className="text-xs text-muted-foreground mb-2">
-                🖱️ Drag fields on the canvas to reposition • Click field in panel to edit • Blue labels show field names
+                🖱️ Drag elements to reposition • Drag corners to resize images • Click element to edit
               </p>
               <div className="w-full border-2 border-dashed border-muted-foreground/20 rounded-xl overflow-hidden bg-muted/10 shadow-inner">
                 <canvas
                   ref={canvasRef}
                   className="w-full"
-                  style={{ aspectRatio: '1122/793', cursor: dragging !== null ? 'grabbing' : 'grab' }}
+                  style={{ aspectRatio: '1122/793', cursor: resizing ? 'nwse-resize' : dragging !== null ? 'grabbing' : 'grab' }}
                   onMouseDown={handleCanvasMouseDown}
                   onMouseMove={handleCanvasMouseMove}
                   onMouseUp={handleCanvasMouseUp}
@@ -554,7 +788,7 @@ const AdminCertificates = () => {
                 />
               </div>
               <p className="text-[10px] text-muted-foreground mt-2 text-center">
-                Preview shows how the certificate will look. Download a sample PDF to verify the final output.
+                Preview shows how the certificate will look. Download a sample PDF to verify.
               </p>
             </div>
           </div>
