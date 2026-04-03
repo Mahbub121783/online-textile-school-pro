@@ -218,6 +218,7 @@ const App = () => (
                   <Route path="forum" element={<AdminForum />} />
                   <Route path="students" element={<AdminStudents />} />
                   <Route path="students/:id" element={<StudentDetail />} />
+                  <Route path="registrations" element={<AdminRegistrations />} />
                 </Route>
                 <Route path="/learn/:courseSlug/:lessonId" element={<LessonPlayer />} />
                 <Route path="/quiz/:quizId" element={<QuizPlayer />} />
