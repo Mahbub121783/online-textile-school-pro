@@ -66,6 +66,7 @@ const bottomItems = [
   { title: 'Notifications', url: '/admin/notifications', icon: Bell },
   { title: 'Forum', url: '/admin/forum', icon: MessageSquare },
   { title: 'Activity Log', url: '/admin/activity', icon: Activity },
+  { title: 'Registration', url: '/admin/registrations', icon: ClipboardEdit },
 ];
 
 interface CollapsibleMenuProps {
