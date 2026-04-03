@@ -104,7 +104,8 @@ const ContactPage = lazy(() => import("./pages/static/ContactPage"));
 const PrivacyPage = lazy(() => import("./pages/static/PrivacyPage"));
 const TermsPage = lazy(() => import("./pages/static/TermsPage"));
 const BecomeInstructor = lazy(() => import("./pages/static/BecomeInstructor"));
-
+const PublicRegistration = lazy(() => import("./pages/registration/PublicRegistration"));
+const AdminRegistrations = lazy(() => import("./pages/admin/AdminRegistrations"));
 const queryClient = new QueryClient();
 
 const PageLoader = () => (
@@ -217,6 +218,7 @@ const App = () => (
                   <Route path="forum" element={<AdminForum />} />
                   <Route path="students" element={<AdminStudents />} />
                   <Route path="students/:id" element={<StudentDetail />} />
+                  <Route path="registrations" element={<AdminRegistrations />} />
                 </Route>
                 <Route path="/learn/:courseSlug/:lessonId" element={<LessonPlayer />} />
                 <Route path="/quiz/:quizId" element={<QuizPlayer />} />
@@ -231,6 +233,8 @@ const App = () => (
                 <Route path="/departments" element={<DepartmentsPage />} />
                 <Route path="/events" element={<EventsPage />} />
                 <Route path="/alumni" element={<AlumniPage />} />
+                <Route path="/register" element={<PublicRegistration />} />
+                <Route path="/register/:slug" element={<PublicRegistration />} />
                 {/* Forum */}
                 <Route path="/forum" element={<ForumHome />} />
                 <Route path="/forum/new" element={<CreateForumPost />} />

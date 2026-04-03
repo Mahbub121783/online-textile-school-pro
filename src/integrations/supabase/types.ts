@@ -2320,6 +2320,143 @@ export type Database = {
           },
         ]
       }
+      registration_form_config: {
+        Row: {
+          banner_url: string | null
+          countdown_target: string | null
+          custom_css: string | null
+          event_details: string | null
+          fields_order: Json | null
+          id: string
+          page_subtitle: string | null
+          page_title: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          banner_url?: string | null
+          countdown_target?: string | null
+          custom_css?: string | null
+          event_details?: string | null
+          fields_order?: Json | null
+          id?: string
+          page_subtitle?: string | null
+          page_title?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          banner_url?: string | null
+          countdown_target?: string | null
+          custom_css?: string | null
+          event_details?: string | null
+          fields_order?: Json | null
+          id?: string
+          page_subtitle?: string | null
+          page_title?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      registration_purposes: {
+        Row: {
+          created_at: string | null
+          custom_fields: Json | null
+          ends_at: string | null
+          id: string
+          is_active: boolean | null
+          max_entries: number | null
+          name: string
+          photo_required: boolean | null
+          slug: string
+          sort_order: number | null
+          starts_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          custom_fields?: Json | null
+          ends_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          max_entries?: number | null
+          name: string
+          photo_required?: boolean | null
+          slug: string
+          sort_order?: number | null
+          starts_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          custom_fields?: Json | null
+          ends_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          max_entries?: number | null
+          name?: string
+          photo_required?: boolean | null
+          slug?: string
+          sort_order?: number | null
+          starts_at?: string | null
+        }
+        Relationships: []
+      }
+      registrations: {
+        Row: {
+          batch: string | null
+          blood_group: string | null
+          business_name: string | null
+          created_at: string | null
+          email: string
+          experience_years: number | null
+          extra_fields: Json | null
+          full_name: string
+          id: string
+          job_area: string | null
+          mobile: string
+          photo_url: string | null
+          purpose_id: string | null
+          university: string | null
+        }
+        Insert: {
+          batch?: string | null
+          blood_group?: string | null
+          business_name?: string | null
+          created_at?: string | null
+          email: string
+          experience_years?: number | null
+          extra_fields?: Json | null
+          full_name: string
+          id?: string
+          job_area?: string | null
+          mobile: string
+          photo_url?: string | null
+          purpose_id?: string | null
+          university?: string | null
+        }
+        Update: {
+          batch?: string | null
+          blood_group?: string | null
+          business_name?: string | null
+          created_at?: string | null
+          email?: string
+          experience_years?: number | null
+          extra_fields?: Json | null
+          full_name?: string
+          id?: string
+          job_area?: string | null
+          mobile?: string
+          photo_url?: string | null
+          purpose_id?: string | null
+          university?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "registrations_purpose_id_fkey"
+            columns: ["purpose_id"]
+            isOneToOne: false
+            referencedRelation: "registration_purposes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       reviews: {
         Row: {
           comment: string | null

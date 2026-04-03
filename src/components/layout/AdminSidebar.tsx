@@ -1,4 +1,4 @@
-import { LayoutDashboard, Users, BookOpen, Image, Activity, LogOut, GraduationCap, Tag, Wallet, FileText, PenTool, ImageIcon, Menu, Palette, Video, HelpCircle, ClipboardList, Award, Settings, ChevronDown, BarChart3, UserCog, CheckSquare, DollarSign, Shield, MessageSquare, Wrench, Mail, CreditCard, ReceiptText, Cloud, Bell, ShoppingCart, HardDrive, Crown, Server } from 'lucide-react';
+import { LayoutDashboard, Users, BookOpen, Image, Activity, LogOut, GraduationCap, Tag, Wallet, FileText, PenTool, ImageIcon, Menu, Palette, Video, HelpCircle, ClipboardList, Award, Settings, ChevronDown, BarChart3, UserCog, CheckSquare, DollarSign, Shield, MessageSquare, Wrench, Mail, CreditCard, ReceiptText, Cloud, Bell, ShoppingCart, HardDrive, Crown, Server, ClipboardEdit } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
@@ -66,6 +66,7 @@ const bottomItems = [
   { title: 'Notifications', url: '/admin/notifications', icon: Bell },
   { title: 'Forum', url: '/admin/forum', icon: MessageSquare },
   { title: 'Activity Log', url: '/admin/activity', icon: Activity },
+  { title: 'Registration', url: '/admin/registrations', icon: ClipboardEdit },
 ];
 
 interface CollapsibleMenuProps {
