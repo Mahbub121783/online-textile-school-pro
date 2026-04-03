@@ -2,19 +2,22 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useProfileCompleteness } from '@/hooks/useProfileCompleteness';
 import { renderIdCard, downloadIdCardPdf, downloadIdCardPng, IdCardData, IdCardSettings } from '@/lib/idCardRenderer';
 import { ensureStudentIdCard } from '@/lib/ensureStudentIdCard';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Download, CreditCard, RefreshCw, FileImage, FileText, ChevronDown } from 'lucide-react';
+import { Download, CreditCard, RefreshCw, FileImage, FileText, ChevronDown, AlertTriangle, ShieldX } from 'lucide-react';
 import { format } from 'date-fns';
+import { Link } from 'react-router-dom';
 
 interface Props {
   userId?: string;
@@ -22,6 +25,7 @@ interface Props {
 
 export default function StudentIdCard({ userId }: Props) {
   const { user, profile } = useAuth();
+  const { isComplete, incomplete, percentage } = useProfileCompleteness(profile);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const cardWrapperRef = useRef<HTMLDivElement>(null);
   const [downloading, setDownloading] = useState(false);
@@ -129,6 +133,8 @@ export default function StudentIdCard({ userId }: Props) {
 
   const isExpired = new Date(idCard.valid_until) < new Date();
   const isActive = idCard.is_active && !isExpired;
+  const isDownloadBlocked = !!(idCard as any).download_blocked;
+  const canDownload = isComplete && !isDownloadBlocked;
 
   return (
     <Card className="overflow-hidden border-0 shadow-lg bg-gradient-to-br from-background to-muted/30">
@@ -147,7 +153,7 @@ export default function StudentIdCard({ userId }: Props) {
             </Badge>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button size="sm" variant="outline" disabled={downloading} className="gap-1">
+                <Button size="sm" variant="outline" disabled={downloading || !canDownload} className="gap-1">
                   {downloading ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
                   Download
                   <ChevronDown className="h-3 w-3" />
@@ -166,6 +172,24 @@ export default function StudentIdCard({ userId }: Props) {
         </div>
       </CardHeader>
       <CardContent>
+        {!isComplete && !userId && (
+          <Alert variant="destructive" className="mb-4">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>
+              <span className="font-medium">Profile {percentage}% complete.</span> Complete your profile to download.
+              Missing: {incomplete.map(f => f.label).join(', ')}.{' '}
+              <Link to="/dashboard/settings" className="underline font-medium">Complete Profile →</Link>
+            </AlertDescription>
+          </Alert>
+        )}
+        {isDownloadBlocked && (
+          <Alert variant="destructive" className="mb-4">
+            <ShieldX className="h-4 w-4" />
+            <AlertDescription>
+              <span className="font-medium">Download blocked by administrator.</span> Contact support for assistance.
+            </AlertDescription>
+          </Alert>
+        )}
         <div className="flex justify-center">
           <div
             ref={cardWrapperRef}

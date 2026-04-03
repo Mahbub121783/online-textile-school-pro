@@ -2366,6 +2366,7 @@ export type Database = {
         Row: {
           card_number: string
           created_at: string | null
+          download_blocked: boolean
           id: string
           is_active: boolean
           updated_at: string | null
@@ -2376,6 +2377,7 @@ export type Database = {
         Insert: {
           card_number: string
           created_at?: string | null
+          download_blocked?: boolean
           id?: string
           is_active?: boolean
           updated_at?: string | null
@@ -2386,6 +2388,7 @@ export type Database = {
         Update: {
           card_number?: string
           created_at?: string | null
+          download_blocked?: boolean
           id?: string
           is_active?: boolean
           updated_at?: string | null
