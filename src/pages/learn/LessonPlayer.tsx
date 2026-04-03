@@ -240,25 +240,15 @@ const LessonPlayer = () => {
             </div>
           ) : (
             <>
-              {/* Video with anti-download overlay */}
-              <div className="aspect-video bg-black w-full relative" onContextMenu={e => e.preventDefault()}>
-                {embedUrl ? (
-                  <>
-                    <iframe
-                      src={embedUrl}
-                      className="w-full h-full"
-                      allowFullScreen
-                      allow="autoplay; encrypted-media"
-                      sandbox="allow-scripts allow-same-origin allow-presentation"
-                    />
-                    <div className="absolute inset-0 pointer-events-none" />
-                  </>
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center text-muted-foreground">
-                    <Play className="h-16 w-16 opacity-30" />
-                  </div>
-                )}
-              </div>
+              {/* Advanced Secure Media Player */}
+              <SecureMediaPlayer
+                videoUrl={currentLesson?.video_url}
+                videoPlatform={currentLesson?.video_platform}
+                title={currentLesson?.title}
+                onProgress={handleVideoProgress}
+                startPosition={savedPosition}
+                watermark={user?.email}
+              />
 
               {/* Lesson info & tabs */}
               <div className="p-4 md:p-6 space-y-4">
