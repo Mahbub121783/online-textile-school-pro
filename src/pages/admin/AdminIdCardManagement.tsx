@@ -29,7 +29,7 @@ export default function AdminIdCardManagement() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('student_id_cards')
-        .select('*, user_profiles!student_id_cards_user_id_fkey(full_name, roll_id, avatar_url, email)')
+        .select('*, user_profiles!student_id_cards_user_id_fkey(full_name, roll_id, avatar_url)')
         .order('created_at', { ascending: false });
       if (error) throw error;
       return data || [];
