@@ -3,8 +3,9 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent } from '@/components/ui/card';
+import SecureMediaPlayer from '@/components/media/SecureMediaPlayer';
 import {
-  Play, Monitor, Download, BookOpen, ClipboardList, ExternalLink, Lock, Clock, CalendarIcon
+  Monitor, Download, BookOpen, ClipboardList, ExternalLink, Lock, Clock, CalendarIcon
 } from 'lucide-react';
 import { format } from 'date-fns';
 
