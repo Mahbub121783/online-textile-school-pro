@@ -688,7 +688,7 @@ const EbookReader = () => {
 
   return (
     <div
-      className={`min-h-screen flex flex-col select-none ${modeStyles[readingMode]} transition-colors duration-300`}
+      className={`h-screen flex flex-col select-none overflow-hidden ${modeStyles[readingMode]} transition-colors duration-300`}
       style={{ filter: `brightness(${brightness}%)` }}
       onContextMenu={(e) => e.preventDefault()}
     >
@@ -698,7 +698,7 @@ const EbookReader = () => {
           position: absolute;
           left: 0;
           top: 0;
-          opacity: 0.3;
+          opacity: 1;
           line-height: 1;
           z-index: 2;
           overflow: hidden;
@@ -710,9 +710,14 @@ const EbookReader = () => {
           cursor: text;
           -webkit-user-select: text;
           user-select: text;
+          -webkit-touch-callout: none;
         }
         .text-layer-container span::selection {
-          background: rgba(96, 165, 250, 0.35);
+          background: rgba(96, 165, 250, 0.4);
+          color: transparent;
+        }
+        .text-layer-container span::-moz-selection {
+          background: rgba(96, 165, 250, 0.4);
           color: transparent;
         }
         .reader-blurred .reader-content {
