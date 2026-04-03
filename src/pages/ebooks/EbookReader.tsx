@@ -297,10 +297,13 @@ const EbookReader = () => {
   };
 
   // ===== Render page with canvas + text layer + watermark =====
+  const renderingRef = useRef(false);
+
   const renderPage = useCallback(async (pageNum: number, pdf?: any) => {
     const doc = pdf || pdfDocRef.current;
-    if (!doc || !canvasRef.current || rendering) return;
+    if (!doc || !canvasRef.current || renderingRef.current) return;
 
+    renderingRef.current = true;
     setRendering(true);
     setSelectionToolbar(null);
 
@@ -314,8 +317,11 @@ const EbookReader = () => {
       const containerHeight = container?.clientHeight || window.innerHeight;
 
       const viewport = page.getViewport({ scale: 1 });
-      // Fit to container width for full readable view — allow vertical scroll
-      const scale = ((containerWidth - 16) / viewport.width) * (fontSize / 16);
+      // Fit to width but cap so it doesn't exceed container height — whichever gives a bigger readable view
+      const scaleW = (containerWidth - 16) / viewport.width;
+      const scaleH = (containerHeight - 16) / viewport.height;
+      // Use width-fit but cap to avoid oversized pages that cause scroll jumps
+      const scale = Math.min(scaleW, Math.max(scaleH, scaleW * 0.95)) * (fontSize / 16);
 
       const scaledViewport = page.getViewport({ scale });
       canvas.width = scaledViewport.width;
@@ -363,9 +369,10 @@ const EbookReader = () => {
     } catch (err) {
       console.error('Render error:', err);
     } finally {
+      renderingRef.current = false;
       setRendering(false);
     }
-  }, [rendering, fontSize, user, highlights]);
+  }, [fontSize, user, highlights]);
 
   // ===== Apply highlights to text layer spans =====
   const applyHighlightsToTextLayer = useCallback((pageNum: number, container: HTMLDivElement) => {
@@ -528,14 +535,25 @@ const EbookReader = () => {
     setHighlights((prev) => prev.filter((h) => h.id !== id));
   };
 
-  // ===== ResizeObserver =====
+  // ===== ResizeObserver — debounced to prevent render loops =====
   useEffect(() => {
     if (loadingState !== 'ready' || !containerRef.current) return;
-    resizeObserverRef.current = new ResizeObserver(() => {
-      renderPage(currentPage);
+    let resizeTimer: ReturnType<typeof setTimeout> | null = null;
+    let lastWidth = containerRef.current.clientWidth;
+
+    resizeObserverRef.current = new ResizeObserver((entries) => {
+      const newWidth = entries[0]?.contentRect?.width || 0;
+      // Only re-render on width change (height changes from canvas resize should be ignored)
+      if (Math.abs(newWidth - lastWidth) < 2) return;
+      lastWidth = newWidth;
+      if (resizeTimer) clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => renderPage(currentPage), 200);
     });
     resizeObserverRef.current.observe(containerRef.current);
-    return () => resizeObserverRef.current?.disconnect();
+    return () => {
+      if (resizeTimer) clearTimeout(resizeTimer);
+      resizeObserverRef.current?.disconnect();
+    };
   }, [loadingState]);
 
   // Re-render on page/fontSize change
@@ -796,7 +814,7 @@ const EbookReader = () => {
       <div className={`flex-1 flex overflow-hidden reader-content ${isBlurred ? 'reader-blurred' : ''}`}>
         <div
           ref={containerRef}
-          className="flex-1 flex justify-center overflow-auto p-2 sm:p-4 relative"
+          className="flex-1 flex items-center justify-center overflow-auto p-2 sm:p-4 relative"
           onClick={(e) => {
             // Only toggle controls if click is not on text layer
             if (!(e.target as HTMLElement).closest('.text-layer-container') && !selectionToolbar) {
