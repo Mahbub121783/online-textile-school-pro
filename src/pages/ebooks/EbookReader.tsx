@@ -12,7 +12,7 @@ import { Textarea } from '@/components/ui/textarea';
 import {
   ArrowLeft, ChevronLeft, ChevronRight, Sun, Moon, BookOpen,
   Minus, Plus, StickyNote, X, Loader2, Type, Lightbulb, List,
-  Highlighter, MessageSquare, Palette, Trash2
+  Highlighter, MessageSquare, Trash2
 } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist';
 
@@ -23,6 +23,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
 ).toString();
 
 type ReadingMode = 'light' | 'dark' | 'sepia';
+type FitMode = 'width' | 'page';
 type HighlightColor = 'yellow' | 'green' | 'blue' | 'pink';
 
 interface HighlightItem {
@@ -71,6 +72,9 @@ const EbookReader = () => {
   const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
   const pageLabelsRef = useRef<string[] | null>(null);
+  const renderingRef = useRef(false);
+  const renderPageRef = useRef<((pageNum: number, pdf?: any) => Promise<void>) | null>(null);
+  const currentPageRef = useRef(1);
 
   const [loadingState, setLoadingState] = useState<'auth' | 'loading' | 'ready' | 'error'>('auth');
   const [loadingProgress, setLoadingProgress] = useState(0);
@@ -79,7 +83,8 @@ const EbookReader = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(0);
   const [readingMode, setReadingMode] = useState<ReadingMode>('light');
-  const [fontSize, setFontSize] = useState(16);
+  const [fitMode, setFitMode] = useState<FitMode>('width');
+  const [zoomLevel, setZoomLevel] = useState(100);
   const [brightness, setBrightness] = useState(100);
   const [showControls, setShowControls] = useState(true);
   const [showNotes, setShowNotes] = useState(false);
@@ -102,17 +107,18 @@ const EbookReader = () => {
     color: HighlightColor; text: string; startOffset: number; endOffset: number; noteText: string;
   } | null>(null);
 
+  // Keep ref in sync
+  useEffect(() => { currentPageRef.current = currentPage; }, [currentPage]);
+
   // ===== DRM: block right-click, printing, copy, screenshots, drag =====
   useEffect(() => {
     const blockCtxMenu = (e: MouseEvent) => e.preventDefault();
     const blockCopy = (e: ClipboardEvent) => e.preventDefault();
     const blockDrag = (e: DragEvent) => e.preventDefault();
     const blockKeys = (e: KeyboardEvent) => {
-      // Block print, save, copy, screenshot combos
       if ((e.ctrlKey || e.metaKey) && ['p', 's', 'c', 'P', 'S', 'C'].includes(e.key)) {
         e.preventDefault();
       }
-      // Block PrtScn, Ctrl+Shift+S, Ctrl+Shift+I
       if (e.key === 'PrintScreen') e.preventDefault();
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && ['s', 'S', 'i', 'I'].includes(e.key)) {
         e.preventDefault();
@@ -134,9 +140,7 @@ const EbookReader = () => {
 
   // ===== Visibility API: blur content when tab loses focus =====
   useEffect(() => {
-    const handleVisibility = () => {
-      setIsBlurred(document.hidden);
-    };
+    const handleVisibility = () => { setIsBlurred(document.hidden); };
     document.addEventListener('visibilitychange', handleVisibility);
     return () => document.removeEventListener('visibilitychange', handleVisibility);
   }, []);
@@ -258,9 +262,13 @@ const EbookReader = () => {
         .maybeSingle();
 
       const startPage = progress?.current_page || 1;
+      const restoredZoom = typeof progress?.font_size === 'number' && progress.font_size >= 50
+        ? progress.font_size
+        : 100;
       setCurrentPage(startPage);
+      currentPageRef.current = startPage;
       setReadingMode((progress?.reading_mode as ReadingMode) || 'light');
-      setFontSize(progress?.font_size || 16);
+      setZoomLevel(restoredZoom);
       setBrightness(progress?.brightness || 100);
 
       // Parse saved data — highlights are stored alongside notes
@@ -270,7 +278,6 @@ const EbookReader = () => {
         setHighlights(rd.highlights || []);
         setNotes(rd.notes || []);
       } else if (Array.isArray(savedData)) {
-        // Legacy format — old notes array
         setNotes(savedData as NoteItem[]);
         setHighlights([]);
       } else {
@@ -297,8 +304,6 @@ const EbookReader = () => {
   };
 
   // ===== Render page with canvas + text layer + watermark =====
-  const renderingRef = useRef(false);
-
   const renderPage = useCallback(async (pageNum: number, pdf?: any) => {
     const doc = pdf || pdfDocRef.current;
     if (!doc || !canvasRef.current || renderingRef.current) return;
@@ -310,22 +315,35 @@ const EbookReader = () => {
     try {
       const page = await doc.getPage(pageNum);
       const canvas = canvasRef.current;
-      const ctx = canvas.getContext('2d')!;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
 
       const container = containerRef.current;
       const containerWidth = container?.clientWidth || window.innerWidth;
       const containerHeight = container?.clientHeight || window.innerHeight;
-
       const viewport = page.getViewport({ scale: 1 });
-      // Fit to width but cap so it doesn't exceed container height — whichever gives a bigger readable view
-      const scaleW = (containerWidth - 16) / viewport.width;
-      const scaleH = (containerHeight - 16) / viewport.height;
-      // Use width-fit but cap to avoid oversized pages that cause scroll jumps
-      const scale = Math.min(scaleW, Math.max(scaleH, scaleW * 0.95)) * (fontSize / 16);
 
+      // Calculate fit scales
+      const pagePadding = window.innerWidth < 640 ? 12 : 24;
+      const fitWidthScale = Math.max(0.1, (containerWidth - pagePadding * 2) / viewport.width);
+      const fitPageScale = Math.max(0.1, Math.min(
+        (containerWidth - pagePadding * 2) / viewport.width,
+        (containerHeight - pagePadding * 2) / viewport.height
+      ));
+      const baseScale = fitMode === 'page' ? fitPageScale : fitWidthScale;
+      const scale = Math.max(0.1, baseScale * (zoomLevel / 100));
       const scaledViewport = page.getViewport({ scale });
-      canvas.width = scaledViewport.width;
-      canvas.height = scaledViewport.height;
+
+      // DPR-aware canvas for retina clarity
+      const outputScale = window.devicePixelRatio || 1;
+      canvas.width = Math.floor(scaledViewport.width * outputScale);
+      canvas.height = Math.floor(scaledViewport.height * outputScale);
+      canvas.style.width = `${scaledViewport.width}px`;
+      canvas.style.height = `${scaledViewport.height}px`;
+
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.setTransform(outputScale, 0, 0, outputScale, 0, 0);
 
       await page.render({ canvasContext: ctx, viewport: scaledViewport }).promise;
 
@@ -354,16 +372,17 @@ const EbookReader = () => {
         textLayerDiv.style.width = `${scaledViewport.width}px`;
         textLayerDiv.style.height = `${scaledViewport.height}px`;
 
-        const textContent = await page.getTextContent();
+        const textContentSource = typeof page.streamTextContent === 'function'
+          ? page.streamTextContent()
+          : await page.getTextContent();
 
         const textLayerInstance = new pdfjsLib.TextLayer({
-          textContentSource: textContent,
+          textContentSource,
           container: textLayerDiv,
           viewport: scaledViewport,
         });
         await textLayerInstance.render();
 
-        // Re-apply highlights for this page
         applyHighlightsToTextLayer(pageNum, textLayerDiv);
       }
     } catch (err) {
@@ -372,7 +391,10 @@ const EbookReader = () => {
       renderingRef.current = false;
       setRendering(false);
     }
-  }, [fontSize, user, highlights]);
+  }, [fitMode, zoomLevel, user, highlights]);
+
+  // Keep renderPageRef in sync
+  useEffect(() => { renderPageRef.current = renderPage; }, [renderPage]);
 
   // ===== Apply highlights to text layer spans =====
   const applyHighlightsToTextLayer = useCallback((pageNum: number, container: HTMLDivElement) => {
@@ -415,7 +437,6 @@ const EbookReader = () => {
       return;
     }
 
-    // Calculate offsets within text layer
     const spans = textLayerRef.current.querySelectorAll('span');
     let runningOffset = 0;
     let startOffset = 0;
@@ -437,7 +458,6 @@ const EbookReader = () => {
     });
 
     if (!foundStart) {
-      // Fallback — use full text search
       const fullText = Array.from(spans).map((s) => s.textContent || '').join('');
       const idx = fullText.indexOf(selectedText);
       if (idx >= 0) {
@@ -446,7 +466,6 @@ const EbookReader = () => {
       }
     }
 
-    // Position toolbar near selection
     const rect = range.getBoundingClientRect();
     const containerRect = containerRef.current?.getBoundingClientRect();
     if (containerRect) {
@@ -460,17 +479,31 @@ const EbookReader = () => {
     }
   }, []);
 
-  // Listen for mouseup on text layer
+  // Listen for mouse/touch/selection events on text layer
   useEffect(() => {
     const textLayer = textLayerRef.current;
     if (!textLayer) return;
 
-    const onMouseUp = () => {
-      setTimeout(handleTextSelection, 50);
+    const scheduleCheck = () => { window.setTimeout(handleTextSelection, 60); };
+
+    const onSelectionChange = () => {
+      const selection = window.getSelection();
+      if (!selection || selection.isCollapsed) return;
+      if (selection.anchorNode && textLayer.contains(selection.anchorNode)) {
+        scheduleCheck();
+      }
     };
-    textLayer.addEventListener('mouseup', onMouseUp);
-    return () => textLayer.removeEventListener('mouseup', onMouseUp);
-  }, [handleTextSelection, loadingState]);
+
+    textLayer.addEventListener('mouseup', scheduleCheck);
+    textLayer.addEventListener('touchend', scheduleCheck);
+    document.addEventListener('selectionchange', onSelectionChange);
+
+    return () => {
+      textLayer.removeEventListener('mouseup', scheduleCheck);
+      textLayer.removeEventListener('touchend', scheduleCheck);
+      document.removeEventListener('selectionchange', onSelectionChange);
+    };
+  }, [handleTextSelection, currentPage, loadingState]);
 
   // ===== Add highlight =====
   const addHighlight = (color: HighlightColor, withNote = false) => {
@@ -503,7 +536,6 @@ const EbookReader = () => {
     setSelectionToolbar(null);
     window.getSelection()?.removeAllRanges();
 
-    // Re-apply to current text layer
     if (textLayerRef.current) {
       applyHighlightsToTextLayer(currentPage, textLayerRef.current);
     }
@@ -535,7 +567,7 @@ const EbookReader = () => {
     setHighlights((prev) => prev.filter((h) => h.id !== id));
   };
 
-  // ===== ResizeObserver — debounced to prevent render loops =====
+  // ===== ResizeObserver — width-only, stable via refs =====
   useEffect(() => {
     if (loadingState !== 'ready' || !containerRef.current) return;
     let resizeTimer: ReturnType<typeof setTimeout> | null = null;
@@ -543,12 +575,14 @@ const EbookReader = () => {
 
     resizeObserverRef.current = new ResizeObserver((entries) => {
       const newWidth = entries[0]?.contentRect?.width || 0;
-      // Only re-render on width change (height changes from canvas resize should be ignored)
       if (Math.abs(newWidth - lastWidth) < 2) return;
       lastWidth = newWidth;
       if (resizeTimer) clearTimeout(resizeTimer);
-      resizeTimer = setTimeout(() => renderPage(currentPage), 200);
+      resizeTimer = setTimeout(() => {
+        renderPageRef.current?.(currentPageRef.current);
+      }, 150);
     });
+
     resizeObserverRef.current.observe(containerRef.current);
     return () => {
       if (resizeTimer) clearTimeout(resizeTimer);
@@ -556,10 +590,18 @@ const EbookReader = () => {
     };
   }, [loadingState]);
 
-  // Re-render on page/fontSize change
+  // Reset scroll on page change
+  useEffect(() => {
+    if (containerRef.current) {
+      containerRef.current.scrollTop = 0;
+      containerRef.current.scrollLeft = 0;
+    }
+  }, [currentPage]);
+
+  // Re-render on page/zoom/fit change
   useEffect(() => {
     if (loadingState === 'ready') renderPage(currentPage);
-  }, [currentPage, fontSize, loadingState]);
+  }, [currentPage, fitMode, zoomLevel, loadingState, renderPage]);
 
   // ===== Debounced save progress (highlights + notes) =====
   const saveProgress = useCallback(() => {
@@ -577,15 +619,15 @@ const EbookReader = () => {
           total_pages: totalPages,
           progress_pct: progressPct,
           reading_mode: readingMode,
-          font_size: fontSize,
+          font_size: zoomLevel,
           brightness,
           notes: readerData as unknown as any,
           updated_at: new Date().toISOString(),
         } as any, { onConflict: 'user_id,ebook_id' });
     }, 800);
-  }, [currentPage, totalPages, readingMode, fontSize, brightness, notes, highlights, user, ebookId]);
+  }, [currentPage, totalPages, readingMode, zoomLevel, brightness, notes, highlights, user, ebookId]);
 
-  useEffect(() => { saveProgress(); }, [currentPage, readingMode, fontSize, brightness, notes, highlights]);
+  useEffect(() => { saveProgress(); }, [currentPage, readingMode, zoomLevel, brightness, notes, highlights]);
 
   // ===== Keyboard navigation =====
   useEffect(() => {
@@ -705,7 +747,7 @@ const EbookReader = () => {
 
   return (
     <div
-      className={`h-screen flex flex-col select-none overflow-hidden ${modeStyles[readingMode]} transition-colors duration-300`}
+      className={`h-screen flex flex-col overflow-hidden ${modeStyles[readingMode]} transition-colors duration-300`}
       style={{ filter: `brightness(${brightness}%)` }}
       onContextMenu={(e) => e.preventDefault()}
     >
@@ -713,21 +755,27 @@ const EbookReader = () => {
         @media print { body * { display: none !important; } }
         .text-layer-container {
           position: absolute;
-          left: 0;
-          top: 0;
+          inset: 0;
+          overflow: hidden;
           opacity: 1;
           line-height: 1;
           z-index: 2;
-          overflow: hidden;
+          text-align: initial;
+          transform-origin: 0 0;
+          -webkit-text-size-adjust: none;
+          forced-color-adjust: none;
+          touch-action: pan-y;
         }
-        .text-layer-container span {
+        .text-layer-container span,
+        .text-layer-container br {
           position: absolute;
           white-space: pre;
           color: transparent;
           cursor: text;
+          transform-origin: 0 0;
           -webkit-user-select: text;
           user-select: text;
-          -webkit-touch-callout: none;
+          -webkit-touch-callout: default;
         }
         .text-layer-container span::selection {
           background: rgba(96, 165, 250, 0.4);
@@ -736,6 +784,11 @@ const EbookReader = () => {
         .text-layer-container span::-moz-selection {
           background: rgba(96, 165, 250, 0.4);
           color: transparent;
+        }
+        .pdf-page-canvas {
+          display: block;
+          max-width: none;
+          max-height: none;
         }
         .reader-blurred .reader-content {
           filter: blur(20px) !important;
@@ -780,16 +833,33 @@ const EbookReader = () => {
             ))}
           </div>
 
-          {/* Font size */}
-          <div className="hidden sm:flex items-center gap-0.5">
-            <button onClick={() => setFontSize((s) => Math.max(10, s - 2))} className="p-1 hover:bg-muted rounded">
-              <Minus className="h-3.5 w-3.5" />
-            </button>
-            <Type className="h-3.5 w-3.5" />
-            <span className="text-xs w-6 text-center">{fontSize}</span>
-            <button onClick={() => setFontSize((s) => Math.min(32, s + 2))} className="p-1 hover:bg-muted rounded">
-              <Plus className="h-3.5 w-3.5" />
-            </button>
+          {/* Zoom + fit mode */}
+          <div className="flex items-center gap-1">
+            <div className="hidden sm:flex items-center gap-0.5">
+              <button onClick={() => setZoomLevel((s) => Math.max(50, s - 10))} className="p-1 hover:bg-muted rounded">
+                <Minus className="h-3.5 w-3.5" />
+              </button>
+              <Type className="h-3.5 w-3.5" />
+              <span className="text-xs min-w-10 text-center">{zoomLevel}%</span>
+              <button onClick={() => setZoomLevel((s) => Math.min(200, s + 10))} className="p-1 hover:bg-muted rounded">
+                <Plus className="h-3.5 w-3.5" />
+              </button>
+            </div>
+            <div className="flex items-center gap-0.5 border rounded-lg px-0.5 py-0.5">
+              {[
+                { mode: 'width' as const, label: 'W' },
+                { mode: 'page' as const, label: 'P' },
+              ].map(({ mode, label }) => (
+                <button
+                  key={mode}
+                  onClick={() => setFitMode(mode)}
+                  className={`px-1.5 sm:px-2 py-1 rounded text-[10px] sm:text-xs ${fitMode === mode ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
+                  title={mode === 'width' ? 'Fit Width' : 'Fit Page'}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Brightness */}
@@ -814,9 +884,8 @@ const EbookReader = () => {
       <div className={`flex-1 flex overflow-hidden reader-content ${isBlurred ? 'reader-blurred' : ''}`}>
         <div
           ref={containerRef}
-          className="flex-1 flex items-center justify-center overflow-auto p-2 sm:p-4 relative"
+          className={`flex-1 flex justify-center overflow-auto p-2 sm:p-4 relative ${fitMode === 'width' ? 'items-start' : 'items-center'}`}
           onClick={(e) => {
-            // Only toggle controls if click is not on text layer
             if (!(e.target as HTMLElement).closest('.text-layer-container') && !selectionToolbar) {
               setShowControls((s) => !s);
             }
@@ -827,7 +896,7 @@ const EbookReader = () => {
           <div className="relative">
             <canvas
               ref={canvasRef}
-              className={`max-w-full max-h-full shadow-2xl rounded-sm transition-opacity duration-200 ${pageTransition ? 'opacity-0' : 'opacity-100'}`}
+              className={`pdf-page-canvas shadow-2xl rounded-sm transition-opacity duration-200 ${pageTransition ? 'opacity-0' : 'opacity-100'}`}
               style={{ userSelect: 'none' }}
               onDragStart={(e) => e.preventDefault()}
             />
@@ -836,6 +905,9 @@ const EbookReader = () => {
               ref={textLayerRef}
               className="text-layer-container"
               style={{ pointerEvents: 'auto' }}
+              onMouseDown={(e) => e.stopPropagation()}
+              onTouchStart={(e) => e.stopPropagation()}
+              onTouchEnd={(e) => e.stopPropagation()}
               onCopy={(e) => e.preventDefault()}
             />
           </div>
