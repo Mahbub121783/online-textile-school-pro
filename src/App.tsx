@@ -233,6 +233,8 @@ const App = () => (
                 <Route path="/departments" element={<DepartmentsPage />} />
                 <Route path="/events" element={<EventsPage />} />
                 <Route path="/alumni" element={<AlumniPage />} />
+                <Route path="/register" element={<PublicRegistration />} />
+                <Route path="/register/:slug" element={<PublicRegistration />} />
                 {/* Forum */}
                 <Route path="/forum" element={<ForumHome />} />
                 <Route path="/forum/new" element={<CreateForumPost />} />
