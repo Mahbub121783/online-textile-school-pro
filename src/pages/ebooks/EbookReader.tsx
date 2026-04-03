@@ -814,7 +814,7 @@ const EbookReader = () => {
       <div className={`flex-1 flex overflow-hidden reader-content ${isBlurred ? 'reader-blurred' : ''}`}>
         <div
           ref={containerRef}
-          className="flex-1 flex justify-center overflow-auto p-2 sm:p-4 relative"
+          className="flex-1 flex items-center justify-center overflow-auto p-2 sm:p-4 relative"
           onClick={(e) => {
             // Only toggle controls if click is not on text layer
             if (!(e.target as HTMLElement).closest('.text-layer-container') && !selectionToolbar) {
