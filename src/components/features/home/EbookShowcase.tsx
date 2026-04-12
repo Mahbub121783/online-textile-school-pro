@@ -17,15 +17,8 @@ const EbookShowcase = () => {
         .select('id, title, slug, author, cover_url, price, discount_price, download_count, created_at')
         .eq('is_published', true)
         .order('created_at', { ascending: false })
-        .limit(12);
-      const now = Date.now();
-      const scored = (data ?? []).map((b: any) => {
-        const ageDays = (now - new Date(b.created_at).getTime()) / 86400000;
-        const recencyBoost = Math.max(0, 30 - ageDays) * 3;
-        return { ...b, _score: (b.download_count || 0) + recencyBoost };
-      });
-      scored.sort((a: any, b: any) => b._score - a._score);
-      return scored.slice(0, 4);
+        .limit(4);
+      return data ?? [];
     },
     staleTime: 2 * 60 * 1000,
   });
