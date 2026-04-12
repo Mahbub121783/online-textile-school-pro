@@ -29,17 +29,8 @@ const FeaturedCourses = () => {
         .select('id, title, slug, price, discount_price, avg_rating, enrollment_count, total_duration_minutes, difficulty_level, thumbnail_url, category_id, categories(name), user_profiles!courses_instructor_id_fkey(full_name), created_at')
         .eq('is_published', true)
         .order('created_at', { ascending: false })
-        .limit(20);
-      // Hybrid score: newer items get a boost so they appear alongside popular ones
-      const now = Date.now();
-      const scored = (data ?? []).map((c: any) => {
-        const ageDays = (now - new Date(c.created_at).getTime()) / 86400000;
-        const recencyBoost = Math.max(0, 30 - ageDays) * 2; // up to 60 pts for items < 30 days old
-        const popularityScore = (c.enrollment_count || 0) + (Number(c.avg_rating) || 0) * 5;
-        return { ...c, _score: popularityScore + recencyBoost };
-      });
-      scored.sort((a: any, b: any) => b._score - a._score);
-      return scored.slice(0, 8);
+        .limit(8);
+      return data ?? [];
     },
     staleTime: 2 * 60 * 1000,
   });
