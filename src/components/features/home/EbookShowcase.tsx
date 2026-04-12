@@ -14,13 +14,20 @@ const EbookShowcase = () => {
     queryFn: async () => {
       const { data } = await supabase
         .from('ebooks')
-        .select('id, title, slug, author, cover_url, price, discount_price, download_count')
+        .select('id, title, slug, author, cover_url, price, discount_price, download_count, created_at')
         .eq('is_published', true)
-        .order('download_count', { ascending: false })
-        .limit(4);
-      return data ?? [];
+        .order('created_at', { ascending: false })
+        .limit(12);
+      const now = Date.now();
+      const scored = (data ?? []).map((b: any) => {
+        const ageDays = (now - new Date(b.created_at).getTime()) / 86400000;
+        const recencyBoost = Math.max(0, 30 - ageDays) * 3;
+        return { ...b, _score: (b.download_count || 0) + recencyBoost };
+      });
+      scored.sort((a: any, b: any) => b._score - a._score);
+      return scored.slice(0, 4);
     },
-    staleTime: 5 * 60 * 1000,
+    staleTime: 2 * 60 * 1000,
   });
 
   if (!isLoading && ebooks.length === 0) return null;
