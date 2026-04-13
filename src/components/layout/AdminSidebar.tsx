@@ -187,6 +187,7 @@ export function AdminSidebar() {
               <CollapsibleMenu label="Setup" icon={Wrench} items={setupSubItems} basePath="/admin/setup" collapsed={collapsed} groupClass="group/collapsible-setup" />
               <CollapsibleMenu label="Payment" icon={CreditCard} items={paymentSubItems} basePath="/admin/payment" collapsed={collapsed} groupClass="group/collapsible-pay" />
               <CollapsibleMenu label="Engagement" icon={Star} items={engagementSubItems} basePath="/admin/reviews" collapsed={collapsed} groupClass="group/collapsible-eng" />
+              <CollapsibleMenu label="Career & Research" icon={Briefcase} items={careerSubItems} basePath="/admin/internships" collapsed={collapsed} groupClass="group/collapsible-career" />
               {bottomItems.map(renderNavItem)}
               {isSuperAdmin && (
                 <>
