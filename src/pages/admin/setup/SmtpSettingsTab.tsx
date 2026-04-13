@@ -210,6 +210,15 @@ const SmtpSettingsTab = () => {
         </CardContent>
       </Card>
 
+      <MediaPickerModal
+        open={mediaOpen}
+        onClose={() => setMediaOpen(false)}
+        onSelect={(url) => {
+          setForm(p => ({ ...p, email_logo_url: url }));
+          setMediaOpen(false);
+        }}
+      />
+
       {/* Actions */}
       <div className="flex gap-3">
         <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
