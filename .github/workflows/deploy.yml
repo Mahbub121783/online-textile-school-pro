@@ -28,7 +28,7 @@ jobs:
           server: ${{ secrets.FTP_SERVER }}
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
-          # Lovable/Vite er build folder holo dist
+          # Lovable/Vite er build folder holo distk
           local-dir: ./dist/ 
           # Tomar specific domain folder path
           server-dir: ./onlinetextileschool.com/
