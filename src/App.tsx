@@ -107,6 +107,9 @@ const BecomeInstructor = lazy(() => import("./pages/static/BecomeInstructor"));
 const PublicRegistration = lazy(() => import("./pages/registration/PublicRegistration"));
 const AdminRegistrations = lazy(() => import("./pages/admin/AdminRegistrations"));
 const AdminSiteContent = lazy(() => import("./pages/admin/AdminSiteContent"));
+const AdminBatches = lazy(() => import("./pages/admin/AdminBatches"));
+const AdminAcademicCalendar = lazy(() => import("./pages/admin/AdminAcademicCalendar"));
+const AdminGradeConfig = lazy(() => import("./pages/admin/AdminGradeConfig"));
 
 // Optimized QueryClient with aggressive caching
 const queryClient = new QueryClient({
@@ -232,6 +235,9 @@ const App = () => (
                   <Route path="students/:id" element={<StudentDetail />} />
                   <Route path="registrations" element={<AdminRegistrations />} />
                   <Route path="site-content" element={<AdminSiteContent />} />
+                  <Route path="batches" element={<AdminBatches />} />
+                  <Route path="academic-calendar" element={<AdminAcademicCalendar />} />
+                  <Route path="grade-config" element={<AdminGradeConfig />} />
                 </Route>
                 <Route path="/learn/:courseSlug/:lessonId" element={<LessonPlayer />} />
                 <Route path="/quiz/:quizId" element={<QuizPlayer />} />
