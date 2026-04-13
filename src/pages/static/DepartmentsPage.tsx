@@ -1,15 +1,16 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Link } from 'react-router-dom';
-import { Building2, BookOpen, Users, ArrowRight } from 'lucide-react';
+import { Building2, BookOpen, ArrowRight } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import SEOHead from '@/components/SEOHead';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import BottomNav from '@/components/layout/BottomNav';
+import { useSiteContent } from '@/hooks/useSiteContent';
 
-const departments = [
+const defaultDepartments = [
   { name: 'Textile Engineering', description: 'Core textile manufacturing processes, fiber science, and industrial engineering principles.', slug: 'textile-engineering', color: 'from-blue-500/20 to-blue-600/10' },
   { name: 'Fashion Design', description: 'Creative design, pattern making, draping, and fashion technology for the modern textile industry.', slug: 'fashion-design', color: 'from-pink-500/20 to-pink-600/10' },
   { name: 'Yarn Manufacturing', description: 'Spinning technology, yarn quality control, and advanced yarn production techniques.', slug: 'yarn-manufacturing', color: 'from-green-500/20 to-green-600/10' },
@@ -19,6 +20,12 @@ const departments = [
 ];
 
 const DepartmentsPage = () => {
+  const { data: content } = useSiteContent('departments');
+
+  const heroTitle = content?.hero_title || 'Our Departments';
+  const heroDesc = content?.hero_description || 'Explore specialized departments covering every aspect of textile science, engineering, and design.';
+  const departments = Array.isArray(content?.departments_list) ? content.departments_list : defaultDepartments;
+
   const { data: categories = [] } = useQuery({
     queryKey: ['categories'],
     queryFn: async () => {
@@ -45,14 +52,14 @@ const DepartmentsPage = () => {
         <section className="bg-gradient-to-br from-primary/10 to-accent/10 py-12 md:py-16">
           <div className="container text-center">
             <Building2 className="h-12 w-12 mx-auto text-primary mb-4" />
-            <h1 className="text-3xl md:text-4xl font-heading font-bold mb-3">Our Departments</h1>
-            <p className="text-muted-foreground max-w-2xl mx-auto">Explore specialized departments covering every aspect of textile science, engineering, and design.</p>
+            <h1 className="text-3xl md:text-4xl font-heading font-bold mb-3">{heroTitle}</h1>
+            <p className="text-muted-foreground max-w-2xl mx-auto">{heroDesc}</p>
           </div>
         </section>
 
         <section className="container py-12">
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {departments.map((dept) => {
+            {departments.map((dept: any) => {
               const category = categories.find((c: any) => c.slug === dept.slug);
               const count = category ? (courseCounts as Record<number, number>)[category.id] || 0 : 0;
               return (

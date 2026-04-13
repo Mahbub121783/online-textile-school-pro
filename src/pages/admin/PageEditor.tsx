@@ -37,20 +37,20 @@ const PageEditor = () => {
     queryKey: ['admin-page', pageId],
     enabled: !!pageId,
     queryFn: async () => {
-      const { data } = await supabase.from('pages' as any).select('*').eq('id', pageId).single();
-      return data as any;
+      const { data } = await supabase.from('pages').select('*').eq('id', pageId).single();
+      return data;
     },
   });
 
   useEffect(() => {
     if (page?.content) {
-      setBlocks(Array.isArray(page.content) ? page.content : []);
+      setBlocks(Array.isArray(page.content) ? (page.content as unknown as ContentBlock[]) : []);
     }
   }, [page]);
 
   const saveMutation = useMutation({
     mutationFn: async () => {
-      await supabase.from('pages' as any).update({ content: blocks as any }).eq('id', pageId);
+      await supabase.from('pages').update({ content: blocks as any } as any).eq('id', pageId);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-page', pageId] });
