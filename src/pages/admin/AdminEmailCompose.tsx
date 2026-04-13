@@ -182,6 +182,18 @@ const AdminEmailCompose = () => {
         emails = manualEmails;
       }
 
+      // Validate content before sending
+      if (mode === 'custom' && !subject && !body) {
+        toast({ title: 'Please enter a subject and/or body for your email', variant: 'destructive' });
+        setSending(false);
+        return;
+      }
+      if (mode === 'template' && !templateKey) {
+        toast({ title: 'Please select a template', variant: 'destructive' });
+        setSending(false);
+        return;
+      }
+
       let count = 0;
       for (const email of emails) {
         try {
