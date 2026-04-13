@@ -1,16 +1,77 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Trash2, ShoppingCart as CartIcon, ArrowRight } from 'lucide-react';
+import { Trash2, ShoppingCart as CartIcon, ArrowRight, Loader2, Tag, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useCartStore } from '@/stores/cartStore';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 import UtilityBar from '@/components/layout/UtilityBar';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import BottomNav from '@/components/layout/BottomNav';
 
 const CartPage = () => {
-  const { items, removeItem, clearCart, getTotal } = useCartStore();
+  const { items, removeItem, getTotal } = useCartStore();
   const total = getTotal();
+  const [couponCode, setCouponCode] = useState('');
+  const [appliedCoupon, setAppliedCoupon] = useState<any>(null);
+  const [couponLoading, setCouponLoading] = useState(false);
+
+  const discountAmount = appliedCoupon
+    ? appliedCoupon.discount_type === 'percentage'
+      ? Math.min(total * (appliedCoupon.discount_value / 100), appliedCoupon.max_discount_amount || Infinity)
+      : Math.min(appliedCoupon.discount_value, total)
+    : 0;
+  const finalTotal = Math.max(total - discountAmount, 0);
+
+  const applyCoupon = async () => {
+    if (!couponCode.trim()) return;
+    setCouponLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('coupons')
+        .select('*')
+        .eq('code', couponCode.toUpperCase())
+        .eq('is_active', true)
+        .single();
+
+      if (error || !data) {
+        toast.error('Invalid or expired coupon code');
+        setAppliedCoupon(null);
+        setCouponLoading(false);
+        return;
+      }
+
+      const coupon = data as any;
+      if (coupon.valid_until && new Date(coupon.valid_until) < new Date()) {
+        toast.error('This coupon has expired');
+        setCouponLoading(false);
+        return;
+      }
+      if (coupon.usage_limit && coupon.used_count >= coupon.usage_limit) {
+        toast.error('This coupon has reached its usage limit');
+        setCouponLoading(false);
+        return;
+      }
+      if (coupon.min_order_amount && total < coupon.min_order_amount) {
+        toast.error(`Minimum order amount is ৳${coupon.min_order_amount}`);
+        setCouponLoading(false);
+        return;
+      }
+
+      setAppliedCoupon(coupon);
+      toast.success('Coupon applied successfully!');
+    } catch {
+      toast.error('Failed to apply coupon');
+    }
+    setCouponLoading(false);
+  };
+
+  const removeCoupon = () => {
+    setAppliedCoupon(null);
+    setCouponCode('');
+  };
 
   if (items.length === 0) {
     return (
@@ -72,15 +133,44 @@ const CartPage = () => {
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span>৳{total.toLocaleString()}</span></div>
                 </div>
-                <div className="flex gap-2">
-                  <Input placeholder="Coupon code" className="text-sm" />
-                  <Button variant="outline" size="sm">Apply</Button>
-                </div>
+
+                {/* Coupon Section */}
+                {appliedCoupon ? (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg px-3 py-2">
+                      <div className="flex items-center gap-2">
+                        <Tag className="h-3.5 w-3.5 text-green-600" />
+                        <span className="font-mono text-sm font-bold text-green-700 dark:text-green-400">{appliedCoupon.code}</span>
+                      </div>
+                      <Button variant="ghost" size="sm" onClick={removeCoupon} className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive">
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                    <div className="flex justify-between text-sm text-green-600">
+                      <span>Discount</span>
+                      <span>-৳{discountAmount.toLocaleString()}</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="Coupon code"
+                      className="text-sm"
+                      value={couponCode}
+                      onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                      onKeyDown={(e) => e.key === 'Enter' && applyCoupon()}
+                    />
+                    <Button variant="outline" size="sm" onClick={applyCoupon} disabled={couponLoading}>
+                      {couponLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Apply'}
+                    </Button>
+                  </div>
+                )}
+
                 <div className="border-t pt-3 flex justify-between font-heading font-bold text-lg">
-                  <span>Total</span><span>৳{total.toLocaleString()}</span>
+                  <span>Total</span><span>৳{finalTotal.toLocaleString()}</span>
                 </div>
                 <Button asChild className="w-full h-12 bg-accent hover:bg-accent-hover text-accent-foreground font-semibold">
-                  <Link to="/checkout">Proceed to Checkout <ArrowRight className="h-4 w-4 ml-2" /></Link>
+                  <Link to={`/checkout${appliedCoupon ? `?coupon=${appliedCoupon.code}` : ''}`}>Proceed to Checkout <ArrowRight className="h-4 w-4 ml-2" /></Link>
                 </Button>
                 <p className="text-xs text-muted-foreground text-center">
                   Need help? WhatsApp: <a href="https://wa.me/8801721001923" className="text-primary hover:underline">+8801721001923</a>

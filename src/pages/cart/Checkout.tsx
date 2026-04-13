@@ -28,8 +28,11 @@ const Checkout = () => {
     phone: profile?.phone || '',
     district: profile?.district || '',
   }));
-  const [couponCode, setCouponCode] = useState('');
+  // Pre-load coupon from cart page URL param
+  const urlCoupon = new URLSearchParams(window.location.search).get('coupon') || '';
+  const [couponCode, setCouponCode] = useState(urlCoupon);
   const [appliedCoupon, setAppliedCoupon] = useState<any>(null);
+  const [couponAutoApplied, setCouponAutoApplied] = useState(false);
   const [couponLoading, setCouponLoading] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState('manual');
   const [manualSubMethod, setManualSubMethod] = useState('');
@@ -52,6 +55,31 @@ const Checkout = () => {
   const activeGateways = allGateways.filter((g: any) => g.is_active);
   const { data: walletData } = useWallet();
   const walletBalance = Number(walletData?.balance ?? 0);
+
+  // Auto-apply coupon from URL
+  const autoApplyCouponFromUrl = async () => {
+    if (couponAutoApplied || !urlCoupon || appliedCoupon) return;
+    setCouponAutoApplied(true);
+    setCouponLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('coupons')
+        .select('*')
+        .eq('code', urlCoupon.toUpperCase())
+        .eq('is_active', true)
+        .single();
+      if (!error && data) {
+        const coupon = data as any;
+        const valid = (!coupon.valid_until || new Date(coupon.valid_until) >= new Date()) &&
+          (!coupon.usage_limit || coupon.used_count < coupon.usage_limit);
+        if (valid) setAppliedCoupon(coupon);
+      }
+    } catch {}
+    setCouponLoading(false);
+  };
+  if (urlCoupon && !couponAutoApplied && user) {
+    autoApplyCouponFromUrl();
+  }
 
   if (!user) {
     return (
@@ -179,14 +207,17 @@ const Checkout = () => {
     e.preventDefault();
     if (items.length === 0) return;
 
-    // Validate manual payment requires sub-method + transaction ID
-    if (isManualPayment && !manualSubMethod) {
-      toast.error('Please select a payment method (bKash, Nagad, or Rocket)');
-      return;
-    }
-    if (needsTxId && !transactionId.trim()) {
-      toast.error('Please enter the Transaction ID after sending money');
-      return;
+    // Skip payment validation when total is 0 (100% coupon)
+    if (total > 0) {
+      // Validate manual payment requires sub-method + transaction ID
+      if (isManualPayment && !manualSubMethod) {
+        toast.error('Please select a payment method (bKash, Nagad, or Rocket)');
+        return;
+      }
+      if (needsTxId && !transactionId.trim()) {
+        toast.error('Please enter the Transaction ID after sending money');
+        return;
+      }
     }
 
     setSubmitting(true);
@@ -391,7 +422,8 @@ const Checkout = () => {
                 </div>
               </div>
 
-              {/* Payment Method */}
+              {/* Payment Method - only show when total > 0 */}
+              {total > 0 && (
               <div className="bg-card border rounded-xl p-6 space-y-4">
                 <h2 className="font-heading font-bold text-lg">Payment Method</h2>
                 <RadioGroup value={paymentMethod} onValueChange={(v) => { setPaymentMethod(v); setTransactionId(''); setSenderNumber(''); setManualSubMethod(''); }} className="space-y-3">
@@ -536,6 +568,7 @@ const Checkout = () => {
                   </div>
                 )}
               </div>
+              )}
 
               <Button type="submit" className="w-full h-12 bg-accent hover:bg-accent-hover text-accent-foreground font-semibold" disabled={submitting || items.length === 0}>
                 {submitting ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Processing...</> : `Place Order — ৳${total.toLocaleString()}`}

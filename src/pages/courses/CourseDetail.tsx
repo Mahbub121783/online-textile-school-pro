@@ -422,10 +422,17 @@ const CourseDetail = () => {
                       </div>
                     ) : (
                       <>
-                        <Button className="w-full h-12 bg-accent hover:bg-accent/90 text-accent-foreground font-semibold" onClick={() => addItem({ id: course.id, type: 'course', title: course.title, price: originalPrice, discount_price: course.discount_price ?? undefined })}>
+                        <Button className="w-full h-12 bg-accent hover:bg-accent/90 text-accent-foreground font-semibold" onClick={() => addItem({ id: course.id, type: 'course', title: course.title, price: originalPrice, discount_price: course.discount_price ?? undefined, thumbnail_url: course.thumbnail_url ?? undefined })}>
                           <ShoppingCart className="h-4 w-4 mr-2" />{originalPrice > 0 ? 'Add to Cart' : 'Enroll Free'}
                         </Button>
-                        {originalPrice > 0 && <Button variant="outline" className="w-full h-12">Buy Now</Button>}
+                        {originalPrice > 0 && (
+                          <Button variant="outline" className="w-full h-12" onClick={() => {
+                            addItem({ id: course.id, type: 'course', title: course.title, price: originalPrice, discount_price: course.discount_price ?? undefined, thumbnail_url: course.thumbnail_url ?? undefined });
+                            navigate('/checkout');
+                          }}>
+                            Buy Now
+                          </Button>
+                        )}
                       </>
                     )}
                   </>

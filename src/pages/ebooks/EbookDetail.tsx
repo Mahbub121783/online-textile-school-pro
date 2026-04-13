@@ -233,10 +233,18 @@ const EbookDetail = () => {
                       </span>
                     )}
                   </div>
-                  <div className="flex gap-3">
+                  <div className="flex gap-3 flex-wrap">
                     <Button size="lg" className="bg-accent hover:bg-accent/90 text-accent-foreground gap-2" onClick={handleAddToCart} disabled={inCart}>
                       <ShoppingCart className="h-5 w-5" /> {inCart ? 'In Cart' : 'Add to Cart'}
                     </Button>
+                    {(price ?? 0) > 0 && (
+                      <Button size="lg" variant="secondary" className="gap-2" onClick={() => {
+                        handleAddToCart();
+                        navigate('/checkout');
+                      }} disabled={inCart}>
+                        Buy Now
+                      </Button>
+                    )}
                     <Button size="lg" variant="outline" onClick={handleShare}>
                       <Share2 className="h-4 w-4 mr-2" /> Share
                     </Button>
