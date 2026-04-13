@@ -1,82 +1,118 @@
 
 
-# Make All Pages Dynamic, Editable & Perfectly Connected
+# Critical Fix Plan: Auth, RLS, and Rendering Issues
 
-## Summary
-The user wants the previously fixed type-safe pages to be fully connected to the system with smart navigation, and wants static pages (About, Contact, Departments, etc.) to become dynamic and admin-editable. Additionally, remaining `as any` table-name casts need cleanup since all tables exist in the generated types.
+## Root Cause Analysis
 
-## Phase 1: Remove Remaining Table-Name `as any` Casts
-The following tables exist in the Supabase types but are still cast with `as any`:
-- **`pages`** — in `AdminPages.tsx`, `PageEditor.tsx`, `DynamicPage.tsx`
-- **`posts`** — in `AdminPosts.tsx`, `BlogList.tsx`, `BlogPost.tsx`
-- **`payment_gateways`** — in `PaymentSettingsTab.tsx`, `PaymentDashboardTab.tsx`
+After deep investigation, I found **3 critical root causes** breaking the app:
 
-Remove all `from('table_name' as any)` and `as any` on insert/update payloads where the type system can infer them.
+### 1. Auth Deadlock (CRITICAL)
+The `useAuth` hook uses `await` inside `supabase.auth.onAuthStateChange()`. Supabase docs explicitly warn this can cause deadlocks — blocking subsequent auth events from processing. This means:
+- Roles may never load, causing admin "Access Denied"
+- Profile data stalls, leaving dashboard in perpetual loading state
+- `loading` stays `true` forever in some cases
 
-## Phase 2: Make Static Pages Admin-Editable via `site_settings` Table
-Currently `AboutPage`, `ContactPage`, `DepartmentsPage` have hardcoded content. We will:
+### 2. RLS Policy on `user_roles` Blocks Public Queries (CRITICAL)
+The `user_roles` table only allows users to see **their own roles**. But multiple components query it for **all instructors**:
+- `InstructorSpotlight` (homepage) — fetches `user_roles WHERE role = 'instructor'` → returns empty for non-admins
+- `AdminDashboard` — counts instructors via `user_roles` → fails silently
+- This makes the homepage instructor section appear empty and admin stats show 0 instructors
 
-1. **Create a `site_content` table** (migration) to store editable page sections:
-   - `id`, `page_key` (e.g. `about`, `contact`, `departments`), `section_key` (e.g. `hero_title`, `hero_description`, `stats`, `departments_list`), `content` (JSONB — flexible for text, arrays, objects), `updated_at`, `updated_by`
-   - Unique constraint on `(page_key, section_key)`
-   - RLS: Public SELECT, admin-only INSERT/UPDATE/DELETE
+### 3. Console `forwardRef` Warnings
+`StatsSection` (CountUp component) and `InstructorSpotlight` pass refs to function components (`Skeleton`, `CountUp`) that don't use `forwardRef`, causing React warnings.
 
-2. **Create `AdminSiteContent.tsx`** — a new admin page at `/admin/site-content` where admins can edit content for About, Contact, Departments pages via a tabbed interface with inline JSON/text editors.
+## Implementation Plan
 
-3. **Refactor static pages** to query `site_content` with fallback to current hardcoded values (graceful degradation — pages work even if DB content is empty).
+### Fix 1: Refactor `useAuth` — Remove `await` from `onAuthStateChange`
+**File**: `src/hooks/useAuth.tsx`
+- Use `getSession()` as the primary session initializer
+- In `onAuthStateChange`, update session/user synchronously, then fetch profile/roles via a non-blocking helper (no `await` in the callback — use `.then()` or a separate effect)
+- Ensure `loading` is set to `false` reliably even if profile fetch fails
 
-4. **Add admin sidebar entry** for "Site Content" under the existing navigation.
+```text
+Flow:
+1. getSession() → set user/session → fetch profile/roles → set loading=false
+2. onAuthStateChange → update user/session synchronously → re-fetch profile/roles (fire-and-forget)
+```
 
-## Phase 3: Navigation Completeness
-Ensure all pages are reachable from multiple entry points:
+### Fix 2: Add Public RLS Policy for Instructor Discovery
+**Migration**: Add a new SELECT policy on `user_roles` that allows anyone to see rows where `role = 'instructor'` (non-sensitive — just links user_id to instructor role for discovery).
 
-1. **Header nav** — already has: Home, Courses, Learning Paths, eBooks, Departments, Events, Blog, Forum, Registration, About. Add `Contact` and `Alumni` to the mobile menu and footer (already in footer).
+```sql
+CREATE POLICY "Anyone can discover instructors"
+ON public.user_roles FOR SELECT
+USING (role = 'instructor'::app_role);
+```
 
-2. **Homepage sections** — add a "Learning Paths" section link and "Events" preview section to the homepage `Index.tsx`.
+This is safe because:
+- Only exposes the fact that a user_id is an instructor (already public via courses.instructor_id)
+- Does not expose admin/super_admin roles
+- The existing policy still handles own-role visibility
 
-3. **Admin sidebar** — add "Site Content" entry to `AdminSidebar.tsx` bottom items.
+### Fix 3: Fix `forwardRef` Warnings
+**Files**: `src/components/features/home/StatsSection.tsx`, `src/components/features/home/InstructorSpotlight.tsx`
+- `CountUp`: Uses `useInView` which returns a ref callback. Wrap the receiving `div` directly instead of passing ref to a function component.
+- `InstructorSpotlight`: Replace `<Skeleton ref={...} />` pattern — Skeleton doesn't accept refs. Wrap in a `div` that holds the ref.
 
-4. **Cross-linking** — Add "View all Learning Paths" CTA to `FeaturedCourses` section, and "Browse Events" card to the homepage.
-
-## Phase 4: Homepage Dynamic Sections
-Add two new homepage sections:
-1. **Upcoming Events Preview** — shows next 3 upcoming events from the `events` table with "View All" link to `/events`
-2. **Learning Paths Preview** — shows top 3 published learning paths with "Explore All" link to `/learning-paths`
+### Fix 4: Defensive Query Error Handling
+**Files**: `FeaturedCourses.tsx`, `EbookCatalog.tsx`, `DashboardOverview.tsx`
+- Add `throwOnError: false` and error logging to critical queries
+- Ensure silent Supabase errors (e.g., empty `data` with non-null `error`) are surfaced in the UI instead of showing blank states
 
 ## Technical Details
 
-### Database Migration
-```sql
-CREATE TABLE public.site_content (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  page_key text NOT NULL,
-  section_key text NOT NULL,
-  content jsonb NOT NULL DEFAULT '{}',
-  updated_at timestamptz DEFAULT now(),
-  updated_by uuid REFERENCES auth.users(id),
-  UNIQUE(page_key, section_key)
-);
-ALTER TABLE public.site_content ENABLE ROW LEVEL SECURITY;
--- Public read
-CREATE POLICY "Anyone can view site content" ON public.site_content FOR SELECT USING (true);
--- Admin write
-CREATE POLICY "Admins manage site content" ON public.site_content FOR ALL TO authenticated
-  USING (has_role(auth.uid(), 'admin') OR has_role(auth.uid(), 'super_admin'))
-  WITH CHECK (has_role(auth.uid(), 'admin') OR has_role(auth.uid(), 'super_admin'));
+### Auth Refactor Pattern
+```typescript
+useEffect(() => {
+  let mounted = true;
+  
+  // 1. Primary init — no await in callback
+  supabase.auth.getSession().then(({ data: { session } }) => {
+    if (!mounted) return;
+    setSession(session);
+    setUser(session?.user ?? null);
+    if (session?.user) {
+      fetchUserData(session.user.id).then(d => {
+        if (!mounted) return;
+        setProfile(d.profile);
+        setRoles(d.roles);
+        setLoading(false);
+      });
+    } else {
+      setLoading(false);
+    }
+  });
+
+  // 2. Listener — fire-and-forget, NO await
+  const { data: { subscription } } = supabase.auth.onAuthStateChange(
+    (_event, session) => {
+      setSession(session);
+      setUser(session?.user ?? null);
+      if (session?.user) {
+        fetchUserData(session.user.id).then(d => {
+          if (!mounted) return;
+          setProfile(d.profile);
+          setRoles(d.roles);
+        });
+      } else {
+        setProfile(null);
+        setRoles([]);
+      }
+    }
+  );
+
+  return () => { mounted = false; subscription.unsubscribe(); };
+}, []);
 ```
 
-### Files to Create
-- `src/pages/admin/AdminSiteContent.tsx` — tabbed editor for About/Contact/Departments content
-- `src/components/features/home/UpcomingEvents.tsx` — homepage events preview
-- `src/components/features/home/LearningPathsPreview.tsx` — homepage learning paths preview
-- `src/hooks/useSiteContent.ts` — reusable hook to fetch site_content by page_key
-
 ### Files to Edit
-- `AdminPages.tsx`, `PageEditor.tsx`, `DynamicPage.tsx` — remove `as any` on `pages`
-- `AdminPosts.tsx`, `BlogList.tsx`, `BlogPost.tsx` — remove `as any` on `posts`
-- `PaymentSettingsTab.tsx`, `PaymentDashboardTab.tsx` — remove `as any` on `payment_gateways`
-- `AboutPage.tsx`, `ContactPage.tsx`, `DepartmentsPage.tsx` — fetch from `site_content` with fallback
-- `AdminSidebar.tsx` — add Site Content nav item
-- `Index.tsx` — add UpcomingEvents and LearningPathsPreview sections
-- `App.tsx` — add route for `/admin/site-content`
+1. `src/hooks/useAuth.tsx` — auth refactor
+2. `src/components/features/home/StatsSection.tsx` — fix ref warning
+3. `src/components/features/home/InstructorSpotlight.tsx` — fix ref warning
+4. New migration — add instructor discovery RLS policy
+
+### Files to Verify (no changes expected)
+- `AdminLayout.tsx` — should work once roles load properly
+- `FeaturedCourses.tsx` — queries are correct, data exists
+- `DashboardOverview.tsx` — depends on auth loading correctly
 
