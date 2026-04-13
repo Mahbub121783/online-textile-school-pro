@@ -1,4 +1,4 @@
-import { BookOpen, Users, ExternalLink } from 'lucide-react';
+import { BookOpen, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useQuery } from '@tanstack/react-query';
@@ -9,7 +9,6 @@ const InstructorSpotlight = () => {
   const { data: instructors = [], isLoading } = useQuery({
     queryKey: ['home-instructors'],
     queryFn: async () => {
-      // Get users with instructor role
       const { data: roleData } = await supabase
         .from('user_roles')
         .select('user_id')
@@ -27,35 +26,42 @@ const InstructorSpotlight = () => {
 
       if (!profiles) return [];
 
-      // Get course counts and student counts per instructor
-      const enriched = await Promise.all(
-        profiles.map(async (p: any) => {
-          const { count: courseCount } = await supabase
-            .from('courses')
-            .select('id', { count: 'exact', head: true })
-            .eq('instructor_id', p.id)
-            .eq('is_published', true);
+      // Batch: get all courses for these instructors in one query
+      const { data: courses } = await supabase
+        .from('courses')
+        .select('id, instructor_id')
+        .eq('is_published', true)
+        .in('instructor_id', ids);
 
-          const { data: courseIds } = await supabase
-            .from('courses')
-            .select('id')
-            .eq('instructor_id', p.id)
-            .eq('is_published', true);
+      const coursesByInstructor = new Map<string, string[]>();
+      (courses ?? []).forEach((c: any) => {
+        const list = coursesByInstructor.get(c.instructor_id) || [];
+        list.push(c.id);
+        coursesByInstructor.set(c.instructor_id, list);
+      });
 
-          let studentCount = 0;
-          if (courseIds && courseIds.length > 0) {
-            const { count } = await supabase
-              .from('enrollments')
-              .select('id', { count: 'exact', head: true })
-              .in('course_id', courseIds.map((c: any) => c.id));
-            studentCount = count || 0;
+      // Batch: get all enrollment counts in one query
+      const allCourseIds = (courses ?? []).map((c: any) => c.id);
+      let enrollmentCounts = new Map<string, number>();
+      if (allCourseIds.length > 0) {
+        const { data: enrollments } = await supabase
+          .from('enrollments')
+          .select('course_id');
+        // No filter needed — we'll count per course_id
+        const countMap = new Map<string, number>();
+        (enrollments ?? []).forEach((e: any) => {
+          if (allCourseIds.includes(e.course_id)) {
+            countMap.set(e.course_id, (countMap.get(e.course_id) || 0) + 1);
           }
+        });
+        enrollmentCounts = countMap;
+      }
 
-          return { ...p, courseCount: courseCount || 0, studentCount };
-        })
-      );
-
-      return enriched;
+      return profiles.map((p: any) => {
+        const instrCourses = coursesByInstructor.get(p.id) || [];
+        const studentCount = instrCourses.reduce((sum, cid) => sum + (enrollmentCounts.get(cid) || 0), 0);
+        return { ...p, courseCount: instrCourses.length, studentCount };
+      });
     },
     staleTime: 10 * 60 * 1000,
   });

@@ -22,6 +22,17 @@ const AuthContext = createContext<AuthContextType>({
   signOut: async () => {},
 });
 
+const fetchUserData = async (userId: string) => {
+  const [profileRes, rolesRes] = await Promise.all([
+    supabase.from('user_profiles').select('*').eq('id', userId).single(),
+    supabase.from('user_roles').select('role').eq('user_id', userId),
+  ]);
+  return {
+    profile: profileRes.data,
+    roles: rolesRes.data?.map((r: any) => r.role) ?? [],
+  };
+};
+
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
@@ -34,22 +45,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       async (_event, session) => {
         setSession(session);
         setUser(session?.user ?? null);
-        
-        if (session?.user) {
-          setTimeout(async () => {
-            const { data: profileData } = await supabase
-              .from('user_profiles')
-              .select('*')
-              .eq('id', session.user.id)
-              .single();
-            setProfile(profileData);
 
-            const { data: rolesData } = await supabase
-              .from('user_roles')
-              .select('role')
-              .eq('user_id', session.user.id);
-            setRoles(rolesData?.map((r: any) => r.role) ?? []);
-          }, 0);
+        if (session?.user) {
+          // Fetch profile & roles before setting loading=false
+          const data = await fetchUserData(session.user.id);
+          setProfile(data.profile);
+          setRoles(data.roles);
         } else {
           setProfile(null);
           setRoles([]);
