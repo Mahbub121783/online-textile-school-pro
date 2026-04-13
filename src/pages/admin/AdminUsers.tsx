@@ -47,7 +47,7 @@ const AdminUsers = () => {
     mutationFn: async ({ id, is_active }: { id: string; is_active: boolean }) => {
       const { error } = await supabase.from('user_profiles').update({ is_active }).eq('id', id);
       if (error) throw error;
-      await supabase.from('admin_activity_log' as any).insert({
+      await supabase.from('admin_activity_log').insert({
         admin_id: currentUser!.id,
         action: is_active ? 'Activated user' : 'Deactivated user',
         target_type: 'user',
@@ -62,7 +62,7 @@ const AdminUsers = () => {
     mutationFn: async ({ userId, role }: { userId: string; role: string }) => {
       const { error } = await supabase.from('user_roles').insert({ user_id: userId, role: role as any });
       if (error) throw error;
-      await supabase.from('admin_activity_log' as any).insert({
+      await supabase.from('admin_activity_log').insert({
         admin_id: currentUser!.id,
         action: `Assigned role: ${role}`,
         target_type: 'user',
@@ -77,7 +77,7 @@ const AdminUsers = () => {
     mutationFn: async ({ userId, role }: { userId: string; role: string }) => {
       const { error } = await supabase.from('user_roles').delete().eq('user_id', userId).eq('role', role as any);
       if (error) throw error;
-      await supabase.from('admin_activity_log' as any).insert({
+      await supabase.from('admin_activity_log').insert({
         admin_id: currentUser!.id,
         action: `Removed role: ${role}`,
         target_type: 'user',

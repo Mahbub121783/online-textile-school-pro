@@ -52,7 +52,7 @@ const AdminSettings = () => {
           await supabase.from('site_settings').insert({ key: def.key, value });
         }
       }
-      await supabase.from('admin_activity_log' as any).insert({ admin_id: user!.id, action: 'Updated site settings', target_type: 'settings', target_id: 'global' });
+      await supabase.from('admin_activity_log').insert({ admin_id: user!.id, action: 'Updated site settings', target_type: 'settings', target_id: 'global' });
     },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['admin-site-settings'] }); toast.success('Settings saved'); },
     onError: () => toast.error('Failed to save settings'),

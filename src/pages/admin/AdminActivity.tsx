@@ -18,7 +18,7 @@ const AdminActivity = () => {
     queryFn: async () => {
       const from = page * PAGE_SIZE;
       const { data: logs, count } = await supabase
-        .from('admin_activity_log' as any)
+        .from('admin_activity_log')
         .select('*, user_profiles!admin_activity_log_admin_id_fkey(full_name)', { count: 'exact' })
         .order('created_at', { ascending: false })
         .range(from, from + PAGE_SIZE - 1);

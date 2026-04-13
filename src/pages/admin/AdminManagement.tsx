@@ -40,7 +40,7 @@ const AdminManagement = () => {
       const profileMap = Object.fromEntries((profiles || []).map(p => [p.id, p]));
 
       const { data: activityCounts } = await supabase
-        .from('admin_activity_log' as any)
+        .from('admin_activity_log')
         .select('admin_id');
 
       const activityMap: Record<string, number> = {};
