@@ -162,15 +162,17 @@ const AiTutorWidget = () => {
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
-          className="fixed z-50 w-14 h-14 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-lg hover:shadow-xl transition-shadow flex items-center justify-center group cursor-grab active:cursor-grabbing touch-none select-none"
+          className="fixed z-[9999] w-14 h-14 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-lg hover:shadow-2xl transition-all flex items-center justify-center group cursor-grab active:cursor-grabbing touch-none select-none ring-2 ring-emerald-400/30"
           style={{
             left: pos.x,
             bottom: pos.y,
-            opacity: 0.2,
-            transition: dragRef.current.dragging ? 'none' : 'opacity 0.3s',
+            opacity: 0.25,
+            transition: dragRef.current.dragging ? 'none' : 'opacity 0.3s, box-shadow 0.3s',
           }}
           onMouseEnter={e => { (e.currentTarget as HTMLElement).style.opacity = '1'; }}
-          onMouseLeave={e => { if (!dragRef.current.dragging) (e.currentTarget as HTMLElement).style.opacity = '0.2'; }}
+          onMouseLeave={e => { if (!dragRef.current.dragging) (e.currentTarget as HTMLElement).style.opacity = '0.25'; }}
+          onTouchStart={e => { (e.currentTarget as HTMLElement).style.opacity = '1'; }}
+          onTouchEnd={e => { if (!dragRef.current.dragging) setTimeout(() => { (e.currentTarget as HTMLElement).style.opacity = '0.25'; }, 2000); }}
           title="AI Tutor - Drag to move"
         >
           <Bot className="h-7 w-7 group-hover:hidden" />
