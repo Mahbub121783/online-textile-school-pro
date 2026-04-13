@@ -1,16 +1,19 @@
 import { useState, useMemo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useIsEnrolled, useLessonProgress } from '@/hooks/useEnrollments';
-import { Star, Clock, Users, Play, Lock, ChevronDown, ChevronUp, ShoppingCart, Award, Smartphone, Download, RotateCcw, MessageSquare } from 'lucide-react';
+import { useWishlist } from '@/hooks/useWishlist';
+import { Star, Clock, Users, Play, Lock, ChevronDown, ChevronUp, ShoppingCart, Award, Smartphone, Download, RotateCcw, MessageSquare, Heart, Share2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Textarea } from '@/components/ui/textarea';
 import { useCartStore } from '@/stores/cartStore';
 import { format } from 'date-fns';
+import { toast } from 'sonner';
 import SEOHead from '@/components/SEOHead';
 import UtilityBar from '@/components/layout/UtilityBar';
 import Header from '@/components/layout/Header';
@@ -21,10 +24,15 @@ const CourseDetail = () => {
   const { slug } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [expandedSections, setExpandedSections] = useState<number[]>([0]);
   const addItem = useCartStore((s) => s.addItem);
+  const { wishlistIds, toggleWishlist } = useWishlist();
 
-  // Fetch course
+  // Review form state
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState('');
+
   const { data: course, isLoading } = useQuery({
     queryKey: ['course-detail', slug],
     queryFn: async () => {
@@ -39,7 +47,6 @@ const CourseDetail = () => {
     enabled: !!slug,
   });
 
-  // Fetch sections with lessons
   const { data: sections = [] } = useQuery({
     queryKey: ['course-sections', course?.id],
     enabled: !!course?.id,
@@ -56,7 +63,6 @@ const CourseDetail = () => {
     },
   });
 
-  // Fetch reviews
   const { data: reviews = [] } = useQuery({
     queryKey: ['course-reviews', course?.id],
     enabled: !!course?.id,
@@ -70,7 +76,6 @@ const CourseDetail = () => {
     },
   });
 
-  // Q&A count
   const { data: qaCount = 0 } = useQuery({
     queryKey: ['course-qa-count', course?.id],
     enabled: !!course?.id,
@@ -87,7 +92,6 @@ const CourseDetail = () => {
   const { data: isEnrolled } = useIsEnrolled(course?.id);
   const { data: progressData = [] } = useLessonProgress(course?.id);
 
-  // Check if user has a pending order for this course (to prevent re-purchase)
   const { data: hasPendingOrder } = useQuery({
     queryKey: ['course-pending-order', course?.id, user?.id],
     enabled: !!course?.id && !!user && !isEnrolled,
@@ -104,12 +108,32 @@ const CourseDetail = () => {
     },
   });
 
+  // Check if user already reviewed
+  const userReview = reviews.find((r: any) => r.user_id === user?.id);
+
+  const submitReview = useMutation({
+    mutationFn: async () => {
+      if (!user || !course) throw new Error('Not ready');
+      const { error } = await supabase.from('reviews').upsert({
+        user_id: user.id,
+        course_id: course.id,
+        rating: reviewRating,
+        comment: reviewComment || null,
+      }, { onConflict: 'user_id,course_id' });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['course-reviews', course?.id] });
+      toast.success('Review submitted!');
+    },
+    onError: () => toast.error('Failed to submit review'),
+  });
+
   const allLessons = useMemo(() => sections.flatMap((s: any) => s.lessons), [sections]);
   const totalLessons = allLessons.length;
   const totalDuration = allLessons.reduce((s: number, l: any) => s + (l.duration_minutes || 0), 0);
   const completedIds = new Set(progressData.filter((p: any) => p.completed).map((p: any) => p.lesson_id));
 
-  // Find next uncompleted lesson for "Continue Learning"
   const nextLesson = useMemo(() => {
     if (!isEnrolled) return null;
     return allLessons.find((l: any) => !completedIds.has(l.id)) || allLessons[0];
@@ -124,12 +148,12 @@ const CourseDetail = () => {
   const discount = course?.discount_price && originalPrice > 0 ? Math.round((1 - course.discount_price / originalPrice) * 100) : 0;
   const instructor = course?.user_profiles as any;
   const category = (course?.categories as any)?.name;
+  const isWished = course ? wishlistIds instanceof Set && wishlistIds.has(course.id) : false;
 
   if (isLoading) {
     return (
       <div className="min-h-screen flex flex-col">
-        <UtilityBar />
-        <Header />
+        <UtilityBar /><Header />
         <main className="flex-1 pb-14 lg:pb-0">
           <div className="bg-primary py-8 md:py-12">
             <div className="container space-y-4">
@@ -147,8 +171,7 @@ const CourseDetail = () => {
             <div className="lg:w-80"><Skeleton className="h-80 w-full rounded-xl" /></div>
           </div>
         </main>
-        <Footer />
-        <BottomNav />
+        <Footer /><BottomNav />
       </div>
     );
   }
@@ -170,6 +193,15 @@ const CourseDetail = () => {
   }
 
   const durationStr = totalDuration >= 60 ? `${Math.floor(totalDuration / 60)}h ${totalDuration % 60}m` : `${totalDuration}m`;
+
+  const handleShare = () => {
+    if (navigator.share) {
+      navigator.share({ title: course.title, url: window.location.href });
+    } else {
+      navigator.clipboard.writeText(window.location.href);
+      toast.success('Link copied to clipboard!');
+    }
+  };
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -209,18 +241,28 @@ const CourseDetail = () => {
                 <span className="flex items-center gap-1"><Users className="h-4 w-4" />{course.enrollment_count || 0} students</span>
                 <span className="flex items-center gap-1"><Clock className="h-4 w-4" />{durationStr}</span>
               </div>
-              <p className="text-sm text-primary-foreground/60 mt-2">
-                By {instructor?.full_name || 'Instructor'} • Last updated {course.updated_at ? format(new Date(course.updated_at), 'MMMM yyyy') : ''}
-              </p>
+              <div className="flex items-center gap-3 mt-4">
+                <p className="text-sm text-primary-foreground/60">
+                  By {instructor?.full_name || 'Instructor'} • Last updated {course.updated_at ? format(new Date(course.updated_at), 'MMMM yyyy') : ''}
+                </p>
+                <div className="flex gap-1 ml-auto">
+                  {user && (
+                    <button onClick={() => toggleWishlist(course.id)} className="p-2 rounded-full bg-primary-foreground/10 hover:bg-primary-foreground/20 transition-colors">
+                      <Heart className={`h-4 w-4 ${isWished ? 'fill-destructive text-destructive' : 'text-primary-foreground/70'}`} />
+                    </button>
+                  )}
+                  <button onClick={handleShare} className="p-2 rounded-full bg-primary-foreground/10 hover:bg-primary-foreground/20 transition-colors">
+                    <Share2 className="h-4 w-4 text-primary-foreground/70" />
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
 
         <div className="container py-6">
           <div className="flex flex-col lg:flex-row gap-6">
-            {/* Main Content */}
             <div className="flex-1">
-              {/* Intro Video */}
               {course.intro_video_url ? (
                 <div className="aspect-video bg-black rounded-xl overflow-hidden mb-6">
                   <iframe
@@ -330,8 +372,38 @@ const CourseDetail = () => {
                   </div>
                 </TabsContent>
 
-                <TabsContent value="reviews" className="pt-6">
-                  {reviews.length === 0 ? (
+                <TabsContent value="reviews" className="pt-6 space-y-6">
+                  {/* Review Form — only for enrolled users who haven't reviewed yet */}
+                  {isEnrolled && !userReview && (
+                    <div className="border rounded-lg p-4 space-y-3 bg-muted/30">
+                      <h3 className="font-heading font-semibold text-sm">Write a Review</h3>
+                      <div className="flex items-center gap-1">
+                        {Array.from({ length: 5 }).map((_, i) => (
+                          <button key={i} onClick={() => setReviewRating(i + 1)} className="p-0.5">
+                            <Star className={`h-5 w-5 ${i < reviewRating ? 'fill-warning text-warning' : 'text-muted-foreground'}`} />
+                          </button>
+                        ))}
+                        <span className="text-sm text-muted-foreground ml-2">{reviewRating}/5</span>
+                      </div>
+                      <Textarea
+                        placeholder="Share your experience with this course..."
+                        value={reviewComment}
+                        onChange={(e) => setReviewComment(e.target.value)}
+                        rows={3}
+                      />
+                      <Button size="sm" onClick={() => submitReview.mutate()} disabled={submitReview.isPending}>
+                        {submitReview.isPending ? 'Submitting...' : 'Submit Review'}
+                      </Button>
+                    </div>
+                  )}
+
+                  {userReview && (
+                    <div className="border rounded-lg p-4 bg-green-50 dark:bg-green-900/20">
+                      <p className="text-sm text-green-700 dark:text-green-400 font-medium">✓ You've already reviewed this course</p>
+                    </div>
+                  )}
+
+                  {reviews.length === 0 && !isEnrolled ? (
                     <div className="text-center py-8 text-muted-foreground">
                       <Star className="h-12 w-12 mx-auto mb-3 text-muted" />
                       <p>No reviews yet. Be the first to review this course!</p>
@@ -363,7 +435,7 @@ const CourseDetail = () => {
               </Tabs>
             </div>
 
-            {/* Sticky Purchase Card — hidden on mobile when enrolled (fixed bar handles it) */}
+            {/* Sticky Purchase Card */}
             <div className={`lg:w-80 shrink-0 ${isEnrolled ? 'hidden lg:block' : ''}`}>
               <div className="sticky top-20 bg-card border rounded-xl p-6 shadow-lg space-y-4">
                 {isEnrolled ? (
@@ -373,7 +445,6 @@ const CourseDetail = () => {
                         <Award className="h-4 w-4" /> Enrolled
                       </div>
                     </div>
-
                     <Button
                       className="w-full h-12 bg-accent hover:bg-accent/90 text-accent-foreground font-semibold text-base"
                       onClick={() => {
@@ -384,7 +455,6 @@ const CourseDetail = () => {
                       <Play className="h-5 w-5 mr-2" />
                       {completedIds.size > 0 ? 'Continue Learning' : 'Start Learning'}
                     </Button>
-
                     <div>
                       <div className="flex justify-between mb-1.5 text-sm">
                         <span className="text-muted-foreground">Progress</span>
@@ -398,7 +468,6 @@ const CourseDetail = () => {
                   </>
                 ) : (
                   <>
-                    {/* Not enrolled — show price */}
                     {originalPrice > 0 ? (
                       <div className="flex items-end gap-2">
                         <span className="font-heading text-3xl font-bold text-foreground">৳{Number(finalPrice).toLocaleString()}</span>
@@ -458,7 +527,6 @@ const CourseDetail = () => {
           </div>
         </div>
       </main>
-      {/* Fixed mobile action bar for enrolled users */}
       {isEnrolled && (
         <div className="fixed bottom-14 left-0 right-0 z-40 lg:hidden bg-card border-t shadow-lg px-4 py-3">
           <div className="flex items-center gap-3">
