@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef } from 'react'; // v5
 import { useInView } from 'react-intersection-observer';
 import { Users, BookOpen, GraduationCap, Star } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
