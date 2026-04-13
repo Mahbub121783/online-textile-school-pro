@@ -1,4 +1,4 @@
-import { LayoutDashboard, Users, BookOpen, Image, Activity, LogOut, GraduationCap, Tag, Wallet, FileText, PenTool, ImageIcon, Menu, Palette, Video, HelpCircle, ClipboardList, Award, Settings, ChevronDown, BarChart3, UserCog, CheckSquare, DollarSign, Shield, MessageSquare, Wrench, Mail, CreditCard, ReceiptText, Cloud, Bell, ShoppingCart, HardDrive, Crown, Server, ClipboardEdit, Send, Calendar, Layers, Star } from 'lucide-react';
+import { LayoutDashboard, Users, BookOpen, Image, Activity, LogOut, GraduationCap, Tag, Wallet, FileText, PenTool, ImageIcon, Menu, Palette, Video, HelpCircle, ClipboardList, Award, Settings, ChevronDown, BarChart3, UserCog, CheckSquare, DollarSign, Shield, MessageSquare, Wrench, Mail, CreditCard, ReceiptText, Cloud, Bell, ShoppingCart, HardDrive, Crown, Server, ClipboardEdit, Send, Calendar, Layers, Star, AlertTriangle, FolderKanban } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
@@ -59,6 +59,8 @@ const academicSubItems = [
   { title: 'Grade Config', url: '/admin/grade-config', icon: GraduationCap },
   { title: 'Live Classes', url: '/admin/live-classes', icon: Video },
   { title: 'Attendance', url: '/admin/attendance', icon: ClipboardList },
+  { title: 'Plagiarism', url: '/admin/plagiarism', icon: AlertTriangle },
+  { title: 'Project Groups', url: '/admin/project-groups', icon: FolderKanban },
 ];
 
 const engagementSubItems = [
