@@ -1,158 +1,95 @@
 
 
-# Full Project Audit Report
+# Deep Audit Report — Round 2
 
-## Executive Summary
-After deeply reviewing the codebase, database schema, security policies, and runtime behavior, I've identified **28 issues** across 7 categories. Here's a prioritized breakdown with actionable fixes.
-
----
-
-## 1. CRITICAL: Missing Database Tables (Features Will Crash)
-
-Several pages query tables that **do not exist** in the database:
-
-| Page | Missing Table | Impact |
-|------|--------------|--------|
-| WishlistPage | `wishlists` | Crash on load |
-| LearningPaths / LearningPathDetail | `learning_paths`, `learning_path_courses` | Crash on load |
-| EventsPage / AdminEvents | `events` | Crash on load |
-| AdminLearningPaths | `learning_paths` | Crash on load |
-
-**Fix**: Create these 4 tables with proper columns and RLS policies via migration.
+## Previous Fixes Verified
+The following issues from the first audit are now resolved:
+- Missing tables (`wishlists`, `learning_paths`, `learning_path_courses`, `events`) — all created
+- StatsSection — now queries real DB counts
+- TestimonialsSection — now queries `success_stories` with fallback
+- CourseCatalog — dynamic categories, sorting, and pagination all working
+- InstructorSpotlight — batch queries implemented (no more N+1)
+- Auth race condition — `setLoading(false)` now waits for profile/roles
+- `refetchOnMount: 'always'` — applied globally
+- BD_DISTRICTS — updated (need to verify count)
+- `useCouponValidation` hook — created but NOT used anywhere
 
 ---
 
-## 2. CRITICAL: Checkout Does Not Enroll for eBooks
+## CRITICAL Issues
 
-In `Checkout.tsx`, both the wallet payment and free-order paths only enroll users in **courses** -- eBooks are silently skipped. After purchasing an eBook, the user has no record of ownership.
+### 1. No "Add to Wishlist" button anywhere
+The `wishlists` table and `WishlistPage` exist, but there is no UI to add a course to the wishlist. `CourseDetail.tsx` and `CourseCatalog.tsx` have no Heart/wishlist button. The feature is completely broken end-to-end.
 
-```text
-// Current code (line 344-352, 363-371):
-for (const item of items) {
-  if (item.type === 'course') {  // <-- eBooks ignored!
-    await supabase.from('enrollments').upsert(...)
-  }
-}
-```
+### 2. eBook ownership not checked in EbookReader
+The EbookReader grants access to any logged-in user — it calls `ebook-secure-access` edge function with just the ebook ID and user token, but there's no client-side or server-side check that the user actually purchased the eBook. The checkout comment says "eBook ownership is tracked via completed order_items" but this is never verified before granting read access.
 
-**Fix**: Add eBook purchase records to `order_items` (already done) but also need a mechanism to check eBook ownership via completed `order_items` -- the `EbookCatalog` already does this correctly, but `EbookReader` access control should be verified.
+### 3. Checkout still doesn't create enrollments for free eBooks
+In the free order path (line 360-374), only courses get enrollment records. eBooks get no ownership record beyond `order_items`, and the `order_items` insert happens before the order status is set to "completed" — so checking for `order_items` with a completed order may fail depending on timing.
 
 ---
 
-## 3. HIGH: StatsSection Is Completely Hardcoded
+## HIGH Priority
 
-`StatsSection.tsx` shows fake static numbers (50+ instructors, 120+ courses, 10,000+ students, 4.8/5 rating) while the actual database has **9 courses, 7 ebooks, 7 users**. This is misleading.
+### 4. Shared `useCouponValidation` hook created but never used
+Both `CartPage.tsx` and `Checkout.tsx` still have their own duplicate inline coupon logic. The hook was created but never integrated, defeating its purpose.
 
-**Fix**: Query real counts from the database (instructors from `user_roles`, courses from `courses`, students from `user_profiles`, avg rating from `reviews`).
+### 5. 79 unnecessary `(supabase as any)` casts
+The types file already includes `events`, `learning_paths`, `wishlists`, `success_stories`, `invoices`, `order_items`, `payment_gateways`, and `coupons`. All `(supabase as any)` casts across 8 files can be removed for proper type safety.
 
----
-
-## 4. HIGH: TestimonialsSection Is Completely Hardcoded
-
-`TestimonialsSection.tsx` uses a static `TESTIMONIALS` array with 3 fake entries. The database has a `success_stories` table that is never queried here.
-
-**Fix**: Replace the static array with a query to `success_stories` or create a `testimonials` table. Fall back to static data only if the table is empty.
+### 6. 67 `as any` casts in Checkout.tsx
+Similarly, most `as any` casts on `.from('coupons' as any)`, `.from('invoices' as any)`, etc. are no longer needed since the types were regenerated.
 
 ---
 
-## 5. HIGH: Course Categories Are Hardcoded in Filters
+## MEDIUM Priority
 
-`CourseCatalog.tsx` uses `COURSE_CATEGORIES` from `constants.ts` (10 hardcoded textile categories) for filter sidebar, while the database `categories` table may have different entries. The homepage `FeaturedCourses` correctly queries from DB, but the catalog page doesn't.
+### 7. Two overly permissive RLS policies remain
+The Supabase linter still flags 2 `USING (true)` policies on non-SELECT operations. These need to be identified and tightened.
 
-**Fix**: Replace `COURSE_CATEGORIES` usage in `CourseCatalog` with a dynamic query to the `categories` table.
+### 8. Leaked password protection still disabled
+This is a Supabase Auth dashboard setting — cannot be fixed via code. Must be enabled manually.
 
----
+### 9. No "Buy Now" on CourseCatalog cards
+`CourseDetail.tsx` and `EbookDetail.tsx` have Buy Now buttons, but the catalog listing cards only have "Add to Cart." A direct purchase path from catalog cards would improve conversion.
 
-## 6. HIGH: Sort Not Applied in CourseCatalog
-
-The `sortBy` state (`popular`, `newest`, `rating`, `price-low`, `price-high`) is never actually applied. The query always returns `order('enrollment_count', { ascending: false })` and the frontend `filtered` array has no sort logic.
-
-**Fix**: Add sorting logic after filtering, based on the `sortBy` value.
-
----
-
-## 7. MEDIUM: Security Linter Warnings
-
-- **2 overly permissive RLS policies** with `USING (true)` on non-SELECT operations. Need to identify which tables and tighten.
-- **Leaked password protection disabled** -- should be enabled in Supabase Auth settings.
+### 10. Cart doesn't show item thumbnails
+The cart store's `addItem` in CourseCatalog doesn't pass `thumbnail_url`, making cart items display without images. Some call sites pass it, others don't — inconsistent.
 
 ---
 
-## 8. MEDIUM: Excessive `as any` Type Casting
+## LOW Priority
 
-Over 70 instances of `as any` in checkout alone. This hides type errors and suggests the Supabase types file is out of sync with the actual schema. Tables like `payment_gateways`, `order_items`, `coupons` are cast because they're missing from the generated types.
+### 11. No ebook category filter on EbookCatalog
+CourseCatalog has dynamic category filters from DB, but EbookCatalog likely doesn't have equivalent filtering.
 
-**Fix**: Regenerate `src/integrations/supabase/types.ts` to match current schema. This will eliminate most `as any` casts.
+### 12. CourseDetail missing wishlist + share buttons
+No social sharing or wishlist toggle on the course detail page.
 
----
-
-## 9. MEDIUM: Auth Race Condition
-
-In `useAuth.tsx`, `setLoading(false)` is called immediately after `onAuthStateChange`, but the profile/roles fetch is inside a `setTimeout(..., 0)`. This means components see `loading=false` before `roles` is populated, causing brief unauthorized flashes.
-
-**Fix**: Only set `loading(false)` after profile and roles are fetched.
-
----
-
-## 10. MEDIUM: No Pagination on CourseCatalog
-
-EbookCatalog has pagination (12 per page), but CourseCatalog loads all courses at once with no pagination. With growth, this will degrade performance.
-
-**Fix**: Add client-side pagination similar to EbookCatalog.
-
----
-
-## 11. MEDIUM: BD_DISTRICTS List Is Incomplete
-
-Only 28 of Bangladesh's 64 districts are listed in `constants.ts`.
-
-**Fix**: Add all 64 districts.
-
----
-
-## 12. LOW: InstructorSpotlight Makes N+1 Queries
-
-For each instructor, it makes 3 separate queries (course count, course IDs, enrollment count). With 10 instructors, that's 30 queries.
-
-**Fix**: Use a single aggregation query or RPC function.
-
----
-
-## 13. LOW: Duplicate Coupon Validation Logic
-
-Coupon validation is duplicated in `CartPage.tsx` and `Checkout.tsx` (identical code). Should be extracted to a shared hook `useCouponValidation`.
-
----
-
-## 14. LOW: `refetchOnMount: false` Globally
-
-The global QueryClient sets `refetchOnMount: false`, meaning if a user navigates away and back, stale data persists. This conflicts with the goal of "always showing new items first."
-
-**Fix**: Change to `refetchOnMount: 'always'` or remove it and rely on `staleTime`.
+### 13. Review/rating system UI missing on CourseDetail
+The `reviews` table exists, `avg_rating` is displayed, but there's no UI for students to submit reviews after completing a course.
 
 ---
 
 ## Implementation Plan
 
-### Phase 1: Critical Fixes (Database)
-1. Create `wishlists`, `learning_paths`, `learning_path_courses`, `events` tables with RLS
-2. Fix eBook enrollment/ownership tracking in checkout
+### Phase 1: Critical Fixes
+1. **Add wishlist toggle button** to `CourseDetail.tsx` and `CourseCatalog.tsx` cards — insert/delete from `wishlists` table with optimistic UI
+2. **Verify eBook access control** in the `ebook-secure-access` edge function — ensure it checks ownership via `order_items` with completed orders, or free eBooks
+3. **Fix free-order eBook tracking** — ensure eBook purchases in the free-order and wallet paths create proper ownership records
 
-### Phase 2: Make Everything Dynamic
-3. Replace hardcoded StatsSection with real DB counts
-4. Replace hardcoded TestimonialsSection with `success_stories` query
-5. Replace hardcoded `COURSE_CATEGORIES` in CourseCatalog filters with DB query
+### Phase 2: Code Quality
+4. **Integrate `useCouponValidation` hook** into both `CartPage.tsx` and `Checkout.tsx`, removing duplicate logic
+5. **Remove all unnecessary `as any` casts** across 8+ files (LearningPaths, Events, Wishlist, AdminEvents, AdminLearningPaths, AdminSuccessStories, Checkout, TestimonialsSection)
+6. **Identify and fix the 2 overly permissive RLS policies**
 
-### Phase 3: Functional Bugs
-6. Implement sort logic in CourseCatalog
-7. Fix auth loading race condition in useAuth
-8. Add pagination to CourseCatalog
+### Phase 3: UX Enhancements
+7. **Add review/rating submission UI** on CourseDetail for enrolled students
+8. **Pass `thumbnail_url` consistently** to cart store from all add-to-cart call sites
+9. **Add "Buy Now" to catalog cards** for direct checkout
 
-### Phase 4: Code Quality & Security
-9. Extract shared coupon validation hook
-10. Fix N+1 queries in InstructorSpotlight
-11. Complete BD_DISTRICTS list
-12. Remove global `refetchOnMount: false`
-13. Address RLS linter warnings
-14. Enable leaked password protection
+### Technical Details
+- Wishlist toggle: Use `useMutation` with `onMutate` for optimistic updates; query `wishlists` table filtered by `user_id` and `course_id`
+- eBook access: The edge function `ebook-secure-access` needs a query like `SELECT 1 FROM order_items oi JOIN orders o ON o.id = oi.order_id WHERE oi.item_id = ebook_id AND oi.item_type = 'ebook' AND o.user_id = user_id AND o.status = 'completed'`
+- RLS fix: Run a query to identify which tables have the permissive policies, then create a migration to replace them with proper conditions
 
