@@ -129,6 +129,27 @@ const CourseDetail = () => {
     onError: () => toast.error('Failed to submit review'),
   });
 
+  // Free enrollment mutation
+  const freeEnroll = useMutation({
+    mutationFn: async () => {
+      if (!user || !course) throw new Error('Not ready');
+      // Create order for audit trail
+      const orderId = crypto.randomUUID();
+      await supabase.from('orders').insert({ id: orderId, user_id: user.id, total: 0, status: 'completed', payment_method: 'free' });
+      await supabase.from('order_items').insert({ order_id: orderId, item_id: course.id, item_type: 'course', price: 0 });
+      // Enroll
+      const { error } = await supabase.from('enrollments').insert({ user_id: user.id, course_id: course.id, payment_id: orderId });
+      if (error && !error.message.includes('duplicate')) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['enrollment'] });
+      queryClient.invalidateQueries({ queryKey: ['enrollments'] });
+      queryClient.invalidateQueries({ queryKey: ['course-pending-order'] });
+      toast.success('Successfully enrolled!');
+    },
+    onError: () => toast.error('Failed to enroll'),
+  });
+
   const allLessons = useMemo(() => sections.flatMap((s: any) => s.lessons), [sections]);
   const totalLessons = allLessons.length;
   const totalDuration = allLessons.reduce((s: number, l: any) => s + (l.duration_minutes || 0), 0);
