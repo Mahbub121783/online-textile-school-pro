@@ -8,7 +8,8 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import { Mail, Server, Shield, Send, Palette, Image, Globe } from 'lucide-react';
+import { Mail, Server, Shield, Send, Palette, Image, Globe, Upload } from 'lucide-react';
+import MediaPickerModal from '@/components/shared/MediaPickerModal';
 
 const SMTP_KEYS = ['smtp_host', 'smtp_port', 'smtp_user', 'smtp_pass', 'smtp_encryption', 'smtp_from_email', 'smtp_from_name'] as const;
 const BRAND_KEYS = ['email_logo_url', 'email_brand_color', 'email_footer_text', 'email_website_url', 'email_facebook_url', 'email_youtube_url'] as const;
