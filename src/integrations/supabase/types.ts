@@ -157,6 +157,51 @@ export type Database = {
           },
         ]
       }
+      ai_chatbot_config: {
+        Row: {
+          api_key: string | null
+          created_at: string
+          db_context_enabled: boolean
+          id: string
+          is_active: boolean
+          knowledge_base: Json
+          max_tokens: number
+          model_name: string
+          provider: string
+          system_prompt: string
+          temperature: number
+          updated_at: string
+        }
+        Insert: {
+          api_key?: string | null
+          created_at?: string
+          db_context_enabled?: boolean
+          id?: string
+          is_active?: boolean
+          knowledge_base?: Json
+          max_tokens?: number
+          model_name?: string
+          provider?: string
+          system_prompt?: string
+          temperature?: number
+          updated_at?: string
+        }
+        Update: {
+          api_key?: string | null
+          created_at?: string
+          db_context_enabled?: boolean
+          id?: string
+          is_active?: boolean
+          knowledge_base?: Json
+          max_tokens?: number
+          model_name?: string
+          provider?: string
+          system_prompt?: string
+          temperature?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       assignment_submissions: {
         Row: {
           assignment_id: string
