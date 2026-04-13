@@ -44,7 +44,7 @@ const PageEditor = () => {
 
   useEffect(() => {
     if (page?.content) {
-      setBlocks(Array.isArray(page.content) ? (page.content as ContentBlock[]) : []);
+      setBlocks(Array.isArray(page.content) ? (page.content as unknown as ContentBlock[]) : []);
     }
   }, [page]);
 

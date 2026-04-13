@@ -10,10 +10,16 @@ import { Label } from '@/components/ui/label';
 import { SITE_CONFIG } from '@/lib/constants';
 import { Phone, Mail, MapPin, Send } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useSiteContent } from '@/hooks/useSiteContent';
 
 const ContactPage = () => {
   const { toast } = useToast();
   const [sending, setSending] = useState(false);
+  const { data: content } = useSiteContent('contact');
+
+  const heroTitle = content?.hero_title || 'Contact Us';
+  const heroDesc = content?.hero_description || "We'd love to hear from you. Reach out anytime.";
+  const address = content?.address || 'Bangladesh';
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -32,14 +38,13 @@ const ContactPage = () => {
       <main className="min-h-screen bg-background">
         <section className="bg-primary text-primary-foreground py-16">
           <div className="container text-center max-w-3xl mx-auto space-y-4">
-            <h1 className="font-heading text-3xl md:text-5xl font-bold">Contact Us</h1>
-            <p className="text-primary-foreground/80 text-lg">We'd love to hear from you. Reach out anytime.</p>
+            <h1 className="font-heading text-3xl md:text-5xl font-bold">{heroTitle}</h1>
+            <p className="text-primary-foreground/80 text-lg">{heroDesc}</p>
           </div>
         </section>
 
         <section className="container py-12">
           <div className="grid md:grid-cols-2 gap-12 max-w-5xl mx-auto">
-            {/* Info */}
             <div className="space-y-8">
               <h2 className="font-heading text-2xl font-bold">Get In Touch</h2>
               <div className="space-y-4">
@@ -61,32 +66,19 @@ const ContactPage = () => {
                   <div className="bg-primary/10 p-3 rounded-lg"><MapPin className="h-5 w-5 text-primary" /></div>
                   <div>
                     <p className="text-sm font-medium text-foreground">Address</p>
-                    <p>Bangladesh</p>
+                    <p>{address}</p>
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* Form */}
             <div className="bg-card border rounded-xl p-6 shadow-sm">
               <h3 className="font-heading text-lg font-semibold mb-4">Send a Message</h3>
               <form onSubmit={handleSubmit} className="space-y-4">
-                <div>
-                  <Label htmlFor="name">Your Name</Label>
-                  <Input id="name" required maxLength={100} placeholder="Full name" />
-                </div>
-                <div>
-                  <Label htmlFor="email">Email</Label>
-                  <Input id="email" type="email" required maxLength={255} placeholder="you@example.com" />
-                </div>
-                <div>
-                  <Label htmlFor="subject">Subject</Label>
-                  <Input id="subject" required maxLength={200} placeholder="How can we help?" />
-                </div>
-                <div>
-                  <Label htmlFor="message">Message</Label>
-                  <Textarea id="message" required maxLength={2000} rows={5} placeholder="Write your message..." />
-                </div>
+                <div><Label htmlFor="name">Your Name</Label><Input id="name" required maxLength={100} placeholder="Full name" /></div>
+                <div><Label htmlFor="email">Email</Label><Input id="email" type="email" required maxLength={255} placeholder="you@example.com" /></div>
+                <div><Label htmlFor="subject">Subject</Label><Input id="subject" required maxLength={200} placeholder="How can we help?" /></div>
+                <div><Label htmlFor="message">Message</Label><Textarea id="message" required maxLength={2000} rows={5} placeholder="Write your message..." /></div>
                 <Button type="submit" disabled={sending} className="w-full">
                   <Send className="h-4 w-4 mr-2" /> {sending ? 'Sending...' : 'Send Message'}
                 </Button>
