@@ -53,6 +53,7 @@ const SmtpSettingsTab = () => {
   });
 
   const [testing, setTesting] = useState(false);
+  const [mediaOpen, setMediaOpen] = useState(false);
 
   const handleTest = async () => {
     setTesting(true);
