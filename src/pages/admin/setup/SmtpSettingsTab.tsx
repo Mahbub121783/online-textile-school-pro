@@ -148,7 +148,12 @@ const SmtpSettingsTab = () => {
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
               <Label className="flex items-center gap-1"><Image className="h-4 w-4" /> Logo URL</Label>
-              <Input placeholder="https://example.com/logo.png" value={getValue('email_logo_url')} onChange={e => setForm(p => ({ ...p, email_logo_url: e.target.value }))} />
+              <div className="flex gap-2">
+                <Input placeholder="https://example.com/logo.png" value={getValue('email_logo_url')} onChange={e => setForm(p => ({ ...p, email_logo_url: e.target.value }))} className="flex-1" />
+                <Button type="button" variant="outline" size="sm" onClick={() => setMediaOpen(true)}>
+                  <Upload className="h-4 w-4 mr-1" /> Upload
+                </Button>
+              </div>
               <p className="text-xs text-muted-foreground">Appears at the top of every email. Recommended: 200×60px</p>
             </div>
             <div className="space-y-2">
