@@ -27,6 +27,7 @@ const EbookCatalog = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { addItem, items } = useCartStore();
+  const { wishlistIds, toggleWishlist } = useWishlist();
 
   const { data: categories = [] } = useQuery({
     queryKey: ['ebook-categories'],
