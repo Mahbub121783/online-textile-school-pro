@@ -114,6 +114,8 @@ const AdminReviews = lazy(() => import("./pages/admin/AdminReviews"));
 const PeerReviewsPage = lazy(() => import("./pages/dashboard/PeerReviewsPage"));
 const AdminLiveClasses = lazy(() => import("./pages/admin/AdminLiveClasses"));
 const AdminAttendance = lazy(() => import("./pages/admin/AdminAttendance"));
+const AdminFaculty = lazy(() => import("./pages/admin/AdminFaculty"));
+const FacultyPage = lazy(() => import("./pages/static/FacultyPage"));
 
 // Optimized QueryClient with aggressive caching
 const queryClient = new QueryClient({
