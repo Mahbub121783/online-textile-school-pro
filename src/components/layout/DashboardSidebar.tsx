@@ -1,4 +1,4 @@
-import { BookOpen, LayoutDashboard, Library, Wallet, Settings, LogOut, FileQuestion, ClipboardList, Award, Users, FileText, Bell, ShoppingCart, Heart, Trophy, MessageSquare, ClipboardCheck, GraduationCap, FolderKanban } from 'lucide-react';
+import { BookOpen, LayoutDashboard, Library, Wallet, Settings, LogOut, FileQuestion, ClipboardList, Award, Users, FileText, Bell, ShoppingCart, Heart, Trophy, MessageSquare, ClipboardCheck, GraduationCap, FolderKanban, BarChart3 } from 'lucide-react';
 import ProfileCompletenessWidget from '@/components/ProfileCompletenessWidget';
 import { NavLink } from '@/components/NavLink';
 import { useLocation } from 'react-router-dom';
@@ -30,6 +30,7 @@ const navItems = [
   { title: 'Peer Reviews', url: '/dashboard/peer-reviews', icon: ClipboardCheck },
   { title: 'Transcript', url: '/dashboard/transcript', icon: GraduationCap },
   { title: 'Group Projects', url: '/dashboard/group-projects', icon: FolderKanban },
+  { title: 'Analytics', url: '/dashboard/analytics', icon: BarChart3 },
   { title: 'Invoices', url: '/dashboard/invoices', icon: FileText },
   { title: 'Referrals', url: '/dashboard/referrals', icon: Users },
   { title: 'Forum', url: '/forum', icon: MessageSquare },
