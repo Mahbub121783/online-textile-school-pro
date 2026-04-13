@@ -1,62 +1,46 @@
 
 
-# Remaining Issues Audit
+# Upgrade Privacy Policy and Terms of Service Pages
 
-## Status of Previous Fixes
+## Current State
+- Both pages exist at `/privacy` and `/terms` with routes configured
+- They use basic `prose` styling -- plain text with no visual polish
+- Footer links to Privacy Policy but **not** Terms of Service
+- Copyright bar has no legal links
 
-| Fix | Status |
-|-----|--------|
-| Auth deadlock (no `await` in `onAuthStateChange`) | DONE - verified in `useAuth.tsx` |
-| Instructor discovery RLS policy | DONE - migration applied |
-| StatsSection `forwardRef` fix | DONE - `CountUp` uses ref on `div` directly |
-| `as any` casts removed (pages, posts, payment_gateways) | DONE |
-| Dynamic site content system | DONE |
+## What Changes
 
-## Remaining Issues (3 found)
+### 1. Redesign Both Pages with Advanced UI
+Replace the plain prose layout with a modern, card-based design:
+- Sticky sidebar table of contents (desktop) for quick section navigation
+- Each section in its own Card with icon, numbered badge, and smooth scroll anchors
+- Breadcrumb navigation at the top
+- Cross-link banner at the bottom (Privacy page links to Terms and vice versa)
+- "Last updated" badge styled prominently
+- Print-friendly button
+- Mobile: collapsible accordion-style TOC
 
-### Issue 1: `forwardRef` Warnings (3 console errors still active)
+### 2. Update Footer
+- Add "Terms of Service" link next to the existing "Privacy Policy" link in Quick Links
+- Add both links to the copyright bar at the bottom: `Privacy Policy | Terms of Service`
 
-The console shows 3 warnings:
-- **InstructorSpotlight** - used via `React.lazy()` which tries to forward a ref, but the component is a plain function
-- **Skeleton** - used inside InstructorSpotlight, no `forwardRef`
-- **Badge** - used inside FeaturedCourses (also lazy-loaded), no `forwardRef`
-
-**Fix**: Add `React.forwardRef` to `Skeleton` and `Badge` (UI primitives should support refs). Wrap `InstructorSpotlight` and `FeaturedCourses` default exports with `forwardRef` or use `memo` which handles the lazy ref issue.
-
-### Issue 2: `admin_activity_log as any` Cast
-
-In `AdminDashboard.tsx` line 97, `admin_activity_log` is still cast with `as any`. This table likely doesn't exist in the generated types yet, meaning the table may not exist or types are stale.
-
-**Fix**: Check if `admin_activity_log` table exists. If not, either create it or remove the query. If it exists but types are stale, remove the `as any` cast.
-
-### Issue 3: Enrollment Query Fetches ALL Enrollments
-
-In `InstructorSpotlight.tsx` line 48-49, the query fetches ALL enrollments without filtering by course IDs, then filters client-side. This is a performance issue that will worsen with data growth.
-
-**Fix**: Add `.in('course_id', allCourseIds)` filter to the enrollments query.
+### 3. Also Add to Google OAuth Branding (Info Only)
+Fill in the two empty fields on your Google Branding page:
+- **Application privacy policy link**: `https://onlinetextileschool.com/privacy`
+- **Application terms of service link**: `https://onlinetextileschool.com/terms`
 
 ## Files to Edit
+1. `src/pages/static/PrivacyPage.tsx` -- full redesign with sidebar TOC, cards, icons
+2. `src/pages/static/TermsPage.tsx` -- same treatment
+3. `src/components/layout/Footer.tsx` -- add Terms link + copyright bar links
 
-1. `src/components/ui/skeleton.tsx` - add `forwardRef`
-2. `src/components/ui/badge.tsx` - add `forwardRef`
-3. `src/components/features/home/InstructorSpotlight.tsx` - add `forwardRef` wrapper + fix enrollment query
-4. `src/components/features/home/FeaturedCourses.tsx` - add `forwardRef` wrapper
-5. `src/pages/admin/AdminDashboard.tsx` - fix or remove `admin_activity_log as any`
+## Page URLs
+- Privacy Policy: `https://onlinetextileschool.com/privacy`
+- Terms of Service: `https://onlinetextileschool.com/terms`
 
 ## Technical Details
-
-For `Badge` and `Skeleton`, the pattern is:
-```typescript
-const Skeleton = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
-  ({ className, ...props }, ref) => (
-    <div ref={ref} className={cn("animate-pulse rounded-md bg-muted", className)} {...props} />
-  )
-);
-Skeleton.displayName = "Skeleton";
-```
-
-For lazy-loaded components, wrap the default export:
-```typescript
-export default React.forwardRef<HTMLElement>((_, ref) => <InstructorSpotlightInner />);
-```
+- Uses existing UI components: Card, Badge, Breadcrumb, ScrollArea
+- Icons from lucide-react for each section (Shield, Eye, Lock, Cookie, etc.)
+- Smooth scroll via `scrollIntoView({ behavior: 'smooth' })` for TOC links
+- No new dependencies required
 
