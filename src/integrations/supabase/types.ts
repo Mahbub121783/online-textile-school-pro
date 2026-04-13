@@ -923,6 +923,42 @@ export type Database = {
           },
         ]
       }
+      currencies: {
+        Row: {
+          code: string
+          created_at: string
+          exchange_rate: number
+          id: string
+          is_active: boolean
+          is_default: boolean
+          name: string
+          symbol: string
+          updated_at: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          exchange_rate?: number
+          id?: string
+          is_active?: boolean
+          is_default?: boolean
+          name: string
+          symbol?: string
+          updated_at?: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          exchange_rate?: number
+          id?: string
+          is_active?: boolean
+          is_default?: boolean
+          name?: string
+          symbol?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       discussion_upvotes: {
         Row: {
           created_at: string
@@ -1747,6 +1783,60 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: []
+      }
+      installment_payments: {
+        Row: {
+          amount: number
+          created_at: string
+          due_date: string
+          id: string
+          installment_number: number
+          paid_at: string | null
+          plan_id: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          amount?: number
+          created_at?: string
+          due_date: string
+          id?: string
+          installment_number: number
+          paid_at?: string | null
+          plan_id: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          due_date?: string
+          id?: string
+          installment_number?: number
+          paid_at?: string | null
+          plan_id?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "installment_payments_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "payment_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "installment_payments_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       instructor_applications: {
         Row: {
@@ -2590,6 +2680,47 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: []
+      }
+      payment_plans: {
+        Row: {
+          course_id: string
+          created_at: string
+          id: string
+          installment_count: number
+          interval_days: number
+          is_active: boolean
+          total_amount: number
+          updated_at: string
+        }
+        Insert: {
+          course_id: string
+          created_at?: string
+          id?: string
+          installment_count?: number
+          interval_days?: number
+          is_active?: boolean
+          total_amount?: number
+          updated_at?: string
+        }
+        Update: {
+          course_id?: string
+          created_at?: string
+          id?: string
+          installment_count?: number
+          interval_days?: number
+          is_active?: boolean
+          total_amount?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_plans_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "courses"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       peer_review_config: {
         Row: {
