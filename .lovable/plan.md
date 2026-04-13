@@ -1,215 +1,110 @@
 
 
-# Online Textile University -- Complete Feature Implementation PRD
-## 8 Phases, 21 Features
+# Phase 2: Learning Engagement - Implementation Plan
+
+## Summary
+Enhance lesson-level discussions with upvotes/pinning, add admin review approval system for course reviews, and build a peer review system for assignments.
 
 ---
 
-## Phase 1: Academic Foundation
-**Goal**: Establish core academic infrastructure that all subsequent features depend on.
+## What Already Exists
+- **Discussions table**: Already has `lesson_id`, `parent_id`, `is_answered`, `course_id`, `user_id`, `content`. Q&A tab already works in LessonPlayer.
+- **Reviews table**: Already has `user_id`, `course_id`, `rating`, `comment`. Review form and display exist in CourseDetail.
+- **Assignment submissions table**: Has `assignment_id`, `user_id`, `submission_text`, `file_url`, `score`, `feedback`, `status`.
 
-### Features:
-1. **Batch/Cohort System** -- Create `batches` table (name, start_date, end_date, status, max_students). Admin can create/manage batches, assign students to batches, filter by batch everywhere. Student profile shows batch. Batch-specific announcements. Admin sidebar gets "Batches" menu item.
+## What Needs to Be Built
 
-2. **Academic Calendar** -- Create `academic_calendar` table (title, event_type [semester_start, exam_week, holiday, deadline], start_date, end_date, batch_id nullable, is_global). Admin CRUD with color-coded calendar view. Students see filtered calendar on dashboard. Public events page shows upcoming academic dates.
+### Database Migration
 
-3. **Grade Point System (GPA/CGPA)** -- Create `grade_configs` table (letter_grade, min_pct, max_pct, grade_point, is_active). Create `student_grades` table (user_id, course_id, batch_id, letter_grade, grade_point, credits). Admin configures grading scale. Auto-calculate from quiz+assignment+manual marks. Student dashboard shows semester GPA and cumulative CGPA. Instructor gradebook shows letter grades.
+**1. Enhance `discussions` table:**
+- Add `upvote_count` (integer, default 0)
+- Add `is_pinned` (boolean, default false)
+- Add `is_closed` (boolean, default false)
 
-### Admin Access:
-- Full CRUD for batches, calendar events, grade configuration
-- Assign/remove students from batches in bulk
-- Override individual student grades
+**2. Create `discussion_upvotes` table:**
+- `id`, `discussion_id` (FK), `user_id` (FK), `created_at`
+- UNIQUE on (discussion_id, user_id)
+- RLS: authenticated can insert/delete own, select all
 
-### Student Access:
-- View assigned batch, academic calendar, GPA/CGPA on dashboard
-- Semester-wise grade breakdown
+**3. Enhance `reviews` table:**
+- Add `is_approved` (boolean, default null) -- null = pending, true = approved, false = rejected
+- Add `admin_response` (text, nullable)
 
-### Notifications & Email:
-- Email on batch assignment (`batch_assigned` template)
-- Calendar event reminders (1 day before)
-- Grade published notification
+**4. Create `peer_reviews` table:**
+- `id`, `submission_id` (FK to assignment_submissions), `reviewer_id` (FK to user_profiles), `course_id` (FK), `rubric_scores` (jsonb), `feedback` (text), `rating` (integer 1-5), `created_at`
+- UNIQUE on (submission_id, reviewer_id)
+- RLS: reviewer can insert/update own, students can read reviews of their submissions, admin/instructor full access
+
+**5. Create `peer_review_config` table:**
+- `id`, `assignment_id` (FK, unique), `min_reviewers` (integer, default 2), `rubric_criteria` (jsonb), `is_enabled` (boolean, default false), `created_at`
+- RLS: admin/instructor manage, students read
 
 ---
 
-## Phase 2: Learning Engagement
-**Goal**: Deepen student-content interaction.
+### Frontend Changes
 
-### Features:
-4. **Discussion per Lesson** -- Extend existing `discussions` table to support lesson-level threading. Add discussion panel inside LessonPlayer with reply chains, upvote, mark-as-answer. Instructor can pin/close threads. Real-time updates via Supabase realtime.
+**6. Enhanced Lesson Discussions (LessonPlayer.tsx):**
+- Add upvote button with count on each discussion post
+- Add "Pin" and "Close Thread" buttons for instructor/admin
+- Show pinned discussions at top
+- Sort by upvote count or newest
+- Real-time subscription for new posts via Supabase realtime
 
-5. **Course Review & Rating** -- Create `course_reviews` table (user_id, course_id, rating 1-5, review_text, is_approved, created_at). Only enrolled students who completed >50% can review. Admin approval queue. Average rating updates on courses table. Display on course detail page with pagination.
+**7. Admin Review Approval Page (`AdminReviews.tsx`):**
+- New admin page at `/admin/reviews`
+- List all pending reviews with approve/reject buttons
+- Admin can write response to reviews
+- Add to AdminSidebar under a new "Engagement" collapsible menu
+- Only approved reviews show on CourseDetail page
 
-6. **Peer Review System** -- Create `peer_reviews` table (assignment_submission_id, reviewer_user_id, rubric_scores jsonb, feedback, created_at). Admin/instructor configures peer review for assignments (min reviewers, rubric criteria). System auto-assigns reviewers from enrolled students. Reviewer dashboard in student panel.
+**8. Update CourseDetail.tsx:**
+- Filter reviews to only show `is_approved = true`
+- Show admin responses under reviews
+- Show "Review pending approval" message after submission
 
-### Admin Access:
-- Moderate all discussions, approve/reject reviews, configure peer review rules
+**9. Peer Review System:**
+- **Admin/Instructor config**: Add peer review toggle in assignment settings (reuse existing AssignmentTab or create inline config)
+- **Auto-assignment**: When a student submits, system checks if peer review is enabled and assigns reviewers from other enrolled students who have also submitted
+- **Student Peer Review Page** (`/dashboard/peer-reviews`): List assigned peer reviews with rubric scoring form
+- **Instructor view**: See peer review scores alongside their own grading
 
-### Student Access:
-- Post questions per lesson, rate completed courses, review peers' assignments
+**10. Routing & Navigation:**
+- Add `/admin/reviews` route
+- Add `/dashboard/peer-reviews` route  
+- Add "Engagement" section to AdminSidebar with Reviews, Discussions items
+- Add "Peer Reviews" to student DashboardSidebar
 
-### Notifications & Email:
-- Notify instructor on new lesson question
-- Email when review is approved/rejected
+---
+
+### Notifications
+- Notify instructor when new lesson discussion is posted
+- Notify student when their review is approved/rejected
 - Notify student when assigned as peer reviewer
+- Notify student when peer review received on their submission
 
 ---
 
-## Phase 3: Live Learning
-**Goal**: Real-time classroom experience.
+## Technical Details
 
-### Features:
-7. **Live Class / Zoom + Meet Integration** -- Create `live_classes` table (course_id, batch_id, title, description, meeting_url, platform [zoom/meet/custom], start_time, duration_minutes, recording_url, status). Admin/instructor creates sessions with Zoom/Meet links. Student dashboard shows upcoming live classes with join button (auto-enabled 10 min before). Calendar integration. Recording link post-session.
+### Files to Create:
+- `src/pages/admin/AdminReviews.tsx` - Review approval queue
+- `src/pages/dashboard/PeerReviewsPage.tsx` - Student peer review dashboard
+- Migration SQL for all schema changes
 
-8. **Attendance System** -- Create `attendance_records` table (live_class_id, user_id, check_in_time, check_out_time, status [present/absent/late/excused], marked_by). Instructor marks attendance during/after live class. Bulk mark from enrolled list. Student sees attendance percentage on dashboard. Admin sees attendance analytics per batch/course.
+### Files to Edit:
+- `src/pages/learn/LessonPlayer.tsx` - Add upvotes, pin, close, realtime
+- `src/pages/courses/CourseDetail.tsx` - Filter approved reviews, show admin responses
+- `src/components/layout/AdminSidebar.tsx` - Add Engagement menu
+- `src/components/layout/DashboardSidebar.tsx` - Add Peer Reviews link
+- `src/App.tsx` - Add new routes
+- `src/integrations/supabase/types.ts` - Auto-updated after migration
+- `src/lib/notifications.ts` - Already has helpers, will be reused
 
-### Admin Access:
-- Create/edit/cancel live classes across all courses
-- View attendance reports with export to CSV
-- Set attendance percentage thresholds
-
-### Student Access:
-- View upcoming classes, join via link, see personal attendance record
-
-### Notifications & Email:
-- Email 1 hour before live class (`live_class_reminder` template)
-- Notify when recording is available
-- Weekly attendance summary email
-
----
-
-## Phase 4: Communication & Language
-**Goal**: Reach every student in their language.
-
-### Features:
-9. **Multi-language Support (Bengali + English)** -- Implement i18n using `react-i18next`. Create `public/locales/en/` and `public/locales/bn/` translation JSON files. Language toggle in header (EN/BN). Store preference in user_profiles (`preferred_language` column). Translate all UI labels, buttons, navigation, dashboard headings, and static pages. Admin can set default site language.
-
-10. **SMS Notifications** -- Create `sms_logs` table. Create `send-sms` edge function supporting providers (e.g., generic HTTP API). Admin configures SMS provider credentials in setup. SMS templates for critical events (OTP, class reminder, result published). Admin can compose bulk SMS. Student can opt-in/out of SMS in settings.
-
-11. **Faculty/Staff Directory** -- Create `faculty_members` table (name, designation, department, bio, photo_url, email, phone, specialization, sort_order, is_active). Admin CRUD. Public `/faculty` page with search/filter by department. Link to instructor profiles where applicable.
-
-### Admin Access:
-- Manage translations, SMS templates, faculty directory
-- Set default language, SMS provider configuration
-
-### Student Access:
-- Toggle language, manage SMS preferences, browse faculty directory
-
-### Notifications & Email:
-- SMS for live class reminders, grade published, payment due
-- Language-aware email templates (send in user's preferred language)
-
----
-
-## Phase 5: Academic Integrity & Assessment
-**Goal**: Ensure academic quality.
-
-### Features:
-12. **Plagiarism Checker** -- Create `plagiarism_reports` table (submission_id, similarity_pct, matched_sources jsonb, checked_at). Edge function that compares assignment text against other submissions in same assignment (internal similarity detection using text hashing/shingling). Display similarity score on instructor's grading view. Flag submissions above threshold (configurable by admin).
-
-13. **Student Transcript Generator** -- Create `/dashboard/transcript` route. Pull all completed courses, grades, GPA/CGPA, credits. Generate professional PDF transcript with university branding (logo, name, address from id_card_settings). Include student photo, roll ID, batch. Admin can generate for any student. Digital verification QR code linking to verification endpoint.
-
-14. **Group Projects** -- Create `project_groups` table (course_id, name, max_members). Create `project_group_members` table. Create `project_submissions` table. Instructor creates groups (manual or auto-assign). Students see group dashboard with shared submission area. Group-level grading. Discussion thread per group.
-
-### Admin Access:
-- Configure plagiarism thresholds, generate transcripts for any student, manage group project settings
-
-### Student Access:
-- View plagiarism report on own submissions, download transcript, collaborate in groups
-
-### Notifications & Email:
-- Email when plagiarism flagged (to instructor)
-- Notify group members on new submission/comment
-- Email transcript download link
-
----
-
-## Phase 6: Career & Research
-**Goal**: Beyond-classroom value.
-
-### Features:
-15. **Internship Management** -- Create `internships` table (title, company, description, requirements, stipend, duration, application_deadline, status, posted_by). Create `internship_applications` table. Admin/industry partners post internships. Students apply with cover letter + resume. Application tracking pipeline (applied -> shortlisted -> interviewed -> offered -> rejected). Dashboard widget for active internship.
-
-16. **Research Paper Repository** -- Create `research_papers` table (title, abstract, authors jsonb, file_url, category, keywords, published_date, download_count, submitted_by). Students/faculty submit papers for admin approval. Public browse/search with filters. Download tracking. Citation export (BibTeX format).
-
-17. **Virtual Lab Simulations** -- Create `virtual_labs` table (title, description, course_id, simulation_url, type [iframe/external], instructions, is_published). Admin/instructor adds simulation links (iframe embeds or external URLs to existing textile simulation platforms). Student accesses from lesson player or dedicated `/labs` page. Track completion.
-
-### Admin Access:
-- Full CRUD for internships, approve research papers, manage lab simulations
-
-### Student Access:
-- Apply to internships, submit research papers, access virtual labs
-
-### Notifications & Email:
-- Email on internship application status change
-- Notify when new paper is published in student's field
-- Lab assignment notification
-
----
-
-## Phase 7: Financial Flexibility
-**Goal**: Remove payment barriers.
-
-### Features:
-18. **Payment Plans / Installments** -- Create `payment_plans` table (course_id, total_amount, installment_count, interval_days). Create `installment_payments` table (plan_id, user_id, installment_number, amount, due_date, paid_at, status). Admin creates installment options per course. Student selects plan at checkout. Dashboard shows upcoming payments. Auto-reminder emails before due dates. Late payment handling (grace period, access suspension).
-
-19. **Multi-currency Support** -- Create `currencies` table (code, name, symbol, exchange_rate, is_active). Admin sets base currency and exchange rates. Course prices auto-convert based on student's selected currency. Currency selector in header/footer. Store original + converted amounts in orders table. Admin can update exchange rates.
-
-20. **Analytics Dashboard for Students** -- New `/dashboard/analytics` route. Charts showing: study time per week, course completion velocity, quiz score trends, assignment grades over time, attendance rate, GPA progression. Compare with batch average (anonymized). Weekly progress email with key metrics.
-
-### Admin Access:
-- Configure payment plans, manage currencies/exchange rates, view aggregate student analytics
-
-### Student Access:
-- Choose installment plans, select currency, view personal analytics dashboard
-
-### Notifications & Email:
-- Installment due reminder (3 days before, on due date, overdue)
-- Currency rate change notification to admin
-- Weekly analytics summary email to students
-
----
-
-## Phase 8: Intelligence & Polish
-**Goal**: AI-powered features and final integration.
-
-### Features:
-21. **AI Tutor Chatbot** -- Create `ai_chat_sessions` table (user_id, course_id, messages jsonb, created_at). Edge function proxying to AI API (using LOVABLE_API_KEY). Context-aware: knows student's enrolled courses, current lesson, recent quiz scores. Floating chat widget (separate from existing support chat). Suggest resources, explain concepts, quiz prep. Admin can configure behavior rules and restrict to specific courses.
-
-### Final Integration Tasks:
-- **Cross-feature notification audit**: Ensure every feature sends proper notifications (in-app + email + SMS where configured)
-- **Admin super-dashboard**: Aggregate widgets from all 21 features on admin dashboard
-- **Student profile completeness**: Update ProfileCompletenessWidget to include new fields (batch, language, transcript, attendance)
-- **Mobile responsiveness**: Audit all new pages for mobile/tablet layouts
-- **Performance optimization**: Lazy-load all new routes, optimize queries with proper indexes
-
-### Admin Access:
-- Configure AI behavior, view all chat logs, set feature toggles for each module
-
-### Student Access:
-- AI tutor chat, fully integrated profile with all features accessible
-
-### Notifications & Email:
-- Final audit: all 25+ email templates working with proper placeholders
-- SMS fallback for critical notifications
-- In-app notification center shows all feature events
-
----
-
-## Technical Architecture Summary
-
-### New Database Tables (across all phases):
-`batches`, `batch_students`, `academic_calendar`, `grade_configs`, `student_grades`, `course_reviews`, `peer_reviews`, `live_classes`, `attendance_records`, `sms_logs`, `faculty_members`, `plagiarism_reports`, `project_groups`, `project_group_members`, `project_submissions`, `internships`, `internship_applications`, `research_papers`, `virtual_labs`, `payment_plans`, `installment_payments`, `currencies`, `ai_chat_sessions`
-
-### New Edge Functions:
-`send-sms`, `check-plagiarism`, `generate-transcript`, `ai-tutor`
-
-### New Routes (~25):
-Admin: batches, calendar, grade-config, reviews, live-classes, attendance, faculty, internships, research, labs, payment-plans, currencies, ai-config
-Student: transcript, analytics, internships, research, labs, groups
-Public: faculty, labs
-
-### Implementation Order Rationale:
-Phase 1-2 build the academic data model everything else depends on. Phase 3 adds live interaction. Phase 4 removes language barriers. Phase 5-6 add academic depth. Phase 7 removes financial barriers. Phase 8 ties everything together with AI and polish.
-
-Each phase is independently deployable and testable. No phase breaks existing functionality.
+### Implementation Order:
+1. Database migration (all tables/columns at once)
+2. Enhanced lesson discussions with upvotes/pinning
+3. Review approval system (admin page + CourseDetail filter)
+4. Peer review system (config + auto-assign + student UI)
+5. Notifications integration
+6. Route registration and sidebar updates
 
