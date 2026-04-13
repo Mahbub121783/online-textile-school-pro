@@ -102,7 +102,7 @@ const CourseDetail = () => {
         .eq('item_type', 'course')
         .eq('item_id', course!.id)
         .eq('orders.user_id', user!.id)
-        .in('orders.status', ['pending', 'completed'])
+        .eq('orders.status', 'pending')
         .limit(1);
       return (data?.length ?? 0) > 0;
     },

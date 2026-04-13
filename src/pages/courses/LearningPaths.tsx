@@ -15,7 +15,7 @@ const LearningPaths = () => {
   const { data: paths = [], isLoading } = useQuery({
     queryKey: ['learning-paths'],
     queryFn: async () => {
-      const { data } = await (supabase as any)
+      const { data } = await supabase
         .from('learning_paths')
         .select('*')
         .eq('is_published', true)

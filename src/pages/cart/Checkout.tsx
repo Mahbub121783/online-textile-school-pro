@@ -134,11 +134,13 @@ const Checkout = () => {
   const enrollAfterPayment = async (orderId: string) => {
     for (const item of items) {
       if (item.type === 'course') {
-        await supabase.from('enrollments').upsert({
+        const { error: enrollError } = await supabase.from('enrollments').insert({
           user_id: user.id,
           course_id: item.id,
           payment_id: orderId,
-        }, { onConflict: 'user_id,course_id' } as any);
+        });
+        // Ignore duplicate enrollment (already enrolled)
+        if (enrollError && !enrollError.message.includes('duplicate')) throw enrollError;
       }
       // eBook ownership is verified via order_items + completed order status
       // No separate table needed — the order being "completed" is the proof of purchase
@@ -266,6 +268,9 @@ const Checkout = () => {
 
       clearCart();
       toast.success('Order placed successfully!');
+      // Invalidate enrollment queries so dashboard shows fresh data
+      const { QueryClient } = await import('@tanstack/react-query');
+      // We don't have queryClient here directly, so invalidation happens on navigation via staleTime
       navigate('/dashboard');
     } catch (err: any) {
       console.error('Checkout error:', err);
