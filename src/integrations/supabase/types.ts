@@ -1324,6 +1324,54 @@ export type Database = {
         }
         Relationships: []
       }
+      faculty_members: {
+        Row: {
+          bio: string | null
+          created_at: string
+          department: string | null
+          designation: string | null
+          email: string | null
+          id: string
+          is_active: boolean
+          name: string
+          phone: string | null
+          photo_url: string | null
+          sort_order: number | null
+          specialization: string | null
+          updated_at: string
+        }
+        Insert: {
+          bio?: string | null
+          created_at?: string
+          department?: string | null
+          designation?: string | null
+          email?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          phone?: string | null
+          photo_url?: string | null
+          sort_order?: number | null
+          specialization?: string | null
+          updated_at?: string
+        }
+        Update: {
+          bio?: string | null
+          created_at?: string
+          department?: string | null
+          designation?: string | null
+          email?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          phone?: string | null
+          photo_url?: string | null
+          sort_order?: number | null
+          specialization?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       forum_categories: {
         Row: {
           created_at: string | null
@@ -3157,6 +3205,47 @@ export type Database = {
           value?: string | null
         }
         Relationships: []
+      }
+      sms_logs: {
+        Row: {
+          created_at: string
+          id: string
+          message: string
+          provider_response: Json | null
+          recipient_phone: string
+          status: string
+          template_key: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          message: string
+          provider_response?: Json | null
+          recipient_phone: string
+          status?: string
+          template_key?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          message?: string
+          provider_response?: Json | null
+          recipient_phone?: string
+          status?: string
+          template_key?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sms_logs_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       student_grades: {
         Row: {
