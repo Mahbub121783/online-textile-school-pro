@@ -7,7 +7,30 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-function buildBrandedHtml(body: string, branding: Record<string, string>) {
+function generateToken(): string {
+  const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
+  let token = "";
+  for (let i = 0; i < 32; i++) {
+    token += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return token;
+}
+
+async function getOrCreateUnsubToken(supabase: any, email: string): Promise<string> {
+  const { data: existing } = await supabase
+    .from("email_unsubscribes")
+    .select("token, unsubscribed_at")
+    .eq("email", email)
+    .maybeSingle();
+
+  if (existing) return existing.token;
+
+  const token = generateToken();
+  await supabase.from("email_unsubscribes").insert({ email, token });
+  return token;
+}
+
+function buildBrandedHtml(body: string, branding: Record<string, string>, unsubscribeUrl: string) {
   const brandColor = branding.email_brand_color || "#1a365d";
   const logoUrl = branding.email_logo_url || "";
   const footerText = (branding.email_footer_text || "© Online Textile School. All rights reserved.").replace(/\n/g, "<br>");
@@ -16,7 +39,6 @@ function buildBrandedHtml(body: string, branding: Record<string, string>) {
   const youtubeUrl = branding.email_youtube_url || "";
   const fromName = branding.smtp_from_name || "Online Textile School";
 
-  // Robust logo: use explicit width/height, display block, and border=0 for maximum email client compatibility
   const logoHtml = logoUrl
     ? `<img src="${logoUrl}" alt="${fromName}" width="180" height="50" border="0" style="display:block;margin:0 auto;max-width:180px;height:auto;outline:none;text-decoration:none;" />`
     : `<span style="font-size:20px;font-weight:700;color:${brandColor};letter-spacing:0.5px;">${fromName}</span>`;
@@ -80,8 +102,15 @@ function buildBrandedHtml(body: string, branding: Record<string, string>) {
 
   <!-- Footer -->
   <tr>
-    <td align="center" style="padding:16px 32px 28px 32px;">
+    <td align="center" style="padding:16px 32px 12px 32px;">
       <p style="margin:0;color:#a0aec0;font-size:12px;line-height:1.6;">${footerText}</p>
+    </td>
+  </tr>
+
+  <!-- Unsubscribe -->
+  <tr>
+    <td align="center" style="padding:0 32px 28px 32px;">
+      <a href="${unsubscribeUrl}" style="color:#a0aec0;font-size:11px;text-decoration:underline;">Unsubscribe from these emails</a>
     </td>
   </tr>
 
@@ -109,6 +138,28 @@ serve(async (req) => {
     if (!recipientEmail) {
       return new Response(JSON.stringify({ error: "recipientEmail is required" }), {
         status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Check if recipient has unsubscribed
+    const { data: unsub } = await supabase
+      .from("email_unsubscribes")
+      .select("unsubscribed_at")
+      .eq("email", recipientEmail)
+      .maybeSingle();
+
+    if (unsub?.unsubscribed_at) {
+      await supabase.from("email_logs").insert({
+        recipient: recipientEmail,
+        subject: customSubject || templateKey || "Unknown",
+        template_key: templateKey || "custom",
+        status: "blocked",
+        error_message: "Recipient has unsubscribed",
+        metadata: metadata || null,
+      });
+      return new Response(JSON.stringify({ error: "Recipient has unsubscribed" }), {
+        status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -177,14 +228,19 @@ serve(async (req) => {
       });
     }
 
-    // Wrap body in branded template
-    const brandedHtml = buildBrandedHtml(emailBody, cfg);
+    // Generate unsubscribe link
+    const unsubToken = await getOrCreateUnsubToken(supabase, recipientEmail);
+    const unsubscribeUrl = `${supabaseUrl}/functions/v1/handle-unsubscribe?token=${unsubToken}`;
+
+    // Replace {{unsubscribe_url}} placeholder if used in body
+    emailBody = emailBody.replace(/\{\{unsubscribe_url\}\}/g, unsubscribeUrl);
+
+    // Wrap body in branded template with unsubscribe link
+    const brandedHtml = buildBrandedHtml(emailBody, cfg, unsubscribeUrl);
 
     // Determine SMTP connection settings
     const port = parseInt(cfg.smtp_port || "465", 10);
     const encryption = cfg.smtp_encryption || "ssl";
-
-    // SSL (implicit TLS on port 465) vs STARTTLS (port 587) vs none
     const useTls = encryption === "ssl" || port === 465;
     const useStartTls = encryption === "tls";
 
@@ -201,7 +257,6 @@ serve(async (req) => {
       connectionConfig.tls = true;
     } else if (useStartTls) {
       connectionConfig.tls = false;
-      // denomailer handles STARTTLS upgrade automatically when tls is false on port 587
     } else {
       connectionConfig.tls = false;
     }
@@ -217,6 +272,10 @@ serve(async (req) => {
         subject: emailSubject,
         content: "auto",
         html: brandedHtml,
+        headers: {
+          "List-Unsubscribe": `<${unsubscribeUrl}>`,
+          "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+        },
       });
 
       await client.close();
