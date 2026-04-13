@@ -32,4 +32,10 @@ export const BD_DISTRICTS = [
   'Comilla', 'Gazipur', 'Narayanganj', 'Tangail', 'Narsingdi', 'Manikganj', 'Munshiganj',
   'Faridpur', 'Gopalganj', 'Madaripur', 'Shariatpur', 'Brahmanbaria', 'Chandpur', 'Feni',
   'Lakshmipur', 'Noakhali', 'Cox\'s Bazar', 'Bandarban', 'Khagrachari', 'Rangamati',
+  'Jessore', 'Satkhira', 'Narail', 'Magura', 'Meherpur', 'Chuadanga', 'Kushtia', 'Jhenaidah',
+  'Bagerhat', 'Pirojpur', 'Patuakhali', 'Bhola', 'Barguna', 'Jhalokathi',
+  'Habiganj', 'Moulvibazar', 'Sunamganj',
+  'Natore', 'Naogaon', 'Nawabganj', 'Bogra', 'Joypurhat', 'Pabna', 'Sirajganj',
+  'Dinajpur', 'Thakurgaon', 'Panchagarh', 'Nilphamari', 'Lalmonirhat', 'Kurigram', 'Gaibandha',
+  'Jamalpur', 'Sherpur', 'Netrokona', 'Kishoreganj',
 ] as const;

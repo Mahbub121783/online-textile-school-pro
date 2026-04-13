@@ -1,13 +1,8 @@
 import { useEffect, useState, useRef } from 'react';
 import { useInView } from 'react-intersection-observer';
 import { Users, BookOpen, GraduationCap, Star } from 'lucide-react';
-
-const stats = [
-  { icon: Users, label: 'Total Instructors', value: 50, suffix: '+' },
-  { icon: BookOpen, label: 'Total Courses', value: 120, suffix: '+' },
-  { icon: GraduationCap, label: 'Total Students', value: 10000, suffix: '+' },
-  { icon: Star, label: 'Average Rating', value: 4.8, suffix: '/5', decimal: true },
-];
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 
 const CountUp = ({ end, decimal, suffix }: { end: number; decimal?: boolean; suffix: string }) => {
   const [count, setCount] = useState(0);
@@ -42,6 +37,34 @@ const CountUp = ({ end, decimal, suffix }: { end: number; decimal?: boolean; suf
 };
 
 const StatsSection = () => {
+  const { data } = useQuery({
+    queryKey: ['homepage-stats'],
+    queryFn: async () => {
+      const [instructors, courses, students, ratingResult] = await Promise.all([
+        supabase.from('user_roles').select('id', { count: 'exact', head: true }).eq('role', 'instructor'),
+        supabase.from('courses').select('id', { count: 'exact', head: true }).eq('is_published', true),
+        supabase.from('user_profiles').select('id', { count: 'exact', head: true }),
+        supabase.from('courses').select('avg_rating').eq('is_published', true).gt('avg_rating', 0),
+      ]);
+      const ratings = (ratingResult.data ?? []).map((c: any) => Number(c.avg_rating)).filter(Boolean);
+      const avgRating = ratings.length > 0 ? ratings.reduce((a, b) => a + b, 0) / ratings.length : 4.8;
+      return {
+        instructors: instructors.count || 0,
+        courses: courses.count || 0,
+        students: students.count || 0,
+        avgRating: Math.round(avgRating * 10) / 10,
+      };
+    },
+    staleTime: 10 * 60 * 1000,
+  });
+
+  const stats = [
+    { icon: Users, label: 'Total Instructors', value: data?.instructors || 0, suffix: '+' },
+    { icon: BookOpen, label: 'Total Courses', value: data?.courses || 0, suffix: '+' },
+    { icon: GraduationCap, label: 'Total Students', value: data?.students || 0, suffix: '+' },
+    { icon: Star, label: 'Average Rating', value: data?.avgRating || 4.8, suffix: '/5', decimal: true },
+  ];
+
   return (
     <section className="bg-primary py-12 md:py-16">
       <div className="container">

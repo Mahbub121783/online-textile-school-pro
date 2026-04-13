@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { Star, ChevronLeft, ChevronRight, Quote } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 
-const TESTIMONIALS = [
+const FALLBACK = [
   { name: 'Md. Rakibul Hasan', institution: 'BUTEX', rating: 5, quote: 'Online Textile School helped me understand spinning technology deeply. The course quality is exceptional and the instructors are very responsive.' },
   { name: 'Fatema Khatun', institution: 'Ahsanullah University', rating: 5, quote: 'As a working professional, the flexibility of learning at my own pace was invaluable. I completed three courses and earned certificates that boosted my career.' },
   { name: 'Tanvir Ahmed', institution: 'DUET', rating: 4, quote: 'The eBooks are comprehensive and the course player is very user-friendly. I especially love the Q&A section where instructors actively help students.' },
@@ -9,7 +11,29 @@ const TESTIMONIALS = [
 
 const TestimonialsSection = () => {
   const [current, setCurrent] = useState(0);
-  const t = TESTIMONIALS[current];
+
+  const { data: testimonials = FALLBACK } = useQuery({
+    queryKey: ['homepage-testimonials'],
+    queryFn: async () => {
+      const { data } = await (supabase as any)
+        .from('success_stories')
+        .select('*')
+        .eq('is_featured', true)
+        .order('created_at', { ascending: false })
+        .limit(6);
+      if (!data || data.length === 0) return FALLBACK;
+      return data.map((s: any) => ({
+        name: s.name,
+        institution: s.job_title || '',
+        rating: 5,
+        quote: s.story,
+        photo: s.photo_url,
+      }));
+    },
+    staleTime: 10 * 60 * 1000,
+  });
+
+  const t = testimonials[current];
 
   return (
     <section className="py-12 md:py-16 bg-secondary">
@@ -33,13 +57,13 @@ const TestimonialsSection = () => {
             </div>
           </div>
           <div className="flex justify-center gap-2 mt-6">
-            <button onClick={() => setCurrent((c) => (c - 1 + TESTIMONIALS.length) % TESTIMONIALS.length)} className="p-2 rounded-full hover:bg-secondary transition-colors">
+            <button onClick={() => setCurrent((c) => (c - 1 + testimonials.length) % testimonials.length)} className="p-2 rounded-full hover:bg-secondary transition-colors">
               <ChevronLeft className="h-4 w-4" />
             </button>
-            {TESTIMONIALS.map((_, i) => (
+            {testimonials.map((_: any, i: number) => (
               <button key={i} onClick={() => setCurrent(i)} className={`w-2 h-2 rounded-full transition-all ${i === current ? 'bg-accent w-6' : 'bg-muted-foreground/30'}`} />
             ))}
-            <button onClick={() => setCurrent((c) => (c + 1) % TESTIMONIALS.length)} className="p-2 rounded-full hover:bg-secondary transition-colors">
+            <button onClick={() => setCurrent((c) => (c + 1) % testimonials.length)} className="p-2 rounded-full hover:bg-secondary transition-colors">
               <ChevronRight className="h-4 w-4" />
             </button>
           </div>
