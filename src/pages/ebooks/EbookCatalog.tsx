@@ -7,12 +7,13 @@ import { useCartStore } from '@/stores/cartStore';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ShoppingCart, Search, BookOpen, CheckCircle, LayoutGrid, List, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ShoppingCart, Search, BookOpen, CheckCircle, LayoutGrid, List, ChevronLeft, ChevronRight, Heart } from 'lucide-react';
 import SEOHead from '@/components/SEOHead';
 import UtilityBar from '@/components/layout/UtilityBar';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import BottomNav from '@/components/layout/BottomNav';
+import { useWishlist } from '@/hooks/useWishlist';
 import { toast } from '@/hooks/use-toast';
 
 const ITEMS_PER_PAGE = 12;
@@ -26,6 +27,7 @@ const EbookCatalog = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { addItem, items } = useCartStore();
+  const { wishlistIds, toggleWishlist } = useWishlist();
 
   const { data: categories = [] } = useQuery({
     queryKey: ['ebook-categories'],
@@ -179,10 +181,19 @@ const EbookCatalog = () => {
                 const isPurchased = purchasedEbookIds instanceof Set && purchasedEbookIds.has(ebook.id);
                 const inCart = items.some((i) => i.id === ebook.id);
                 const price = ebook.discount_price ?? ebook.price;
+                const isWished = wishlistIds instanceof Set && wishlistIds.has(ebook.id);
                 return (
                   <div key={ebook.id} className="bg-card border rounded-xl overflow-hidden group hover:shadow-lg transition-shadow">
                     <div className="aspect-[3/4] relative overflow-hidden bg-muted cursor-pointer" onClick={() => navigate(`/ebooks/${ebook.slug}`)}>
                       <img src={ebook.cover_url || '/placeholder.svg'} alt={ebook.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform" loading="lazy" />
+                      {user && !isPurchased && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); toggleWishlist(ebook.id); }}
+                          className="absolute top-2 left-2 p-1.5 rounded-full bg-card/80 hover:bg-card transition-colors"
+                        >
+                          <Heart className={`h-3.5 w-3.5 ${isWished ? 'fill-destructive text-destructive' : 'text-muted-foreground'}`} />
+                        </button>
+                      )}
                       {isPurchased && (
                         <div className="absolute top-2 right-2 bg-green-600 text-white text-xs px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
                           <CheckCircle className="h-3 w-3" /> Owned
@@ -209,9 +220,16 @@ const EbookCatalog = () => {
                               <span className="font-heading font-bold text-sm">৳{price}</span>
                               {ebook.discount_price && <span className="text-xs text-muted-foreground line-through ml-1">৳{ebook.price}</span>}
                             </div>
-                            <Button size="icon" variant={inCart ? 'secondary' : 'default'} className="h-8 w-8" onClick={() => !inCart && handleAddToCart(ebook)} disabled={inCart}>
-                              <ShoppingCart className="h-3.5 w-3.5" />
-                            </Button>
+                            <div className="flex gap-1">
+                              <Button size="icon" variant={inCart ? 'secondary' : 'default'} className="h-8 w-8" onClick={() => !inCart && handleAddToCart(ebook)} disabled={inCart}>
+                                <ShoppingCart className="h-3.5 w-3.5" />
+                              </Button>
+                              {!inCart && (
+                                <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => { handleAddToCart(ebook); navigate('/checkout'); }} title="Buy Now">
+                                  <ChevronRight className="h-3.5 w-3.5" />
+                                </Button>
+                              )}
+                            </div>
                           </>
                         )}
                       </div>

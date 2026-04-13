@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -23,6 +23,7 @@ const Checkout = () => {
   const { items, getTotal, clearCart } = useCartStore();
   const { user, profile } = useAuth();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [formData, setFormData] = useState(() => ({
     fullName: profile?.full_name || '',
     email: user?.email || '',
@@ -134,11 +135,13 @@ const Checkout = () => {
   const enrollAfterPayment = async (orderId: string) => {
     for (const item of items) {
       if (item.type === 'course') {
-        await supabase.from('enrollments').upsert({
+        const { error: enrollError } = await supabase.from('enrollments').insert({
           user_id: user.id,
           course_id: item.id,
           payment_id: orderId,
-        }, { onConflict: 'user_id,course_id' } as any);
+        });
+        // Ignore duplicate enrollment (already enrolled)
+        if (enrollError && !enrollError.message.includes('duplicate')) throw enrollError;
       }
       // eBook ownership is verified via order_items + completed order status
       // No separate table needed — the order being "completed" is the proof of purchase
@@ -266,6 +269,9 @@ const Checkout = () => {
 
       clearCart();
       toast.success('Order placed successfully!');
+      queryClient.invalidateQueries({ queryKey: ['enrollments'] });
+      queryClient.invalidateQueries({ queryKey: ['enrollment'] });
+      queryClient.invalidateQueries({ queryKey: ['purchased-ebooks-set'] });
       navigate('/dashboard');
     } catch (err: any) {
       console.error('Checkout error:', err);

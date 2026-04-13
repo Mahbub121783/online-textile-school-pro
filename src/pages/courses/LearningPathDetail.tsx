@@ -21,7 +21,7 @@ const LearningPathDetail = () => {
   const { data: path, isLoading } = useQuery({
     queryKey: ['learning-path', slug],
     queryFn: async () => {
-      const { data } = await (supabase as any).from('learning_paths').select('*').eq('slug', slug!).single();
+      const { data } = await supabase.from('learning_paths').select('*').eq('slug', slug!).single();
       return data;
     },
     enabled: !!slug,

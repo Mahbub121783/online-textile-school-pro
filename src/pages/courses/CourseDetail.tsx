@@ -102,7 +102,7 @@ const CourseDetail = () => {
         .eq('item_type', 'course')
         .eq('item_id', course!.id)
         .eq('orders.user_id', user!.id)
-        .in('orders.status', ['pending', 'completed'])
+        .eq('orders.status', 'pending')
         .limit(1);
       return (data?.length ?? 0) > 0;
     },
@@ -127,6 +127,27 @@ const CourseDetail = () => {
       toast.success('Review submitted!');
     },
     onError: () => toast.error('Failed to submit review'),
+  });
+
+  // Free enrollment mutation
+  const freeEnroll = useMutation({
+    mutationFn: async () => {
+      if (!user || !course) throw new Error('Not ready');
+      // Create order for audit trail
+      const orderId = crypto.randomUUID();
+      await supabase.from('orders').insert({ id: orderId, user_id: user.id, total: 0, status: 'completed', payment_method: 'free' });
+      await supabase.from('order_items').insert({ order_id: orderId, item_id: course.id, item_type: 'course', price: 0 });
+      // Enroll
+      const { error } = await supabase.from('enrollments').insert({ user_id: user.id, course_id: course.id, payment_id: orderId });
+      if (error && !error.message.includes('duplicate')) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['enrollment'] });
+      queryClient.invalidateQueries({ queryKey: ['enrollments'] });
+      queryClient.invalidateQueries({ queryKey: ['course-pending-order'] });
+      toast.success('Successfully enrolled!');
+    },
+    onError: () => toast.error('Failed to enroll'),
   });
 
   const allLessons = useMemo(() => sections.flatMap((s: any) => s.lessons), [sections]);
@@ -491,9 +512,15 @@ const CourseDetail = () => {
                       </div>
                     ) : (
                       <>
-                        <Button className="w-full h-12 bg-accent hover:bg-accent/90 text-accent-foreground font-semibold" onClick={() => addItem({ id: course.id, type: 'course', title: course.title, price: originalPrice, discount_price: course.discount_price ?? undefined, thumbnail_url: course.thumbnail_url ?? undefined })}>
-                          <ShoppingCart className="h-4 w-4 mr-2" />{originalPrice > 0 ? 'Add to Cart' : 'Enroll Free'}
-                        </Button>
+                        {originalPrice === 0 ? (
+                          <Button className="w-full h-12 bg-accent hover:bg-accent/90 text-accent-foreground font-semibold" onClick={() => user ? freeEnroll.mutate() : navigate('/auth/login?redirect=/courses/' + slug)} disabled={freeEnroll.isPending}>
+                            {freeEnroll.isPending ? 'Enrolling...' : 'Enroll Free'}
+                          </Button>
+                        ) : (
+                          <Button className="w-full h-12 bg-accent hover:bg-accent/90 text-accent-foreground font-semibold" onClick={() => addItem({ id: course.id, type: 'course', title: course.title, price: originalPrice, discount_price: course.discount_price ?? undefined, thumbnail_url: course.thumbnail_url ?? undefined })}>
+                            <ShoppingCart className="h-4 w-4 mr-2" />Add to Cart
+                          </Button>
+                        )}
                         {originalPrice > 0 && (
                           <Button variant="outline" className="w-full h-12" onClick={() => {
                             addItem({ id: course.id, type: 'course', title: course.title, price: originalPrice, discount_price: course.discount_price ?? undefined, thumbnail_url: course.thumbnail_url ?? undefined });

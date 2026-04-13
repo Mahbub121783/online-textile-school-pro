@@ -15,7 +15,7 @@ const TestimonialsSection = () => {
   const { data: testimonials = FALLBACK } = useQuery({
     queryKey: ['homepage-testimonials'],
     queryFn: async () => {
-      const { data } = await (supabase as any)
+      const { data } = await supabase
         .from('success_stories')
         .select('*')
         .eq('is_featured', true)
