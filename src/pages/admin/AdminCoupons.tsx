@@ -49,7 +49,7 @@ const AdminCoupons = () => {
         const { error } = await supabase.from('coupons' as any).insert(rest);
         if (error) throw error;
       }
-      await supabase.from('admin_activity_log' as any).insert({ admin_id: user!.id, action: id ? 'Updated coupon' : 'Created coupon', target_type: 'coupon', target_id: id || rest.code });
+      await supabase.from('admin_activity_log').insert({ admin_id: user!.id, action: id ? 'Updated coupon' : 'Created coupon', target_type: 'coupon', target_id: id || rest.code });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-coupons'] });
