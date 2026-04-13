@@ -28,8 +28,11 @@ const Checkout = () => {
     phone: profile?.phone || '',
     district: profile?.district || '',
   }));
-  const [couponCode, setCouponCode] = useState('');
+  // Pre-load coupon from cart page URL param
+  const urlCoupon = new URLSearchParams(window.location.search).get('coupon') || '';
+  const [couponCode, setCouponCode] = useState(urlCoupon);
   const [appliedCoupon, setAppliedCoupon] = useState<any>(null);
+  const [couponAutoApplied, setCouponAutoApplied] = useState(false);
   const [couponLoading, setCouponLoading] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState('manual');
   const [manualSubMethod, setManualSubMethod] = useState('');
@@ -52,6 +55,31 @@ const Checkout = () => {
   const activeGateways = allGateways.filter((g: any) => g.is_active);
   const { data: walletData } = useWallet();
   const walletBalance = Number(walletData?.balance ?? 0);
+
+  // Auto-apply coupon from URL
+  const autoApplyCouponFromUrl = async () => {
+    if (couponAutoApplied || !urlCoupon || appliedCoupon) return;
+    setCouponAutoApplied(true);
+    setCouponLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('coupons')
+        .select('*')
+        .eq('code', urlCoupon.toUpperCase())
+        .eq('is_active', true)
+        .single();
+      if (!error && data) {
+        const coupon = data as any;
+        const valid = (!coupon.valid_until || new Date(coupon.valid_until) >= new Date()) &&
+          (!coupon.usage_limit || coupon.used_count < coupon.usage_limit);
+        if (valid) setAppliedCoupon(coupon);
+      }
+    } catch {}
+    setCouponLoading(false);
+  };
+  if (urlCoupon && !couponAutoApplied && user) {
+    autoApplyCouponFromUrl();
+  }
 
   if (!user) {
     return (
