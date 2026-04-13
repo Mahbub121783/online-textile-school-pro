@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Search, ShoppingCart, Menu, X, ChevronDown, User, LogOut, GraduationCap, Shield } from 'lucide-react';
 import ThemeToggle from '@/components/ThemeToggle';
+import LanguageToggle from '@/components/LanguageToggle';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/hooks/useAuth';
@@ -38,6 +39,7 @@ const Header = () => {
     { label: 'Blog', href: '/blog' },
     { label: 'Forum', href: '/forum' },
     { label: 'Registration', href: '/register' },
+    { label: 'Faculty', href: '/faculty' },
     { label: 'About', href: '/about' },
   ];
 
@@ -92,7 +94,8 @@ const Header = () => {
             )}
           </div>
 
-          <ThemeToggle />
+         <LanguageToggle />
+         <ThemeToggle />
 
           {user && <NotificationBell basePath="/dashboard" />}
 
