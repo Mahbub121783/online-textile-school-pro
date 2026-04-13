@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useCartStore } from '@/stores/cartStore';
 import { useAuth } from '@/hooks/useAuth';
+import { useCouponValidation } from '@/hooks/useCouponValidation';
 import { supabase } from '@/integrations/supabase/client';
 import { BD_DISTRICTS } from '@/lib/constants';
 import { toast } from 'sonner';
@@ -28,20 +29,17 @@ const Checkout = () => {
     phone: profile?.phone || '',
     district: profile?.district || '',
   }));
-  // Pre-load coupon from cart page URL param
+
   const urlCoupon = new URLSearchParams(window.location.search).get('coupon') || '';
   const [couponCode, setCouponCode] = useState(urlCoupon);
-  const [appliedCoupon, setAppliedCoupon] = useState<any>(null);
+  const { appliedCoupon, couponLoading, applyCoupon, removeCoupon, calculateDiscount } = useCouponValidation();
   const [couponAutoApplied, setCouponAutoApplied] = useState(false);
-  const [couponLoading, setCouponLoading] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState('manual');
   const [manualSubMethod, setManualSubMethod] = useState('');
   const [transactionId, setTransactionId] = useState('');
   const [senderNumber, setSenderNumber] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  // Fetch active payment gateways
-  // Fetch ALL payment gateways (including inactive ones for send money info)
   const { data: allGateways = [] } = useQuery({
     queryKey: ['all-payment-gateways-checkout'],
     queryFn: async () => {
@@ -60,22 +58,7 @@ const Checkout = () => {
   const autoApplyCouponFromUrl = async () => {
     if (couponAutoApplied || !urlCoupon || appliedCoupon) return;
     setCouponAutoApplied(true);
-    setCouponLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from('coupons')
-        .select('*')
-        .eq('code', urlCoupon.toUpperCase())
-        .eq('is_active', true)
-        .single();
-      if (!error && data) {
-        const coupon = data as any;
-        const valid = (!coupon.valid_until || new Date(coupon.valid_until) >= new Date()) &&
-          (!coupon.usage_limit || coupon.used_count < coupon.usage_limit);
-        if (valid) setAppliedCoupon(coupon);
-      }
-    } catch {}
-    setCouponLoading(false);
+    await applyCoupon(urlCoupon, getTotal());
   };
   if (urlCoupon && !couponAutoApplied && user) {
     autoApplyCouponFromUrl();
@@ -99,75 +82,20 @@ const Checkout = () => {
     );
   }
 
-
   const subtotal = getTotal();
-  const discountAmount = appliedCoupon
-    ? appliedCoupon.discount_type === 'percentage'
-      ? Math.min(subtotal * (appliedCoupon.discount_value / 100), appliedCoupon.max_discount_amount || Infinity)
-      : Math.min(appliedCoupon.discount_value, subtotal)
-    : 0;
+  const discountAmount = calculateDiscount(subtotal);
   const total = Math.max(subtotal - discountAmount, 0);
 
-  // Build dynamic payment options — use allGateways for send money details
   const getActiveGateway = (name: string) => activeGateways.find((g: any) => g.gateway_name === name);
   const getAnyGateway = (name: string) => allGateways.find((g: any) => g.gateway_name === name);
   const bankGateway = getActiveGateway('bank');
-
-  // For manual/send money, find gateway from ALL gateways (even inactive ones have send money config)
-  const selectedManualGateway = manualSubMethod
-    ? getAnyGateway(manualSubMethod)
-    : null;
+  const selectedManualGateway = manualSubMethod ? getAnyGateway(manualSubMethod) : null;
 
   const isManualPayment = paymentMethod === 'manual';
   const needsTxId = isManualPayment || paymentMethod === 'bank';
 
-  const applyCoupon = async () => {
-    if (!couponCode.trim()) return;
-    setCouponLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from('coupons' as any)
-        .select('*')
-        .eq('code', couponCode.toUpperCase())
-        .eq('is_active', true)
-        .single();
-
-      if (error || !data) {
-        toast.error('Invalid or expired coupon code');
-        setAppliedCoupon(null);
-        setCouponLoading(false);
-        return;
-      }
-
-      const coupon = data as any;
-      if (coupon.valid_until && new Date(coupon.valid_until) < new Date()) {
-        toast.error('This coupon has expired');
-        setCouponLoading(false);
-        return;
-      }
-      if (coupon.usage_limit && coupon.used_count >= coupon.usage_limit) {
-        toast.error('This coupon has reached its usage limit');
-        setCouponLoading(false);
-        return;
-      }
-      if (coupon.min_order_amount && subtotal < coupon.min_order_amount) {
-        toast.error(`Minimum order amount is ৳${coupon.min_order_amount}`);
-        setCouponLoading(false);
-        return;
-      }
-
-      setAppliedCoupon(coupon);
-      toast.success('Coupon applied!');
-    } catch {
-      toast.error('Failed to apply coupon');
-    }
-    setCouponLoading(false);
-  };
-
-  const removeCoupon = () => {
-    setAppliedCoupon(null);
-    setCouponCode('');
-  };
+  const handleApplyCoupon = () => applyCoupon(couponCode, subtotal);
+  const handleRemoveCoupon = () => { removeCoupon(); setCouponCode(''); };
 
   const generateInvoiceNumber = () => {
     const date = new Date();
@@ -177,7 +105,6 @@ const Checkout = () => {
     return `INV-${y}${m}-${rand}`;
   };
 
-  // Credit instructor revenue share for course items
   const creditInstructorRevenue = async (orderId: string, orderItems: typeof items) => {
     for (const item of orderItems) {
       if (item.type === 'course') {
@@ -203,13 +130,26 @@ const Checkout = () => {
     }
   };
 
+  // Enroll user in courses and ensure eBook ownership via completed order
+  const enrollAfterPayment = async (orderId: string) => {
+    for (const item of items) {
+      if (item.type === 'course') {
+        await supabase.from('enrollments').upsert({
+          user_id: user.id,
+          course_id: item.id,
+          payment_id: orderId,
+        }, { onConflict: 'user_id,course_id' } as any);
+      }
+      // eBook ownership is verified via order_items + completed order status
+      // No separate table needed — the order being "completed" is the proof of purchase
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (items.length === 0) return;
 
-    // Skip payment validation when total is 0 (100% coupon)
     if (total > 0) {
-      // Validate manual payment requires sub-method + transaction ID
       if (isManualPayment && !manualSubMethod) {
         toast.error('Please select a payment method (bKash, Nagad, or Rocket)');
         return;
@@ -223,7 +163,7 @@ const Checkout = () => {
     setSubmitting(true);
 
     try {
-      const effectiveMethod = isManualPayment ? `${manualSubMethod}_send_money` : paymentMethod;
+      const effectiveMethod = total === 0 ? 'free' : isManualPayment ? `${manualSubMethod}_send_money` : paymentMethod;
       const orderId = crypto.randomUUID();
       const { error: orderError } = await supabase.from('orders').insert({
         id: orderId,
@@ -234,10 +174,9 @@ const Checkout = () => {
         payment_reference: transactionId || null,
         coupon_code: appliedCoupon?.code || null,
         discount_amount: discountAmount,
-      } as any);
+      });
       if (orderError) throw orderError;
 
-      // Create order items — MUST check for errors
       const orderItems = items.map((item) => ({
         order_id: orderId,
         item_id: item.id,
@@ -245,12 +184,9 @@ const Checkout = () => {
         price: item.discount_price ?? item.price,
       }));
       const { error: itemsError } = await supabase.from('order_items').insert(orderItems);
-      if (itemsError) {
-        throw new Error(`Failed to save order items: ${itemsError.message}`);
-      }
+      if (itemsError) throw new Error(`Failed to save order items: ${itemsError.message}`);
 
-      // Create invoice — MUST check for errors
-      const { error: invoiceError } = await supabase.from('invoices' as any).insert({
+      const { error: invoiceError } = await supabase.from('invoices').insert({
         invoice_number: generateInvoiceNumber(),
         order_id: orderId,
         user_id: user.id,
@@ -265,58 +201,41 @@ const Checkout = () => {
         payment_method: effectiveMethod,
         payment_status: 'pending',
       });
-      if (invoiceError) {
-        console.error('Invoice creation failed:', invoiceError);
-      }
+      if (invoiceError) console.error('Invoice creation failed:', invoiceError);
 
-      // Record coupon usage
       if (appliedCoupon) {
-        await supabase.from('coupon_usages' as any).insert({
+        await supabase.from('coupon_usages').insert({
           coupon_id: appliedCoupon.id,
           user_id: user.id,
           order_id: orderId,
         });
-        await supabase.from('coupons' as any).update({ used_count: (appliedCoupon.used_count || 0) + 1 }).eq('id', appliedCoupon.id);
+        await supabase.from('coupons').update({ used_count: (appliedCoupon.used_count || 0) + 1 }).eq('id', appliedCoupon.id);
       }
 
-      // UddoktaPay (or any merchant API gateway)
+      // UddoktaPay
       if (paymentMethod === 'uddoktapay' && total > 0) {
         const { data: paymentData, error: paymentError } = await supabase.functions.invoke('process-payment', {
           body: {
-            orderId,
-            amount: total,
-            customerName: formData.fullName,
-            customerEmail: formData.email,
-            customerPhone: formData.phone,
+            orderId, amount: total, customerName: formData.fullName, customerEmail: formData.email, customerPhone: formData.phone,
             metadata: { coupon_code: appliedCoupon?.code },
           },
         });
         if (paymentError) throw paymentError;
-        if (paymentData?.payment_url) {
-          window.location.href = paymentData.payment_url;
-          return;
-        }
+        if (paymentData?.payment_url) { window.location.href = paymentData.payment_url; return; }
       }
 
-      // Send Money / Manual / Bank payment -- order stays pending for admin verification
+      // Manual / Bank — pending verification
       if ((isManualPayment || paymentMethod === 'bank') && total > 0) {
-        // Notify the user
         await supabase.from('notifications').insert({
-          user_id: user.id,
-          type: 'order',
-          title: 'Order Placed',
+          user_id: user.id, type: 'order', title: 'Order Placed',
           message: `Your order #${orderId.slice(0, 8)} has been placed and is pending verification.`,
           link: '/dashboard/orders',
         });
-
-        // Notify admins via security-definer function (students can't insert notifications for other users)
         await supabase.rpc('notify_admins', {
-          _type: 'order',
-          _title: 'New Order Received',
+          _type: 'order', _title: 'New Order Received',
           _message: `New order #${orderId.slice(0, 8)} from ${formData.fullName} requires verification.`,
           _link: '/admin/orders',
         });
-
         clearCart();
         toast.success('Order placed! Your payment will be verified by admin.');
         navigate('/dashboard/orders');
@@ -325,52 +244,23 @@ const Checkout = () => {
 
       // Wallet payment
       if (paymentMethod === 'wallet' && total > 0) {
-        if (walletBalance < total) {
-          toast.error('Insufficient wallet balance');
-          setSubmitting(false);
-          return;
-        }
-        const { error: debitError } = await supabase.rpc('debit_wallet' as any, {
-          _user_id: user.id,
-          _amount: total,
-          _description: `Payment for order ${orderId}`,
-          _reference_id: orderId,
+        if (walletBalance < total) { toast.error('Insufficient wallet balance'); setSubmitting(false); return; }
+        const { error: debitError } = await supabase.rpc('debit_wallet', {
+          _user_id: user.id, _amount: total,
+          _description: `Payment for order ${orderId}`, _reference_id: orderId,
         });
         if (debitError) throw debitError;
-
-        await supabase.from('orders').update({ status: 'completed' } as any).eq('id', orderId);
-        await supabase.from('invoices' as any).update({ payment_status: 'paid', paid_at: new Date().toISOString() }).eq('order_id', orderId);
-
-        // Enroll in courses and record eBook ownership
-        for (const item of items) {
-          if (item.type === 'course') {
-            await supabase.from('enrollments').upsert({
-              user_id: user.id,
-              course_id: item.id,
-              payment_id: orderId,
-            }, { onConflict: 'user_id,course_id' } as any);
-          }
-          // eBook ownership is tracked via completed order_items — no separate table needed
-        }
-
-        // Credit instructor revenue share
+        await supabase.from('orders').update({ status: 'completed' }).eq('id', orderId);
+        await supabase.from('invoices').update({ payment_status: 'paid', paid_at: new Date().toISOString() }).eq('order_id', orderId);
+        await enrollAfterPayment(orderId);
         await creditInstructorRevenue(orderId, items);
       }
 
-      // Free order
+      // Free order (100% coupon or free items)
       if (total === 0) {
-        await supabase.from('orders').update({ status: 'completed' } as any).eq('id', orderId);
-        await supabase.from('invoices' as any).update({ payment_status: 'paid', paid_at: new Date().toISOString() }).eq('order_id', orderId);
-
-        for (const item of items) {
-          if (item.type === 'course') {
-            await supabase.from('enrollments').upsert({
-              user_id: user.id,
-              course_id: item.id,
-              payment_id: orderId,
-            }, { onConflict: 'user_id,course_id' } as any);
-          }
-        }
+        await supabase.from('orders').update({ status: 'completed' }).eq('id', orderId);
+        await supabase.from('invoices').update({ payment_status: 'paid', paid_at: new Date().toISOString() }).eq('order_id', orderId);
+        await enrollAfterPayment(orderId);
         await creditInstructorRevenue(orderId, items);
       }
 
@@ -441,27 +331,17 @@ const Checkout = () => {
                     </Label>
                   </div>
 
-                  {/* SSLCommerz */}
                   {getActiveGateway('sslcommerz') && (
                     <PaymentOption value="sslcommerz" icon={gatewayIcons.sslcommerz} title="SSLCommerz" subtitle="Pay via SSLCommerz gateway (Cards, MFS, Net Banking)" />
                   )}
-
-                  {/* UddoktaPay */}
                   {getActiveGateway('uddoktapay') && (
                     <PaymentOption value="uddoktapay" icon={gatewayIcons.uddoktapay} title="bKash / Nagad / Rocket (Auto)" subtitle="Pay via UddoktaPay gateway" />
                   )}
-
-                  {/* Bank Transfer */}
                   {bankGateway && (
-                    <PaymentOption
-                      value="bank"
-                      icon={gatewayIcons.bank}
-                      title="Bank Transfer"
-                      subtitle={`${bankGateway.credentials?.bank_name || 'Bank'} — ${bankGateway.credentials?.account_number || ''}`}
-                    />
+                    <PaymentOption value="bank" icon={gatewayIcons.bank} title="Bank Transfer"
+                      subtitle={`${bankGateway.credentials?.bank_name || 'Bank'} — ${bankGateway.credentials?.account_number || ''}`} />
                   )}
 
-                  {/* Manual Payment — always show */}
                   <div className="flex items-center space-x-3 border rounded-lg p-4 cursor-pointer hover:bg-muted/50">
                     <RadioGroupItem value="manual" id="manual" />
                     <Label htmlFor="manual" className="flex items-center gap-2 cursor-pointer flex-1">
@@ -474,7 +354,6 @@ const Checkout = () => {
                   </div>
                 </RadioGroup>
 
-                {/* Manual Payment — Sub-method selector */}
                 {isManualPayment && (
                   <div className="border rounded-lg p-4 space-y-4 bg-muted/30">
                     <p className="text-sm font-medium">Select Payment Method:</p>
@@ -484,16 +363,11 @@ const Checkout = () => {
                         const meta = manualMethodIcons[method];
                         const isSelected = manualSubMethod === method;
                         return (
-                          <button
-                            key={method}
-                            type="button"
+                          <button key={method} type="button"
                             onClick={() => { setManualSubMethod(method); setTransactionId(''); setSenderNumber(''); }}
                             className={`flex flex-col items-center gap-1.5 p-3 rounded-lg border-2 transition-all ${
-                              isSelected
-                                ? 'border-primary bg-primary/5 shadow-sm'
-                                : 'border-border hover:border-primary/40 hover:bg-muted/50'
-                            }`}
-                          >
+                              isSelected ? 'border-primary bg-primary/5 shadow-sm' : 'border-border hover:border-primary/40 hover:bg-muted/50'
+                            }`}>
                             <span className={meta.color}>{meta.icon}</span>
                             <span className="text-xs font-medium capitalize">{gw?.display_name || method}</span>
                           </button>
@@ -501,7 +375,6 @@ const Checkout = () => {
                       })}
                     </div>
 
-                    {/* Selected method details */}
                     {manualSubMethod && selectedManualGateway && (
                       <div className="bg-card border rounded-lg p-4 space-y-4">
                         <div className="text-center space-y-1">
@@ -512,28 +385,17 @@ const Checkout = () => {
                         <div className="space-y-3">
                           <div className="space-y-1">
                             <Label className="text-sm">Your {selectedManualGateway.display_name} Number *</Label>
-                            <Input
-                              placeholder="Enter your sender number"
-                              value={senderNumber}
-                              onChange={(e) => setSenderNumber(e.target.value)}
-                              required
-                            />
+                            <Input placeholder="Enter your sender number" value={senderNumber} onChange={(e) => setSenderNumber(e.target.value)} required />
                           </div>
                           <div className="space-y-1">
                             <Label className="text-sm">Transaction ID (TrxID) *</Label>
-                            <Input
-                              placeholder="Enter your Transaction ID (e.g., TRX1234ABCD)"
-                              value={transactionId}
-                              onChange={(e) => setTransactionId(e.target.value)}
-                              required
-                            />
+                            <Input placeholder="Enter your Transaction ID (e.g., TRX1234ABCD)" value={transactionId} onChange={(e) => setTransactionId(e.target.value)} required />
                             <p className="text-xs text-muted-foreground">After sending money, enter the Transaction ID you received.</p>
                           </div>
                         </div>
                       </div>
                     )}
 
-                    {/* Fallback if sub-method selected but no gateway configured */}
                     {manualSubMethod && !selectedManualGateway && (
                       <div className="bg-card border rounded-lg p-4 space-y-4">
                         <p className="text-sm text-center text-muted-foreground">
@@ -554,7 +416,6 @@ const Checkout = () => {
                   </div>
                 )}
 
-                {/* Bank Transfer Instructions */}
                 {paymentMethod === 'bank' && bankGateway && (
                   <div className="bg-muted rounded-lg p-4 space-y-2 text-sm">
                     <p className="font-medium">Bank Transfer Details:</p>
@@ -590,18 +451,17 @@ const Checkout = () => {
                   ))}
                 </div>
 
-                {/* Coupon */}
                 <div className="border-t pt-4">
                   <Label className="text-sm flex items-center gap-1 mb-2"><Tag className="h-3 w-3" /> Coupon Code</Label>
                   {appliedCoupon ? (
                     <div className="flex items-center justify-between bg-muted rounded-lg p-2">
                       <span className="font-mono text-sm font-bold text-primary">{appliedCoupon.code}</span>
-                      <Button variant="ghost" size="sm" onClick={removeCoupon} className="text-destructive text-xs">Remove</Button>
+                      <Button variant="ghost" size="sm" onClick={handleRemoveCoupon} className="text-destructive text-xs">Remove</Button>
                     </div>
                   ) : (
                     <div className="flex gap-2">
                       <Input value={couponCode} onChange={(e) => setCouponCode(e.target.value.toUpperCase())} placeholder="Enter code" className="text-sm" />
-                      <Button variant="outline" size="sm" onClick={applyCoupon} disabled={couponLoading}>
+                      <Button variant="outline" size="sm" onClick={handleApplyCoupon} disabled={couponLoading}>
                         {couponLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Apply'}
                       </Button>
                     </div>
@@ -627,7 +487,6 @@ const Checkout = () => {
   );
 };
 
-// Helper component
 const PaymentOption = ({ value, icon, title, subtitle }: { value: string; icon: React.ReactNode; title: string; subtitle: string }) => (
   <div className="flex items-center space-x-3 border rounded-lg p-4 cursor-pointer hover:bg-muted/50">
     <RadioGroupItem value={value} id={value} />

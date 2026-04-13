@@ -7,7 +7,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useCartStore } from '@/stores/cartStore';
-import { toast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
 import { Link } from 'react-router-dom';
 
 const WishlistPage = () => {
@@ -19,7 +19,7 @@ const WishlistPage = () => {
     queryKey: ['wishlist', user?.id],
     enabled: !!user?.id,
     queryFn: async () => {
-      const { data } = await (supabase as any)
+      const { data } = await supabase
         .from('wishlists')
         .select('*, courses(id, title, slug, thumbnail_url, price, discount_price, avg_rating, enrollment_count, categories(name))')
         .eq('user_id', user!.id)
@@ -30,11 +30,12 @@ const WishlistPage = () => {
 
   const removeWishlist = useMutation({
     mutationFn: async (id: string) => {
-      await (supabase as any).from('wishlists').delete().eq('id', id);
+      await supabase.from('wishlists').delete().eq('id', id);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['wishlist'] });
-      toast({ title: 'Removed from wishlist' });
+      queryClient.invalidateQueries({ queryKey: ['wishlist-ids'] });
+      toast.success('Removed from wishlist');
     },
   });
 
@@ -67,8 +68,8 @@ const WishlistPage = () => {
         </Card>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {wishlistItems.map((item: any) => {
-            const course = item.courses;
+          {wishlistItems.map((item) => {
+            const course = item.courses as any;
             if (!course) return null;
             return (
               <Card key={item.id} className="overflow-hidden group hover:shadow-lg transition-shadow">
@@ -104,8 +105,8 @@ const WishlistPage = () => {
                         <Trash2 className="h-4 w-4" />
                       </Button>
                       <Button size="icon" variant="ghost" onClick={() => {
-                        addItem({ id: course.id, title: course.title, price: course.discount_price ?? course.price ?? 0, type: 'course', thumbnail_url: course.thumbnail_url });
-                        toast({ title: 'Added to cart' });
+                        addItem({ id: course.id, title: course.title, price: course.price ?? 0, discount_price: course.discount_price ?? undefined, type: 'course', thumbnail_url: course.thumbnail_url ?? undefined });
+                        toast.success('Added to cart');
                       }}>
                         <ShoppingCart className="h-4 w-4" />
                       </Button>
