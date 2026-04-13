@@ -16,42 +16,78 @@ function buildBrandedHtml(body: string, branding: Record<string, string>) {
   const youtubeUrl = branding.email_youtube_url || "";
   const fromName = branding.smtp_from_name || "Online Textile School";
 
+  // Robust logo: use explicit width/height, display block, and border=0 for maximum email client compatibility
   const logoHtml = logoUrl
-    ? `<img src="${logoUrl}" alt="${fromName}" style="max-height:60px;max-width:200px;" />`
-    : `<span style="font-size:22px;font-weight:bold;color:#ffffff;">${fromName}</span>`;
+    ? `<img src="${logoUrl}" alt="${fromName}" width="180" height="50" border="0" style="display:block;margin:0 auto;max-width:180px;height:auto;outline:none;text-decoration:none;" />`
+    : `<span style="font-size:20px;font-weight:700;color:${brandColor};letter-spacing:0.5px;">${fromName}</span>`;
 
   const socialLinks: string[] = [];
-  if (websiteUrl) socialLinks.push(`<a href="${websiteUrl}" style="color:#ffffff;text-decoration:underline;margin:0 8px;">Website</a>`);
-  if (facebookUrl) socialLinks.push(`<a href="${facebookUrl}" style="color:#ffffff;text-decoration:underline;margin:0 8px;">Facebook</a>`);
-  if (youtubeUrl) socialLinks.push(`<a href="${youtubeUrl}" style="color:#ffffff;text-decoration:underline;margin:0 8px;">YouTube</a>`);
+  if (websiteUrl) socialLinks.push(`<a href="${websiteUrl}" style="color:${brandColor};text-decoration:none;font-weight:600;margin:0 10px;font-size:13px;">Website</a>`);
+  if (facebookUrl) socialLinks.push(`<a href="${facebookUrl}" style="color:${brandColor};text-decoration:none;font-weight:600;margin:0 10px;font-size:13px;">Facebook</a>`);
+  if (youtubeUrl) socialLinks.push(`<a href="${youtubeUrl}" style="color:${brandColor};text-decoration:none;font-weight:600;margin:0 10px;font-size:13px;">YouTube</a>`);
 
   return `<!DOCTYPE html>
-<html lang="en">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>
-<body style="margin:0;padding:0;background-color:#f4f4f7;font-family:Arial,Helvetica,sans-serif;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f4f7;">
-<tr><td align="center" style="padding:24px 16px;">
-<table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background-color:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
-  <!-- Header -->
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta name="x-apple-disable-message-reformatting" />
+  <title>${fromName}</title>
+  <!--[if mso]><style>table,td{font-family:Arial,Helvetica,sans-serif!important;}</style><![endif]-->
+</head>
+<body style="margin:0;padding:0;background-color:#f0f2f5;font-family:Arial,Helvetica,sans-serif;-webkit-font-smoothing:antialiased;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f0f2f5;">
+<tr><td align="center" style="padding:32px 16px;">
+
+<!-- Main Card -->
+<table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;background-color:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.06);">
+  
+  <!-- Logo Header -->
   <tr>
-    <td align="center" style="background-color:${brandColor};padding:24px 32px;">
+    <td align="center" style="background-color:#ffffff;padding:28px 32px 20px 32px;border-bottom:1px solid #e8e8e8;">
       ${logoHtml}
     </td>
   </tr>
-  <!-- Body -->
+
+  <!-- Accent Bar -->
   <tr>
-    <td style="padding:32px 32px 24px 32px;color:#333333;font-size:15px;line-height:1.6;">
+    <td style="background-color:${brandColor};height:4px;font-size:0;line-height:0;">&nbsp;</td>
+  </tr>
+
+  <!-- Body Content -->
+  <tr>
+    <td style="padding:32px 36px 28px 36px;color:#2d3748;font-size:15px;line-height:1.7;">
       ${body}
     </td>
   </tr>
-  <!-- Footer -->
+
+  <!-- Divider -->
   <tr>
-    <td style="background-color:${brandColor};padding:20px 32px;text-align:center;">
-      ${socialLinks.length > 0 ? `<p style="margin:0 0 12px 0;">${socialLinks.join("")}</p>` : ""}
-      <p style="margin:0;color:rgba(255,255,255,0.85);font-size:12px;line-height:1.5;">${footerText}</p>
+    <td style="padding:0 36px;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr><td style="border-top:1px solid #edf0f3;height:1px;font-size:0;line-height:0;">&nbsp;</td></tr>
+      </table>
     </td>
   </tr>
+
+  <!-- Social Links -->
+  ${socialLinks.length > 0 ? `<tr>
+    <td align="center" style="padding:20px 32px 8px 32px;">
+      ${socialLinks.join("&nbsp;&nbsp;·&nbsp;&nbsp;")}
+    </td>
+  </tr>` : ""}
+
+  <!-- Footer -->
+  <tr>
+    <td align="center" style="padding:16px 32px 28px 32px;">
+      <p style="margin:0;color:#a0aec0;font-size:12px;line-height:1.6;">${footerText}</p>
+    </td>
+  </tr>
+
 </table>
+<!-- End Main Card -->
+
 </td></tr>
 </table>
 </body>
@@ -197,7 +233,7 @@ serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     } catch (smtpError: any) {
-      await client.close().catch(() => {});
+      try { await client.close(); } catch { /* ignore */ }
 
       await supabase.from("email_logs").insert({
         recipient: recipientEmail,
