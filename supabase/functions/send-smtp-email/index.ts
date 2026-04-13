@@ -7,6 +7,120 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+/* ─── Default template definitions (used when no DB template exists) ─── */
+const DEFAULT_TEMPLATES: Record<string, { subject: string; body: string }> = {
+  order_confirmation: {
+    subject: "Order Confirmed — #{{order_id}}",
+    body: `<h2 style="margin:0 0 16px">Thank you for your order, {{user_name}}!</h2>
+<p>Your order <strong>#{{order_id}}</strong> has been confirmed.</p>
+<table style="width:100%;border-collapse:collapse;margin:16px 0">
+<tr style="background:#f0f0f0"><td style="padding:8px;font-weight:bold">Items</td><td style="padding:8px">{{order_items}}</td></tr>
+<tr><td style="padding:8px;font-weight:bold">Total</td><td style="padding:8px">{{order_total}}</td></tr>
+<tr style="background:#f0f0f0"><td style="padding:8px;font-weight:bold">Payment</td><td style="padding:8px">{{payment_method}}</td></tr>
+<tr><td style="padding:8px;font-weight:bold">Invoice</td><td style="padding:8px">{{invoice_number}}</td></tr>
+</table>
+<p>If you have any questions, contact us at {{support_email}}.</p>`,
+  },
+  order_cancellation: {
+    subject: "Order Cancelled — #{{order_id}}",
+    body: `<h2 style="margin:0 0 16px">Order Cancelled</h2><p>Hi {{user_name}}, your order <strong>#{{order_id}}</strong> has been cancelled.</p><p><strong>Reason:</strong> {{reason}}</p><p>If this was a mistake, please contact {{support_email}}.</p>`,
+  },
+  instructor_approved: {
+    subject: "Congratulations! You are now an Instructor",
+    body: `<h2 style="margin:0 0 16px">Welcome to Our Instructor Team!</h2><p>Dear {{user_name}},</p><p>Your instructor application has been <strong>approved</strong>. You can now create courses and start teaching.</p><p><a href="{{login_url}}" style="display:inline-block;padding:12px 24px;background:#1a365d;color:#fff;border-radius:6px;text-decoration:none;font-weight:bold">Go to Dashboard</a></p>`,
+  },
+  instructor_rejected: {
+    subject: "Instructor Application Update",
+    body: `<h2 style="margin:0 0 16px">Application Update</h2><p>Dear {{user_name}},</p><p>After careful review, we were unable to approve your instructor application at this time.</p><p><strong>Reason:</strong> {{reason}}</p><p>Feel free to reapply or contact {{support_email}} for more information.</p>`,
+  },
+  student_approved: {
+    subject: "Account Approved — Start Learning!",
+    body: `<h2 style="margin:0 0 16px">Your Account is Approved!</h2><p>Hi {{user_name}}, your student account has been approved. You can now enroll in courses.</p><p><a href="{{login_url}}" style="display:inline-block;padding:12px 24px;background:#1a365d;color:#fff;border-radius:6px;text-decoration:none;font-weight:bold">Login Now</a></p>`,
+  },
+  student_rejected: {
+    subject: "Account Registration Update",
+    body: `<h2 style="margin:0 0 16px">Registration Update</h2><p>Dear {{user_name}}, we were unable to approve your registration at this time.</p><p><strong>Reason:</strong> {{reason}}</p><p>Please contact {{support_email}} if you have questions.</p>`,
+  },
+  password_reset: {
+    subject: "Reset Your Password",
+    body: `<h2 style="margin:0 0 16px">Password Reset Request</h2><p>Hi {{user_name}}, we received a request to reset your password.</p><p><a href="{{reset_link}}" style="display:inline-block;padding:12px 24px;background:#1a365d;color:#fff;border-radius:6px;text-decoration:none;font-weight:bold">Reset Password</a></p><p style="color:#888;font-size:13px">If you didn't request this, please ignore this email.</p>`,
+  },
+  welcome_email: {
+    subject: "Welcome to {{site_name}}!",
+    body: `<h2 style="margin:0 0 16px">Welcome, {{user_name}}! 🎉</h2><p>Thank you for joining <strong>{{site_name}}</strong>. We're thrilled to have you!</p><p>Your Student ID: <strong>{{user_roll_id}}</strong></p><p><a href="{{login_url}}" style="display:inline-block;padding:12px 24px;background:#1a365d;color:#fff;border-radius:6px;text-decoration:none;font-weight:bold">Explore Courses</a></p>`,
+  },
+  enrollment_confirmation: {
+    subject: "Enrolled in {{course_name}}",
+    body: `<h2 style="margin:0 0 16px">Enrollment Confirmed!</h2><p>Hi {{user_name}}, you have been successfully enrolled in <strong>{{course_name}}</strong>.</p><p><a href="{{course_url}}" style="display:inline-block;padding:12px 24px;background:#1a365d;color:#fff;border-radius:6px;text-decoration:none;font-weight:bold">Start Learning</a></p>`,
+  },
+  certificate_issued: {
+    subject: "Your Certificate is Ready — {{course_name}}",
+    body: `<h2 style="margin:0 0 16px">Congratulations, {{user_name}}! 🏆</h2><p>You have earned a certificate for completing <strong>{{course_name}}</strong>.</p><p>Certificate No: <strong>{{certificate_number}}</strong></p><p><a href="{{certificate_download_url}}" style="display:inline-block;padding:12px 24px;background:#1a365d;color:#fff;border-radius:6px;text-decoration:none;font-weight:bold">Download Certificate</a></p>`,
+  },
+  registration_approved: {
+    subject: "Registration Approved",
+    body: `<h2 style="margin:0 0 16px">Registration Approved!</h2><p>Hi {{user_name}}, your <strong>{{registration_type}}</strong> registration has been approved.</p><p><a href="{{login_url}}" style="display:inline-block;padding:12px 24px;background:#1a365d;color:#fff;border-radius:6px;text-decoration:none;font-weight:bold">Login Now</a></p>`,
+  },
+  registration_rejected: {
+    subject: "Registration Update",
+    body: `<h2 style="margin:0 0 16px">Registration Update</h2><p>Dear {{user_name}}, your <strong>{{registration_type}}</strong> registration could not be approved.</p><p><strong>Reason:</strong> {{reason}}</p><p>Contact {{support_email}} for assistance.</p>`,
+  },
+  push_notification: {
+    subject: "{{notification_title}}",
+    body: `<h2 style="margin:0 0 16px">{{notification_title}}</h2><p>Hi {{user_name}},</p><p>{{notification_body}}</p><p><a href="{{action_url}}" style="display:inline-block;padding:12px 24px;background:#1a365d;color:#fff;border-radius:6px;text-decoration:none;font-weight:bold">View Details</a></p>`,
+  },
+  account_suspended: {
+    subject: "Account Suspended",
+    body: `<h2 style="margin:0 0 16px;color:#c53030">Account Suspended</h2><p>Dear {{user_name}}, your account has been suspended.</p><p><strong>Reason:</strong> {{reason}}</p><p>Please contact <a href="mailto:{{support_email}}">{{support_email}}</a> for more information.</p>`,
+  },
+  payment_received: {
+    subject: "Payment Received — {{amount}}",
+    body: `<h2 style="margin:0 0 16px">Payment Received ✓</h2><p>Hi {{user_name}}, we have received your payment of <strong>{{amount}}</strong> via {{payment_method}}.</p><p>Invoice: <strong>{{invoice_number}}</strong></p><p><a href="{{invoice_url}}" style="display:inline-block;padding:12px 24px;background:#1a365d;color:#fff;border-radius:6px;text-decoration:none;font-weight:bold">View Invoice</a></p>`,
+  },
+  refund_processed: {
+    subject: "Refund Processed — {{amount}}",
+    body: `<h2 style="margin:0 0 16px">Refund Processed</h2><p>Hi {{user_name}}, a refund of <strong>{{amount}}</strong> for order <strong>#{{order_id}}</strong> has been processed.</p><p>The amount will be credited within 5-7 business days.</p>`,
+  },
+  ebook_purchase: {
+    subject: "Ebook Purchase Confirmed — {{ebook_title}}",
+    body: `<h2 style="margin:0 0 16px">Ebook Purchase Confirmed!</h2><p>Hi {{user_name}}, you have purchased <strong>{{ebook_title}}</strong> by {{ebook_author}}.</p><p><a href="{{ebook_download_url}}" style="display:inline-block;padding:12px 24px;background:#1a365d;color:#fff;border-radius:6px;text-decoration:none;font-weight:bold">Read Now</a></p>`,
+  },
+  ebook_download: {
+    subject: "Your Ebook Download Link — {{ebook_title}}",
+    body: `<h2 style="margin:0 0 16px">Your Ebook is Ready</h2><p>Hi {{user_name}}, here's your download link for <strong>{{ebook_title}}</strong>.</p><p><a href="{{ebook_download_url}}" style="display:inline-block;padding:12px 24px;background:#1a365d;color:#fff;border-radius:6px;text-decoration:none;font-weight:bold">Download Ebook</a></p><p style="color:#888;font-size:13px">This link is for your personal use only.</p>`,
+  },
+  user_registration: {
+    subject: "Welcome to {{site_name}} — Account Created",
+    body: `<h2 style="margin:0 0 16px">Account Created Successfully!</h2><p>Hi {{user_name}}, your account at <strong>{{site_name}}</strong> has been created.</p><p>Your Roll ID: <strong>{{user_roll_id}}</strong></p><p><a href="{{login_url}}" style="display:inline-block;padding:12px 24px;background:#1a365d;color:#fff;border-radius:6px;text-decoration:none;font-weight:bold">Login to Your Account</a></p>`,
+  },
+  course_completion: {
+    subject: "Congratulations! You Completed {{course_name}}",
+    body: `<h2 style="margin:0 0 16px">Course Completed! 🎓</h2><p>Dear {{user_name}}, congratulations on completing <strong>{{course_name}}</strong>!</p><p>Your certificate is ready for download.</p><p><a href="{{certificate_download_url}}" style="display:inline-block;padding:12px 24px;background:#1a365d;color:#fff;border-radius:6px;text-decoration:none;font-weight:bold">Get Certificate</a></p>`,
+  },
+  assignment_submitted: {
+    subject: "Assignment Submitted Successfully",
+    body: `<h2 style="margin:0 0 16px">Assignment Submitted</h2><p>Hi {{user_name}}, your assignment for <strong>{{course_name}}</strong> has been submitted successfully.</p><p>Your instructor will review and grade it shortly.</p>`,
+  },
+  quiz_completed: {
+    subject: "Quiz Results — {{course_name}}",
+    body: `<h2 style="margin:0 0 16px">Quiz Completed!</h2><p>Hi {{user_name}}, you have completed the quiz for <strong>{{course_name}}</strong>.</p><p>Check your dashboard for detailed results.</p><p><a href="{{login_url}}" style="display:inline-block;padding:12px 24px;background:#1a365d;color:#fff;border-radius:6px;text-decoration:none;font-weight:bold">View Results</a></p>`,
+  },
+  wallet_credit: {
+    subject: "Wallet Credited — {{amount}}",
+    body: `<h2 style="margin:0 0 16px">Wallet Credited ✓</h2><p>Hi {{user_name}}, <strong>{{amount}}</strong> has been added to your wallet.</p><p>You can use this balance for course enrollments and ebook purchases.</p>`,
+  },
+  wallet_debit: {
+    subject: "Wallet Debit — {{amount}}",
+    body: `<h2 style="margin:0 0 16px">Wallet Debit</h2><p>Hi {{user_name}}, <strong>{{amount}}</strong> has been deducted from your wallet.</p><p>Check your wallet history for details.</p>`,
+  },
+  id_card_issued: {
+    subject: "Your Student ID Card is Ready",
+    body: `<h2 style="margin:0 0 16px">Student ID Card Issued 🎫</h2><p>Hi {{user_name}}, your student ID card has been generated.</p><p>Roll ID: <strong>{{user_roll_id}}</strong></p><p><a href="{{login_url}}" style="display:inline-block;padding:12px 24px;background:#1a365d;color:#fff;border-radius:6px;text-decoration:none;font-weight:bold">View ID Card</a></p>`,
+  },
+};
+
+/* ─── Helpers ─── */
+
 function generateToken(): string {
   const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
   let token = "";
@@ -22,13 +136,13 @@ async function getOrCreateUnsubToken(supabase: any, email: string): Promise<stri
     .select("token, unsubscribed_at")
     .eq("email", email)
     .maybeSingle();
-
   if (existing) return existing.token;
-
   const token = generateToken();
   await supabase.from("email_unsubscribes").insert({ email, token });
   return token;
 }
+
+/* ─── Branded HTML wrapper ─── */
 
 function buildBrandedHtml(body: string, branding: Record<string, string>, unsubscribeUrl: string) {
   const brandColor = branding.email_brand_color || "#1a365d";
@@ -123,6 +237,8 @@ function buildBrandedHtml(body: string, branding: Record<string, string>, unsubs
 </html>`;
 }
 
+/* ─── Main handler ─── */
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -192,15 +308,25 @@ serve(async (req) => {
     let emailSubject = customSubject || "";
     let emailBody = customBody || "";
 
-    if (templateKey && !customBody) {
-      const settingKey = `email_template_${templateKey}`;
-      const { data: tmpl } = await supabase.from("site_settings").select("value").eq("key", settingKey).maybeSingle();
-      if (tmpl?.value) {
-        try {
-          const parsed = JSON.parse(tmpl.value);
-          emailSubject = emailSubject || parsed.subject || "";
-          emailBody = parsed.body || "";
-        } catch { /* ignore */ }
+    if (templateKey) {
+      // Try DB template first
+      if (!customBody) {
+        const settingKey = `email_template_${templateKey}`;
+        const { data: tmpl } = await supabase.from("site_settings").select("value").eq("key", settingKey).maybeSingle();
+        if (tmpl?.value) {
+          try {
+            const parsed = JSON.parse(tmpl.value);
+            emailSubject = emailSubject || parsed.subject || "";
+            emailBody = parsed.body || "";
+          } catch { /* ignore */ }
+        }
+      }
+
+      // Fall back to built-in default template if DB had nothing
+      if (!emailBody && DEFAULT_TEMPLATES[templateKey]) {
+        const def = DEFAULT_TEMPLATES[templateKey];
+        emailSubject = emailSubject || def.subject;
+        emailBody = def.body;
       }
     }
 
@@ -242,7 +368,6 @@ serve(async (req) => {
     const port = parseInt(cfg.smtp_port || "465", 10);
     const encryption = cfg.smtp_encryption || "ssl";
     const useTls = encryption === "ssl" || port === 465;
-    const useStartTls = encryption === "tls";
 
     const connectionConfig: any = {
       hostname: cfg.smtp_host,
@@ -251,15 +376,8 @@ serve(async (req) => {
         username: cfg.smtp_user,
         password: cfg.smtp_pass,
       },
+      tls: useTls,
     };
-
-    if (useTls) {
-      connectionConfig.tls = true;
-    } else if (useStartTls) {
-      connectionConfig.tls = false;
-    } else {
-      connectionConfig.tls = false;
-    }
 
     const client = new SMTPClient({ connection: connectionConfig });
 
