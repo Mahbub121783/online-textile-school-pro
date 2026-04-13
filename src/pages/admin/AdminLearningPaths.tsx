@@ -26,7 +26,7 @@ const AdminLearningPaths = () => {
 
   const { data: paths = [] } = useQuery({
     queryKey: ['admin-learning-paths'],
-    queryFn: async () => { const { data } = await (supabase as any).from('learning_paths').select('*').order('created_at', { ascending: false }); return data ?? []; },
+    queryFn: async () => { const { data } = await supabase.from('learning_paths').select('*').order('created_at', { ascending: false }); return data ?? []; },
   });
 
   const { data: allCourses = [] } = useQuery({
@@ -37,14 +37,14 @@ const AdminLearningPaths = () => {
   const upsert = useMutation({
     mutationFn: async () => {
       const payload = { title: form.title, slug: form.slug, description: form.description, thumbnail_url: form.thumbnail_url || null, price: parseFloat(form.price) || 0, is_published: form.is_published, course_ids: selectedCourseIds, created_by: user?.id };
-      if (editing) { await (supabase as any).from('learning_paths').update(payload).eq('id', editing.id); }
-      else { await (supabase as any).from('learning_paths').insert(payload); }
+      if (editing) { await supabase.from('learning_paths').update(payload).eq('id', editing.id); }
+      else { await supabase.from('learning_paths').insert(payload); }
     },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['admin-learning-paths'] }); setDialogOpen(false); toast({ title: editing ? 'Updated' : 'Created' }); },
   });
 
   const deletePath = useMutation({
-    mutationFn: async (id: string) => { await (supabase as any).from('learning_paths').delete().eq('id', id); },
+    mutationFn: async (id: string) => { await supabase.from('learning_paths').delete().eq('id', id); },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['admin-learning-paths'] }); toast({ title: 'Deleted' }); },
   });
 

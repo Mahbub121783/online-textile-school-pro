@@ -26,7 +26,7 @@ const AdminEvents = () => {
   const { data: events = [] } = useQuery({
     queryKey: ['admin-events'],
     queryFn: async () => {
-      const { data } = await (supabase as any).from('events').select('*').order('event_date', { ascending: false });
+      const { data } = await supabase.from('events').select('*').order('event_date', { ascending: false });
       return data ?? [];
     },
   });
@@ -34,9 +34,9 @@ const AdminEvents = () => {
   const upsert = useMutation({
     mutationFn: async (values: any) => {
       if (editing) {
-        await (supabase as any).from('events').update(values).eq('id', editing.id);
+        await supabase.from('events').update(values).eq('id', editing.id);
       } else {
-        await (supabase as any).from('events').insert(values);
+        await supabase.from('events').insert(values);
       }
     },
     onSuccess: () => {
@@ -48,7 +48,7 @@ const AdminEvents = () => {
   });
 
   const deleteEvent = useMutation({
-    mutationFn: async (id: string) => { await (supabase as any).from('events').delete().eq('id', id); },
+    mutationFn: async (id: string) => { await supabase.from('events').delete().eq('id', id); },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['admin-events'] }); toast({ title: 'Event deleted' }); },
   });
 
