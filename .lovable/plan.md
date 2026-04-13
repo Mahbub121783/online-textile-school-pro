@@ -1,118 +1,62 @@
 
 
-# Critical Fix Plan: Auth, RLS, and Rendering Issues
+# Remaining Issues Audit
 
-## Root Cause Analysis
+## Status of Previous Fixes
 
-After deep investigation, I found **3 critical root causes** breaking the app:
+| Fix | Status |
+|-----|--------|
+| Auth deadlock (no `await` in `onAuthStateChange`) | DONE - verified in `useAuth.tsx` |
+| Instructor discovery RLS policy | DONE - migration applied |
+| StatsSection `forwardRef` fix | DONE - `CountUp` uses ref on `div` directly |
+| `as any` casts removed (pages, posts, payment_gateways) | DONE |
+| Dynamic site content system | DONE |
 
-### 1. Auth Deadlock (CRITICAL)
-The `useAuth` hook uses `await` inside `supabase.auth.onAuthStateChange()`. Supabase docs explicitly warn this can cause deadlocks — blocking subsequent auth events from processing. This means:
-- Roles may never load, causing admin "Access Denied"
-- Profile data stalls, leaving dashboard in perpetual loading state
-- `loading` stays `true` forever in some cases
+## Remaining Issues (3 found)
 
-### 2. RLS Policy on `user_roles` Blocks Public Queries (CRITICAL)
-The `user_roles` table only allows users to see **their own roles**. But multiple components query it for **all instructors**:
-- `InstructorSpotlight` (homepage) — fetches `user_roles WHERE role = 'instructor'` → returns empty for non-admins
-- `AdminDashboard` — counts instructors via `user_roles` → fails silently
-- This makes the homepage instructor section appear empty and admin stats show 0 instructors
+### Issue 1: `forwardRef` Warnings (3 console errors still active)
 
-### 3. Console `forwardRef` Warnings
-`StatsSection` (CountUp component) and `InstructorSpotlight` pass refs to function components (`Skeleton`, `CountUp`) that don't use `forwardRef`, causing React warnings.
+The console shows 3 warnings:
+- **InstructorSpotlight** - used via `React.lazy()` which tries to forward a ref, but the component is a plain function
+- **Skeleton** - used inside InstructorSpotlight, no `forwardRef`
+- **Badge** - used inside FeaturedCourses (also lazy-loaded), no `forwardRef`
 
-## Implementation Plan
+**Fix**: Add `React.forwardRef` to `Skeleton` and `Badge` (UI primitives should support refs). Wrap `InstructorSpotlight` and `FeaturedCourses` default exports with `forwardRef` or use `memo` which handles the lazy ref issue.
 
-### Fix 1: Refactor `useAuth` — Remove `await` from `onAuthStateChange`
-**File**: `src/hooks/useAuth.tsx`
-- Use `getSession()` as the primary session initializer
-- In `onAuthStateChange`, update session/user synchronously, then fetch profile/roles via a non-blocking helper (no `await` in the callback — use `.then()` or a separate effect)
-- Ensure `loading` is set to `false` reliably even if profile fetch fails
+### Issue 2: `admin_activity_log as any` Cast
 
-```text
-Flow:
-1. getSession() → set user/session → fetch profile/roles → set loading=false
-2. onAuthStateChange → update user/session synchronously → re-fetch profile/roles (fire-and-forget)
-```
+In `AdminDashboard.tsx` line 97, `admin_activity_log` is still cast with `as any`. This table likely doesn't exist in the generated types yet, meaning the table may not exist or types are stale.
 
-### Fix 2: Add Public RLS Policy for Instructor Discovery
-**Migration**: Add a new SELECT policy on `user_roles` that allows anyone to see rows where `role = 'instructor'` (non-sensitive — just links user_id to instructor role for discovery).
+**Fix**: Check if `admin_activity_log` table exists. If not, either create it or remove the query. If it exists but types are stale, remove the `as any` cast.
 
-```sql
-CREATE POLICY "Anyone can discover instructors"
-ON public.user_roles FOR SELECT
-USING (role = 'instructor'::app_role);
-```
+### Issue 3: Enrollment Query Fetches ALL Enrollments
 
-This is safe because:
-- Only exposes the fact that a user_id is an instructor (already public via courses.instructor_id)
-- Does not expose admin/super_admin roles
-- The existing policy still handles own-role visibility
+In `InstructorSpotlight.tsx` line 48-49, the query fetches ALL enrollments without filtering by course IDs, then filters client-side. This is a performance issue that will worsen with data growth.
 
-### Fix 3: Fix `forwardRef` Warnings
-**Files**: `src/components/features/home/StatsSection.tsx`, `src/components/features/home/InstructorSpotlight.tsx`
-- `CountUp`: Uses `useInView` which returns a ref callback. Wrap the receiving `div` directly instead of passing ref to a function component.
-- `InstructorSpotlight`: Replace `<Skeleton ref={...} />` pattern — Skeleton doesn't accept refs. Wrap in a `div` that holds the ref.
+**Fix**: Add `.in('course_id', allCourseIds)` filter to the enrollments query.
 
-### Fix 4: Defensive Query Error Handling
-**Files**: `FeaturedCourses.tsx`, `EbookCatalog.tsx`, `DashboardOverview.tsx`
-- Add `throwOnError: false` and error logging to critical queries
-- Ensure silent Supabase errors (e.g., empty `data` with non-null `error`) are surfaced in the UI instead of showing blank states
+## Files to Edit
+
+1. `src/components/ui/skeleton.tsx` - add `forwardRef`
+2. `src/components/ui/badge.tsx` - add `forwardRef`
+3. `src/components/features/home/InstructorSpotlight.tsx` - add `forwardRef` wrapper + fix enrollment query
+4. `src/components/features/home/FeaturedCourses.tsx` - add `forwardRef` wrapper
+5. `src/pages/admin/AdminDashboard.tsx` - fix or remove `admin_activity_log as any`
 
 ## Technical Details
 
-### Auth Refactor Pattern
+For `Badge` and `Skeleton`, the pattern is:
 ```typescript
-useEffect(() => {
-  let mounted = true;
-  
-  // 1. Primary init — no await in callback
-  supabase.auth.getSession().then(({ data: { session } }) => {
-    if (!mounted) return;
-    setSession(session);
-    setUser(session?.user ?? null);
-    if (session?.user) {
-      fetchUserData(session.user.id).then(d => {
-        if (!mounted) return;
-        setProfile(d.profile);
-        setRoles(d.roles);
-        setLoading(false);
-      });
-    } else {
-      setLoading(false);
-    }
-  });
-
-  // 2. Listener — fire-and-forget, NO await
-  const { data: { subscription } } = supabase.auth.onAuthStateChange(
-    (_event, session) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        fetchUserData(session.user.id).then(d => {
-          if (!mounted) return;
-          setProfile(d.profile);
-          setRoles(d.roles);
-        });
-      } else {
-        setProfile(null);
-        setRoles([]);
-      }
-    }
-  );
-
-  return () => { mounted = false; subscription.unsubscribe(); };
-}, []);
+const Skeleton = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
+  ({ className, ...props }, ref) => (
+    <div ref={ref} className={cn("animate-pulse rounded-md bg-muted", className)} {...props} />
+  )
+);
+Skeleton.displayName = "Skeleton";
 ```
 
-### Files to Edit
-1. `src/hooks/useAuth.tsx` — auth refactor
-2. `src/components/features/home/StatsSection.tsx` — fix ref warning
-3. `src/components/features/home/InstructorSpotlight.tsx` — fix ref warning
-4. New migration — add instructor discovery RLS policy
-
-### Files to Verify (no changes expected)
-- `AdminLayout.tsx` — should work once roles load properly
-- `FeaturedCourses.tsx` — queries are correct, data exists
-- `DashboardOverview.tsx` — depends on auth loading correctly
+For lazy-loaded components, wrap the default export:
+```typescript
+export default React.forwardRef<HTMLElement>((_, ref) => <InstructorSpotlightInner />);
+```
 
