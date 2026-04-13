@@ -7,6 +7,57 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+function buildBrandedHtml(body: string, branding: Record<string, string>) {
+  const brandColor = branding.email_brand_color || "#1a365d";
+  const logoUrl = branding.email_logo_url || "";
+  const footerText = (branding.email_footer_text || "© Online Textile School. All rights reserved.").replace(/\n/g, "<br>");
+  const websiteUrl = branding.email_website_url || "";
+  const facebookUrl = branding.email_facebook_url || "";
+  const youtubeUrl = branding.email_youtube_url || "";
+  const fromName = branding.smtp_from_name || "Online Textile School";
+
+  const logoHtml = logoUrl
+    ? `<img src="${logoUrl}" alt="${fromName}" style="max-height:60px;max-width:200px;" />`
+    : `<span style="font-size:22px;font-weight:bold;color:#ffffff;">${fromName}</span>`;
+
+  const socialLinks: string[] = [];
+  if (websiteUrl) socialLinks.push(`<a href="${websiteUrl}" style="color:#ffffff;text-decoration:underline;margin:0 8px;">Website</a>`);
+  if (facebookUrl) socialLinks.push(`<a href="${facebookUrl}" style="color:#ffffff;text-decoration:underline;margin:0 8px;">Facebook</a>`);
+  if (youtubeUrl) socialLinks.push(`<a href="${youtubeUrl}" style="color:#ffffff;text-decoration:underline;margin:0 8px;">YouTube</a>`);
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>
+<body style="margin:0;padding:0;background-color:#f4f4f7;font-family:Arial,Helvetica,sans-serif;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f4f7;">
+<tr><td align="center" style="padding:24px 16px;">
+<table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background-color:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+  <!-- Header -->
+  <tr>
+    <td align="center" style="background-color:${brandColor};padding:24px 32px;">
+      ${logoHtml}
+    </td>
+  </tr>
+  <!-- Body -->
+  <tr>
+    <td style="padding:32px 32px 24px 32px;color:#333333;font-size:15px;line-height:1.6;">
+      ${body}
+    </td>
+  </tr>
+  <!-- Footer -->
+  <tr>
+    <td style="background-color:${brandColor};padding:20px 32px;text-align:center;">
+      ${socialLinks.length > 0 ? `<p style="margin:0 0 12px 0;">${socialLinks.join("")}</p>` : ""}
+      <p style="margin:0;color:rgba(255,255,255,0.85);font-size:12px;line-height:1.5;">${footerText}</p>
+    </td>
+  </tr>
+</table>
+</td></tr>
+</table>
+</body>
+</html>`;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -26,14 +77,16 @@ serve(async (req) => {
       });
     }
 
-    // Fetch SMTP settings
-    const smtpKeys = ["smtp_host", "smtp_port", "smtp_user", "smtp_pass", "smtp_encryption", "smtp_from_email", "smtp_from_name"];
-    const { data: settings } = await supabase.from("site_settings").select("key, value").in("key", smtpKeys);
+    // Fetch SMTP + branding settings
+    const allKeys = [
+      "smtp_host", "smtp_port", "smtp_user", "smtp_pass", "smtp_encryption", "smtp_from_email", "smtp_from_name",
+      "email_logo_url", "email_brand_color", "email_footer_text", "email_website_url", "email_facebook_url", "email_youtube_url",
+    ];
+    const { data: settings } = await supabase.from("site_settings").select("key, value").in("key", allKeys);
     const cfg: Record<string, string> = {};
     settings?.forEach((s: any) => { cfg[s.key] = s.value ?? ""; });
 
     if (!cfg.smtp_host || !cfg.smtp_user) {
-      // Log failure
       await supabase.from("email_logs").insert({
         recipient: recipientEmail,
         subject: customSubject || templateKey || "Unknown",
@@ -88,34 +141,50 @@ serve(async (req) => {
       });
     }
 
-    // Send via SMTP
-    const port = parseInt(cfg.smtp_port || "465", 10);
-    const tls = cfg.smtp_encryption === "ssl" || port === 465;
+    // Wrap body in branded template
+    const brandedHtml = buildBrandedHtml(emailBody, cfg);
 
-    const client = new SMTPClient({
-      connection: {
-        hostname: cfg.smtp_host,
-        port,
-        tls,
-        auth: {
-          username: cfg.smtp_user,
-          password: cfg.smtp_pass,
-        },
+    // Determine SMTP connection settings
+    const port = parseInt(cfg.smtp_port || "465", 10);
+    const encryption = cfg.smtp_encryption || "ssl";
+
+    // SSL (implicit TLS on port 465) vs STARTTLS (port 587) vs none
+    const useTls = encryption === "ssl" || port === 465;
+    const useStartTls = encryption === "tls";
+
+    const connectionConfig: any = {
+      hostname: cfg.smtp_host,
+      port,
+      auth: {
+        username: cfg.smtp_user,
+        password: cfg.smtp_pass,
       },
-    });
+    };
+
+    if (useTls) {
+      connectionConfig.tls = true;
+    } else if (useStartTls) {
+      connectionConfig.tls = false;
+      // denomailer handles STARTTLS upgrade automatically when tls is false on port 587
+    } else {
+      connectionConfig.tls = false;
+    }
+
+    const client = new SMTPClient({ connection: connectionConfig });
 
     try {
       await client.send({
-        from: cfg.smtp_from_email ? `${cfg.smtp_from_name || "Online Textile School"} <${cfg.smtp_from_email}>` : cfg.smtp_user,
+        from: cfg.smtp_from_email
+          ? `${cfg.smtp_from_name || "Online Textile School"} <${cfg.smtp_from_email}>`
+          : cfg.smtp_user,
         to: recipientEmail,
         subject: emailSubject,
         content: "auto",
-        html: emailBody,
+        html: brandedHtml,
       });
 
       await client.close();
 
-      // Log success
       await supabase.from("email_logs").insert({
         recipient: recipientEmail,
         subject: emailSubject,
