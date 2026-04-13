@@ -57,6 +57,8 @@ const academicSubItems = [
   { title: 'Batches', url: '/admin/batches', icon: Layers },
   { title: 'Academic Calendar', url: '/admin/academic-calendar', icon: Calendar },
   { title: 'Grade Config', url: '/admin/grade-config', icon: GraduationCap },
+  { title: 'Live Classes', url: '/admin/live-classes', icon: Video },
+  { title: 'Attendance', url: '/admin/attendance', icon: ClipboardList },
 ];
 
 const engagementSubItems = [
