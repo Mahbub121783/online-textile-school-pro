@@ -116,6 +116,10 @@ const AdminLiveClasses = lazy(() => import("./pages/admin/AdminLiveClasses"));
 const AdminAttendance = lazy(() => import("./pages/admin/AdminAttendance"));
 const AdminFaculty = lazy(() => import("./pages/admin/AdminFaculty"));
 const FacultyPage = lazy(() => import("./pages/static/FacultyPage"));
+const AdminPlagiarism = lazy(() => import("./pages/admin/AdminPlagiarism"));
+const AdminProjectGroups = lazy(() => import("./pages/admin/AdminProjectGroups"));
+const TranscriptPage = lazy(() => import("./pages/dashboard/TranscriptPage"));
+const GroupProjectsPage = lazy(() => import("./pages/dashboard/GroupProjectsPage"));
 
 // Optimized QueryClient with aggressive caching
 const queryClient = new QueryClient({
@@ -180,6 +184,8 @@ const App = () => (
                   <Route path="wishlist" element={<WishlistPage />} />
                   <Route path="leaderboard" element={<LeaderboardPage />} />
                   <Route path="peer-reviews" element={<PeerReviewsPage />} />
+                  <Route path="transcript" element={<TranscriptPage />} />
+                  <Route path="group-projects" element={<GroupProjectsPage />} />
                   <Route path="settings" element={<SettingsPage />} />
                 </Route>
                 {/* Instructor Portal */}
@@ -249,6 +255,8 @@ const App = () => (
                   <Route path="live-classes" element={<AdminLiveClasses />} />
                   <Route path="attendance" element={<AdminAttendance />} />
                   <Route path="faculty" element={<AdminFaculty />} />
+                  <Route path="plagiarism" element={<AdminPlagiarism />} />
+                  <Route path="project-groups" element={<AdminProjectGroups />} />
                 </Route>
                 <Route path="/learn/:courseSlug/:lessonId" element={<LessonPlayer />} />
                 <Route path="/quiz/:quizId" element={<QuizPlayer />} />
