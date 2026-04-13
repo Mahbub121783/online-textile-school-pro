@@ -868,6 +868,42 @@ export type Database = {
           },
         ]
       }
+      discussion_upvotes: {
+        Row: {
+          created_at: string
+          discussion_id: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          discussion_id: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          discussion_id?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "discussion_upvotes_discussion_id_fkey"
+            columns: ["discussion_id"]
+            isOneToOne: false
+            referencedRelation: "discussions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "discussion_upvotes_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       discussions: {
         Row: {
           content: string
@@ -875,8 +911,11 @@ export type Database = {
           created_at: string | null
           id: string
           is_answered: boolean | null
+          is_closed: boolean
+          is_pinned: boolean
           lesson_id: string | null
           parent_id: string | null
+          upvote_count: number
           user_id: string
         }
         Insert: {
@@ -885,8 +924,11 @@ export type Database = {
           created_at?: string | null
           id?: string
           is_answered?: boolean | null
+          is_closed?: boolean
+          is_pinned?: boolean
           lesson_id?: string | null
           parent_id?: string | null
+          upvote_count?: number
           user_id: string
         }
         Update: {
@@ -895,8 +937,11 @@ export type Database = {
           created_at?: string | null
           id?: string
           is_answered?: boolean | null
+          is_closed?: boolean
+          is_pinned?: boolean
           lesson_id?: string | null
           parent_id?: string | null
+          upvote_count?: number
           user_id?: string
         }
         Relationships: [
@@ -2263,6 +2308,96 @@ export type Database = {
         }
         Relationships: []
       }
+      peer_review_config: {
+        Row: {
+          assignment_id: string
+          created_at: string
+          id: string
+          is_enabled: boolean
+          min_reviewers: number
+          rubric_criteria: Json | null
+        }
+        Insert: {
+          assignment_id: string
+          created_at?: string
+          id?: string
+          is_enabled?: boolean
+          min_reviewers?: number
+          rubric_criteria?: Json | null
+        }
+        Update: {
+          assignment_id?: string
+          created_at?: string
+          id?: string
+          is_enabled?: boolean
+          min_reviewers?: number
+          rubric_criteria?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "peer_review_config_assignment_id_fkey"
+            columns: ["assignment_id"]
+            isOneToOne: true
+            referencedRelation: "assignments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      peer_reviews: {
+        Row: {
+          course_id: string
+          created_at: string
+          feedback: string | null
+          id: string
+          rating: number | null
+          reviewer_id: string
+          rubric_scores: Json | null
+          submission_id: string
+        }
+        Insert: {
+          course_id: string
+          created_at?: string
+          feedback?: string | null
+          id?: string
+          rating?: number | null
+          reviewer_id: string
+          rubric_scores?: Json | null
+          submission_id: string
+        }
+        Update: {
+          course_id?: string
+          created_at?: string
+          feedback?: string | null
+          id?: string
+          rating?: number | null
+          reviewer_id?: string
+          rubric_scores?: Json | null
+          submission_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "peer_reviews_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "courses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "peer_reviews_reviewer_id_fkey"
+            columns: ["reviewer_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "peer_reviews_submission_id_fkey"
+            columns: ["submission_id"]
+            isOneToOne: false
+            referencedRelation: "assignment_submissions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       posts: {
         Row: {
           author_id: string | null
@@ -2801,26 +2936,32 @@ export type Database = {
       }
       reviews: {
         Row: {
+          admin_response: string | null
           comment: string | null
           course_id: string
           created_at: string | null
           id: string
+          is_approved: boolean | null
           rating: number
           user_id: string
         }
         Insert: {
+          admin_response?: string | null
           comment?: string | null
           course_id: string
           created_at?: string | null
           id?: string
+          is_approved?: boolean | null
           rating: number
           user_id: string
         }
         Update: {
+          admin_response?: string | null
           comment?: string | null
           course_id?: string
           created_at?: string | null
           id?: string
+          is_approved?: boolean | null
           rating?: number
           user_id?: string
         }

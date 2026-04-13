@@ -71,6 +71,7 @@ const CourseDetail = () => {
         .from('reviews')
         .select('*, user_profiles!reviews_user_id_fkey(full_name, avatar_url)')
         .eq('course_id', course!.id)
+        .eq('is_approved', true)
         .order('created_at', { ascending: false });
       return data ?? [];
     },
@@ -420,7 +421,11 @@ const CourseDetail = () => {
 
                   {userReview && (
                     <div className="border rounded-lg p-4 bg-green-50 dark:bg-green-900/20">
-                      <p className="text-sm text-green-700 dark:text-green-400 font-medium">✓ You've already reviewed this course</p>
+                      <p className="text-sm text-green-700 dark:text-green-400 font-medium">
+                        {userReview.is_approved === true ? '✓ Your review is published' :
+                         userReview.is_approved === false ? '✗ Your review was not approved' :
+                         '⏳ Your review is pending approval'}
+                      </p>
                     </div>
                   )}
 
@@ -448,6 +453,12 @@ const CourseDetail = () => {
                             </div>
                           </div>
                           {review.comment && <p className="text-sm text-muted-foreground">{review.comment}</p>}
+                          {review.admin_response && (
+                            <div className="mt-2 bg-primary/5 border-l-2 border-primary p-2 rounded-r-md">
+                              <p className="text-[10px] font-semibold text-primary mb-0.5">Admin Response</p>
+                              <p className="text-xs text-muted-foreground">{review.admin_response}</p>
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>

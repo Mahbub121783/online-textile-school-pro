@@ -13,7 +13,8 @@ import { Textarea } from '@/components/ui/textarea';
 import SecureMediaPlayer from '@/components/media/SecureMediaPlayer';
 import {
   ChevronDown, ChevronLeft, ChevronRight, CheckCircle2, Circle,
-  FileText, Download, Menu, X, BookOpen, ClipboardList, Monitor, ExternalLink, Lock, Clock, MessageSquare, Send
+  FileText, Download, Menu, X, BookOpen, ClipboardList, Monitor, ExternalLink, Lock, Clock, MessageSquare, Send,
+  ThumbsUp, Pin, XCircle
 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { format, formatDistanceToNow } from 'date-fns';
@@ -105,18 +106,21 @@ const LessonPlayer = () => {
   const [replyText, setReplyText] = useState('');
   const queryClient = useQueryClient();
 
+  const [sortBy, setSortBy] = useState<'newest' | 'upvotes'>('newest');
+
   const { data: discussions = [] } = useQuery({
-    queryKey: ['lesson-discussions', course?.id, lessonId],
+    queryKey: ['lesson-discussions', course?.id, lessonId, sortBy],
     enabled: !!course?.id && !!lessonId,
     queryFn: async () => {
-      const { data } = await supabase
+      let query = supabase
         .from('discussions')
         .select('*, user_profiles:user_id(full_name, avatar_url)')
         .eq('course_id', course!.id)
         .eq('lesson_id', lessonId!)
-        .is('parent_id', null)
-        .order('created_at', { ascending: false });
-      // Fetch replies for each
+        .is('parent_id', null);
+      if (sortBy === 'upvotes') query = query.order('is_pinned', { ascending: false }).order('upvote_count', { ascending: false });
+      else query = query.order('is_pinned', { ascending: false }).order('created_at', { ascending: false });
+      const { data } = await query;
       if (!data?.length) return [];
       const ids = data.map(d => d.id);
       const { data: replies } = await supabase
@@ -133,6 +137,46 @@ const LessonPlayer = () => {
       return data.map(d => ({ ...d, replies: replyMap.get(d.id) || [] }));
     },
   });
+
+  // Check which discussions user has upvoted
+  const { data: myUpvotes = [] } = useQuery({
+    queryKey: ['my-upvotes', lessonId, user?.id],
+    enabled: !!user?.id && discussions.length > 0,
+    queryFn: async () => {
+      const ids = discussions.map((d: any) => d.id);
+      const { data } = await supabase
+        .from('discussion_upvotes')
+        .select('discussion_id')
+        .eq('user_id', user!.id)
+        .in('discussion_id', ids);
+      return (data ?? []).map((u: any) => u.discussion_id);
+    },
+  });
+
+  const upvotedSet = new Set(myUpvotes);
+
+  const toggleUpvote = async (discussionId: string) => {
+    if (!user) return;
+    if (upvotedSet.has(discussionId)) {
+      await supabase.from('discussion_upvotes').delete().eq('discussion_id', discussionId).eq('user_id', user.id);
+    } else {
+      await supabase.from('discussion_upvotes').insert({ discussion_id: discussionId, user_id: user.id });
+    }
+    queryClient.invalidateQueries({ queryKey: ['lesson-discussions'] });
+    queryClient.invalidateQueries({ queryKey: ['my-upvotes'] });
+  };
+
+  const togglePin = async (discussionId: string, currentlyPinned: boolean) => {
+    await supabase.from('discussions').update({ is_pinned: !currentlyPinned } as any).eq('id', discussionId);
+    queryClient.invalidateQueries({ queryKey: ['lesson-discussions'] });
+  };
+
+  const toggleClose = async (discussionId: string, currentlyClosed: boolean) => {
+    await supabase.from('discussions').update({ is_closed: !currentlyClosed } as any).eq('id', discussionId);
+    queryClient.invalidateQueries({ queryKey: ['lesson-discussions'] });
+  };
+
+  const isInstructor = course?.instructor_id === user?.id;
 
   const postDiscussion = useMutation({
     mutationFn: async ({ content, parentId }: { content: string; parentId?: string }) => {
@@ -404,14 +448,20 @@ const LessonPlayer = () => {
                         onChange={(e) => setQaText(e.target.value)}
                         className="min-h-[60px]"
                       />
-                      <Button
-                        size="sm"
-                        disabled={!qaText.trim() || postDiscussion.isPending}
-                        onClick={() => postDiscussion.mutate({ content: qaText.trim() })}
-                        className="bg-accent hover:bg-accent/90 text-accent-foreground"
-                      >
-                        <Send className="h-3 w-3 mr-1" /> Post Question
-                      </Button>
+                      <div className="flex items-center justify-between">
+                        <Button
+                          size="sm"
+                          disabled={!qaText.trim() || postDiscussion.isPending}
+                          onClick={() => postDiscussion.mutate({ content: qaText.trim() })}
+                          className="bg-accent hover:bg-accent/90 text-accent-foreground"
+                        >
+                          <Send className="h-3 w-3 mr-1" /> Post Question
+                        </Button>
+                        <div className="flex items-center gap-1">
+                          <Button size="sm" variant={sortBy === 'newest' ? 'secondary' : 'ghost'} className="text-xs h-7" onClick={() => setSortBy('newest')}>Newest</Button>
+                          <Button size="sm" variant={sortBy === 'upvotes' ? 'secondary' : 'ghost'} className="text-xs h-7" onClick={() => setSortBy('upvotes')}>Top</Button>
+                        </div>
+                      </div>
                     </div>
 
                     {discussions.length === 0 ? (
@@ -422,18 +472,33 @@ const LessonPlayer = () => {
                     ) : (
                       <div className="space-y-4">
                         {discussions.map((disc: any) => (
-                          <div key={disc.id} className="border rounded-lg p-4 space-y-3">
+                          <div key={disc.id} className={`border rounded-lg p-4 space-y-3 ${disc.is_pinned ? 'border-primary/40 bg-primary/5' : ''} ${disc.is_closed ? 'opacity-60' : ''}`}>
                             <div className="flex items-start gap-3">
-                              <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold shrink-0">
-                                {disc.user_profiles?.full_name?.[0]?.toUpperCase() || 'U'}
-                              </div>
+                              {/* Upvote button */}
+                              <button onClick={() => toggleUpvote(disc.id)} className="flex flex-col items-center gap-0.5 pt-1">
+                                <ThumbsUp className={`h-4 w-4 ${upvotedSet.has(disc.id) ? 'fill-primary text-primary' : 'text-muted-foreground'}`} />
+                                <span className="text-[10px] font-medium">{disc.upvote_count || 0}</span>
+                              </button>
                               <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-2 flex-wrap">
                                   <span className="text-sm font-medium">{disc.user_profiles?.full_name || 'Student'}</span>
                                   <span className="text-[10px] text-muted-foreground">{formatDistanceToNow(new Date(disc.created_at), { addSuffix: true })}</span>
                                   {disc.is_answered && <Badge variant="outline" className="text-[10px] text-green-600 border-green-600">Answered</Badge>}
+                                  {disc.is_pinned && <Badge variant="outline" className="text-[10px] text-primary border-primary">Pinned</Badge>}
+                                  {disc.is_closed && <Badge variant="outline" className="text-[10px]">Closed</Badge>}
                                 </div>
                                 <p className="text-sm text-muted-foreground mt-1">{disc.content}</p>
+                                {/* Instructor controls */}
+                                {isInstructor && (
+                                  <div className="flex gap-1 mt-2">
+                                    <Button size="sm" variant="ghost" className="text-[10px] h-6 px-2" onClick={() => togglePin(disc.id, disc.is_pinned)}>
+                                      <Pin className="h-3 w-3 mr-0.5" /> {disc.is_pinned ? 'Unpin' : 'Pin'}
+                                    </Button>
+                                    <Button size="sm" variant="ghost" className="text-[10px] h-6 px-2" onClick={() => toggleClose(disc.id, disc.is_closed)}>
+                                      <XCircle className="h-3 w-3 mr-0.5" /> {disc.is_closed ? 'Reopen' : 'Close'}
+                                    </Button>
+                                  </div>
+                                )}
                               </div>
                             </div>
 
@@ -457,29 +522,31 @@ const LessonPlayer = () => {
                               </div>
                             )}
 
-                            {/* Reply input */}
-                            {replyTo === disc.id ? (
-                              <div className="ml-10 flex gap-2">
-                                <Textarea
-                                  placeholder="Write a reply..."
-                                  value={replyText}
-                                  onChange={(e) => setReplyText(e.target.value)}
-                                  className="min-h-[40px] text-xs flex-1"
-                                />
-                                <div className="flex flex-col gap-1">
-                                  <Button size="sm" variant="outline" className="text-xs" onClick={() => { setReplyTo(null); setReplyText(''); }}>Cancel</Button>
-                                  <Button
-                                    size="sm"
-                                    className="text-xs bg-accent hover:bg-accent/90 text-accent-foreground"
-                                    disabled={!replyText.trim() || postDiscussion.isPending}
-                                    onClick={() => postDiscussion.mutate({ content: replyText.trim(), parentId: disc.id })}
-                                  >Reply</Button>
+                            {/* Reply input - only if not closed */}
+                            {!disc.is_closed && (
+                              replyTo === disc.id ? (
+                                <div className="ml-10 flex gap-2">
+                                  <Textarea
+                                    placeholder="Write a reply..."
+                                    value={replyText}
+                                    onChange={(e) => setReplyText(e.target.value)}
+                                    className="min-h-[40px] text-xs flex-1"
+                                  />
+                                  <div className="flex flex-col gap-1">
+                                    <Button size="sm" variant="outline" className="text-xs" onClick={() => { setReplyTo(null); setReplyText(''); }}>Cancel</Button>
+                                    <Button
+                                      size="sm"
+                                      className="text-xs bg-accent hover:bg-accent/90 text-accent-foreground"
+                                      disabled={!replyText.trim() || postDiscussion.isPending}
+                                      onClick={() => postDiscussion.mutate({ content: replyText.trim(), parentId: disc.id })}
+                                    >Reply</Button>
+                                  </div>
                                 </div>
-                              </div>
-                            ) : (
-                              <Button size="sm" variant="ghost" className="ml-10 text-xs text-muted-foreground" onClick={() => setReplyTo(disc.id)}>
-                                Reply
-                              </Button>
+                              ) : (
+                                <Button size="sm" variant="ghost" className="ml-10 text-xs text-muted-foreground" onClick={() => setReplyTo(disc.id)}>
+                                  Reply
+                                </Button>
+                              )
                             )}
                           </div>
                         ))}

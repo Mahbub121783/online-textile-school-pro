@@ -1,4 +1,4 @@
-import { LayoutDashboard, Users, BookOpen, Image, Activity, LogOut, GraduationCap, Tag, Wallet, FileText, PenTool, ImageIcon, Menu, Palette, Video, HelpCircle, ClipboardList, Award, Settings, ChevronDown, BarChart3, UserCog, CheckSquare, DollarSign, Shield, MessageSquare, Wrench, Mail, CreditCard, ReceiptText, Cloud, Bell, ShoppingCart, HardDrive, Crown, Server, ClipboardEdit, Send, Calendar, Layers } from 'lucide-react';
+import { LayoutDashboard, Users, BookOpen, Image, Activity, LogOut, GraduationCap, Tag, Wallet, FileText, PenTool, ImageIcon, Menu, Palette, Video, HelpCircle, ClipboardList, Award, Settings, ChevronDown, BarChart3, UserCog, CheckSquare, DollarSign, Shield, MessageSquare, Wrench, Mail, CreditCard, ReceiptText, Cloud, Bell, ShoppingCart, HardDrive, Crown, Server, ClipboardEdit, Send, Calendar, Layers, Star } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
@@ -59,6 +59,11 @@ const academicSubItems = [
   { title: 'Grade Config', url: '/admin/grade-config', icon: GraduationCap },
 ];
 
+const engagementSubItems = [
+  { title: 'Reviews', url: '/admin/reviews', icon: Star },
+  { title: 'Forum', url: '/admin/forum', icon: MessageSquare },
+];
+
 const bottomItems = [
   { title: 'E-Books', url: '/admin/ebooks', icon: BookOpen },
   { title: 'Learning Paths', url: '/admin/learning-paths', icon: GraduationCap },
@@ -73,7 +78,6 @@ const bottomItems = [
   { title: 'Appearance', url: '/admin/appearance', icon: Palette },
   { title: 'Hero Slides', url: '/admin/hero-slides', icon: Image },
   { title: 'Notifications', url: '/admin/notifications', icon: Bell },
-  { title: 'Forum', url: '/admin/forum', icon: MessageSquare },
   { title: 'Activity Log', url: '/admin/activity', icon: Activity },
   { title: 'Registration', url: '/admin/registrations', icon: ClipboardEdit },
 ];
@@ -171,6 +175,7 @@ export function AdminSidebar() {
               <CollapsibleMenu label="CMS" icon={BookOpen} items={cmsSubItems} basePath="/admin/cms" collapsed={collapsed} groupClass="group/collapsible-cms" />
               <CollapsibleMenu label="Setup" icon={Wrench} items={setupSubItems} basePath="/admin/setup" collapsed={collapsed} groupClass="group/collapsible-setup" />
               <CollapsibleMenu label="Payment" icon={CreditCard} items={paymentSubItems} basePath="/admin/payment" collapsed={collapsed} groupClass="group/collapsible-pay" />
+              <CollapsibleMenu label="Engagement" icon={Star} items={engagementSubItems} basePath="/admin/reviews" collapsed={collapsed} groupClass="group/collapsible-eng" />
               {bottomItems.map(renderNavItem)}
               {isSuperAdmin && (
                 <>
