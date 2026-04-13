@@ -53,6 +53,7 @@ const Footer = () => {
                 { label: 'Blog', href: '/blog' },
                 { label: 'Contact', href: '/contact' },
                 { label: 'Privacy Policy', href: '/privacy' },
+                { label: 'Terms of Service', href: '/terms' },
                 { label: 'Become an Instructor', href: '/become-instructor' },
               ].map((link) => (
                 <li key={link.href}>
@@ -93,8 +94,13 @@ const Footer = () => {
 
       {/* Copyright */}
       <div className="border-t border-primary-light/30">
-        <div className="container py-4 text-center text-xs text-primary-foreground/50">
-          © {new Date().getFullYear()} Online Textile School. All rights reserved.
+        <div className="container py-4 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-primary-foreground/50">
+          <span>© {new Date().getFullYear()} Online Textile School. All rights reserved.</span>
+          <div className="flex items-center gap-3">
+            <Link to="/privacy" className="hover:text-primary-foreground transition-colors">Privacy Policy</Link>
+            <span>|</span>
+            <Link to="/terms" className="hover:text-primary-foreground transition-colors">Terms of Service</Link>
+          </div>
         </div>
       </div>
     </footer>
