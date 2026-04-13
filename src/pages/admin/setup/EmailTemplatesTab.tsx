@@ -22,6 +22,12 @@ const TEMPLATE_TYPES = [
   { key: 'welcome_email', label: 'Welcome Email', placeholders: ['{{user_name}}', '{{site_name}}'] },
   { key: 'enrollment_confirmation', label: 'Enrollment Confirmation', placeholders: ['{{user_name}}', '{{course_name}}', '{{course_url}}'] },
   { key: 'certificate_issued', label: 'Certificate Issued', placeholders: ['{{user_name}}', '{{course_name}}', '{{certificate_number}}', '{{download_url}}'] },
+  { key: 'registration_approved', label: 'Registration Approved', placeholders: ['{{user_name}}', '{{registration_type}}', '{{login_url}}'] },
+  { key: 'registration_rejected', label: 'Registration Rejected', placeholders: ['{{user_name}}', '{{registration_type}}', '{{reason}}'] },
+  { key: 'push_notification', label: 'Push Notification', placeholders: ['{{user_name}}', '{{notification_title}}', '{{notification_body}}', '{{action_url}}'] },
+  { key: 'account_suspended', label: 'Account Suspended', placeholders: ['{{user_name}}', '{{reason}}', '{{support_email}}'] },
+  { key: 'payment_received', label: 'Payment Received', placeholders: ['{{user_name}}', '{{amount}}', '{{payment_method}}', '{{invoice_url}}'] },
+  { key: 'refund_processed', label: 'Refund Processed', placeholders: ['{{user_name}}', '{{amount}}', '{{order_id}}'] },
 ];
 
 interface TemplateData {
