@@ -41,31 +41,46 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [roles, setRoles] = useState<string[]>([]);
 
   useEffect(() => {
+    let mounted = true;
+
+    // 1. Primary init — fetch session first, then profile/roles
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!mounted) return;
+      setSession(session);
+      setUser(session?.user ?? null);
+      if (session?.user) {
+        fetchUserData(session.user.id).then(d => {
+          if (!mounted) return;
+          setProfile(d.profile);
+          setRoles(d.roles);
+          setLoading(false);
+        }).catch(() => {
+          if (mounted) setLoading(false);
+        });
+      } else {
+        setLoading(false);
+      }
+    });
+
+    // 2. Listener — fire-and-forget, NO await to prevent deadlocks
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
+      (_event, session) => {
         setSession(session);
         setUser(session?.user ?? null);
-
         if (session?.user) {
-          // Fetch profile & roles before setting loading=false
-          const data = await fetchUserData(session.user.id);
-          setProfile(data.profile);
-          setRoles(data.roles);
+          fetchUserData(session.user.id).then(d => {
+            if (!mounted) return;
+            setProfile(d.profile);
+            setRoles(d.roles);
+          });
         } else {
           setProfile(null);
           setRoles([]);
         }
-        setLoading(false);
       }
     );
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (!session) setLoading(false);
-    });
-
-    return () => subscription.unsubscribe();
+    return () => { mounted = false; subscription.unsubscribe(); };
   }, []);
 
   const signOut = async () => {

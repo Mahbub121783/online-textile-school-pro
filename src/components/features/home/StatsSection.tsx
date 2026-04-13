@@ -6,7 +6,7 @@ import { supabase } from '@/integrations/supabase/client';
 
 const CountUp = ({ end, decimal, suffix }: { end: number; decimal?: boolean; suffix: string }) => {
   const [count, setCount] = useState(0);
-  const [ref, inView] = useInView({ triggerOnce: true, threshold: 0.3 });
+  const { ref, inView } = useInView({ triggerOnce: true, threshold: 0.3 });
   const hasAnimated = useRef(false);
 
   useEffect(() => {
@@ -30,9 +30,11 @@ const CountUp = ({ end, decimal, suffix }: { end: number; decimal?: boolean; suf
   }, [inView, end]);
 
   return (
-    <span ref={ref} className="font-heading text-3xl md:text-4xl font-bold text-primary-foreground">
-      {decimal ? count.toFixed(1) : Math.floor(count).toLocaleString()}{suffix}
-    </span>
+    <div ref={ref}>
+      <span className="font-heading text-3xl md:text-4xl font-bold text-primary-foreground">
+        {decimal ? count.toFixed(1) : Math.floor(count).toLocaleString()}{suffix}
+      </span>
+    </div>
   );
 };
 
