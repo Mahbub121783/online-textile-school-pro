@@ -269,9 +269,9 @@ const Checkout = () => {
 
       clearCart();
       toast.success('Order placed successfully!');
-      // Invalidate enrollment queries so dashboard shows fresh data
-      const { QueryClient } = await import('@tanstack/react-query');
-      // We don't have queryClient here directly, so invalidation happens on navigation via staleTime
+      queryClient.invalidateQueries({ queryKey: ['enrollments'] });
+      queryClient.invalidateQueries({ queryKey: ['enrollment'] });
+      queryClient.invalidateQueries({ queryKey: ['purchased-ebooks-set'] });
       navigate('/dashboard');
     } catch (err: any) {
       console.error('Checkout error:', err);
