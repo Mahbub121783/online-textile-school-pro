@@ -12,6 +12,7 @@ import StudentIdCard from '@/components/student/StudentIdCard';
 import AcademicCalendarWidget from './AcademicCalendarWidget';
 import GpaWidget from './GpaWidget';
 import BatchWidget from './BatchWidget';
+import LiveClassesWidget from './LiveClassesWidget';
 
 const DashboardOverview = () => {
   const { user } = useAuth();
@@ -164,6 +165,9 @@ const DashboardOverview = () => {
           </div>
         )}
       </div>
+
+      {/* Live Classes & Attendance */}
+      <LiveClassesWidget />
 
       {/* Academic Widgets */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
