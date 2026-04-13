@@ -1,4 +1,4 @@
-import { LayoutDashboard, Users, BookOpen, Image, Activity, LogOut, GraduationCap, Tag, Wallet, FileText, PenTool, ImageIcon, Menu, Palette, Video, HelpCircle, ClipboardList, Award, Settings, ChevronDown, BarChart3, UserCog, CheckSquare, DollarSign, Shield, MessageSquare, Wrench, Mail, CreditCard, ReceiptText, Cloud, Bell, ShoppingCart, HardDrive, Crown, Server, ClipboardEdit, Send, Calendar, Layers, Star, AlertTriangle, FolderKanban } from 'lucide-react';
+import { LayoutDashboard, Users, BookOpen, Image, Activity, LogOut, GraduationCap, Tag, Wallet, FileText, PenTool, ImageIcon, Menu, Palette, Video, HelpCircle, ClipboardList, Award, Settings, ChevronDown, BarChart3, UserCog, CheckSquare, DollarSign, Shield, MessageSquare, Wrench, Mail, CreditCard, ReceiptText, Cloud, Bell, ShoppingCart, HardDrive, Crown, Server, ClipboardEdit, Send, Calendar, Layers, Star, AlertTriangle, FolderKanban, Briefcase, FlaskConical } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
@@ -66,6 +66,12 @@ const academicSubItems = [
 const engagementSubItems = [
   { title: 'Reviews', url: '/admin/reviews', icon: Star },
   { title: 'Forum', url: '/admin/forum', icon: MessageSquare },
+];
+
+const careerSubItems = [
+  { title: 'Internships', url: '/admin/internships', icon: Briefcase },
+  { title: 'Research Papers', url: '/admin/research-papers', icon: FileText },
+  { title: 'Virtual Labs', url: '/admin/virtual-labs', icon: FlaskConical },
 ];
 
 const bottomItems = [
