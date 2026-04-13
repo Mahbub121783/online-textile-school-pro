@@ -14,6 +14,66 @@ export type Database = {
   }
   public: {
     Tables: {
+      academic_calendar: {
+        Row: {
+          batch_id: string | null
+          color: string | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          end_date: string | null
+          event_type: string
+          id: string
+          is_global: boolean
+          start_date: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          batch_id?: string | null
+          color?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          end_date?: string | null
+          event_type?: string
+          id?: string
+          is_global?: boolean
+          start_date: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          batch_id?: string | null
+          color?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          end_date?: string | null
+          event_type?: string
+          id?: string
+          is_global?: boolean
+          start_date?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "academic_calendar_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "batches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "academic_calendar_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       admin_activity_log: {
         Row: {
           action: string
@@ -162,6 +222,81 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      batch_students: {
+        Row: {
+          batch_id: string
+          enrolled_at: string
+          id: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          batch_id: string
+          enrolled_at?: string
+          id?: string
+          status?: string
+          user_id: string
+        }
+        Update: {
+          batch_id?: string
+          enrolled_at?: string
+          id?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "batch_students_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "batches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "batch_students_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      batches: {
+        Row: {
+          created_at: string
+          description: string | null
+          end_date: string | null
+          id: string
+          max_students: number | null
+          name: string
+          start_date: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          end_date?: string | null
+          id?: string
+          max_students?: number | null
+          name: string
+          start_date: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          end_date?: string | null
+          id?: string
+          max_students?: number | null
+          name?: string
+          start_date?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
       categories: {
         Row: {
@@ -1283,6 +1418,39 @@ export type Database = {
           points?: number
           reason?: string | null
           user_id?: string
+        }
+        Relationships: []
+      }
+      grade_configs: {
+        Row: {
+          created_at: string
+          grade_point: number
+          id: string
+          is_active: boolean
+          letter_grade: string
+          max_pct: number
+          min_pct: number
+          sort_order: number
+        }
+        Insert: {
+          created_at?: string
+          grade_point: number
+          id?: string
+          is_active?: boolean
+          letter_grade: string
+          max_pct: number
+          min_pct: number
+          sort_order?: number
+        }
+        Update: {
+          created_at?: string
+          grade_point?: number
+          id?: string
+          is_active?: boolean
+          letter_grade?: string
+          max_pct?: number
+          min_pct?: number
+          sort_order?: number
         }
         Relationships: []
       }
@@ -2721,6 +2889,83 @@ export type Database = {
         }
         Relationships: []
       }
+      student_grades: {
+        Row: {
+          batch_id: string | null
+          course_id: string
+          created_at: string
+          credits: number
+          grade_point: number
+          graded_by: string | null
+          id: string
+          letter_grade: string
+          notes: string | null
+          percentage: number | null
+          semester: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          batch_id?: string | null
+          course_id: string
+          created_at?: string
+          credits?: number
+          grade_point: number
+          graded_by?: string | null
+          id?: string
+          letter_grade: string
+          notes?: string | null
+          percentage?: number | null
+          semester?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          batch_id?: string | null
+          course_id?: string
+          created_at?: string
+          credits?: number
+          grade_point?: number
+          graded_by?: string | null
+          id?: string
+          letter_grade?: string
+          notes?: string | null
+          percentage?: number | null
+          semester?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "student_grades_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "batches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "student_grades_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "courses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "student_grades_graded_by_fkey"
+            columns: ["graded_by"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "student_grades_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       student_id_cards: {
         Row: {
           card_number: string
@@ -2844,6 +3089,7 @@ export type Database = {
           longitude: number | null
           occupation: string | null
           phone: string | null
+          preferred_language: string | null
           professional_role: string | null
           referral_code: string | null
           referred_by: string | null
@@ -2874,6 +3120,7 @@ export type Database = {
           longitude?: number | null
           occupation?: string | null
           phone?: string | null
+          preferred_language?: string | null
           professional_role?: string | null
           referral_code?: string | null
           referred_by?: string | null
@@ -2904,6 +3151,7 @@ export type Database = {
           longitude?: number | null
           occupation?: string | null
           phone?: string | null
+          preferred_language?: string | null
           professional_role?: string | null
           referral_code?: string | null
           referred_by?: string | null
