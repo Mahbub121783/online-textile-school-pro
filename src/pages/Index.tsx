@@ -6,13 +6,14 @@ import Footer from '@/components/layout/Footer';
 import BottomNav from '@/components/layout/BottomNav';
 import HeroSlider from '@/components/features/home/HeroSlider';
 
-// Lazy-load below-the-fold sections — not needed for initial paint
 const StatsSection = lazy(() => import('@/components/features/home/StatsSection'));
 const FeaturedCourses = lazy(() => import('@/components/features/home/FeaturedCourses'));
 const EbookShowcase = lazy(() => import('@/components/features/home/EbookShowcase'));
 const InstructorSpotlight = lazy(() => import('@/components/features/home/InstructorSpotlight'));
 const TestimonialsSection = lazy(() => import('@/components/features/home/TestimonialsSection'));
 const DemoClassCTA = lazy(() => import('@/components/features/home/DemoClassCTA'));
+const UpcomingEvents = lazy(() => import('@/components/features/home/UpcomingEvents'));
+const LearningPathsPreview = lazy(() => import('@/components/features/home/LearningPathsPreview'));
 
 const SectionFallback = () => (
   <div className="py-12 flex items-center justify-center">
@@ -39,7 +40,13 @@ const Index = () => {
           <FeaturedCourses />
         </Suspense>
         <Suspense fallback={<SectionFallback />}>
+          <LearningPathsPreview />
+        </Suspense>
+        <Suspense fallback={<SectionFallback />}>
           <EbookShowcase />
+        </Suspense>
+        <Suspense fallback={<SectionFallback />}>
+          <UpcomingEvents />
         </Suspense>
         <Suspense fallback={<SectionFallback />}>
           <InstructorSpotlight />

@@ -106,6 +106,7 @@ const TermsPage = lazy(() => import("./pages/static/TermsPage"));
 const BecomeInstructor = lazy(() => import("./pages/static/BecomeInstructor"));
 const PublicRegistration = lazy(() => import("./pages/registration/PublicRegistration"));
 const AdminRegistrations = lazy(() => import("./pages/admin/AdminRegistrations"));
+const AdminSiteContent = lazy(() => import("./pages/admin/AdminSiteContent"));
 
 // Optimized QueryClient with aggressive caching
 const queryClient = new QueryClient({
@@ -230,6 +231,7 @@ const App = () => (
                   <Route path="students" element={<AdminStudents />} />
                   <Route path="students/:id" element={<StudentDetail />} />
                   <Route path="registrations" element={<AdminRegistrations />} />
+                  <Route path="site-content" element={<AdminSiteContent />} />
                 </Route>
                 <Route path="/learn/:courseSlug/:lessonId" element={<LessonPlayer />} />
                 <Route path="/quiz/:quizId" element={<QuizPlayer />} />

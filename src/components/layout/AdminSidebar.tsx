@@ -59,6 +59,7 @@ const bottomItems = [
   { title: 'Coupons', url: '/admin/coupons', icon: Tag },
   { title: 'Pages', url: '/admin/pages', icon: FileText },
   { title: 'Blog Posts', url: '/admin/posts', icon: PenTool },
+  { title: 'Site Content', url: '/admin/site-content', icon: ClipboardEdit },
   { title: 'Media', url: '/admin/media', icon: ImageIcon },
   { title: 'Menus', url: '/admin/menus', icon: Menu },
   { title: 'Appearance', url: '/admin/appearance', icon: Palette },
