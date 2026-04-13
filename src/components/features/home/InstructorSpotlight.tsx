@@ -44,15 +44,13 @@ const InstructorSpotlight = () => {
       const allCourseIds = (courses ?? []).map((c: any) => c.id);
       let enrollmentCounts = new Map<string, number>();
       if (allCourseIds.length > 0) {
-        const { data: enrollments } = await supabase
+      const { data: enrollments } = await supabase
           .from('enrollments')
-          .select('course_id');
-        // No filter needed — we'll count per course_id
+          .select('course_id')
+          .in('course_id', allCourseIds);
         const countMap = new Map<string, number>();
         (enrollments ?? []).forEach((e: any) => {
-          if (allCourseIds.includes(e.course_id)) {
-            countMap.set(e.course_id, (countMap.get(e.course_id) || 0) + 1);
-          }
+          countMap.set(e.course_id, (countMap.get(e.course_id) || 0) + 1);
         });
         enrollmentCounts = countMap;
       }
