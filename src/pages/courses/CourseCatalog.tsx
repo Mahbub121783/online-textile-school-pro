@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { Search, Star, Clock, Users, ShoppingCart, SlidersHorizontal, X, Play, CheckCircle } from 'lucide-react';
+import { Search, Star, Clock, Users, ShoppingCart, SlidersHorizontal, X, Play, CheckCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -12,12 +12,14 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useCartStore } from '@/stores/cartStore';
-import { COURSE_CATEGORIES, DIFFICULTY_LEVELS } from '@/lib/constants';
+import { DIFFICULTY_LEVELS } from '@/lib/constants';
 import SEOHead from '@/components/SEOHead';
 import UtilityBar from '@/components/layout/UtilityBar';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import BottomNav from '@/components/layout/BottomNav';
+
+const PER_PAGE = 12;
 
 const CourseCatalog = () => {
   const [search, setSearch] = useState('');
@@ -25,53 +27,84 @@ const CourseCatalog = () => {
   const [selectedDifficulty, setSelectedDifficulty] = useState('');
   const [sortBy, setSortBy] = useState('popular');
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [page, setPage] = useState(1);
   const addItem = useCartStore((s) => s.addItem);
   const navigate = useNavigate();
   const { user } = useAuth();
 
-  // Fetch real courses
+  // Dynamic categories from DB
+  const { data: dbCategories = [] } = useQuery({
+    queryKey: ['catalog-categories'],
+    queryFn: async () => {
+      const { data } = await supabase.from('categories').select('id, name, slug').order('sort_order');
+      return data ?? [];
+    },
+    staleTime: 10 * 60 * 1000,
+  });
+
   const { data: courses = [], isLoading } = useQuery({
     queryKey: ['catalog-courses'],
     queryFn: async () => {
       const { data } = await supabase
         .from('courses')
-        .select('id, title, slug, price, discount_price, avg_rating, enrollment_count, total_duration_minutes, total_lessons, difficulty_level, thumbnail_url, category_id, categories(name), user_profiles!courses_instructor_id_fkey(full_name)')
+        .select('id, title, slug, price, discount_price, avg_rating, enrollment_count, total_duration_minutes, total_lessons, difficulty_level, thumbnail_url, category_id, categories(name), user_profiles!courses_instructor_id_fkey(full_name), created_at')
         .eq('is_published', true)
-        .order('enrollment_count', { ascending: false });
+        .order('created_at', { ascending: false });
       return data ?? [];
     },
   });
 
-  // Fetch user enrollments
   const { data: enrolledCourseIds = new Set<string>() } = useQuery({
     queryKey: ['user-enrollments-set', user?.id],
     enabled: !!user,
     queryFn: async () => {
-      const { data } = await supabase
-        .from('enrollments')
-        .select('course_id')
-        .eq('user_id', user!.id);
+      const { data } = await supabase.from('enrollments').select('course_id').eq('user_id', user!.id);
       return new Set((data ?? []).map((e: any) => e.course_id));
     },
   });
 
-  const filtered = courses.filter((c: any) => {
-    const catName = (c.categories as any)?.name || '';
-    if (search && !c.title.toLowerCase().includes(search.toLowerCase())) return false;
-    if (selectedCategory && catName !== selectedCategory) return false;
-    if (selectedDifficulty && c.difficulty_level !== selectedDifficulty.toLowerCase()) return false;
-    return true;
-  });
+  const sortedFiltered = useMemo(() => {
+    let result = courses.filter((c: any) => {
+      const catName = (c.categories as any)?.name || '';
+      if (search && !c.title.toLowerCase().includes(search.toLowerCase())) return false;
+      if (selectedCategory && catName !== selectedCategory) return false;
+      if (selectedDifficulty && c.difficulty_level !== selectedDifficulty.toLowerCase()) return false;
+      return true;
+    });
+
+    // Sort
+    result = [...result].sort((a: any, b: any) => {
+      switch (sortBy) {
+        case 'newest': return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+        case 'rating': return (b.avg_rating || 0) - (a.avg_rating || 0);
+        case 'price-low': return ((a.discount_price ?? a.price) || 0) - ((b.discount_price ?? b.price) || 0);
+        case 'price-high': return ((b.discount_price ?? b.price) || 0) - ((a.discount_price ?? a.price) || 0);
+        case 'popular':
+        default: return (b.enrollment_count || 0) - (a.enrollment_count || 0);
+      }
+    });
+
+    return result;
+  }, [courses, search, selectedCategory, selectedDifficulty, sortBy]);
+
+  const totalPages = Math.ceil(sortedFiltered.length / PER_PAGE);
+  const paginatedCourses = sortedFiltered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
+
+  // Reset page when filters change
+  const updateFilter = (setter: (v: string) => void, value: string) => {
+    setter(value);
+    setPage(1);
+  };
 
   const FilterSidebar = () => (
     <div className="space-y-6">
       <div>
         <h3 className="font-heading font-semibold text-sm mb-3">Category</h3>
         <div className="space-y-2">
-          {COURSE_CATEGORIES.map((cat) => (
-            <div key={cat.slug} className="flex items-center gap-2">
-              <Checkbox id={cat.slug} checked={selectedCategory === cat.name} onCheckedChange={() => setSelectedCategory(selectedCategory === cat.name ? '' : cat.name)} />
-              <Label htmlFor={cat.slug} className="text-sm cursor-pointer">{cat.name}</Label>
+          {dbCategories.map((cat: any) => (
+            <div key={cat.id} className="flex items-center gap-2">
+              <Checkbox id={`cat-${cat.id}`} checked={selectedCategory === cat.name} onCheckedChange={() => updateFilter(setSelectedCategory, selectedCategory === cat.name ? '' : cat.name)} />
+              <Label htmlFor={`cat-${cat.id}`} className="text-sm cursor-pointer">{cat.name}</Label>
             </div>
           ))}
         </div>
@@ -81,7 +114,7 @@ const CourseCatalog = () => {
         <div className="space-y-2">
           {DIFFICULTY_LEVELS.map((level) => (
             <div key={level} className="flex items-center gap-2">
-              <Checkbox id={level} checked={selectedDifficulty === level} onCheckedChange={() => setSelectedDifficulty(selectedDifficulty === level ? '' : level)} />
+              <Checkbox id={level} checked={selectedDifficulty === level} onCheckedChange={() => updateFilter(setSelectedDifficulty, selectedDifficulty === level ? '' : level)} />
               <Label htmlFor={level} className="text-sm cursor-pointer">{level}</Label>
             </div>
           ))}
@@ -94,12 +127,12 @@ const CourseCatalog = () => {
     <div className="min-h-screen flex flex-col">
       <SEOHead
         title="Course Catalog"
-        description="Browse textile engineering courses in Spinning, Weaving, Dyeing, Knitting, Garments Technology and more. Learn from industry experts at Online Textile School."
+        description="Browse textile engineering courses in Spinning, Weaving, Dyeing, Knitting, Garments Technology and more."
         jsonLd={{
           '@context': 'https://schema.org',
           '@type': 'CollectionPage',
           name: 'Course Catalog — Online Textile School',
-          description: 'Browse textile engineering courses in Spinning, Weaving, Dyeing, Knitting, and more.',
+          description: 'Browse textile engineering courses.',
           url: window.location.href,
           provider: { '@type': 'EducationalOrganization', name: 'Online Textile School' },
         }}
@@ -122,13 +155,13 @@ const CourseCatalog = () => {
           <div className="flex flex-col sm:flex-row gap-3 mb-6">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input placeholder="Search courses..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-10" />
+              <Input placeholder="Search courses..." value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} className="pl-10" />
             </div>
             <div className="flex gap-2">
               <Button variant="outline" className="lg:hidden" onClick={() => setFiltersOpen(!filtersOpen)}>
                 <SlidersHorizontal className="h-4 w-4 mr-1" />Filters
               </Button>
-              <Select value={sortBy} onValueChange={setSortBy}>
+              <Select value={sortBy} onValueChange={(v) => { setSortBy(v); setPage(1); }}>
                 <SelectTrigger className="w-[180px]"><SelectValue placeholder="Sort by" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="popular">Most Popular</SelectItem>
@@ -161,7 +194,7 @@ const CourseCatalog = () => {
             )}
 
             <div className="flex-1">
-              <p className="text-sm text-muted-foreground mb-4">{filtered.length} courses found</p>
+              <p className="text-sm text-muted-foreground mb-4">{sortedFiltered.length} courses found</p>
 
               {isLoading ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -170,66 +203,96 @@ const CourseCatalog = () => {
                   ))}
                 </div>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-                  {filtered.map((course: any) => {
-                    const finalPrice = course.discount_price ?? course.price ?? 0;
-                    const isEnrolled = enrolledCourseIds instanceof Set && enrolledCourseIds.has(course.id);
-                    const catName = (course.categories as any)?.name || '';
-                    const instructorName = (course.user_profiles as any)?.full_name || 'Instructor';
-                    const dur = course.total_duration_minutes || 0;
-                    const durationStr = dur >= 60 ? `${Math.floor(dur / 60)}h ${dur % 60}m` : `${dur}m`;
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+                    {paginatedCourses.map((course: any) => {
+                      const finalPrice = course.discount_price ?? course.price ?? 0;
+                      const isEnrolled = enrolledCourseIds instanceof Set && enrolledCourseIds.has(course.id);
+                      const catName = (course.categories as any)?.name || '';
+                      const instructorName = (course.user_profiles as any)?.full_name || 'Instructor';
+                      const dur = course.total_duration_minutes || 0;
+                      const durationStr = dur >= 60 ? `${Math.floor(dur / 60)}h ${dur % 60}m` : `${dur}m`;
 
-                    return (
-                      <div key={course.id} className="group bg-card border rounded-lg overflow-hidden hover:shadow-lg transition-all hover:-translate-y-1">
-                        <div className="relative aspect-video bg-secondary overflow-hidden cursor-pointer" onClick={() => navigate(`/courses/${course.slug}`)}>
-                          {course.thumbnail_url ? (
-                            <img src={course.thumbnail_url} alt={course.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
-                          ) : (
-                            <div className="absolute inset-0 bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center"><span className="text-3xl opacity-30">📚</span></div>
-                          )}
-                          {isEnrolled && (
-                            <Badge className="absolute top-2 left-2 text-xs bg-green-600 text-white border-0">
-                              <CheckCircle className="h-3 w-3 mr-1" /> Enrolled
-                            </Badge>
-                          )}
-                          {!isEnrolled && finalPrice === 0 && (
-                            <Badge className="absolute top-2 left-2 text-xs bg-primary text-primary-foreground">Free</Badge>
-                          )}
-                        </div>
-                        <div className="p-4 space-y-2">
-                          <p className="text-xs text-muted-foreground">{catName}</p>
-                          <Link to={`/courses/${course.slug}`}><h3 className="font-heading font-semibold text-sm line-clamp-2 hover:text-primary">{course.title}</h3></Link>
-                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                            {(course.avg_rating ?? 0) > 0 && <><Star className="h-3 w-3 fill-warning text-warning" />{Number(course.avg_rating).toFixed(1)} •</>}
-                            <Users className="h-3 w-3" />{course.enrollment_count || 0} •
-                            <Clock className="h-3 w-3" />{durationStr}
-                          </div>
-                          <p className="text-xs text-muted-foreground">by {instructorName}</p>
-                          <div className="flex items-center justify-between pt-2 border-t">
-                            {isEnrolled ? (
-                              <>
-                                <span className="text-xs text-green-600 font-semibold">✓ Purchased</span>
-                                <Button size="sm" className="h-8 text-xs bg-accent hover:bg-accent/90 text-accent-foreground" onClick={() => navigate(`/courses/${course.slug}`)}>
-                                  <Play className="h-3 w-3 mr-1" />Continue
-                                </Button>
-                              </>
+                      return (
+                        <div key={course.id} className="group bg-card border rounded-lg overflow-hidden hover:shadow-lg transition-all hover:-translate-y-1">
+                          <div className="relative aspect-video bg-secondary overflow-hidden cursor-pointer" onClick={() => navigate(`/courses/${course.slug}`)}>
+                            {course.thumbnail_url ? (
+                              <img src={course.thumbnail_url} alt={course.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
                             ) : (
-                              <>
-                                <div>
-                                  <span className="font-heading font-bold">{finalPrice === 0 ? 'Free' : `৳${Number(finalPrice).toLocaleString()}`}</span>
-                                  {course.discount_price && <span className="text-xs text-muted-foreground line-through ml-2">৳{Number(course.price).toLocaleString()}</span>}
-                                </div>
-                                <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => addItem({ id: course.id, type: 'course', title: course.title, price: course.price || 0, discount_price: course.discount_price ?? undefined })}>
-                                  <ShoppingCart className="h-3 w-3 mr-1" />Add
-                                </Button>
-                              </>
+                              <div className="absolute inset-0 bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center"><span className="text-3xl opacity-30">📚</span></div>
+                            )}
+                            {isEnrolled && (
+                              <Badge className="absolute top-2 left-2 text-xs bg-green-600 text-white border-0">
+                                <CheckCircle className="h-3 w-3 mr-1" /> Enrolled
+                              </Badge>
+                            )}
+                            {!isEnrolled && finalPrice === 0 && (
+                              <Badge className="absolute top-2 left-2 text-xs bg-primary text-primary-foreground">Free</Badge>
                             )}
                           </div>
+                          <div className="p-4 space-y-2">
+                            <p className="text-xs text-muted-foreground">{catName}</p>
+                            <Link to={`/courses/${course.slug}`}><h3 className="font-heading font-semibold text-sm line-clamp-2 hover:text-primary">{course.title}</h3></Link>
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                              {(course.avg_rating ?? 0) > 0 && <><Star className="h-3 w-3 fill-warning text-warning" />{Number(course.avg_rating).toFixed(1)} •</>}
+                              <Users className="h-3 w-3" />{course.enrollment_count || 0} •
+                              <Clock className="h-3 w-3" />{durationStr}
+                            </div>
+                            <p className="text-xs text-muted-foreground">by {instructorName}</p>
+                            <div className="flex items-center justify-between pt-2 border-t">
+                              {isEnrolled ? (
+                                <>
+                                  <span className="text-xs text-green-600 font-semibold">✓ Purchased</span>
+                                  <Button size="sm" className="h-8 text-xs bg-accent hover:bg-accent/90 text-accent-foreground" onClick={() => navigate(`/courses/${course.slug}`)}>
+                                    <Play className="h-3 w-3 mr-1" />Continue
+                                  </Button>
+                                </>
+                              ) : (
+                                <>
+                                  <div>
+                                    <span className="font-heading font-bold">{finalPrice === 0 ? 'Free' : `৳${Number(finalPrice).toLocaleString()}`}</span>
+                                    {course.discount_price && <span className="text-xs text-muted-foreground line-through ml-2">৳{Number(course.price).toLocaleString()}</span>}
+                                  </div>
+                                  <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => addItem({ id: course.id, type: 'course', title: course.title, price: course.price || 0, discount_price: course.discount_price ?? undefined })}>
+                                    <ShoppingCart className="h-3 w-3 mr-1" />Add
+                                  </Button>
+                                </>
+                              )}
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })}
-                </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Pagination */}
+                  {totalPages > 1 && (
+                    <div className="flex items-center justify-center gap-2 mt-8">
+                      <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>
+                        <ChevronLeft className="h-4 w-4" />
+                      </Button>
+                      {Array.from({ length: totalPages }, (_, i) => i + 1)
+                        .filter(p => p === 1 || p === totalPages || Math.abs(p - page) <= 1)
+                        .reduce<(number | string)[]>((acc, p, i, arr) => {
+                          if (i > 0 && p - (arr[i - 1] as number) > 1) acc.push('...');
+                          acc.push(p);
+                          return acc;
+                        }, [])
+                        .map((p, i) =>
+                          typeof p === 'string' ? (
+                            <span key={`ellipsis-${i}`} className="px-2 text-muted-foreground">…</span>
+                          ) : (
+                            <Button key={p} variant={p === page ? 'default' : 'outline'} size="sm" onClick={() => setPage(p)}>
+                              {p}
+                            </Button>
+                          )
+                        )}
+                      <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </div>
