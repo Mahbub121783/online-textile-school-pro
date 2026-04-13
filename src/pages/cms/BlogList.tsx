@@ -15,7 +15,7 @@ const BlogList = () => {
     queryKey: ['blog-posts'],
     queryFn: async () => {
       const { data } = await supabase
-        .from('posts' as any)
+        .from('posts')
         .select('*, user_profiles!posts_author_id_fkey(full_name)')
         .eq('status', 'published')
         .order('published_at', { ascending: false });

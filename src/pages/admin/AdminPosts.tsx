@@ -26,7 +26,7 @@ const AdminPosts = () => {
   const { data: posts = [], isLoading } = useQuery({
     queryKey: ['admin-posts'],
     queryFn: async () => {
-      const { data } = await supabase.from('posts' as any).select('*').order('created_at', { ascending: false });
+      const { data } = await supabase.from('posts').select('*').order('created_at', { ascending: false });
       return data ?? [];
     },
   });
@@ -37,9 +37,9 @@ const AdminPosts = () => {
       const payload: any = { ...form, slug };
       if (form.status === 'published' && !editingPost?.published_at) payload.published_at = new Date().toISOString();
       if (editingPost) {
-        await supabase.from('posts' as any).update(payload).eq('id', editingPost.id);
+        await supabase.from('posts').update(payload).eq('id', editingPost.id);
       } else {
-        await supabase.from('posts' as any).insert({ ...payload, author_id: user?.id, content: [] });
+        await supabase.from('posts').insert({ ...payload, author_id: user?.id, content: [] } as any);
       }
     },
     onSuccess: () => {
@@ -53,7 +53,7 @@ const AdminPosts = () => {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: async (id: string) => { await supabase.from('posts' as any).delete().eq('id', id); },
+    mutationFn: async (id: string) => { await supabase.from('posts').delete().eq('id', id); },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['admin-posts'] }); toast.success('Post deleted'); },
   });
 

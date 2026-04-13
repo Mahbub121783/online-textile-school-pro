@@ -1,4 +1,4 @@
-import { useParams, Navigate } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import SEOHead from '@/components/SEOHead';
@@ -16,13 +16,13 @@ const DynamicPage = () => {
     enabled: !!slug,
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('pages' as any)
+        .from('pages')
         .select('*')
-        .eq('slug', slug)
+        .eq('slug', slug!)
         .eq('status', 'published')
         .single();
       if (error) throw error;
-      return data as any;
+      return data;
     },
   });
 
@@ -39,7 +39,6 @@ const DynamicPage = () => {
   }
 
   if (!isLoading && (error || !page)) {
-    // Known app routes should not be caught here
     const appRoutes = ['courses', 'ebooks', 'cart', 'checkout', 'auth', 'dashboard', 'instructor', 'admin', 'learn', 'quiz', 'assignment', 'payment', 'blog', 'profile', 'reset-password'];
     if (slug && appRoutes.includes(slug.split('/')[0])) return null;
     return (
@@ -68,11 +67,11 @@ const DynamicPage = () => {
       <Header />
       <main className="flex-1 pb-14 lg:pb-0">
         {page.template === 'landing' ? (
-          <BlockRenderer blocks={blocks} />
+          <BlockRenderer blocks={blocks as any} />
         ) : (
           <div className="container py-8 max-w-4xl">
             <h1 className="font-heading text-3xl md:text-4xl font-bold mb-8">{page.title}</h1>
-            <BlockRenderer blocks={blocks} />
+            <BlockRenderer blocks={blocks as any} />
           </div>
         )}
       </main>

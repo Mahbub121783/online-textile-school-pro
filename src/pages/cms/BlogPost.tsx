@@ -19,12 +19,12 @@ const BlogPost = () => {
     enabled: !!slug,
     queryFn: async () => {
       const { data } = await supabase
-        .from('posts' as any)
+        .from('posts')
         .select('*, user_profiles!posts_author_id_fkey(full_name, avatar_url)')
-        .eq('slug', slug)
+        .eq('slug', slug!)
         .eq('status', 'published')
         .single();
-      return data as any;
+      return data;
     },
   });
 
@@ -81,7 +81,7 @@ const BlogPost = () => {
             </div>
           </div>
 
-          <BlockRenderer blocks={blocks} />
+          <BlockRenderer blocks={blocks as any} />
         </div>
       </main>
       <Footer />

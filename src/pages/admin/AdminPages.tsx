@@ -26,7 +26,7 @@ const AdminPages = () => {
   const { data: pages = [], isLoading } = useQuery({
     queryKey: ['admin-pages'],
     queryFn: async () => {
-      const { data } = await supabase.from('pages' as any).select('*').order('sort_order', { ascending: true });
+      const { data } = await supabase.from('pages').select('*').order('sort_order', { ascending: true });
       return data ?? [];
     },
   });
@@ -35,9 +35,9 @@ const AdminPages = () => {
     mutationFn: async () => {
       const slug = form.slug || form.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
       if (editingPage) {
-        await supabase.from('pages' as any).update({ ...form, slug }).eq('id', editingPage.id);
+        await supabase.from('pages').update({ ...form, slug } as any).eq('id', editingPage.id);
       } else {
-        await supabase.from('pages' as any).insert({ ...form, slug, author_id: user?.id, content: [] });
+        await supabase.from('pages').insert({ ...form, slug, author_id: user?.id, content: [] } as any);
       }
     },
     onSuccess: () => {
@@ -52,7 +52,7 @@ const AdminPages = () => {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      await supabase.from('pages' as any).delete().eq('id', id);
+      await supabase.from('pages').delete().eq('id', id);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-pages'] });

@@ -99,8 +99,8 @@ const PaymentSettingsTab = () => {
   const { data: gateways, isLoading } = useQuery({
     queryKey: ['payment-gateways'],
     queryFn: async () => {
-      const { data } = await supabase.from('payment_gateways' as any).select('*');
-      return (data || []) as any[];
+      const { data } = await supabase.from('payment_gateways').select('*');
+      return data ?? [];
     },
   });
 
@@ -108,13 +108,13 @@ const PaymentSettingsTab = () => {
     if (gateways) {
       const state: typeof formState = {};
       GATEWAYS.forEach(gw => {
-        const existing = gateways.find((g: any) => g.gateway_name === gw.gateway_name);
-        const creds = existing?.credentials || {};
+        const existing = gateways.find((g) => g.gateway_name === gw.gateway_name);
+        const creds = (existing?.credentials as Record<string, any>) || {};
         state[gw.gateway_name] = {
           credentials: typeof creds === 'object' ? creds as Record<string, string> : {},
           is_active: existing?.is_active || false,
-          sandbox: (typeof creds === 'object' && (creds as any).sandbox) || false,
-          payment_mode: (typeof creds === 'object' && (creds as any).payment_mode) || 'merchant',
+          sandbox: (typeof creds === 'object' && creds.sandbox) || false,
+          payment_mode: (typeof creds === 'object' && creds.payment_mode) || 'merchant',
         };
       });
       setFormState(state);
@@ -126,13 +126,13 @@ const PaymentSettingsTab = () => {
       const state = formState[gatewayName];
       if (!state) return;
       const credentials = { ...state.credentials, sandbox: state.sandbox, payment_mode: state.payment_mode };
-      const existing = gateways?.find((g: any) => g.gateway_name === gatewayName);
+      const existing = gateways?.find((g) => g.gateway_name === gatewayName);
       const config = GATEWAYS.find(g => g.gateway_name === gatewayName)!;
 
       if (existing) {
-        await supabase.from('payment_gateways' as any).update({ credentials, is_active: state.is_active } as any).eq('id', existing.id);
+        await supabase.from('payment_gateways').update({ credentials, is_active: state.is_active } as any).eq('id', existing.id);
       } else {
-        await supabase.from('payment_gateways' as any).insert({ gateway_name: gatewayName, display_name: config.display_name, credentials, is_active: state.is_active } as any);
+        await supabase.from('payment_gateways').insert({ gateway_name: gatewayName, display_name: config.display_name, credentials, is_active: state.is_active } as any);
       }
     },
     onSuccess: () => {
@@ -197,7 +197,6 @@ const PaymentSettingsTab = () => {
                 </div>
               </CardHeader>
               <CardContent className="space-y-3">
-                {/* Mode toggle for mobile banking */}
                 {gw.supportsSendMoney && (
                   <div className="space-y-1">
                     <Label className="text-xs">Payment Mode</Label>
