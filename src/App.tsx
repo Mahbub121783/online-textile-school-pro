@@ -248,6 +248,7 @@ const App = () => (
                   <Route path="reviews" element={<AdminReviews />} />
                   <Route path="live-classes" element={<AdminLiveClasses />} />
                   <Route path="attendance" element={<AdminAttendance />} />
+                  <Route path="faculty" element={<AdminFaculty />} />
                 </Route>
                 <Route path="/learn/:courseSlug/:lessonId" element={<LessonPlayer />} />
                 <Route path="/quiz/:quizId" element={<QuizPlayer />} />
@@ -262,6 +263,7 @@ const App = () => (
                 <Route path="/departments" element={<DepartmentsPage />} />
                 <Route path="/events" element={<EventsPage />} />
                 <Route path="/alumni" element={<AlumniPage />} />
+                <Route path="/faculty" element={<FacultyPage />} />
                 <Route path="/register" element={<PublicRegistration />} />
                 <Route path="/register/:slug" element={<PublicRegistration />} />
                 {/* Forum */}
