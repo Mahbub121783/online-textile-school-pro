@@ -94,7 +94,7 @@ const AdminDashboard = () => {
     queryKey: ['admin-recent-activity'],
     queryFn: async () => {
       const { data } = await supabase
-        .from('admin_activity_log' as any)
+        .from('admin_activity_log')
         .select('*')
         .order('created_at', { ascending: false })
         .limit(10);
