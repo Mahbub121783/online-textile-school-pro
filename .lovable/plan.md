@@ -1,108 +1,215 @@
 
 
-# Advanced Placeholders, Default Templates, and Compose Email Search
-
-## Overview
-Three major improvements to the email system: (1) comprehensive placeholders sourced from all user/course/order/ebook data, (2) pre-built professional HTML templates for every template type, (3) email recipient search from database in Compose Email.
+# Online Textile University -- Complete Feature Implementation PRD
+## 8 Phases, 21 Features
 
 ---
 
-## 1. Comprehensive Placeholder System
+## Phase 1: Academic Foundation
+**Goal**: Establish core academic infrastructure that all subsequent features depend on.
 
-### Current State
-Each template has only 3-5 basic placeholders. The compose page has only 4 placeholders. Missing: user profile fields, ebook data, registration data, invoice numbers, student ID, etc.
+### Features:
+1. **Batch/Cohort System** -- Create `batches` table (name, start_date, end_date, status, max_students). Admin can create/manage batches, assign students to batches, filter by batch everywhere. Student profile shows batch. Batch-specific announcements. Admin sidebar gets "Batches" menu item.
 
-### New Universal Placeholders (available to ALL templates)
+2. **Academic Calendar** -- Create `academic_calendar` table (title, event_type [semester_start, exam_week, holiday, deadline], start_date, end_date, batch_id nullable, is_global). Admin CRUD with color-coded calendar view. Students see filtered calendar on dashboard. Public events page shows upcoming academic dates.
 
-**User Profile (A-Z):**
-`{{user_name}}`, `{{user_email}}`, `{{user_phone}}`, `{{user_avatar_url}}`, `{{user_batch}}`, `{{user_blood_group}}`, `{{user_company_name}}`, `{{user_country}}`, `{{user_current_job}}`, `{{user_date_of_birth}}`, `{{user_district}}`, `{{user_division}}`, `{{user_occupation}}`, `{{user_professional_role}}`, `{{user_referral_code}}`, `{{user_roll_id}}`, `{{user_university}}`, `{{user_username}}`, `{{user_created_at}}`
+3. **Grade Point System (GPA/CGPA)** -- Create `grade_configs` table (letter_grade, min_pct, max_pct, grade_point, is_active). Create `student_grades` table (user_id, course_id, batch_id, letter_grade, grade_point, credits). Admin configures grading scale. Auto-calculate from quiz+assignment+manual marks. Student dashboard shows semester GPA and cumulative CGPA. Instructor gradebook shows letter grades.
 
-**Course:**
-`{{course_name}}`, `{{course_id}}`, `{{course_price}}`, `{{course_description}}`, `{{course_url}}`, `{{course_instructor}}`
+### Admin Access:
+- Full CRUD for batches, calendar events, grade configuration
+- Assign/remove students from batches in bulk
+- Override individual student grades
 
-**Order/Invoice:**
-`{{order_id}}`, `{{order_total}}`, `{{order_items}}`, `{{order_date}}`, `{{invoice_number}}` (auto-generated: `INV-YYYYMMDD-XXXXX`), `{{payment_method}}`, `{{payment_status}}`
+### Student Access:
+- View assigned batch, academic calendar, GPA/CGPA on dashboard
+- Semester-wise grade breakdown
 
-**Ebook:**
-`{{ebook_title}}`, `{{ebook_id}}`, `{{ebook_author}}`, `{{ebook_price}}`, `{{ebook_download_url}}`
-
-**Certificate:**
-`{{certificate_number}}`, `{{certificate_download_url}}`, `{{certificate_date}}`
-
-**Registration:**
-`{{registration_type}}`, `{{registration_date}}`, `{{registration_status}}`
-
-**System:**
-`{{site_name}}`, `{{site_url}}`, `{{support_email}}`, `{{current_date}}`, `{{current_year}}`, `{{login_url}}`
-
-### Implementation
-- Create a `GLOBAL_PLACEHOLDERS` constant grouped by category (User, Course, Order, Ebook, Certificate, Registration, System)
-- Each template type gets ALL global placeholders plus its context-specific ones
-- In the template editor, show placeholders in collapsible category groups (not a flat list)
-- Clicking a placeholder inserts it at cursor position in the body textarea
-- In the compose page sidebar, show the same grouped placeholder system
-- The Edge Function's placeholder replacement already handles `{{key}}` pattern -- just need to pass more data from the trigger points
-
-### Files
-- `EmailTemplatesTab.tsx` -- replace per-template placeholder arrays with global grouped system
-- `AdminEmailCompose.tsx` -- update sidebar placeholders with full grouped list
-- `send-smtp-email/index.ts` -- no change needed (already replaces any `{{key}}` from placeholders object)
+### Notifications & Email:
+- Email on batch assignment (`batch_assigned` template)
+- Calendar event reminders (1 day before)
+- Grade published notification
 
 ---
 
-## 2. Pre-Built Professional Default Templates
+## Phase 2: Learning Engagement
+**Goal**: Deepen student-content interaction.
 
-### New Template Types to Add
-- `ebook_purchase` -- Ebook Purchase Confirmation
-- `ebook_download` -- Ebook Download Link
-- `user_registration` -- New User Registration (self-registered)
-- `course_completion` -- Course Completion Congratulations
-- `assignment_submitted` -- Assignment Submission Confirmation
-- `quiz_completed` -- Quiz Completion Results
-- `wallet_credit` -- Wallet Credit Notification
-- `wallet_debit` -- Wallet Debit Notification
-- `id_card_issued` -- Student ID Card Issued
+### Features:
+4. **Discussion per Lesson** -- Extend existing `discussions` table to support lesson-level threading. Add discussion panel inside LessonPlayer with reply chains, upvote, mark-as-answer. Instructor can pin/close threads. Real-time updates via Supabase realtime.
 
-### Default Template Bodies
-Each of the 25 total template types will get a professionally designed default HTML body pre-filled when admin clicks "Edit" (if no custom template exists yet). The defaults use placeholder variables and clean HTML structure matching the branded wrapper.
+5. **Course Review & Rating** -- Create `course_reviews` table (user_id, course_id, rating 1-5, review_text, is_approved, created_at). Only enrolled students who completed >50% can review. Admin approval queue. Average rating updates on courses table. Display on course detail page with pagination.
 
-### Files
-- `EmailTemplatesTab.tsx` -- expand `TEMPLATE_TYPES` array with new types + add `defaultBody` field with pre-built HTML for each
+6. **Peer Review System** -- Create `peer_reviews` table (assignment_submission_id, reviewer_user_id, rubric_scores jsonb, feedback, created_at). Admin/instructor configures peer review for assignments (min reviewers, rubric criteria). System auto-assigns reviewers from enrolled students. Reviewer dashboard in student panel.
 
----
+### Admin Access:
+- Moderate all discussions, approve/reject reviews, configure peer review rules
 
-## 3. Compose Email: Search Recipients from Database
+### Student Access:
+- Post questions per lesson, rate completed courses, review peers' assignments
 
-### Current Problem
-The compose page only allows manual email entry. Bulk send to "All Students" and "Course Students" shows an error because it cannot fetch emails.
-
-### Solution
-- Add a **user search** field that queries `user_profiles` joined with auth metadata
-- Since we cannot access `auth.users` directly from client, we will store/lookup emails via a new approach: query `user_profiles` and show results with names, then the admin selects users
-- Add a searchable dropdown/combobox that searches `user_profiles` by `full_name`, `username`, `phone`
-- Selected users appear as chips/tags showing name
-- For "All Students" and "Course Students" modes: fetch enrolled user IDs from `enrollments` table, then look up their profiles, and require email input per user (or use a server-side approach via the Edge Function)
-- Add a **"Search & Select"** mode alongside manual input
-
-### Implementation
-- Add a search input with debounced query to `user_profiles`
-- Show results in a dropdown list with name, phone, roll_id
-- Selected users added to a recipient list
-- Admin can still type emails manually
-- For bulk modes: fetch user profiles and display them in a selectable list, admin provides/confirms emails
-
-### Files
-- `AdminEmailCompose.tsx` -- add search combobox, user selection chips, fix bulk send
+### Notifications & Email:
+- Notify instructor on new lesson question
+- Email when review is approved/rejected
+- Notify student when assigned as peer reviewer
 
 ---
 
-## Technical Details
+## Phase 3: Live Learning
+**Goal**: Real-time classroom experience.
 
-### Files to Edit
-1. **`src/pages/admin/setup/EmailTemplatesTab.tsx`** -- Global placeholder system (grouped, clickable), 9 new template types, default HTML bodies for all 25 templates
-2. **`src/pages/admin/AdminEmailCompose.tsx`** -- User search from DB, recipient chips, full placeholder sidebar with categories, fix bulk email modes
-3. **`supabase/functions/send-smtp-email/index.ts`** -- Add auto invoice number generation (`INV-{date}-{random}`) when `{{invoice_number}}` placeholder is used
+### Features:
+7. **Live Class / Zoom + Meet Integration** -- Create `live_classes` table (course_id, batch_id, title, description, meeting_url, platform [zoom/meet/custom], start_time, duration_minutes, recording_url, status). Admin/instructor creates sessions with Zoom/Meet links. Student dashboard shows upcoming live classes with join button (auto-enabled 10 min before). Calendar integration. Recording link post-session.
 
-### No new migrations needed
-All data comes from existing tables (`user_profiles`, `courses`, `enrollments`, `ebooks`, `orders`).
+8. **Attendance System** -- Create `attendance_records` table (live_class_id, user_id, check_in_time, check_out_time, status [present/absent/late/excused], marked_by). Instructor marks attendance during/after live class. Bulk mark from enrolled list. Student sees attendance percentage on dashboard. Admin sees attendance analytics per batch/course.
+
+### Admin Access:
+- Create/edit/cancel live classes across all courses
+- View attendance reports with export to CSV
+- Set attendance percentage thresholds
+
+### Student Access:
+- View upcoming classes, join via link, see personal attendance record
+
+### Notifications & Email:
+- Email 1 hour before live class (`live_class_reminder` template)
+- Notify when recording is available
+- Weekly attendance summary email
+
+---
+
+## Phase 4: Communication & Language
+**Goal**: Reach every student in their language.
+
+### Features:
+9. **Multi-language Support (Bengali + English)** -- Implement i18n using `react-i18next`. Create `public/locales/en/` and `public/locales/bn/` translation JSON files. Language toggle in header (EN/BN). Store preference in user_profiles (`preferred_language` column). Translate all UI labels, buttons, navigation, dashboard headings, and static pages. Admin can set default site language.
+
+10. **SMS Notifications** -- Create `sms_logs` table. Create `send-sms` edge function supporting providers (e.g., generic HTTP API). Admin configures SMS provider credentials in setup. SMS templates for critical events (OTP, class reminder, result published). Admin can compose bulk SMS. Student can opt-in/out of SMS in settings.
+
+11. **Faculty/Staff Directory** -- Create `faculty_members` table (name, designation, department, bio, photo_url, email, phone, specialization, sort_order, is_active). Admin CRUD. Public `/faculty` page with search/filter by department. Link to instructor profiles where applicable.
+
+### Admin Access:
+- Manage translations, SMS templates, faculty directory
+- Set default language, SMS provider configuration
+
+### Student Access:
+- Toggle language, manage SMS preferences, browse faculty directory
+
+### Notifications & Email:
+- SMS for live class reminders, grade published, payment due
+- Language-aware email templates (send in user's preferred language)
+
+---
+
+## Phase 5: Academic Integrity & Assessment
+**Goal**: Ensure academic quality.
+
+### Features:
+12. **Plagiarism Checker** -- Create `plagiarism_reports` table (submission_id, similarity_pct, matched_sources jsonb, checked_at). Edge function that compares assignment text against other submissions in same assignment (internal similarity detection using text hashing/shingling). Display similarity score on instructor's grading view. Flag submissions above threshold (configurable by admin).
+
+13. **Student Transcript Generator** -- Create `/dashboard/transcript` route. Pull all completed courses, grades, GPA/CGPA, credits. Generate professional PDF transcript with university branding (logo, name, address from id_card_settings). Include student photo, roll ID, batch. Admin can generate for any student. Digital verification QR code linking to verification endpoint.
+
+14. **Group Projects** -- Create `project_groups` table (course_id, name, max_members). Create `project_group_members` table. Create `project_submissions` table. Instructor creates groups (manual or auto-assign). Students see group dashboard with shared submission area. Group-level grading. Discussion thread per group.
+
+### Admin Access:
+- Configure plagiarism thresholds, generate transcripts for any student, manage group project settings
+
+### Student Access:
+- View plagiarism report on own submissions, download transcript, collaborate in groups
+
+### Notifications & Email:
+- Email when plagiarism flagged (to instructor)
+- Notify group members on new submission/comment
+- Email transcript download link
+
+---
+
+## Phase 6: Career & Research
+**Goal**: Beyond-classroom value.
+
+### Features:
+15. **Internship Management** -- Create `internships` table (title, company, description, requirements, stipend, duration, application_deadline, status, posted_by). Create `internship_applications` table. Admin/industry partners post internships. Students apply with cover letter + resume. Application tracking pipeline (applied -> shortlisted -> interviewed -> offered -> rejected). Dashboard widget for active internship.
+
+16. **Research Paper Repository** -- Create `research_papers` table (title, abstract, authors jsonb, file_url, category, keywords, published_date, download_count, submitted_by). Students/faculty submit papers for admin approval. Public browse/search with filters. Download tracking. Citation export (BibTeX format).
+
+17. **Virtual Lab Simulations** -- Create `virtual_labs` table (title, description, course_id, simulation_url, type [iframe/external], instructions, is_published). Admin/instructor adds simulation links (iframe embeds or external URLs to existing textile simulation platforms). Student accesses from lesson player or dedicated `/labs` page. Track completion.
+
+### Admin Access:
+- Full CRUD for internships, approve research papers, manage lab simulations
+
+### Student Access:
+- Apply to internships, submit research papers, access virtual labs
+
+### Notifications & Email:
+- Email on internship application status change
+- Notify when new paper is published in student's field
+- Lab assignment notification
+
+---
+
+## Phase 7: Financial Flexibility
+**Goal**: Remove payment barriers.
+
+### Features:
+18. **Payment Plans / Installments** -- Create `payment_plans` table (course_id, total_amount, installment_count, interval_days). Create `installment_payments` table (plan_id, user_id, installment_number, amount, due_date, paid_at, status). Admin creates installment options per course. Student selects plan at checkout. Dashboard shows upcoming payments. Auto-reminder emails before due dates. Late payment handling (grace period, access suspension).
+
+19. **Multi-currency Support** -- Create `currencies` table (code, name, symbol, exchange_rate, is_active). Admin sets base currency and exchange rates. Course prices auto-convert based on student's selected currency. Currency selector in header/footer. Store original + converted amounts in orders table. Admin can update exchange rates.
+
+20. **Analytics Dashboard for Students** -- New `/dashboard/analytics` route. Charts showing: study time per week, course completion velocity, quiz score trends, assignment grades over time, attendance rate, GPA progression. Compare with batch average (anonymized). Weekly progress email with key metrics.
+
+### Admin Access:
+- Configure payment plans, manage currencies/exchange rates, view aggregate student analytics
+
+### Student Access:
+- Choose installment plans, select currency, view personal analytics dashboard
+
+### Notifications & Email:
+- Installment due reminder (3 days before, on due date, overdue)
+- Currency rate change notification to admin
+- Weekly analytics summary email to students
+
+---
+
+## Phase 8: Intelligence & Polish
+**Goal**: AI-powered features and final integration.
+
+### Features:
+21. **AI Tutor Chatbot** -- Create `ai_chat_sessions` table (user_id, course_id, messages jsonb, created_at). Edge function proxying to AI API (using LOVABLE_API_KEY). Context-aware: knows student's enrolled courses, current lesson, recent quiz scores. Floating chat widget (separate from existing support chat). Suggest resources, explain concepts, quiz prep. Admin can configure behavior rules and restrict to specific courses.
+
+### Final Integration Tasks:
+- **Cross-feature notification audit**: Ensure every feature sends proper notifications (in-app + email + SMS where configured)
+- **Admin super-dashboard**: Aggregate widgets from all 21 features on admin dashboard
+- **Student profile completeness**: Update ProfileCompletenessWidget to include new fields (batch, language, transcript, attendance)
+- **Mobile responsiveness**: Audit all new pages for mobile/tablet layouts
+- **Performance optimization**: Lazy-load all new routes, optimize queries with proper indexes
+
+### Admin Access:
+- Configure AI behavior, view all chat logs, set feature toggles for each module
+
+### Student Access:
+- AI tutor chat, fully integrated profile with all features accessible
+
+### Notifications & Email:
+- Final audit: all 25+ email templates working with proper placeholders
+- SMS fallback for critical notifications
+- In-app notification center shows all feature events
+
+---
+
+## Technical Architecture Summary
+
+### New Database Tables (across all phases):
+`batches`, `batch_students`, `academic_calendar`, `grade_configs`, `student_grades`, `course_reviews`, `peer_reviews`, `live_classes`, `attendance_records`, `sms_logs`, `faculty_members`, `plagiarism_reports`, `project_groups`, `project_group_members`, `project_submissions`, `internships`, `internship_applications`, `research_papers`, `virtual_labs`, `payment_plans`, `installment_payments`, `currencies`, `ai_chat_sessions`
+
+### New Edge Functions:
+`send-sms`, `check-plagiarism`, `generate-transcript`, `ai-tutor`
+
+### New Routes (~25):
+Admin: batches, calendar, grade-config, reviews, live-classes, attendance, faculty, internships, research, labs, payment-plans, currencies, ai-config
+Student: transcript, analytics, internships, research, labs, groups
+Public: faculty, labs
+
+### Implementation Order Rationale:
+Phase 1-2 build the academic data model everything else depends on. Phase 3 adds live interaction. Phase 4 removes language barriers. Phase 5-6 add academic depth. Phase 7 removes financial barriers. Phase 8 ties everything together with AI and polish.
+
+Each phase is independently deployable and testable. No phase breaks existing functionality.
 
