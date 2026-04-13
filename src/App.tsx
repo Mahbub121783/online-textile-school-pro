@@ -126,6 +126,9 @@ const AdminVirtualLabs = lazy(() => import("./pages/admin/AdminVirtualLabs"));
 const InternshipsPage = lazy(() => import("./pages/static/InternshipsPage"));
 const ResearchPapersPage = lazy(() => import("./pages/static/ResearchPapersPage"));
 const VirtualLabsPage = lazy(() => import("./pages/static/VirtualLabsPage"));
+const AdminPaymentPlans = lazy(() => import("./pages/admin/AdminPaymentPlans"));
+const AdminCurrencies = lazy(() => import("./pages/admin/AdminCurrencies"));
+const StudentAnalytics = lazy(() => import("./pages/dashboard/StudentAnalytics"));
 
 // Optimized QueryClient with aggressive caching
 const queryClient = new QueryClient({
@@ -192,6 +195,7 @@ const App = () => (
                   <Route path="peer-reviews" element={<PeerReviewsPage />} />
                   <Route path="transcript" element={<TranscriptPage />} />
                   <Route path="group-projects" element={<GroupProjectsPage />} />
+                  <Route path="analytics" element={<StudentAnalytics />} />
                   <Route path="settings" element={<SettingsPage />} />
                 </Route>
                 {/* Instructor Portal */}
@@ -266,6 +270,8 @@ const App = () => (
                   <Route path="internships" element={<AdminInternships />} />
                   <Route path="research-papers" element={<AdminResearchPapers />} />
                   <Route path="virtual-labs" element={<AdminVirtualLabs />} />
+                  <Route path="payment-plans" element={<AdminPaymentPlans />} />
+                  <Route path="currencies" element={<AdminCurrencies />} />
                 </Route>
                 <Route path="/learn/:courseSlug/:lessonId" element={<LessonPlayer />} />
                 <Route path="/quiz/:quizId" element={<QuizPlayer />} />
