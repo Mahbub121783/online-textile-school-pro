@@ -2616,6 +2616,33 @@ export type Database = {
           },
         ]
       }
+      site_content: {
+        Row: {
+          content: Json
+          id: string
+          page_key: string
+          section_key: string
+          updated_at: string | null
+          updated_by: string | null
+        }
+        Insert: {
+          content?: Json
+          id?: string
+          page_key: string
+          section_key: string
+          updated_at?: string | null
+          updated_by?: string | null
+        }
+        Update: {
+          content?: Json
+          id?: string
+          page_key?: string
+          section_key?: string
+          updated_at?: string | null
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       site_settings: {
         Row: {
           id: number
