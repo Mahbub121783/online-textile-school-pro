@@ -112,6 +112,92 @@ export type Database = {
           },
         ]
       }
+      ai_api_keys: {
+        Row: {
+          api_key: string
+          created_at: string
+          error_count: number
+          id: string
+          is_active: boolean
+          label: string
+          last_error: string | null
+          last_used_at: string | null
+          provider: string
+          usage_count: number
+        }
+        Insert: {
+          api_key: string
+          created_at?: string
+          error_count?: number
+          id?: string
+          is_active?: boolean
+          label?: string
+          last_error?: string | null
+          last_used_at?: string | null
+          provider?: string
+          usage_count?: number
+        }
+        Update: {
+          api_key?: string
+          created_at?: string
+          error_count?: number
+          id?: string
+          is_active?: boolean
+          label?: string
+          last_error?: string | null
+          last_used_at?: string | null
+          provider?: string
+          usage_count?: number
+        }
+        Relationships: []
+      }
+      ai_chat_history: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          model_used: string | null
+          provider_used: string | null
+          response_time_ms: number | null
+          role: string
+          session_id: string | null
+          tokens_used: number | null
+          user_id: string
+        }
+        Insert: {
+          content?: string
+          created_at?: string
+          id?: string
+          model_used?: string | null
+          provider_used?: string | null
+          response_time_ms?: number | null
+          role?: string
+          session_id?: string | null
+          tokens_used?: number | null
+          user_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          model_used?: string | null
+          provider_used?: string | null
+          response_time_ms?: number | null
+          role?: string
+          session_id?: string | null
+          tokens_used?: number | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_chat_history_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "ai_chat_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ai_chat_sessions: {
         Row: {
           course_id: string | null
@@ -198,6 +284,42 @@ export type Database = {
           provider?: string
           system_prompt?: string
           temperature?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      ai_search_index: {
+        Row: {
+          content_summary: string
+          entity_id: string
+          entity_type: string
+          id: string
+          keywords: string[] | null
+          metadata: Json | null
+          search_vector: unknown
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          content_summary?: string
+          entity_id: string
+          entity_type: string
+          id?: string
+          keywords?: string[] | null
+          metadata?: Json | null
+          search_vector?: unknown
+          title?: string
+          updated_at?: string
+        }
+        Update: {
+          content_summary?: string
+          entity_id?: string
+          entity_type?: string
+          id?: string
+          keywords?: string[] | null
+          metadata?: Json | null
+          search_vector?: unknown
+          title?: string
           updated_at?: string
         }
         Relationships: []

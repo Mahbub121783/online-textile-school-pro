@@ -1,13 +1,23 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Bot, X, Send, Trash2, Loader2, Sparkles } from 'lucide-react';
+import { Bot, X, Send, Trash2, Loader2, Sparkles, GripVertical } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 
-type Msg = { role: 'user' | 'assistant'; content: string };
+type Msg = { role: 'user' | 'assistant'; content: string; provider?: string; model?: string };
 
 const AI_TUTOR_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-tutor`;
+
+const STORAGE_KEY = 'ai-tutor-pos';
+const DEFAULT_POS = { x: 24, y: -96 }; // left:24, bottom:96
+
+function getStoredPos() {
+  try {
+    const s = localStorage.getItem(STORAGE_KEY);
+    return s ? JSON.parse(s) : DEFAULT_POS;
+  } catch { return DEFAULT_POS; }
+}
 
 const AiTutorWidget = () => {
   const { user } = useAuth();
@@ -18,10 +28,42 @@ const AiTutorWidget = () => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // Draggable bubble
+  const [pos, setPos] = useState(getStoredPos);
+  const dragRef = useRef<{ startX: number; startY: number; origX: number; origY: number; dragging: boolean }>({
+    startX: 0, startY: 0, origX: 0, origY: 0, dragging: false,
+  });
+  const bubbleRef = useRef<HTMLButtonElement>(null);
+
+  const persistPos = useCallback((p: { x: number; y: number }) => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(p));
+  }, []);
+
+  const handlePointerDown = useCallback((e: React.PointerEvent) => {
+    e.preventDefault();
+    dragRef.current = { startX: e.clientX, startY: e.clientY, origX: pos.x, origY: pos.y, dragging: true };
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+  }, [pos]);
+
+  const handlePointerMove = useCallback((e: React.PointerEvent) => {
+    if (!dragRef.current.dragging) return;
+    const dx = e.clientX - dragRef.current.startX;
+    const dy = e.clientY - dragRef.current.startY;
+    const newX = Math.max(0, Math.min(window.innerWidth - 60, dragRef.current.origX + dx));
+    const newY = dragRef.current.origY - dy; // bottom-based
+    setPos({ x: newX, y: Math.max(16, newY) });
+  }, []);
+
+  const handlePointerUp = useCallback((e: React.PointerEvent) => {
+    const d = dragRef.current;
+    const moved = Math.abs(e.clientX - d.startX) + Math.abs(e.clientY - d.startY);
+    d.dragging = false;
+    persistPos(pos);
+    if (moved < 5) setOpen(true); // click, not drag
+  }, [pos, persistPos]);
+
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
+    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages, open]);
 
   useEffect(() => {
@@ -49,12 +91,12 @@ const AiTutorWidget = () => {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
         },
-        body: JSON.stringify({ messages: allMessages, user_id: user.id }),
+        body: JSON.stringify({ messages: allMessages.map(m => ({ role: m.role, content: m.content })), user_id: user.id }),
       });
 
       if (!resp.ok) {
         const err = await resp.json().catch(() => ({ error: 'AI service error' }));
-        setMessages(prev => [...prev, { role: 'assistant', content: `⚠️ ${err.error || 'Something went wrong. Please try again.'}` }]);
+        setMessages(prev => [...prev, { role: 'assistant', content: `⚠️ ${err.error || 'Something went wrong.'}` }]);
         setLoading(false);
         return;
       }
@@ -107,28 +149,42 @@ const AiTutorWidget = () => {
   const quickPrompts = [
     "What is GSM in textiles?",
     "Explain ring spinning",
+    "Calculate yarn count",
     "Dyeing process steps",
   ];
 
   return (
     <>
-      {/* Floating bubble - LEFT side */}
+      {/* Draggable floating bubble */}
       {!open && (
         <button
-          onClick={() => setOpen(true)}
-          className="fixed bottom-6 left-6 z-50 w-14 h-14 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-lg hover:shadow-xl transition-all hover:scale-110 flex items-center justify-center group"
-          title="AI Tutor"
+          ref={bubbleRef}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          className="fixed z-50 w-14 h-14 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-lg hover:shadow-xl transition-shadow flex items-center justify-center group cursor-grab active:cursor-grabbing touch-none select-none"
+          style={{
+            left: pos.x,
+            bottom: pos.y,
+            opacity: 0.2,
+            transition: dragRef.current.dragging ? 'none' : 'opacity 0.3s',
+          }}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.opacity = '1'; }}
+          onMouseLeave={e => { if (!dragRef.current.dragging) (e.currentTarget as HTMLElement).style.opacity = '0.2'; }}
+          title="AI Tutor - Drag to move"
         >
           <Bot className="h-7 w-7 group-hover:hidden" />
           <Sparkles className="h-7 w-7 hidden group-hover:block animate-pulse" />
-          {/* Pulse ring */}
           <span className="absolute inset-0 rounded-full bg-emerald-400/30 animate-ping pointer-events-none" />
         </button>
       )}
 
-      {/* Chat panel - LEFT side */}
+      {/* Chat panel */}
       {open && (
-        <div className="fixed bottom-6 left-6 z-50 w-[400px] h-[560px] bg-background border rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 fade-in duration-300">
+        <div
+          className="fixed z-50 w-[360px] sm:w-[400px] h-[520px] sm:h-[560px] bg-background border rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 fade-in duration-300"
+          style={{ left: Math.min(pos.x, window.innerWidth - 410), bottom: Math.max(pos.y, 16) }}
+        >
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 bg-gradient-to-r from-emerald-500 to-teal-600 text-white shrink-0">
             <div className="flex items-center gap-2">
@@ -158,7 +214,7 @@ const AiTutorWidget = () => {
                   <Bot className="h-8 w-8 text-emerald-600 dark:text-emerald-400" />
                 </div>
                 <p className="font-heading font-semibold text-foreground mb-1">Hi! I'm your AI Tutor 🎓</p>
-                <p className="text-xs mb-4">I know about your courses, grades & all textile engineering topics.</p>
+                <p className="text-xs mb-4">I know about your courses, grades & all textile engineering topics. I can also do complex calculations!</p>
                 <div className="space-y-2">
                   {quickPrompts.map((q, i) => (
                     <button
