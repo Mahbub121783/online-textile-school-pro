@@ -48,8 +48,31 @@ const SmtpSettingsTab = () => {
     onError: () => toast({ title: 'Failed to save', variant: 'destructive' }),
   });
 
-  const handleTest = () => {
-    toast({ title: 'Test connection initiated', description: 'Check your inbox for a test email.' });
+  const [testing, setTesting] = useState(false);
+
+  const handleTest = async () => {
+    setTesting(true);
+    try {
+      const testEmail = getValue('smtp_from_email') || getValue('smtp_user');
+      if (!testEmail) {
+        toast({ title: 'Set a From Email first', variant: 'destructive' });
+        return;
+      }
+      const { data, error } = await supabase.functions.invoke('send-smtp-email', {
+        body: {
+          recipientEmail: testEmail,
+          subject: 'SMTP Test - Online Textile School',
+          body: '<h2>SMTP Connection Test</h2><p>If you received this email, your SMTP configuration is working correctly!</p><p>Sent at: ' + new Date().toLocaleString() + '</p>',
+        },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      toast({ title: 'Test email sent!', description: `Check inbox at ${testEmail}` });
+    } catch (err: any) {
+      toast({ title: 'Test failed', description: err.message, variant: 'destructive' });
+    } finally {
+      setTesting(false);
+    }
   };
 
   if (isLoading) return <div className="text-muted-foreground">Loading SMTP settings...</div>;
@@ -113,9 +136,9 @@ const SmtpSettingsTab = () => {
           <Shield className="h-4 w-4 mr-2" />
           {saveMutation.isPending ? 'Saving...' : 'Save SMTP Settings'}
         </Button>
-        <Button variant="outline" onClick={handleTest}>
+        <Button variant="outline" onClick={handleTest} disabled={testing}>
           <Send className="h-4 w-4 mr-2" />
-          Test Connection
+          {testing ? 'Sending...' : 'Test Connection'}
         </Button>
       </div>
     </div>
