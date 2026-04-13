@@ -233,7 +233,7 @@ serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     } catch (smtpError: any) {
-      await client.close().catch(() => {});
+      try { await client.close(); } catch { /* ignore */ }
 
       await supabase.from("email_logs").insert({
         recipient: recipientEmail,
