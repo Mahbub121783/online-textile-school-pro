@@ -9,6 +9,9 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useMemo } from 'react';
 import ProfileCompletenessWidget from '@/components/ProfileCompletenessWidget';
 import StudentIdCard from '@/components/student/StudentIdCard';
+import AcademicCalendarWidget from './AcademicCalendarWidget';
+import GpaWidget from './GpaWidget';
+import BatchWidget from './BatchWidget';
 
 const DashboardOverview = () => {
   const { user } = useAuth();
@@ -160,6 +163,13 @@ const DashboardOverview = () => {
             </Button>
           </div>
         )}
+      </div>
+
+      {/* Academic Widgets */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <BatchWidget />
+        <GpaWidget />
+        <AcademicCalendarWidget />
       </div>
     </div>
   );
