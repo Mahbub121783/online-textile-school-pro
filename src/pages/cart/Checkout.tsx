@@ -341,6 +341,7 @@ const Checkout = () => {
         await supabase.from('orders').update({ status: 'completed' } as any).eq('id', orderId);
         await supabase.from('invoices' as any).update({ payment_status: 'paid', paid_at: new Date().toISOString() }).eq('order_id', orderId);
 
+        // Enroll in courses and record eBook ownership
         for (const item of items) {
           if (item.type === 'course') {
             await supabase.from('enrollments').upsert({
@@ -349,6 +350,7 @@ const Checkout = () => {
               payment_id: orderId,
             }, { onConflict: 'user_id,course_id' } as any);
           }
+          // eBook ownership is tracked via completed order_items — no separate table needed
         }
 
         // Credit instructor revenue share
