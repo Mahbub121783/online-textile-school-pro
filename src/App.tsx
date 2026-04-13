@@ -274,6 +274,7 @@ const App = () => (
                   <Route path="virtual-labs" element={<AdminVirtualLabs />} />
                   <Route path="payment-plans" element={<AdminPaymentPlans />} />
                   <Route path="currencies" element={<AdminCurrencies />} />
+                  <Route path="ai-chatbot" element={<AdminAiChatbot />} />
                 </Route>
                 <Route path="/learn/:courseSlug/:lessonId" element={<LessonPlayer />} />
                 <Route path="/quiz/:quizId" element={<QuizPlayer />} />
