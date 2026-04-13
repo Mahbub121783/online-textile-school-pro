@@ -120,6 +120,12 @@ const AdminPlagiarism = lazy(() => import("./pages/admin/AdminPlagiarism"));
 const AdminProjectGroups = lazy(() => import("./pages/admin/AdminProjectGroups"));
 const TranscriptPage = lazy(() => import("./pages/dashboard/TranscriptPage"));
 const GroupProjectsPage = lazy(() => import("./pages/dashboard/GroupProjectsPage"));
+const AdminInternships = lazy(() => import("./pages/admin/AdminInternships"));
+const AdminResearchPapers = lazy(() => import("./pages/admin/AdminResearchPapers"));
+const AdminVirtualLabs = lazy(() => import("./pages/admin/AdminVirtualLabs"));
+const InternshipsPage = lazy(() => import("./pages/static/InternshipsPage"));
+const ResearchPapersPage = lazy(() => import("./pages/static/ResearchPapersPage"));
+const VirtualLabsPage = lazy(() => import("./pages/static/VirtualLabsPage"));
 
 // Optimized QueryClient with aggressive caching
 const queryClient = new QueryClient({
@@ -257,6 +263,9 @@ const App = () => (
                   <Route path="faculty" element={<AdminFaculty />} />
                   <Route path="plagiarism" element={<AdminPlagiarism />} />
                   <Route path="project-groups" element={<AdminProjectGroups />} />
+                  <Route path="internships" element={<AdminInternships />} />
+                  <Route path="research-papers" element={<AdminResearchPapers />} />
+                  <Route path="virtual-labs" element={<AdminVirtualLabs />} />
                 </Route>
                 <Route path="/learn/:courseSlug/:lessonId" element={<LessonPlayer />} />
                 <Route path="/quiz/:quizId" element={<QuizPlayer />} />
@@ -272,6 +281,9 @@ const App = () => (
                 <Route path="/events" element={<EventsPage />} />
                 <Route path="/alumni" element={<AlumniPage />} />
                 <Route path="/faculty" element={<FacultyPage />} />
+                <Route path="/internships" element={<InternshipsPage />} />
+                <Route path="/research" element={<ResearchPapersPage />} />
+                <Route path="/labs" element={<VirtualLabsPage />} />
                 <Route path="/register" element={<PublicRegistration />} />
                 <Route path="/register/:slug" element={<PublicRegistration />} />
                 {/* Forum */}

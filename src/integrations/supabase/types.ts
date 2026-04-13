@@ -1819,6 +1819,113 @@ export type Database = {
           },
         ]
       }
+      internship_applications: {
+        Row: {
+          admin_notes: string | null
+          cover_letter: string | null
+          created_at: string
+          id: string
+          internship_id: string
+          resume_url: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          admin_notes?: string | null
+          cover_letter?: string | null
+          created_at?: string
+          id?: string
+          internship_id: string
+          resume_url?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          admin_notes?: string | null
+          cover_letter?: string | null
+          created_at?: string
+          id?: string
+          internship_id?: string
+          resume_url?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "internship_applications_internship_id_fkey"
+            columns: ["internship_id"]
+            isOneToOne: false
+            referencedRelation: "internships"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "internship_applications_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      internships: {
+        Row: {
+          application_deadline: string | null
+          company: string
+          created_at: string
+          description: string | null
+          duration: string | null
+          id: string
+          is_published: boolean
+          posted_by: string | null
+          requirements: string | null
+          status: string
+          stipend: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          application_deadline?: string | null
+          company: string
+          created_at?: string
+          description?: string | null
+          duration?: string | null
+          id?: string
+          is_published?: boolean
+          posted_by?: string | null
+          requirements?: string | null
+          status?: string
+          stipend?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          application_deadline?: string | null
+          company?: string
+          created_at?: string
+          description?: string | null
+          duration?: string | null
+          id?: string
+          is_published?: boolean
+          posted_by?: string | null
+          requirements?: string | null
+          status?: string
+          stipend?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "internships_posted_by_fkey"
+            columns: ["posted_by"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       invoices: {
         Row: {
           billing_district: string | null
@@ -3302,6 +3409,65 @@ export type Database = {
           },
         ]
       }
+      research_papers: {
+        Row: {
+          abstract: string | null
+          admin_notes: string | null
+          authors: Json | null
+          category: string | null
+          created_at: string
+          download_count: number
+          file_url: string | null
+          id: string
+          is_approved: boolean
+          keywords: string | null
+          published_date: string | null
+          submitted_by: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          abstract?: string | null
+          admin_notes?: string | null
+          authors?: Json | null
+          category?: string | null
+          created_at?: string
+          download_count?: number
+          file_url?: string | null
+          id?: string
+          is_approved?: boolean
+          keywords?: string | null
+          published_date?: string | null
+          submitted_by?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          abstract?: string | null
+          admin_notes?: string | null
+          authors?: Json | null
+          category?: string | null
+          created_at?: string
+          download_count?: number
+          file_url?: string | null
+          id?: string
+          is_approved?: boolean
+          keywords?: string | null
+          published_date?: string | null
+          submitted_by?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "research_papers_submitted_by_fkey"
+            columns: ["submitted_by"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       reviews: {
         Row: {
           admin_response: string | null
@@ -3744,6 +3910,66 @@ export type Database = {
           {
             foreignKeyName: "user_roles_user_id_fkey"
             columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      virtual_labs: {
+        Row: {
+          course_id: string | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          instructions: string | null
+          is_published: boolean
+          simulation_url: string
+          sort_order: number
+          title: string
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          course_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          instructions?: string | null
+          is_published?: boolean
+          simulation_url: string
+          sort_order?: number
+          title: string
+          type?: string
+          updated_at?: string
+        }
+        Update: {
+          course_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          instructions?: string | null
+          is_published?: boolean
+          simulation_url?: string
+          sort_order?: number
+          title?: string
+          type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "virtual_labs_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "courses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "virtual_labs_created_by_fkey"
+            columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "user_profiles"
             referencedColumns: ["id"]
