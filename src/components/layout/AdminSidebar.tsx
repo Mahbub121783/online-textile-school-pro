@@ -49,6 +49,8 @@ const setupSubItems = [
 const paymentSubItems = [
   { title: 'Dashboard', url: '/admin/payment', icon: BarChart3 },
   { title: 'Orders', url: '/admin/orders', icon: ShoppingCart },
+  { title: 'Payment Plans', url: '/admin/payment-plans', icon: CreditCard },
+  { title: 'Currencies', url: '/admin/currencies', icon: DollarSign },
   { title: 'Settings', url: '/admin/payment/settings', icon: Settings },
   { title: 'Refunds', url: '/admin/payment/refunds', icon: ReceiptText },
 ];
