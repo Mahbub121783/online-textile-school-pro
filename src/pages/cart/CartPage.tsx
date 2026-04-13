@@ -1,11 +1,10 @@
-import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Trash2, ShoppingCart as CartIcon, ArrowRight, Loader2, Tag, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useCartStore } from '@/stores/cartStore';
-import { supabase } from '@/integrations/supabase/client';
-import { toast } from 'sonner';
+import { useCouponValidation } from '@/hooks/useCouponValidation';
+import { useState } from 'react';
 import UtilityBar from '@/components/layout/UtilityBar';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
@@ -15,63 +14,13 @@ const CartPage = () => {
   const { items, removeItem, getTotal } = useCartStore();
   const total = getTotal();
   const [couponCode, setCouponCode] = useState('');
-  const [appliedCoupon, setAppliedCoupon] = useState<any>(null);
-  const [couponLoading, setCouponLoading] = useState(false);
+  const { appliedCoupon, couponLoading, applyCoupon, removeCoupon, calculateDiscount } = useCouponValidation();
 
-  const discountAmount = appliedCoupon
-    ? appliedCoupon.discount_type === 'percentage'
-      ? Math.min(total * (appliedCoupon.discount_value / 100), appliedCoupon.max_discount_amount || Infinity)
-      : Math.min(appliedCoupon.discount_value, total)
-    : 0;
+  const discountAmount = calculateDiscount(total);
   const finalTotal = Math.max(total - discountAmount, 0);
 
-  const applyCoupon = async () => {
-    if (!couponCode.trim()) return;
-    setCouponLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from('coupons')
-        .select('*')
-        .eq('code', couponCode.toUpperCase())
-        .eq('is_active', true)
-        .single();
-
-      if (error || !data) {
-        toast.error('Invalid or expired coupon code');
-        setAppliedCoupon(null);
-        setCouponLoading(false);
-        return;
-      }
-
-      const coupon = data as any;
-      if (coupon.valid_until && new Date(coupon.valid_until) < new Date()) {
-        toast.error('This coupon has expired');
-        setCouponLoading(false);
-        return;
-      }
-      if (coupon.usage_limit && coupon.used_count >= coupon.usage_limit) {
-        toast.error('This coupon has reached its usage limit');
-        setCouponLoading(false);
-        return;
-      }
-      if (coupon.min_order_amount && total < coupon.min_order_amount) {
-        toast.error(`Minimum order amount is ৳${coupon.min_order_amount}`);
-        setCouponLoading(false);
-        return;
-      }
-
-      setAppliedCoupon(coupon);
-      toast.success('Coupon applied successfully!');
-    } catch {
-      toast.error('Failed to apply coupon');
-    }
-    setCouponLoading(false);
-  };
-
-  const removeCoupon = () => {
-    setAppliedCoupon(null);
-    setCouponCode('');
-  };
+  const handleApply = () => applyCoupon(couponCode, total);
+  const handleRemove = () => { removeCoupon(); setCouponCode(''); };
 
   if (items.length === 0) {
     return (
@@ -126,7 +75,6 @@ const CartPage = () => {
                 </div>
               ))}
             </div>
-            {/* Order Summary */}
             <div className="lg:w-80 shrink-0">
               <div className="bg-card border rounded-xl p-6 sticky top-20 space-y-4">
                 <h3 className="font-heading font-bold text-lg">Order Summary</h3>
@@ -134,7 +82,6 @@ const CartPage = () => {
                   <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span>৳{total.toLocaleString()}</span></div>
                 </div>
 
-                {/* Coupon Section */}
                 {appliedCoupon ? (
                   <div className="space-y-2">
                     <div className="flex items-center justify-between bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg px-3 py-2">
@@ -142,7 +89,7 @@ const CartPage = () => {
                         <Tag className="h-3.5 w-3.5 text-green-600" />
                         <span className="font-mono text-sm font-bold text-green-700 dark:text-green-400">{appliedCoupon.code}</span>
                       </div>
-                      <Button variant="ghost" size="sm" onClick={removeCoupon} className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive">
+                      <Button variant="ghost" size="sm" onClick={handleRemove} className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive">
                         <X className="h-3.5 w-3.5" />
                       </Button>
                     </div>
@@ -158,9 +105,9 @@ const CartPage = () => {
                       className="text-sm"
                       value={couponCode}
                       onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
-                      onKeyDown={(e) => e.key === 'Enter' && applyCoupon()}
+                      onKeyDown={(e) => e.key === 'Enter' && handleApply()}
                     />
-                    <Button variant="outline" size="sm" onClick={applyCoupon} disabled={couponLoading}>
+                    <Button variant="outline" size="sm" onClick={handleApply} disabled={couponLoading}>
                       {couponLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Apply'}
                     </Button>
                   </div>

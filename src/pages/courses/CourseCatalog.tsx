@@ -3,7 +3,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { Search, Star, Clock, Users, ShoppingCart, SlidersHorizontal, X, Play, CheckCircle, ChevronLeft, ChevronRight } from 'lucide-react';
+import { useWishlist } from '@/hooks/useWishlist';
+import { Search, Star, Clock, Users, ShoppingCart, SlidersHorizontal, X, Play, CheckCircle, ChevronLeft, ChevronRight, Heart, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -31,8 +32,8 @@ const CourseCatalog = () => {
   const addItem = useCartStore((s) => s.addItem);
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { wishlistIds, toggleWishlist } = useWishlist();
 
-  // Dynamic categories from DB
   const { data: dbCategories = [] } = useQuery({
     queryKey: ['catalog-categories'],
     queryFn: async () => {
@@ -59,12 +60,12 @@ const CourseCatalog = () => {
     enabled: !!user,
     queryFn: async () => {
       const { data } = await supabase.from('enrollments').select('course_id').eq('user_id', user!.id);
-      return new Set((data ?? []).map((e: any) => e.course_id));
+      return new Set((data ?? []).map((e) => e.course_id));
     },
   });
 
   const sortedFiltered = useMemo(() => {
-    let result = courses.filter((c: any) => {
+    let result = courses.filter((c) => {
       const catName = (c.categories as any)?.name || '';
       if (search && !c.title.toLowerCase().includes(search.toLowerCase())) return false;
       if (selectedCategory && catName !== selectedCategory) return false;
@@ -72,11 +73,10 @@ const CourseCatalog = () => {
       return true;
     });
 
-    // Sort
-    result = [...result].sort((a: any, b: any) => {
+    result = [...result].sort((a, b) => {
       switch (sortBy) {
-        case 'newest': return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-        case 'rating': return (b.avg_rating || 0) - (a.avg_rating || 0);
+        case 'newest': return new Date(b.created_at!).getTime() - new Date(a.created_at!).getTime();
+        case 'rating': return (Number(b.avg_rating) || 0) - (Number(a.avg_rating) || 0);
         case 'price-low': return ((a.discount_price ?? a.price) || 0) - ((b.discount_price ?? b.price) || 0);
         case 'price-high': return ((b.discount_price ?? b.price) || 0) - ((a.discount_price ?? a.price) || 0);
         case 'popular':
@@ -90,7 +90,6 @@ const CourseCatalog = () => {
   const totalPages = Math.ceil(sortedFiltered.length / PER_PAGE);
   const paginatedCourses = sortedFiltered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
 
-  // Reset page when filters change
   const updateFilter = (setter: (v: string) => void, value: string) => {
     setter(value);
     setPage(1);
@@ -101,7 +100,7 @@ const CourseCatalog = () => {
       <div>
         <h3 className="font-heading font-semibold text-sm mb-3">Category</h3>
         <div className="space-y-2">
-          {dbCategories.map((cat: any) => (
+          {dbCategories.map((cat) => (
             <div key={cat.id} className="flex items-center gap-2">
               <Checkbox id={`cat-${cat.id}`} checked={selectedCategory === cat.name} onCheckedChange={() => updateFilter(setSelectedCategory, selectedCategory === cat.name ? '' : cat.name)} />
               <Label htmlFor={`cat-${cat.id}`} className="text-sm cursor-pointer">{cat.name}</Label>
@@ -205,13 +204,14 @@ const CourseCatalog = () => {
               ) : (
                 <>
                   <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-                    {paginatedCourses.map((course: any) => {
+                    {paginatedCourses.map((course) => {
                       const finalPrice = course.discount_price ?? course.price ?? 0;
                       const isEnrolled = enrolledCourseIds instanceof Set && enrolledCourseIds.has(course.id);
                       const catName = (course.categories as any)?.name || '';
                       const instructorName = (course.user_profiles as any)?.full_name || 'Instructor';
                       const dur = course.total_duration_minutes || 0;
                       const durationStr = dur >= 60 ? `${Math.floor(dur / 60)}h ${dur % 60}m` : `${dur}m`;
+                      const isWished = wishlistIds instanceof Set && wishlistIds.has(course.id);
 
                       return (
                         <div key={course.id} className="group bg-card border rounded-lg overflow-hidden hover:shadow-lg transition-all hover:-translate-y-1">
@@ -229,12 +229,21 @@ const CourseCatalog = () => {
                             {!isEnrolled && finalPrice === 0 && (
                               <Badge className="absolute top-2 left-2 text-xs bg-primary text-primary-foreground">Free</Badge>
                             )}
+                            {/* Wishlist heart */}
+                            {user && (
+                              <button
+                                className="absolute top-2 right-2 p-1.5 rounded-full bg-background/70 hover:bg-background transition-colors"
+                                onClick={(e) => { e.stopPropagation(); toggleWishlist(course.id); }}
+                              >
+                                <Heart className={`h-4 w-4 ${isWished ? 'fill-destructive text-destructive' : 'text-muted-foreground'}`} />
+                              </button>
+                            )}
                           </div>
                           <div className="p-4 space-y-2">
                             <p className="text-xs text-muted-foreground">{catName}</p>
                             <Link to={`/courses/${course.slug}`}><h3 className="font-heading font-semibold text-sm line-clamp-2 hover:text-primary">{course.title}</h3></Link>
                             <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                              {(course.avg_rating ?? 0) > 0 && <><Star className="h-3 w-3 fill-warning text-warning" />{Number(course.avg_rating).toFixed(1)} •</>}
+                              {(Number(course.avg_rating) ?? 0) > 0 && <><Star className="h-3 w-3 fill-warning text-warning" />{Number(course.avg_rating).toFixed(1)} •</>}
                               <Users className="h-3 w-3" />{course.enrollment_count || 0} •
                               <Clock className="h-3 w-3" />{durationStr}
                             </div>
@@ -253,9 +262,17 @@ const CourseCatalog = () => {
                                     <span className="font-heading font-bold">{finalPrice === 0 ? 'Free' : `৳${Number(finalPrice).toLocaleString()}`}</span>
                                     {course.discount_price && <span className="text-xs text-muted-foreground line-through ml-2">৳{Number(course.price).toLocaleString()}</span>}
                                   </div>
-                                  <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => addItem({ id: course.id, type: 'course', title: course.title, price: course.price || 0, discount_price: course.discount_price ?? undefined })}>
-                                    <ShoppingCart className="h-3 w-3 mr-1" />Add
-                                  </Button>
+                                  <div className="flex gap-1">
+                                    <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => addItem({ id: course.id, type: 'course', title: course.title, price: course.price || 0, discount_price: course.discount_price ?? undefined, thumbnail_url: course.thumbnail_url ?? undefined })}>
+                                      <ShoppingCart className="h-3 w-3 mr-1" />Add
+                                    </Button>
+                                    <Button size="sm" className="h-8 text-xs" onClick={() => {
+                                      addItem({ id: course.id, type: 'course', title: course.title, price: course.price || 0, discount_price: course.discount_price ?? undefined, thumbnail_url: course.thumbnail_url ?? undefined });
+                                      navigate('/checkout');
+                                    }}>
+                                      <Zap className="h-3 w-3 mr-1" />Buy
+                                    </Button>
+                                  </div>
                                 </>
                               )}
                             </div>
@@ -265,7 +282,6 @@ const CourseCatalog = () => {
                     })}
                   </div>
 
-                  {/* Pagination */}
                   {totalPages > 1 && (
                     <div className="flex items-center justify-center gap-2 mt-8">
                       <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>
