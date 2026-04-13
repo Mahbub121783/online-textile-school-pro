@@ -1,4 +1,4 @@
-import { LayoutDashboard, Users, BookOpen, Image, Activity, LogOut, GraduationCap, Tag, Wallet, FileText, PenTool, ImageIcon, Menu, Palette, Video, HelpCircle, ClipboardList, Award, Settings, ChevronDown, BarChart3, UserCog, CheckSquare, DollarSign, Shield, MessageSquare, Wrench, Mail, CreditCard, ReceiptText, Cloud, Bell, ShoppingCart, HardDrive, Crown, Server, ClipboardEdit } from 'lucide-react';
+import { LayoutDashboard, Users, BookOpen, Image, Activity, LogOut, GraduationCap, Tag, Wallet, FileText, PenTool, ImageIcon, Menu, Palette, Video, HelpCircle, ClipboardList, Award, Settings, ChevronDown, BarChart3, UserCog, CheckSquare, DollarSign, Shield, MessageSquare, Wrench, Mail, CreditCard, ReceiptText, Cloud, Bell, ShoppingCart, HardDrive, Crown, Server, ClipboardEdit, Send } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
@@ -38,6 +38,8 @@ const cmsSubItems = [
 const setupSubItems = [
   { title: 'SMTP', url: '/admin/setup', icon: Mail },
   { title: 'Email Templates', url: '/admin/setup/email-templates', icon: FileText },
+  { title: 'Email Logs', url: '/admin/setup/email-logs', icon: Activity },
+  { title: 'Compose Email', url: '/admin/setup/compose-email', icon: Send },
   { title: 'Cloudinary', url: '/admin/setup/cloudinary', icon: Cloud },
   { title: 'Cloudflare R2', url: '/admin/setup/cloudflare-r2', icon: HardDrive },
   { title: 'ID Card Settings', url: '/admin/id-card-settings', icon: CreditCard },

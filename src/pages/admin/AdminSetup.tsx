@@ -3,10 +3,14 @@ import SmtpSettingsTab from './setup/SmtpSettingsTab';
 import EmailTemplatesTab from './setup/EmailTemplatesTab';
 import CloudinarySettingsTab from './setup/CloudinarySettingsTab';
 import CloudflareR2SettingsTab from './setup/CloudflareR2SettingsTab';
+import AdminEmailLogs from './AdminEmailLogs';
+import AdminEmailCompose from './AdminEmailCompose';
 
 const tabComponents: Record<string, React.ComponentType> = {
   smtp: SmtpSettingsTab,
   'email-templates': EmailTemplatesTab,
+  'email-logs': AdminEmailLogs,
+  'compose-email': AdminEmailCompose,
   cloudinary: CloudinarySettingsTab,
   'cloudflare-r2': CloudflareR2SettingsTab,
 };
@@ -14,6 +18,8 @@ const tabComponents: Record<string, React.ComponentType> = {
 const tabTitles: Record<string, string> = {
   smtp: 'SMTP Configuration',
   'email-templates': 'Email Templates',
+  'email-logs': 'Email Logs',
+  'compose-email': 'Compose Email',
   cloudinary: 'Cloudinary Settings',
   'cloudflare-r2': 'Cloudflare R2 Settings',
 };
