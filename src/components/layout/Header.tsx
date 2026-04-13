@@ -93,7 +93,8 @@ const Header = () => {
             )}
           </div>
 
-          <ThemeToggle />
+         <LanguageToggle />
+         <ThemeToggle />
 
           {user && <NotificationBell basePath="/dashboard" />}
 
