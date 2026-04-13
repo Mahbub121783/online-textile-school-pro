@@ -568,6 +568,7 @@ const Checkout = () => {
                   </div>
                 )}
               </div>
+              )}
 
               <Button type="submit" className="w-full h-12 bg-accent hover:bg-accent-hover text-accent-foreground font-semibold" disabled={submitting || items.length === 0}>
                 {submitting ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Processing...</> : `Place Order — ৳${total.toLocaleString()}`}
