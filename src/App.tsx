@@ -130,6 +130,7 @@ const VirtualLabsPage = lazy(() => import("./pages/static/VirtualLabsPage"));
 const AdminPaymentPlans = lazy(() => import("./pages/admin/AdminPaymentPlans"));
 const AdminCurrencies = lazy(() => import("./pages/admin/AdminCurrencies"));
 const StudentAnalytics = lazy(() => import("./pages/dashboard/StudentAnalytics"));
+const AdminAiChatbot = lazy(() => import("./pages/admin/AdminAiChatbot"));
 
 // Optimized QueryClient with aggressive caching
 const queryClient = new QueryClient({
@@ -273,6 +274,7 @@ const App = () => (
                   <Route path="virtual-labs" element={<AdminVirtualLabs />} />
                   <Route path="payment-plans" element={<AdminPaymentPlans />} />
                   <Route path="currencies" element={<AdminCurrencies />} />
+                  <Route path="ai-chatbot" element={<AdminAiChatbot />} />
                 </Route>
                 <Route path="/learn/:courseSlug/:lessonId" element={<LessonPlayer />} />
                 <Route path="/quiz/:quizId" element={<QuizPlayer />} />

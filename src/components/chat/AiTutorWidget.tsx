@@ -1,10 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Bot, X, Send, Trash2, Loader2 } from 'lucide-react';
+import { Bot, X, Send, Trash2, Loader2, Sparkles } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 
 type Msg = { role: 'user' | 'assistant'; content: string };
@@ -51,7 +49,7 @@ const AiTutorWidget = () => {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
         },
-        body: JSON.stringify({ messages: allMessages }),
+        body: JSON.stringify({ messages: allMessages, user_id: user.id }),
       });
 
       if (!resp.ok) {
@@ -106,30 +104,44 @@ const AiTutorWidget = () => {
     setLoading(false);
   };
 
+  const quickPrompts = [
+    "What is GSM in textiles?",
+    "Explain ring spinning",
+    "Dyeing process steps",
+  ];
+
   return (
     <>
-      {/* Floating button - positioned above the existing chat widget */}
+      {/* Floating bubble - LEFT side */}
       {!open && (
         <button
           onClick={() => setOpen(true)}
-          className="fixed bottom-24 right-6 z-50 w-12 h-12 rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 text-white shadow-lg hover:shadow-xl transition-all hover:scale-105 flex items-center justify-center"
+          className="fixed bottom-6 left-6 z-50 w-14 h-14 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-lg hover:shadow-xl transition-all hover:scale-110 flex items-center justify-center group"
           title="AI Tutor"
         >
-          <Bot className="h-6 w-6" />
+          <Bot className="h-7 w-7 group-hover:hidden" />
+          <Sparkles className="h-7 w-7 hidden group-hover:block animate-pulse" />
+          {/* Pulse ring */}
+          <span className="absolute inset-0 rounded-full bg-emerald-400/30 animate-ping pointer-events-none" />
         </button>
       )}
 
-      {/* Chat panel */}
+      {/* Chat panel - LEFT side */}
       {open && (
-        <div className="fixed bottom-24 right-6 z-50 w-[380px] h-[520px] bg-background border rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 duration-200">
+        <div className="fixed bottom-6 left-6 z-50 w-[400px] h-[560px] bg-background border rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 fade-in duration-300">
           {/* Header */}
-          <div className="flex items-center justify-between px-4 py-3 bg-gradient-to-r from-violet-500 to-indigo-600 text-white">
+          <div className="flex items-center justify-between px-4 py-3 bg-gradient-to-r from-emerald-500 to-teal-600 text-white shrink-0">
             <div className="flex items-center gap-2">
-              <Bot className="h-5 w-5" />
-              <span className="font-heading font-semibold text-sm">AI Tutor</span>
+              <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
+                <Bot className="h-5 w-5" />
+              </div>
+              <div>
+                <span className="font-heading font-semibold text-sm block leading-tight">AI Tutor</span>
+                <span className="text-[10px] text-emerald-100">Textile Engineering Expert</span>
+              </div>
             </div>
             <div className="flex items-center gap-1">
-              <button onClick={() => { setMessages([]); }} className="p-1.5 hover:bg-white/20 rounded-lg transition" title="Clear chat">
+              <button onClick={() => setMessages([])} className="p-1.5 hover:bg-white/20 rounded-lg transition" title="Clear chat">
                 <Trash2 className="h-4 w-4" />
               </button>
               <button onClick={() => setOpen(false)} className="p-1.5 hover:bg-white/20 rounded-lg transition">
@@ -141,21 +153,39 @@ const AiTutorWidget = () => {
           {/* Messages */}
           <div ref={scrollRef} className="flex-1 overflow-y-auto p-3 space-y-3">
             {messages.length === 0 && (
-              <div className="text-center text-muted-foreground text-sm py-8 px-4">
-                <Bot className="h-10 w-10 mx-auto mb-3 text-violet-400" />
-                <p className="font-medium mb-1">Hi! I'm your AI Tutor 🎓</p>
-                <p className="text-xs">Ask me anything about your courses, assignments, or textile engineering concepts.</p>
+              <div className="text-center text-muted-foreground text-sm py-6 px-4">
+                <div className="w-16 h-16 mx-auto mb-3 rounded-2xl bg-gradient-to-br from-emerald-100 to-teal-100 dark:from-emerald-900/30 dark:to-teal-900/30 flex items-center justify-center">
+                  <Bot className="h-8 w-8 text-emerald-600 dark:text-emerald-400" />
+                </div>
+                <p className="font-heading font-semibold text-foreground mb-1">Hi! I'm your AI Tutor 🎓</p>
+                <p className="text-xs mb-4">I know about your courses, grades & all textile engineering topics.</p>
+                <div className="space-y-2">
+                  {quickPrompts.map((q, i) => (
+                    <button
+                      key={i}
+                      onClick={() => { setInput(q); }}
+                      className="block w-full text-left text-xs px-3 py-2 rounded-xl border hover:bg-muted transition"
+                    >
+                      💡 {q}
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
             {messages.map((msg, i) => (
-              <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                <div className={`max-w-[85%] rounded-2xl px-3.5 py-2 text-sm ${
+              <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} gap-2`}>
+                {msg.role === 'assistant' && (
+                  <div className="w-6 h-6 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shrink-0 mt-1">
+                    <Bot className="h-3.5 w-3.5 text-white" />
+                  </div>
+                )}
+                <div className={`max-w-[80%] rounded-2xl px-3.5 py-2.5 text-sm ${
                   msg.role === 'user'
-                    ? 'bg-violet-500 text-white rounded-br-md'
+                    ? 'bg-primary text-primary-foreground rounded-br-md'
                     : 'bg-muted rounded-bl-md'
                 }`}>
                   {msg.role === 'assistant' ? (
-                    <div className="prose prose-sm dark:prose-invert max-w-none [&>p]:mb-1 [&>p:last-child]:mb-0 [&>ul]:my-1 [&>ol]:my-1">
+                    <div className="prose prose-sm dark:prose-invert max-w-none [&>p]:mb-1.5 [&>p:last-child]:mb-0 [&>ul]:my-1 [&>ol]:my-1 [&>h3]:text-sm [&>h3]:font-semibold [&>h3]:mt-2">
                       <ReactMarkdown>{msg.content}</ReactMarkdown>
                     </div>
                   ) : (
@@ -165,27 +195,34 @@ const AiTutorWidget = () => {
               </div>
             ))}
             {loading && messages[messages.length - 1]?.role === 'user' && (
-              <div className="flex justify-start">
-                <div className="bg-muted rounded-2xl rounded-bl-md px-3.5 py-2">
-                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+              <div className="flex justify-start gap-2">
+                <div className="w-6 h-6 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shrink-0">
+                  <Bot className="h-3.5 w-3.5 text-white" />
+                </div>
+                <div className="bg-muted rounded-2xl rounded-bl-md px-3.5 py-2.5">
+                  <div className="flex gap-1">
+                    <span className="w-2 h-2 bg-muted-foreground/50 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                    <span className="w-2 h-2 bg-muted-foreground/50 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                    <span className="w-2 h-2 bg-muted-foreground/50 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                  </div>
                 </div>
               </div>
             )}
           </div>
 
           {/* Input */}
-          <div className="p-3 border-t">
+          <div className="p-3 border-t shrink-0">
             <form onSubmit={e => { e.preventDefault(); sendMessage(); }} className="flex gap-2">
               <Input
                 ref={inputRef}
                 value={input}
                 onChange={e => setInput(e.target.value)}
-                placeholder="Ask a question..."
+                placeholder="Ask anything about textiles..."
                 className="text-sm rounded-xl"
                 disabled={loading}
               />
-              <Button type="submit" size="icon" disabled={loading || !input.trim()} className="rounded-xl bg-violet-500 hover:bg-violet-600 shrink-0">
-                <Send className="h-4 w-4" />
+              <Button type="submit" size="icon" disabled={loading || !input.trim()} className="rounded-xl shrink-0">
+                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
               </Button>
             </form>
           </div>

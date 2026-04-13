@@ -68,6 +68,7 @@ const academicSubItems = [
 const engagementSubItems = [
   { title: 'Reviews', url: '/admin/reviews', icon: Star },
   { title: 'Forum', url: '/admin/forum', icon: MessageSquare },
+  { title: 'AI Chatbot', url: '/admin/ai-chatbot', icon: Activity },
 ];
 
 const careerSubItems = [
