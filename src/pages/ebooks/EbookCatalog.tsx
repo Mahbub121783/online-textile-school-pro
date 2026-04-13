@@ -7,12 +7,13 @@ import { useCartStore } from '@/stores/cartStore';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ShoppingCart, Search, BookOpen, CheckCircle, LayoutGrid, List, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ShoppingCart, Search, BookOpen, CheckCircle, LayoutGrid, List, ChevronLeft, ChevronRight, Heart } from 'lucide-react';
 import SEOHead from '@/components/SEOHead';
 import UtilityBar from '@/components/layout/UtilityBar';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import BottomNav from '@/components/layout/BottomNav';
+import { useWishlist } from '@/hooks/useWishlist';
 import { toast } from '@/hooks/use-toast';
 
 const ITEMS_PER_PAGE = 12;
