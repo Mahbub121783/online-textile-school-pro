@@ -1,95 +1,78 @@
 
 
-# Deep Audit Report — Round 2
+# Deep Audit Report — Round 3
 
 ## Previous Fixes Verified
-The following issues from the first audit are now resolved:
-- Missing tables (`wishlists`, `learning_paths`, `learning_path_courses`, `events`) — all created
-- StatsSection — now queries real DB counts
-- TestimonialsSection — now queries `success_stories` with fallback
-- CourseCatalog — dynamic categories, sorting, and pagination all working
-- InstructorSpotlight — batch queries implemented (no more N+1)
-- Auth race condition — `setLoading(false)` now waits for profile/roles
-- `refetchOnMount: 'always'` — applied globally
-- BD_DISTRICTS — updated (need to verify count)
-- `useCouponValidation` hook — created but NOT used anywhere
+- Wishlist toggle buttons added to CourseCatalog and CourseDetail
+- eBook ownership verified in `ebook-secure-access` edge function (line 71-83 checks `order_items` + completed order)
+- `useCouponValidation` hook integrated into Checkout
+- Review system with enrollment-gated RLS policies created
+- RLS linter now shows only 1 warning (leaked password protection — manual fix)
+- "Buy Now" buttons added to catalog cards and detail pages
 
----
+## Remaining Issues
 
-## CRITICAL Issues
+### CRITICAL
 
-### 1. No "Add to Wishlist" button anywhere
-The `wishlists` table and `WishlistPage` exist, but there is no UI to add a course to the wishlist. `CourseDetail.tsx` and `CourseCatalog.tsx` have no Heart/wishlist button. The feature is completely broken end-to-end.
+**1. Four `(supabase as any)` casts still bypass type safety**
+Files: `EventsPage.tsx`, `LearningPaths.tsx`, `LearningPathDetail.tsx`, `TestimonialsSection.tsx`. These tables (`events`, `learning_paths`, `success_stories`) are already in the generated types. The casts should be removed.
 
-### 2. eBook ownership not checked in EbookReader
-The EbookReader grants access to any logged-in user — it calls `ebook-secure-access` edge function with just the ebook ID and user token, but there's no client-side or server-side check that the user actually purchased the eBook. The checkout comment says "eBook ownership is tracked via completed order_items" but this is never verified before granting read access.
+**2. `enrollAfterPayment` uses `as any` on upsert options (line 141)**
+`{ onConflict: 'user_id,course_id' } as any` — this is needed because the Supabase types don't accept string-based `onConflict`. However, this means if the column names are wrong, there's no compile-time check. Should use `.upsert(..., { onConflict: 'user_id,course_id', ignoreDuplicates: true })` or handle the duplicate error gracefully.
 
-### 3. Checkout still doesn't create enrollments for free eBooks
-In the free order path (line 360-374), only courses get enrollment records. eBooks get no ownership record beyond `order_items`, and the `order_items` insert happens before the order status is set to "completed" — so checking for `order_items` with a completed order may fail depending on timing.
+### HIGH
 
----
+**3. ~839 `as any` casts across 57 files**
+While many are legitimate (e.g., casting Supabase response data), a large portion in files like `QuizBuilder.tsx` (7 casts), `CourseBuilder.tsx` (3 casts), `PaymentDashboardTab.tsx` (10+ casts), and `InstructorDiscussions.tsx` are avoidable. These reduce type safety across the app.
 
-## HIGH Priority
+**4. Free "Enroll" button doesn't actually enroll — it adds to cart**
+In `CourseDetail.tsx` line 494-495, when `originalPrice === 0` the button says "Enroll Free" but only calls `addItem()` to the cart store. The user must still go through the full checkout flow for a free course. Should directly create an enrollment for free courses.
 
-### 4. Shared `useCouponValidation` hook created but never used
-Both `CartPage.tsx` and `Checkout.tsx` still have their own duplicate inline coupon logic. The hook was created but never integrated, defeating its purpose.
+**5. No enrollment invalidation after checkout**
+After `enrollAfterPayment` succeeds, the code navigates to `/dashboard` but never calls `queryClient.invalidateQueries` for enrollment-related queries. The dashboard may show stale data until a page refresh.
 
-### 5. 79 unnecessary `(supabase as any)` casts
-The types file already includes `events`, `learning_paths`, `wishlists`, `success_stories`, `invoices`, `order_items`, `payment_gateways`, and `coupons`. All `(supabase as any)` casts across 8 files can be removed for proper type safety.
+### MEDIUM
 
-### 6. 67 `as any` casts in Checkout.tsx
-Similarly, most `as any` casts on `.from('coupons' as any)`, `.from('invoices' as any)`, etc. are no longer needed since the types were regenerated.
+**6. EbookCatalog missing wishlist + "Buy Now" buttons**
+CourseCatalog now has wishlist hearts and "Buy Now" quick-purchase, but EbookCatalog has neither. Inconsistent UX between the two catalogs.
 
----
+**7. No error boundary around checkout payment flow**
+If `process-payment` edge function fails partway, the order is created in `pending` status with `order_items` and `invoice` already inserted, but no cleanup or retry mechanism exists. Partial failures leave orphaned records.
 
-## MEDIUM Priority
+**8. Cart page still has 50+ `as any` references on gateway data**
+`PaymentDashboardTab.tsx` uses `as any[]` on every query result instead of properly typing the responses.
 
-### 7. Two overly permissive RLS policies remain
-The Supabase linter still flags 2 `USING (true)` policies on non-SELECT operations. These need to be identified and tightened.
+**9. `hasPendingOrder` query in CourseDetail includes 'completed' status**
+Line 105: `.in('orders.status', ['pending', 'completed'])` — this means if a user already purchased and was enrolled, the "Order Pending Verification" message could show instead of the enrolled state. The `isEnrolled` check takes priority in the UI, but the query is logically wrong for its purpose.
 
-### 8. Leaked password protection still disabled
-This is a Supabase Auth dashboard setting — cannot be fixed via code. Must be enabled manually.
+### LOW
 
-### 9. No "Buy Now" on CourseCatalog cards
-`CourseDetail.tsx` and `EbookDetail.tsx` have Buy Now buttons, but the catalog listing cards only have "Add to Cart." A direct purchase path from catalog cards would improve conversion.
+**10. No loading/error state for review submission**
+The `submitReview` mutation has no pending indicator in the UI — the button doesn't show a spinner or disable during submission.
 
-### 10. Cart doesn't show item thumbnails
-The cart store's `addItem` in CourseCatalog doesn't pass `thumbnail_url`, making cart items display without images. Some call sites pass it, others don't — inconsistent.
-
----
-
-## LOW Priority
-
-### 11. No ebook category filter on EbookCatalog
-CourseCatalog has dynamic category filters from DB, but EbookCatalog likely doesn't have equivalent filtering.
-
-### 12. CourseDetail missing wishlist + share buttons
-No social sharing or wishlist toggle on the course detail page.
-
-### 13. Review/rating system UI missing on CourseDetail
-The `reviews` table exists, `avg_rating` is displayed, but there's no UI for students to submit reviews after completing a course.
+**11. EbookCatalog shares course categories**
+The category filter queries `categories` table which is shared between courses and ebooks. If categories are meant to be separate, this could show irrelevant filters.
 
 ---
 
 ## Implementation Plan
 
-### Phase 1: Critical Fixes
-1. **Add wishlist toggle button** to `CourseDetail.tsx` and `CourseCatalog.tsx` cards — insert/delete from `wishlists` table with optimistic UI
-2. **Verify eBook access control** in the `ebook-secure-access` edge function — ensure it checks ownership via `order_items` with completed orders, or free eBooks
-3. **Fix free-order eBook tracking** — ensure eBook purchases in the free-order and wallet paths create proper ownership records
+### Phase 1: Critical Type Safety
+1. Remove all 4 remaining `(supabase as any)` casts in `EventsPage.tsx`, `LearningPaths.tsx`, `LearningPathDetail.tsx`, `TestimonialsSection.tsx`
+2. Fix the `as any` on upsert in `enrollAfterPayment`
 
-### Phase 2: Code Quality
-4. **Integrate `useCouponValidation` hook** into both `CartPage.tsx` and `Checkout.tsx`, removing duplicate logic
-5. **Remove all unnecessary `as any` casts** across 8+ files (LearningPaths, Events, Wishlist, AdminEvents, AdminLearningPaths, AdminSuccessStories, Checkout, TestimonialsSection)
-6. **Identify and fix the 2 overly permissive RLS policies**
+### Phase 2: Functional Fixes
+3. Add direct free enrollment in `CourseDetail.tsx` — when price is 0, skip cart and call enrollment insert directly
+4. Add `queryClient.invalidateQueries` for enrollments after checkout success
+5. Fix `hasPendingOrder` query to only check `'pending'` status, not `'completed'`
 
-### Phase 3: UX Enhancements
-7. **Add review/rating submission UI** on CourseDetail for enrolled students
-8. **Pass `thumbnail_url` consistently** to cart store from all add-to-cart call sites
-9. **Add "Buy Now" to catalog cards** for direct checkout
+### Phase 3: UX Parity
+6. Add wishlist toggle and "Buy Now" to `EbookCatalog.tsx` cards
+7. Add loading spinner to review submission button
+8. Progressively remove unnecessary `as any` casts in high-traffic files (`PaymentDashboardTab`, `QuizBuilder`, `CourseBuilder`)
 
 ### Technical Details
-- Wishlist toggle: Use `useMutation` with `onMutate` for optimistic updates; query `wishlists` table filtered by `user_id` and `course_id`
-- eBook access: The edge function `ebook-secure-access` needs a query like `SELECT 1 FROM order_items oi JOIN orders o ON o.id = oi.order_id WHERE oi.item_id = ebook_id AND oi.item_type = 'ebook' AND o.user_id = user_id AND o.status = 'completed'`
-- RLS fix: Run a query to identify which tables have the permissive policies, then create a migration to replace them with proper conditions
+- Free enrollment: Create a `useFreeEnroll` mutation that inserts into `enrollments` directly, creates a zero-amount order + order_items for audit trail, then invalidates queries
+- Query invalidation: After `enrollAfterPayment`, call `queryClient.invalidateQueries({ queryKey: ['enrollments'] })` and `queryClient.invalidateQueries({ queryKey: ['enrollment'] })`
+- `hasPendingOrder` fix: Change `.in('orders.status', ['pending', 'completed'])` to `.eq('orders.status', 'pending')`
 
