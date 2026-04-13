@@ -207,14 +207,17 @@ const Checkout = () => {
     e.preventDefault();
     if (items.length === 0) return;
 
-    // Validate manual payment requires sub-method + transaction ID
-    if (isManualPayment && !manualSubMethod) {
-      toast.error('Please select a payment method (bKash, Nagad, or Rocket)');
-      return;
-    }
-    if (needsTxId && !transactionId.trim()) {
-      toast.error('Please enter the Transaction ID after sending money');
-      return;
+    // Skip payment validation when total is 0 (100% coupon)
+    if (total > 0) {
+      // Validate manual payment requires sub-method + transaction ID
+      if (isManualPayment && !manualSubMethod) {
+        toast.error('Please select a payment method (bKash, Nagad, or Rocket)');
+        return;
+      }
+      if (needsTxId && !transactionId.trim()) {
+        toast.error('Please enter the Transaction ID after sending money');
+        return;
+      }
     }
 
     setSubmitting(true);
@@ -419,7 +422,8 @@ const Checkout = () => {
                 </div>
               </div>
 
-              {/* Payment Method */}
+              {/* Payment Method - only show when total > 0 */}
+              {total > 0 && (
               <div className="bg-card border rounded-xl p-6 space-y-4">
                 <h2 className="font-heading font-bold text-lg">Payment Method</h2>
                 <RadioGroup value={paymentMethod} onValueChange={(v) => { setPaymentMethod(v); setTransactionId(''); setSenderNumber(''); setManualSubMethod(''); }} className="space-y-3">
