@@ -1,112 +1,71 @@
 
 
-# Advanced Block Editor for Blog Posts (Gutenberg-style)
+# True Round-Robin Model Rotation for AI Tutor
 
-## Overview
+## Problem
 
-Replace the current simple dialog-based post creation with a dedicated full-page block editor, similar to WordPress Gutenberg. The editor will support rich content blocks with drag-and-drop reordering, inline editing, media picker integration, tables, headings, quotes, lists, embeds, and a live preview. Accessible to admin, super_admin, and instructor roles.
+The current `rollingProviderCall` always tries the Lovable gateway first. Since it usually succeeds, the other API keys (Groq, Mistral, etc.) never get used. The "Fibonacci balancer" only kicks in as a fallback, defeating the purpose of key rotation.
 
-## Current State
+## Solution
 
-- `AdminPosts.tsx`: Simple table + dialog with title/slug/excerpt/category/status fields. No content editing.
-- `PageEditor.tsx`: Existing block editor for CMS pages with text/image/video/button/columns/spacer/HTML blocks -- but uses raw textarea for text (no rich editing).
-- `BlockRenderer.tsx`: Renders 7 block types. Already used by `BlogPost.tsx` for the public view.
-- `RichTextEditor.tsx`: Basic contentEditable editor with bold/italic/underline/list toolbar.
-- `MediaPickerModal.tsx`: Full-featured media library picker (upload + browse).
-- Posts table already has `content: Json` column for block storage and `tags: string[]`.
+Replace the "Lovable-first, others as fallback" logic with a true **round-robin rotation** that cycles through ALL available keys (including Lovable) on every message. The rotation order is determined by `usage_count` (lowest goes first), ensuring even distribution.
 
-## What We Will Build
+## Changes
 
-### 1. New Dedicated Post Editor Page (`src/pages/admin/PostEditor.tsx`)
+### 1. Modify `supabase/functions/ai-tutor/index.ts`
 
-A full-page editor (not a popup) with two-panel layout:
+**Remove Lovable-first priority block** (lines 102-122). Instead, treat the Lovable gateway as just another key in the rotation pool.
 
-**Left Panel (Content Area ~70%)**:
-- Large inline-editable title field
-- Block canvas with drag-to-reorder (using array index swap, no extra lib)
-- Each block shows inline editing controls on hover/focus
-- "Add Block" inserter between blocks (+ button) with categorized block palette
-- Floating toolbar per block (move up/down, duplicate, delete, change type)
+**New `rollingProviderCall` logic:**
 
-**Right Sidebar (~30%)**:
-- **Post Settings**: slug (auto-gen), category (dropdown + custom), tags (multi-input chips), excerpt
-- **Featured Image**: thumbnail preview + MediaPickerModal integration
-- **Status & Publish**: draft/published toggle, scheduled publishing (date picker), publish button
-- **SEO Preview**: title + excerpt preview as it would appear on blog list
-- **Author info** (read-only, shows current user)
+1. Fetch all active keys from `ai_api_keys` table
+2. Create a virtual "lovable" entry with its own usage counter (stored in a simple DB row or derived from chat history)
+3. Combine all keys into one pool, sort by `usage_count` ascending (lowest usage = next in line)
+4. Try the lowest-usage key first; on success, increment its `usage_count`
+5. On failure, increment `error_count`, apply Fibonacci penalty, try next key
 
-### 2. Extended Block Types (upgrade `BlockRenderer.tsx`)
+**Lovable key tracking:** Since the Lovable gateway has no row in `ai_api_keys`, add a virtual row for it:
+- Insert a row with `provider = 'lovable'`, `api_key = 'LOVABLE_GATEWAY'` (placeholder — actual key comes from env var) into `ai_api_keys` via migration, or handle it in code by creating a synthetic entry merged into the pool.
+- Simpler approach: handle in code — build a synthetic key object for Lovable, track its usage in the same `ai_api_keys` table.
 
-Add these new block types to both the editor and renderer:
+### 2. Database Migration
 
-| Block | Description |
-|-------|-------------|
-| `heading` | H2/H3/H4 with level selector |
-| `quote` | Blockquote with citation field |
-| `list` | Ordered/unordered list items editor |
-| `table` | Row/column grid editor with add/remove rows/cols |
-| `divider` | Horizontal rule (simple) |
-| `callout` | Colored info/warning/success box with icon |
-| `gallery` | Multi-image grid with MediaPicker |
-| `code` | Code block with syntax label |
-| `embed` | Generic URL embed (social media, etc.) |
+Add a row to `ai_api_keys` for the Lovable gateway so its usage is tracked alongside other keys:
 
-Existing types (text, image, video, button, columns, spacer, html) remain.
+```sql
+INSERT INTO ai_api_keys (provider, label, api_key, is_active, usage_count, error_count)
+VALUES ('lovable', 'Lovable Gateway', 'ENV_MANAGED', true, 0, 0)
+ON CONFLICT DO NOTHING;
+```
 
-### 3. Rich Text Editing for Text Blocks
+### 3. Updated Rotation Logic (pseudocode)
 
-Upgrade the text block editing from raw textarea to an enhanced `RichTextEditor` with:
-- Heading levels (H2-H4 via dropdown)
-- Bold, italic, underline, strikethrough
-- Bullet/numbered lists
-- Links (with URL dialog)
-- Image insertion via MediaPickerModal
-- Blockquote toggle
-- Text alignment (left/center/right)
-- Undo/redo
-- Clear formatting
+```
+function rollingProviderCall():
+  allKeys = getAllActiveKeys(sb)  // includes lovable row
+  sorted = sort by usage_count ASC (ties broken by fewer errors)
+  
+  for key in sorted:
+    if key.provider == 'lovable':
+      apiKey = Deno.env.get("LOVABLE_API_KEY")
+      if !apiKey: continue
+    else:
+      apiKey = key.api_key
+    
+    endpoint = PROVIDER_ENDPOINTS[key.provider]
+    model = DEFAULT_MODELS[key.provider]
+    
+    try call endpoint:
+      on success: markKeyUsed(key.id), return response
+      on rate-limit/error: markKeyError(key.id), continue
+```
 
-### 4. Table Block Editor
-
-Interactive table editor:
-- Default 3x3 grid
-- Add/remove rows and columns via buttons
-- Editable cells (contentEditable)
-- Header row toggle
-- Stores as `{ headers: string[], rows: string[][] }`
-
-### 5. Routes & Navigation
-
-- New route: `/admin/posts/new` and `/admin/posts/:postId/edit` -> `PostEditor`
-- Update `AdminPosts.tsx`: "New Post" navigates to `/admin/posts/new`, edit button navigates to `/admin/posts/:id/edit`
-- Remove the dialog from AdminPosts
-- Add instructor route: `/instructor/posts` (list) + `/instructor/posts/new` + `/instructor/posts/:postId/edit`
-- Add "Blog Posts" to `InstructorSidebar.tsx`
-
-### 6. Instructor Access
-
-Instructors get the same editor but can only see/edit their own posts (filter by `author_id`). Admin/super_admin can see all posts.
-
-## Files to Create/Modify
-
-| File | Action |
-|------|--------|
-| `src/pages/admin/PostEditor.tsx` | **New** -- full-page Gutenberg-style block editor |
-| `src/pages/admin/AdminPosts.tsx` | Refactor: remove dialog, navigate to PostEditor |
-| `src/pages/instructor/InstructorPosts.tsx` | **New** -- instructor post list (own posts only) |
-| `src/components/cms/BlockRenderer.tsx` | Add heading, quote, list, table, divider, callout, gallery, code, embed blocks |
-| `src/components/instructor/RichTextEditor.tsx` | Add heading dropdown, alignment, strikethrough, blockquote, clear formatting |
-| `src/components/layout/InstructorSidebar.tsx` | Add "Blog Posts" nav item |
-| `src/App.tsx` | Add PostEditor routes for admin + instructor |
-
-No database migration needed -- `posts.content` is already JSONB and can store the extended block types.
+This ensures that with 2 keys (Lovable + Groq), messages alternate: Lovable → Groq → Lovable → Groq. With 3+ keys, it cycles through all of them evenly.
 
 ## Technical Details
 
-- Block data stored as `ContentBlock[]` in the `posts.content` JSONB column
-- Extended `ContentBlock` interface to include new types and their properties (e.g., `headingLevel`, `citation`, `listItems`, `tableData`, `calloutType`)
-- Tags stored as `string[]` in existing `posts.tags` column
-- Featured image selected via existing `MediaPickerModal`
-- Auto-save draft every 30 seconds using debounced mutation
-- Keyboard shortcuts: Ctrl+S to save, Ctrl+Z/Y for undo/redo (in rich text blocks)
+- The sort-by-`usage_count` approach naturally produces round-robin behavior without needing an external counter
+- Error penalty via Fibonacci weighting still applies, pushing failing keys to the back
+- Auto-disable after 20 consecutive errors is preserved
+- No client-side changes needed
 
