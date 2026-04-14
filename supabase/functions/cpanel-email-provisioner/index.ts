@@ -307,6 +307,43 @@ Deno.serve(async (req) => {
       }
     }
 
+    // ========== CHANGE PASSWORD (user self-service) ==========
+    if (action === "change-password") {
+      // Verify the request belongs to the calling user
+      if (emailReq.user_id !== user.id) {
+        return new Response(JSON.stringify({ error: "You can only change your own email password" }), { status: 403, headers: corsHeaders });
+      }
+      if (emailReq.status !== "approved") {
+        return new Response(JSON.stringify({ error: "Email account is not active" }), { status: 400, headers: corsHeaders });
+      }
+
+      // 15-day cooldown check
+      const lastReset = emailReq.last_password_reset_at ? new Date(emailReq.last_password_reset_at) : null;
+      if (lastReset) {
+        const cooldownMs = 15 * 24 * 60 * 60 * 1000;
+        if (Date.now() - lastReset.getTime() < cooldownMs) {
+          const daysLeft = Math.ceil((cooldownMs - (Date.now() - lastReset.getTime())) / (1000 * 60 * 60 * 24));
+          return new Response(JSON.stringify({ error: `Password can be changed again in ${daysLeft} day(s)` }), { status: 429, headers: corsHeaders });
+        }
+      }
+
+      const newPassword = generatePassword(14);
+      try {
+        await cpanelRequest(`Email/passwd_pop?email=${encodeURIComponent(localPart)}%40${encodeURIComponent(domain)}&password=${encodeURIComponent(newPassword)}`);
+      } catch (err: any) {
+        return new Response(JSON.stringify({ error: `Password change failed: ${err.message}` }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+
+      await sb.from("institutional_email_requests").update({
+        current_password: newPassword,
+        last_password_reset_at: new Date().toISOString(),
+      }).eq("id", requestId);
+
+      return new Response(JSON.stringify({ success: true, action: "password-changed" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     return new Response(JSON.stringify({ error: "Invalid action" }), { status: 400, headers: corsHeaders });
   } catch (err: any) {
     return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: corsHeaders });
