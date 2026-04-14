@@ -170,7 +170,7 @@ const InstructorGradebook = () => {
                 const eg = existingGrades.find((g: any) => g.user_id === enr.user_id);
                 const ua = attendanceData.filter((a: any) => a.user_id === enr.user_id);
                 const aRate = ua.length > 0 ? Math.round((ua.filter((a: any) => a.status === 'present' || a.status === 'late').length / ua.length) * 100) + '%' : 'N/A';
-                return [enr.user_profiles?.full_name || 'Student', `${enr.progress_pct || 0}%`, avg ? `${avg}%` : 'N/A', `${graded.length}/${sa.length}`, eg ? `${eg.letter_grade} (${eg.grade_point})` : 'N/A', enr.completed_at ? 'Completed' : 'In Progress'];
+                return [enr.user_profiles?.full_name || 'Student', `${enr.progress_pct || 0}%`, aRate, avg ? `${avg}%` : 'N/A', `${graded.length}/${sa.length}`, eg ? `${eg.letter_grade} (${eg.grade_point})` : 'N/A', enr.completed_at ? 'Completed' : 'In Progress'];
               });
               const csv = [headers, ...rows].map(r => r.join(',')).join('\n');
               const blob = new Blob([csv], { type: 'text/csv' });
