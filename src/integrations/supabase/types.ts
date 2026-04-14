@@ -2137,6 +2137,45 @@ export type Database = {
           },
         ]
       }
+      institutional_email_requests: {
+        Row: {
+          admin_notes: string | null
+          approved_at: string | null
+          approved_by: string | null
+          created_at: string
+          generated_password: string | null
+          id: string
+          requested_email: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          admin_notes?: string | null
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string
+          generated_password?: string | null
+          id?: string
+          requested_email: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          admin_notes?: string | null
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string
+          generated_password?: string | null
+          id?: string
+          requested_email?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       instructor_applications: {
         Row: {
           admin_notes: string | null
