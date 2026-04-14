@@ -211,7 +211,7 @@ const AdminDashboard = () => {
       </div>
 
       {/* Stat Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3">
         {statCards.map((s) => (
           <Link key={s.label} to={s.link} className="group">
             <Card className="transition-all duration-200 hover:shadow-md hover:border-primary/30 group-hover:scale-[1.02]">
