@@ -13,7 +13,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Search, BookOpen, Book, DollarSign, Users, UserCheck, FileQuestion, Award, ArrowUpDown, MoreHorizontal, Ban, CheckCircle, Download, Eye, UserX, ChevronLeft, ChevronRight, ShieldAlert, CalendarPlus, Gift } from 'lucide-react';
+import { Search, BookOpen, Book, DollarSign, Users, UserCheck, FileQuestion, Award, ArrowUpDown, MoreHorizontal, Ban, CheckCircle, Download, Eye, UserX, ChevronLeft, ChevronRight, ShieldAlert, CalendarPlus, Gift, AtSign } from 'lucide-react';
 import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from '@/components/ui/command';
@@ -49,6 +49,7 @@ export default function AdminStudents() {
       const { data: orderItems } = await supabase.from('order_items').select('order_id, item_type').eq('item_type', 'ebook');
       const { data: certs } = await supabase.from('certificates').select('user_id').in('user_id', userIds);
       const { data: quizAttempts } = await supabase.from('quiz_attempts').select('user_id').in('user_id', userIds);
+      const { data: emailReqs } = await supabase.from('institutional_email_requests').select('user_id, requested_email, status, is_blocked').in('user_id', userIds);
 
       const orderIds = new Set((orders ?? []).map(o => o.id));
       const ebookCountMap: Record<string, number> = {};
@@ -71,6 +72,9 @@ export default function AdminStudents() {
       const quizCountMap: Record<string, number> = {};
       (quizAttempts ?? []).forEach(q => { quizCountMap[q.user_id] = (quizCountMap[q.user_id] || 0) + 1; });
 
+      const emailMap: Record<string, { email: string; status: string; is_blocked: boolean }> = {};
+      (emailReqs ?? []).forEach((e: any) => { emailMap[e.user_id] = { email: e.requested_email, status: e.status, is_blocked: e.is_blocked }; });
+
       return (profiles ?? []).map(p => ({
         ...p,
         coursesCount: enrollCountMap[p.id] || 0,
@@ -78,6 +82,7 @@ export default function AdminStudents() {
         totalSpend: spendMap[p.id] || 0,
         certsCount: certCountMap[p.id] || 0,
         quizCount: quizCountMap[p.id] || 0,
+        institutionalEmail: emailMap[p.id] || null,
       }));
     },
   });
@@ -360,6 +365,7 @@ export default function AdminStudents() {
                       </Button>
                     </TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead>EduMail</TableHead>
                     <TableHead className="w-10"></TableHead>
                   </TableRow>
                 </TableHeader>
@@ -393,6 +399,17 @@ export default function AdminStudents() {
                           {s.is_active !== false ? 'Active' : 'Blocked'}
                         </Badge>
                       </TableCell>
+                      <TableCell>
+                        {s.institutionalEmail ? (
+                          <div className="flex items-center gap-1">
+                            <AtSign className="h-3 w-3 text-muted-foreground" />
+                            <span className="font-mono text-xs truncate max-w-[140px]" title={s.institutionalEmail.email}>{s.institutionalEmail.email.split('@')[0]}</span>
+                            <Badge variant={s.institutionalEmail.is_blocked ? 'destructive' : s.institutionalEmail.status === 'approved' ? 'default' : 'secondary'} className="text-[10px] h-4 px-1 ml-1">
+                              {s.institutionalEmail.is_blocked ? 'Blocked' : s.institutionalEmail.status}
+                            </Badge>
+                          </div>
+                        ) : <span className="text-xs text-muted-foreground">—</span>}
+                      </TableCell>
                       <TableCell onClick={e => e.stopPropagation()}>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
@@ -417,7 +434,7 @@ export default function AdminStudents() {
                     </TableRow>
                   ))}
                   {paginated.length === 0 && (
-                    <TableRow><TableCell colSpan={11} className="text-center py-8 text-muted-foreground">No students found</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={12} className="text-center py-8 text-muted-foreground">No students found</TableCell></TableRow>
                   )}
                 </TableBody>
               </Table>

@@ -1,4 +1,4 @@
-import { BookOpen, LayoutDashboard, PlusCircle, FileQuestion, ClipboardList, DollarSign, LogOut, GraduationCap, Wallet, Bell, FileText, Award, MessageSquare, Megaphone, BarChart3, Users, FlaskConical, Briefcase, ShieldAlert, Mail } from 'lucide-react';
+import { BookOpen, LayoutDashboard, PlusCircle, FileQuestion, ClipboardList, DollarSign, LogOut, GraduationCap, Wallet, Bell, FileText, Award, MessageSquare, Megaphone, BarChart3, Users, FlaskConical, Briefcase, ShieldAlert, Mail, AtSign } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
@@ -57,6 +57,12 @@ const navGroups = [
     items: [
       { title: 'Revenue', url: '/instructor/revenue', icon: DollarSign },
       { title: 'Wallet', url: '/instructor/wallet', icon: Wallet },
+    ],
+  },
+  {
+    label: 'Account',
+    items: [
+      { title: 'EduMail', url: '/dashboard/edumail', icon: AtSign },
     ],
   },
 ];
