@@ -45,10 +45,11 @@ const EduMailPage = () => {
 
   const generateEmail = () => {
     if (!profile) return '';
-    const name = (profile.full_name || '').toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+    const firstName = (profile.full_name || '').trim().split(/\s+/)[0]?.toLowerCase().replace(/[^a-z0-9]/g, '') || '';
+    if (!firstName) return '';
     const rollId = profile.roll_id || '';
     const last3 = rollId.slice(-3) || '000';
-    return `${name}_${last3}@onlinetextileschool.com`;
+    return `${firstName}${last3}@onlinetextileschool.com`;
   };
 
   const requestMutation = useMutation({
