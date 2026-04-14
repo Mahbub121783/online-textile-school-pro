@@ -35,6 +35,7 @@ const VirtualLabsPage = () => {
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
+      <SEOHead title="Virtual Labs" description="Explore interactive textile engineering simulations and virtual lab environments. Practice spinning, weaving, and dyeing processes online." breadcrumbs={[{ name: 'Home', url: '/' }, { name: 'Virtual Labs', url: '/virtual-labs' }]} />
       <Header />
       <main className="flex-1 container mx-auto px-4 py-8 max-w-6xl">
         <div className="mb-8">

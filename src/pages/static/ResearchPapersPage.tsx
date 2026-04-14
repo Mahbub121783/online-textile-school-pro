@@ -53,6 +53,7 @@ const ResearchPapersPage = () => {
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
+      <SEOHead title="Research Papers" description="Browse and download textile engineering research papers. Access cutting-edge research in spinning, weaving, dyeing, and more." breadcrumbs={[{ name: 'Home', url: '/' }, { name: 'Research Papers', url: '/research-papers' }]} />
       <Header />
       <main className="flex-1 container mx-auto px-4 py-8 max-w-5xl">
         <div className="flex items-center justify-between mb-8">

@@ -126,7 +126,25 @@ const CourseCatalog = () => {
     <div className="min-h-screen flex flex-col">
       <SEOHead
         title="Course Catalog"
-        description="Browse textile engineering courses in Spinning, Weaving, Dyeing, Knitting, Garments Technology and more."
+        description="Browse textile engineering courses in Spinning, Weaving, Dyeing, Knitting, Garments Technology and more. Learn online from industry experts."
+        breadcrumbs={[
+          { name: 'Home', url: '/' },
+          { name: 'Courses', url: '/courses' },
+        ]}
+        jsonLd={{
+          '@context': 'https://schema.org',
+          '@type': 'ItemList',
+          name: 'Textile Engineering Courses',
+          description: 'Browse all textile engineering courses available at Online Textile School',
+          url: 'https://onlinetextileschool.com/courses',
+          numberOfItems: courses.length,
+          itemListElement: courses.slice(0, 10).map((c: any, i: number) => ({
+            '@type': 'ListItem',
+            position: i + 1,
+            url: `https://onlinetextileschool.com/courses/${c.slug}`,
+            name: c.title,
+          })),
+        }}
         jsonLd={{
           '@context': 'https://schema.org',
           '@type': 'CollectionPage',
