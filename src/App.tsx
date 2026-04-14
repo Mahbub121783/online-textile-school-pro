@@ -126,7 +126,11 @@ const AdminResearchPapers = lazy(() => import("./pages/admin/AdminResearchPapers
 const AdminVirtualLabs = lazy(() => import("./pages/admin/AdminVirtualLabs"));
 const InternshipsPage = lazy(() => import("./pages/static/InternshipsPage"));
 const ResearchPapersPage = lazy(() => import("./pages/static/ResearchPapersPage"));
-const VirtualLabsPage = lazy(() => import("./pages/static/VirtualLabsPage"));
+const ResearchPaperDetail = lazy(() => import("./pages/research/ResearchPaperDetail"));
+const ResearchPaperReader = lazy(() => import("./pages/research/ResearchPaperReader"));
+const ResearchSubmit = lazy(() => import("./pages/research/ResearchSubmit"));
+const MyResearchPage = lazy(() => import("./pages/dashboard/MyResearchPage"));
+const InstructorResearch = lazy(() => import("./pages/instructor/InstructorResearch"));
 const AdminPaymentPlans = lazy(() => import("./pages/admin/AdminPaymentPlans"));
 const AdminCurrencies = lazy(() => import("./pages/admin/AdminCurrencies"));
 const StudentAnalytics = lazy(() => import("./pages/dashboard/StudentAnalytics"));
@@ -198,6 +202,7 @@ const App = () => (
                   <Route path="transcript" element={<TranscriptPage />} />
                   <Route path="group-projects" element={<GroupProjectsPage />} />
                   <Route path="attendance" element={<AttendancePage />} />
+                  <Route path="my-research" element={<MyResearchPage />} />
                   <Route path="analytics" element={<StudentAnalytics />} />
                   <Route path="settings" element={<SettingsPage />} />
                 </Route>
@@ -217,6 +222,7 @@ const App = () => (
                   <Route path="students" element={<InstructorStudents />} />
                   <Route path="discussions" element={<InstructorDiscussions />} />
                   <Route path="announcements" element={<InstructorAnnouncements />} />
+                  <Route path="research" element={<InstructorResearch />} />
                   <Route path="analytics" element={<InstructorAnalytics />} />
                   <Route path="notifications" element={<NotificationsPage />} />
                 </Route>
@@ -293,6 +299,9 @@ const App = () => (
                 <Route path="/faculty" element={<FacultyPage />} />
                 <Route path="/internships" element={<InternshipsPage />} />
                 <Route path="/research" element={<ResearchPapersPage />} />
+                <Route path="/research/submit" element={<ResearchSubmit />} />
+                <Route path="/research/:paperId" element={<ResearchPaperDetail />} />
+                <Route path="/research/:paperId/read" element={<ResearchPaperReader />} />
                 <Route path="/labs" element={<VirtualLabsPage />} />
                 <Route path="/register" element={<PublicRegistration />} />
                 <Route path="/register/:slug" element={<PublicRegistration />} />
