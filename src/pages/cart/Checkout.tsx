@@ -57,6 +57,21 @@ const Checkout = () => {
   const { data: walletData } = useWallet();
   const walletBalance = Number(walletData?.balance ?? 0);
 
+  // Fetch installment plans for courses in cart
+  const courseIds = items.filter(i => i.type === 'course').map(i => i.id);
+  const { data: installmentPlans = [] } = useQuery({
+    queryKey: ['checkout-installment-plans', courseIds],
+    enabled: courseIds.length > 0,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('payment_plans')
+        .select('*')
+        .in('course_id', courseIds)
+        .eq('is_active', true);
+      return (data ?? []) as any[];
+    },
+  });
+
   // Auto-apply coupon from URL
   const autoApplyCouponFromUrl = async () => {
     if (couponAutoApplied || !urlCoupon || appliedCoupon) return;
