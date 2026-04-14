@@ -90,7 +90,7 @@ async function markKeyError(sb: any, keyId: string, error: string, label: string
   }
 }
 
-// Rolling cycle: pick from ALL active keys across ALL providers
+// True round-robin: cycle through ALL providers (including Lovable) by lowest usage_count
 async function rollingProviderCall(
   sb: any,
   systemPrompt: string,
@@ -99,29 +99,7 @@ async function rollingProviderCall(
   temperature: number,
 ): Promise<{ response: Response; keyId: string | null; provider: string; model: string }> {
 
-  // 1. Try Lovable gateway first (free, no key rotation needed)
-  const lovableKey = Deno.env.get("LOVABLE_API_KEY") || "";
-  if (lovableKey) {
-    try {
-      const model = DEFAULT_MODELS.lovable;
-      const resp = await fetch(PROVIDER_ENDPOINTS.lovable, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${lovableKey}`, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model,
-          messages: [{ role: "system", content: systemPrompt }, ...messages],
-          stream: true,
-          max_tokens: maxTokens,
-          temperature,
-        }),
-      });
-      if (resp.ok) return { response: resp, keyId: null, provider: "lovable", model };
-      // If lovable fails (rate limit etc), fall through to rolling keys
-      await resp.text();
-    } catch (e) { console.error("Lovable gateway error:", e); }
-  }
-
-  // 2. Get ALL active keys across all providers, ordered by Fibonacci balancer
+  // Get ALL active keys including the 'lovable' row
   const allKeys = await getAllActiveKeys(sb);
   if (!allKeys.length) throw new Error("No active API keys available. Add keys in Admin → AI Chatbot → API Keys.");
 
@@ -132,10 +110,19 @@ async function rollingProviderCall(
     if (!endpoint) continue;
     const model = DEFAULT_MODELS[key.provider] || DEFAULT_MODELS.groq;
 
+    // For the lovable provider, use env var instead of stored api_key
+    let apiKey: string;
+    if (key.provider === "lovable") {
+      apiKey = Deno.env.get("LOVABLE_API_KEY") || "";
+      if (!apiKey) continue; // skip if env var not set
+    } else {
+      apiKey = key.api_key;
+    }
+
     try {
       const resp = await fetch(endpoint, {
         method: "POST",
-        headers: { Authorization: `Bearer ${key.api_key}`, "Content-Type": "application/json" },
+        headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
         body: JSON.stringify({
           model,
           messages: [{ role: "system", content: systemPrompt }, ...messages],
@@ -156,10 +143,9 @@ async function rollingProviderCall(
         continue;
       }
 
-      // Auth or bad request errors
       await markKeyError(sb, key.id, `HTTP ${resp.status}`, key.label || key.provider);
       await resp.text();
-      continue; // try next key even for auth errors
+      continue;
     } catch (e) {
       await markKeyError(sb, key.id, String(e), key.label || key.provider);
       continue;
