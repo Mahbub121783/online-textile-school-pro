@@ -522,7 +522,8 @@ const ChatWidget = () => {
     mutationFn: async ({ id, status }: { id: string; status: string }) => {
       await supabase.from('chat_requests').update({ status, updated_at: new Date().toISOString() } as any).eq('id', id);
       // Notify the sender about acceptance/rejection
-      const req = chatRequests?.find((r: any) => r.id === id);
+      const allReqs = [...(chatRequests?.incoming || []), ...(chatRequests?.outgoing || [])];
+      const req = allReqs.find((r: any) => r.id === id);
       if (req) {
         const senderId = req.sender_id === user!.id ? req.receiver_id : req.sender_id;
         import('@/lib/notifications').then(({ createNotification, NOTIFICATION_TYPES }) => {
