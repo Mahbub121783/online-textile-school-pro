@@ -23,12 +23,39 @@ const AI_TUTOR_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-tutor
 type AiMsg = { role: 'user' | 'assistant'; content: string };
 
 // ─── AI Tutor Tab Content ───
+const AI_SESSION_KEY = 'ots_ai_chat';
+const AI_SESSION_TS_KEY = 'ots_ai_chat_ts';
+const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000;
+
+function loadCachedMessages(): AiMsg[] {
+  try {
+    const ts = localStorage.getItem(AI_SESSION_TS_KEY);
+    if (ts && Date.now() - Number(ts) > THREE_DAYS_MS) {
+      localStorage.removeItem(AI_SESSION_KEY);
+      localStorage.removeItem(AI_SESSION_TS_KEY);
+      return [];
+    }
+    const raw = localStorage.getItem(AI_SESSION_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
+}
+
 const AiTutorTab = ({ user }: { user: any }) => {
-  const [messages, setMessages] = useState<AiMsg[]>([]);
+  const [messages, setMessages] = useState<AiMsg[]>(loadCachedMessages);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Persist messages to localStorage
+  useEffect(() => {
+    if (messages.length > 0) {
+      localStorage.setItem(AI_SESSION_KEY, JSON.stringify(messages));
+      if (!localStorage.getItem(AI_SESSION_TS_KEY)) {
+        localStorage.setItem(AI_SESSION_TS_KEY, String(Date.now()));
+      }
+    }
+  }, [messages]);
 
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -135,7 +162,7 @@ const AiTutorTab = ({ user }: { user: any }) => {
             <span className="text-[10px] text-emerald-100">Textile Engineering Expert</span>
           </div>
         </div>
-        <button onClick={() => setMessages([])} className="p-1 hover:bg-white/20 rounded-lg transition" title="Clear chat">
+        <button onClick={() => { setMessages([]); localStorage.removeItem(AI_SESSION_KEY); localStorage.removeItem(AI_SESSION_TS_KEY); }} className="p-1 hover:bg-white/20 rounded-lg transition" title="Clear chat">
           <Trash2 className="h-3.5 w-3.5" />
         </button>
       </div>

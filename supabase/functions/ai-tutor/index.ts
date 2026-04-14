@@ -22,16 +22,14 @@ const DEFAULT_MODELS: Record<string, string> = {
   gemini: "gemini-2.5-flash",
 };
 
+const ERROR_THRESHOLD = 20; // auto-disable & notify after this many consecutive errors
+
 // Fibonacci-inspired weight distribution for load balancing
-// Keys are cycled with increasing intervals: 1,1,2,3,5,8... requests before rotating
 class FibonacciBalancer {
-  private fibSequence = [1, 1, 2, 3, 5, 8, 13];
-  
-  getKeyOrder(keys: { id: string; usage_count: number; error_count: number }[]): typeof keys {
+  private fibSequence = [1, 1, 2, 3, 5, 8, 13, 21];
+
+  getKeyOrder(keys: { id: string; provider: string; api_key: string; usage_count: number; error_count: number }[]) {
     if (keys.length <= 1) return keys;
-    
-    // Score each key: lower score = higher priority
-    // Fibonacci weighting: penalize error-heavy keys exponentially
     return keys
       .map((k) => {
         const fibIdx = Math.min(k.error_count, this.fibSequence.length - 1);
@@ -45,12 +43,13 @@ class FibonacciBalancer {
 
 const balancer = new FibonacciBalancer();
 
-async function getAllActiveKeys(sb: any, provider: string) {
-  const { data } = await sb
+async function getAllActiveKeys(sb: any, provider?: string) {
+  let query = sb
     .from("ai_api_keys")
-    .select("id, api_key, usage_count, error_count, last_error")
-    .eq("provider", provider)
+    .select("id, api_key, provider, usage_count, error_count, last_error, label")
     .eq("is_active", true);
+  if (provider) query = query.eq("provider", provider);
+  const { data } = await query;
   return data || [];
 }
 
@@ -61,79 +60,120 @@ async function markKeyUsed(sb: any, keyId: string) {
       usage_count: (row.usage_count || 0) + 1,
       last_used_at: new Date().toISOString(),
       last_error: null,
+      error_count: 0, // reset on success
     }).eq("id", keyId);
   }
 }
 
-async function markKeyError(sb: any, keyId: string, error: string) {
+async function markKeyError(sb: any, keyId: string, error: string, label: string) {
   const { data: row } = await sb.from("ai_api_keys").select("error_count").eq("id", keyId).single();
   const newCount = (row?.error_count || 0) + 1;
-  // Auto-disable keys with too many consecutive errors
+  const shouldDisable = newCount >= ERROR_THRESHOLD;
+
   await sb.from("ai_api_keys").update({
     last_error: error,
     error_count: newCount,
     last_used_at: new Date().toISOString(),
-    is_active: newCount < 10, // auto-disable after 10 errors
+    is_active: !shouldDisable,
   }).eq("id", keyId);
+
+  // Notify admins when key is auto-disabled
+  if (shouldDisable) {
+    try {
+      await sb.rpc("notify_admins", {
+        _type: "warning",
+        _title: `API Key "${label}" disabled`,
+        _message: `API key "${label}" was automatically removed from rotation after ${ERROR_THRESHOLD} consecutive failures. Last error: ${error}`,
+        _link: "/admin/ai-chatbot",
+      });
+    } catch (e) { console.error("Failed to notify admins:", e); }
+  }
 }
 
-async function tryProviderCall(
+// Rolling cycle: pick from ALL active keys across ALL providers
+async function rollingProviderCall(
   sb: any,
-  provider: string,
-  endpoint: string,
-  modelName: string,
-  body: any,
-): Promise<{ response: Response; keyId: string | null }> {
-  // For lovable provider, use env key directly
-  if (provider === "lovable") {
-    const apiKey = Deno.env.get("LOVABLE_API_KEY") || "";
-    if (!apiKey) throw new Error("LOVABLE_API_KEY not configured");
-    const resp = await fetch(endpoint, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ ...body, model: modelName }),
-    });
-    return { response: resp, keyId: null };
+  systemPrompt: string,
+  messages: any[],
+  maxTokens: number,
+  temperature: number,
+): Promise<{ response: Response; keyId: string | null; provider: string; model: string }> {
+
+  // 1. Try Lovable gateway first (free, no key rotation needed)
+  const lovableKey = Deno.env.get("LOVABLE_API_KEY") || "";
+  if (lovableKey) {
+    try {
+      const model = DEFAULT_MODELS.lovable;
+      const resp = await fetch(PROVIDER_ENDPOINTS.lovable, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${lovableKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model,
+          messages: [{ role: "system", content: systemPrompt }, ...messages],
+          stream: true,
+          max_tokens: maxTokens,
+          temperature,
+        }),
+      });
+      if (resp.ok) return { response: resp, keyId: null, provider: "lovable", model };
+      // If lovable fails (rate limit etc), fall through to rolling keys
+      await resp.text();
+    } catch (e) { console.error("Lovable gateway error:", e); }
   }
 
-  // Fibonacci load-balanced key selection
-  const allKeys = await getAllActiveKeys(sb, provider);
-  if (!allKeys.length) throw new Error(`No active API keys for ${provider}`);
+  // 2. Get ALL active keys across all providers, ordered by Fibonacci balancer
+  const allKeys = await getAllActiveKeys(sb);
+  if (!allKeys.length) throw new Error("No active API keys available. Add keys in Admin → AI Chatbot → API Keys.");
 
   const orderedKeys = balancer.getKeyOrder(allKeys);
 
   for (const key of orderedKeys) {
-    const resp = await fetch(endpoint, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${key.api_key}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ ...body, model: modelName }),
-    });
+    const endpoint = PROVIDER_ENDPOINTS[key.provider];
+    if (!endpoint) continue;
+    const model = DEFAULT_MODELS[key.provider] || DEFAULT_MODELS.groq;
 
-    if (resp.ok) {
-      await markKeyUsed(sb, key.id);
-      return { response: resp, keyId: key.id };
+    try {
+      const resp = await fetch(endpoint, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${key.api_key}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model,
+          messages: [{ role: "system", content: systemPrompt }, ...messages],
+          stream: true,
+          max_tokens: maxTokens,
+          temperature,
+        }),
+      });
+
+      if (resp.ok) {
+        await markKeyUsed(sb, key.id);
+        return { response: resp, keyId: key.id, provider: key.provider, model };
+      }
+
+      if (resp.status === 429 || resp.status === 402 || resp.status >= 500) {
+        await markKeyError(sb, key.id, `HTTP ${resp.status}`, key.label || key.provider);
+        await resp.text();
+        continue;
+      }
+
+      // Auth or bad request errors
+      await markKeyError(sb, key.id, `HTTP ${resp.status}`, key.label || key.provider);
+      await resp.text();
+      continue; // try next key even for auth errors
+    } catch (e) {
+      await markKeyError(sb, key.id, String(e), key.label || key.provider);
+      continue;
     }
-
-    if (resp.status === 429 || resp.status === 402 || resp.status >= 500) {
-      await markKeyError(sb, key.id, `HTTP ${resp.status}`);
-      await resp.text(); // consume body
-      continue; // try next key
-    }
-
-    // Other errors (auth, bad request) — don't retry with other keys
-    return { response: resp, keyId: key.id };
   }
 
-  throw new Error(`All ${orderedKeys.length} API keys exhausted for ${provider}`);
+  throw new Error(`All ${orderedKeys.length} API keys exhausted. The system tried every available key.`);
 }
 
 const SITE_BASE = Deno.env.get("SITE_URL") || "https://www.onlinetextileschool.com";
 
-// Build deep platform context from database
 async function buildPlatformContext(sb: any, userId: string | null, lastMessage: string) {
   let context = "";
 
-  // Deep search index - semantic search across all indexed content
   try {
     const terms = lastMessage.replace(/[^\w\s]/g, "").split(/\s+/).filter((w: string) => w.length > 2).slice(0, 10).join(" | ");
     if (terms) {
@@ -160,8 +200,7 @@ async function buildPlatformContext(sb: any, userId: string | null, lastMessage:
     }
   } catch (e) { console.error("Search index error:", e); }
 
-  // Student-specific context
-  if (userId) {
+  if (userId && userId !== "guest") {
     try {
       const [enrollRes, quizRes, batchRes] = await Promise.all([
         sb.from("enrollments").select("course_id, progress_pct, courses(title, slug, short_description)").eq("user_id", userId).limit(15),
@@ -187,7 +226,6 @@ async function buildPlatformContext(sb: any, userId: string | null, lastMessage:
     } catch (e) { console.error("Student context error:", e); }
   }
 
-  // Available courses catalog
   try {
     const { data: courses } = await sb
       .from("courses")
@@ -203,7 +241,6 @@ async function buildPlatformContext(sb: any, userId: string | null, lastMessage:
     }
   } catch (e) { console.error("Courses context error:", e); }
 
-  // Available ebooks
   try {
     const { data: ebooks } = await sb
       .from("ebooks")
@@ -271,7 +308,7 @@ serve(async (req) => {
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const sb = createClient(supabaseUrl, serviceKey);
 
-    // Fetch AI config
+    // Fetch AI config for parameters only (provider/model ignored — rolling cycle)
     const { data: config } = await sb
       .from("ai_chatbot_config")
       .select("*")
@@ -286,32 +323,24 @@ serve(async (req) => {
       });
     }
 
-    const provider = config.provider || "lovable";
-    const modelName = config.model_name || DEFAULT_MODELS[provider] || DEFAULT_MODELS.lovable;
     const maxTokens = config.max_tokens || 2048;
     const temperature = parseFloat(config.temperature) || 0.7;
     const knowledgeBase = config.knowledge_base || [];
 
-    // Build knowledge base context
     let knowledgeContext = "";
     if (Array.isArray(knowledgeBase) && knowledgeBase.length > 0) {
       knowledgeContext = "\n\n## 🧠 Custom Knowledge Base:\n" +
         knowledgeBase.map((k: any) => `### ${k.topic}\n${k.content}`).join("\n\n");
     }
 
-    // Get last user message for context search
     const lastUserMsg = [...messages].reverse().find((m: any) => m.role === "user");
-    
-    // Build deep platform context
     const platformContext = await buildPlatformContext(sb, user_id, lastUserMsg?.content || "");
 
     const systemPrompt = EXPERT_SYSTEM_PROMPT +
       (config.system_prompt ? `\n\n## Admin-Configured Instructions:\n${config.system_prompt}` : "") +
       knowledgeContext + platformContext;
 
-    const endpoint = PROVIDER_ENDPOINTS[provider] || PROVIDER_ENDPOINTS.lovable;
-
-    // Save user message to history (fire and forget)
+    // Save user message to history
     if (user_id && lastUserMsg) {
       sb.from("ai_chat_history").insert({
         session_id: session_id || null,
@@ -321,75 +350,28 @@ serve(async (req) => {
       }).then(() => {});
     }
 
-    // Try call with Fibonacci load balancing
-    let result: { response: Response; keyId: string | null };
+    // Rolling provider cycle — tries Lovable first, then all active keys
+    let result: { response: Response; keyId: string | null; provider: string; model: string };
     try {
-      if (provider !== "lovable") {
-        const keys = await getAllActiveKeys(sb, provider);
-        if (!keys.length) {
-          // Fall back to config api_key
-          const fallbackKey = config.api_key || "";
-          if (!fallbackKey) {
-            return new Response(JSON.stringify({ error: `No API keys configured for ${provider}. Add keys in Admin → AI Chatbot → API Keys.` }), {
-              status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" },
-            });
-          }
-          const resp = await fetch(endpoint, {
-            method: "POST",
-            headers: { Authorization: `Bearer ${fallbackKey}`, "Content-Type": "application/json" },
-            body: JSON.stringify({
-              model: modelName,
-              messages: [{ role: "system", content: systemPrompt }, ...messages],
-              stream: true,
-              max_tokens: maxTokens,
-              temperature,
-            }),
-          });
-          result = { response: resp, keyId: null };
-        } else {
-          result = await tryProviderCall(sb, provider, endpoint, modelName, {
-            messages: [{ role: "system", content: systemPrompt }, ...messages],
-            stream: true,
-            max_tokens: maxTokens,
-            temperature,
-          });
-        }
-      } else {
-        result = await tryProviderCall(sb, provider, endpoint, modelName, {
-          messages: [{ role: "system", content: systemPrompt }, ...messages],
-          stream: true,
-          max_tokens: maxTokens,
-          temperature,
-        });
-      }
+      result = await rollingProviderCall(sb, systemPrompt, messages, maxTokens, temperature);
     } catch (e) {
-      console.error("Provider call error:", e);
+      console.error("Rolling provider error:", e);
       return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "AI service error" }), {
         status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const { response } = result;
+    const { response, provider: usedProvider, model: usedModel } = result;
 
     if (!response.ok) {
-      if (response.status === 429) {
-        return new Response(JSON.stringify({ error: "Rate limit exceeded. Trying next key cycle..." }), {
-          status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      if (response.status === 402) {
-        return new Response(JSON.stringify({ error: "AI credits exhausted. Contact admin." }), {
-          status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
       const t = await response.text();
-      console.error(`${provider} API error:`, response.status, t);
-      return new Response(JSON.stringify({ error: `AI service error (${provider}): ${response.status}` }), {
+      console.error(`${usedProvider} API error:`, response.status, t);
+      return new Response(JSON.stringify({ error: `AI service error (${usedProvider}): ${response.status}` }), {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Stream response and capture for history
+    // Stream response
     const reader = response.body!.getReader();
     let fullResponse = "";
     const stream = new ReadableStream({
@@ -404,8 +386,8 @@ serve(async (req) => {
               user_id,
               role: "assistant",
               content: fullResponse,
-              provider_used: provider,
-              model_used: modelName,
+              provider_used: usedProvider,
+              model_used: usedModel,
               response_time_ms: elapsed,
             }).then(() => {});
           }
