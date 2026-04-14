@@ -29,7 +29,7 @@ const ResearchPaperDetail = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('research_papers')
-        .select('*, user_profiles:submitted_by(full_name, avatar_url)')
+        .select('*, submitter:user_profiles!research_papers_submitted_by_fkey(full_name, avatar_url)')
         .eq('id', paperId!)
         .single();
       if (error) throw error;
@@ -185,7 +185,7 @@ const ResearchPaperDetail = () => {
               <div className="flex flex-wrap items-center gap-4 mt-3 text-sm text-muted-foreground">
                 <span className="flex items-center gap-1">
                   <Users className="h-3.5 w-3.5" />
-                  {authors.map((a: any) => a.name).join(', ') || paper.user_profiles?.full_name || 'Unknown'}
+                  {authors.map((a: any) => a.name).join(', ') || (paper as any).submitter?.full_name || 'Unknown'}
                 </span>
                 {paper.published_date && (
                   <span className="flex items-center gap-1">
@@ -324,7 +324,7 @@ const ResearchPaperDetail = () => {
                       {a.affiliation && <p className="text-xs text-muted-foreground">{a.affiliation}</p>}
                     </div>
                   )) : (
-                    <p className="text-sm">{paper.user_profiles?.full_name || 'Unknown'}</p>
+                    <p className="text-sm">{(paper as any).submitter?.full_name || 'Unknown'}</p>
                   )}
                 </div>
               </CardContent>
