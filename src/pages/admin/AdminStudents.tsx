@@ -365,6 +365,7 @@ export default function AdminStudents() {
                       </Button>
                     </TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead>EduMail</TableHead>
                     <TableHead className="w-10"></TableHead>
                   </TableRow>
                 </TableHeader>
@@ -397,6 +398,17 @@ export default function AdminStudents() {
                         <Badge variant={s.is_active !== false ? 'default' : 'destructive'} className="text-xs">
                           {s.is_active !== false ? 'Active' : 'Blocked'}
                         </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {s.institutionalEmail ? (
+                          <div className="flex items-center gap-1">
+                            <AtSign className="h-3 w-3 text-muted-foreground" />
+                            <span className="font-mono text-xs truncate max-w-[140px]" title={s.institutionalEmail.email}>{s.institutionalEmail.email.split('@')[0]}</span>
+                            <Badge variant={s.institutionalEmail.is_blocked ? 'destructive' : s.institutionalEmail.status === 'approved' ? 'default' : 'secondary'} className="text-[10px] h-4 px-1 ml-1">
+                              {s.institutionalEmail.is_blocked ? 'Blocked' : s.institutionalEmail.status}
+                            </Badge>
+                          </div>
+                        ) : <span className="text-xs text-muted-foreground">—</span>}
                       </TableCell>
                       <TableCell onClick={e => e.stopPropagation()}>
                         <DropdownMenu>
