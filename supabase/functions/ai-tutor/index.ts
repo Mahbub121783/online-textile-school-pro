@@ -308,7 +308,11 @@ serve(async (req) => {
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const sb = createClient(supabaseUrl, serviceKey);
 
-    // Fetch AI config for parameters only (provider/model ignored — rolling cycle)
+    // Probabilistic cleanup: ~1% of requests trigger old chat deletion
+    if (Math.random() < 0.01) {
+      sb.rpc("cleanup_old_ai_chats").then(() => console.log("Cleanup done")).catch((e: any) => console.error("Cleanup error:", e));
+    }
+
     const { data: config } = await sb
       .from("ai_chatbot_config")
       .select("*")
