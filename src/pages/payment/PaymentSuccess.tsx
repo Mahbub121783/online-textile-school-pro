@@ -40,7 +40,19 @@ const PaymentSuccess = () => {
       if (data?.status === 'COMPLETED') {
         setStatus('success');
         clearCart();
-        if (user?.id) ensureStudentIdCard(user.id);
+        if (user?.id) {
+          ensureStudentIdCard(user.id);
+          // Send payment confirmation notification + email
+          import('@/lib/notifications').then(({ createNotificationWithEmail, NOTIFICATION_TYPES }) => {
+            createNotificationWithEmail({
+              userId: user.id,
+              type: NOTIFICATION_TYPES.PAYMENT_CONFIRMED,
+              title: 'Payment Confirmed ✅',
+              message: 'Your payment has been verified and your purchased items are now accessible!',
+              link: '/dashboard/orders',
+            });
+          });
+        }
       } else {
         setStatus('failed');
       }
