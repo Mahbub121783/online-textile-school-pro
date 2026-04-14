@@ -1,81 +1,94 @@
 
 
-# Automated Institutional Email System via cPanel API
+# Advanced Institutional Email Management System
 
 ## Overview
 
-Build a complete system where students/instructors can request an institutional email (`name_roll_last3digits@onlinetextileschool.com`), and admins can approve/reject requests. On approval, the system auto-creates the email account via cPanel UAPI and notifies the user with their credentials.
-
-## Architecture
-
-```text
-Student/Instructor                Admin Panel                  Edge Function
-  ┌─────────┐                   ┌──────────┐               ┌──────────────┐
-  │ Request  │──insert row──▶   │ Review & │──approve──▶   │ cpanel-email │
-  │ Email    │                   │ Approve  │               │ -provisioner │
-  │ Button   │                   │ or Reject│               │              │
-  └─────────┘                   └──────────┘               │ 1. Call cPanel│
-                                                            │    UAPI      │
-                                                            │ 2. Update DB │
-                                                            │ 3. Send SMTP │
-                                                            │    with creds│
-                                                            └──────────────┘
-```
+Upgrade the institutional email system with full admin management capabilities, 6-month auto-validity tied to course enrollments (like the ID card system), a dedicated student "EduMail" tab, and comprehensive admin controls (block, reset password, view usage, see user emails on Students page).
 
 ## What Will Be Built
 
-### 1. Database Migration — `institutional_email_requests` table
-- `id`, `user_id` (FK to auth.users), `requested_email`, `generated_password`, `status` (pending/approved/rejected/failed), `admin_notes`, `approved_by`, `created_at`, `approved_at`
-- RLS policies for students to insert/read own rows, admins to manage all
+### 1. Database Migration — Add new columns to `institutional_email_requests`
 
-### 2. Supabase Secrets
-- `CPANEL_API_TOKEN` = `T0OII5ISCFUC6QHSV3JYKMSAPM0GNGG7`
-- `CPANEL_USERNAME` = `tecnedub`
-- `CPANEL_HOSTNAME` = `premium.us10.svlogins.com`
+Add columns to support validity, blocking, and password reset tracking:
+- `valid_from` (timestamptz) — when email was activated
+- `valid_until` (timestamptz) — auto-calculated expiry (6 months per enrollment)
+- `is_blocked` (boolean, default false) — admin can block/unblock
+- `blocked_at` (timestamptz)
+- `last_password_reset_at` (timestamptz)
+- `current_password` (text, encrypted) — stored for admin visibility
+- `email_quota_mb` (integer, default 512)
 
-### 3. Edge Function — `cpanel-email-provisioner`
-- Receives `{ requestId, action: 'approve' | 'reject' }`
-- On approve: generates a secure password, calls cPanel UAPI `Email::add_pop` to create the email account, updates DB row with credentials, sends notification email via existing SMTP system with the new email + password
-- On reject: updates status, optionally sends rejection notification
-- Email format: `firstname_rollid_last3digits@onlinetextileschool.com` (auto-generated from user profile)
+### 2. Edge Function Updates — `cpanel-email-provisioner`
 
-### 4. Student Dashboard — "Request Institutional Email" button
-- Added to the student Settings page or as a new card on Dashboard Overview
-- Shows current status if already requested (pending/approved with email shown)
-- Simple form with a "Request Email" button (email is auto-generated from profile data)
+Add new actions beyond approve/reject:
+- `block` — Suspend email via cPanel UAPI (`Email::suspend_login`)
+- `unblock` — Unsuspend via cPanel UAPI (`Email::unsuspend_login`)
+- `reset-password` — Generate new password via cPanel UAPI (`Email::passwd_pop`), send to user
+- `delete` — Delete expired accounts via cPanel UAPI (`Email::delete_pop`)
+- `check-usage` — Query disk usage via cPanel UAPI (`Email::get_disk_usage`)
+- On approve: set `valid_from` = now, calculate `valid_until` based on paid enrollments (6 months each)
 
-### 5. Instructor Dashboard — Same feature for instructors
-- Added to instructor settings, same request flow
+### 3. Auto-Validity System (like ID cards)
 
-### 6. Admin Panel — Email Requests Management Page
-- New page at `/admin/email-requests` with sidebar link under Setup section
-- Table showing all requests with user name, roll ID, requested email, status, date
-- Approve/Reject buttons with confirmation dialog
-- View provisioned email details
-- Filter by status (pending/approved/rejected)
+Create `src/lib/ensureEmailValidity.ts`:
+- When a new paid enrollment happens, extend `valid_until` by 6 months
+- When `valid_until` passes, auto-set status to `expired` (via a scheduled check or on-access check)
+- Mirror the `ensureStudentIdCard.ts` pattern exactly
 
-### 7. Notification Emails
-- On approval: email sent to user's personal email with their new institutional email + password
-- On rejection: email sent with admin notes explaining why
+### 4. Admin Email Requests Page — Major Upgrade
 
-## Technical Details
+Enhance `AdminEmailRequests.tsx` with:
+- Show user's personal email alongside institutional email
+- Block/Unblock toggle per approved email
+- "Reset Password" button (generates new password, emails to user)
+- "View Usage" showing mailbox size
+- Validity period display with expiry countdown
+- Status for `expired` emails
+- Bulk actions (block multiple, delete expired)
+- Detail modal showing full email info, IMAP/SMTP settings, activity log
 
-- cPanel UAPI endpoint: `https://premium.us10.svlogins.com:2083/execute/Email/add_pop`
-- Auth header: `Authorization: cpanel tecnedub:T0OII5ISCFUC6QHSV3JYKMSAPM0GNGG7`
-- Email domain: `onlinetextileschool.com`
-- Password: auto-generated 12-char alphanumeric
-- The generated password is encrypted/hashed before storing in DB (only sent once via email)
+### 5. Admin Students Page — Show Institutional Email
+
+In `AdminStudents.tsx`:
+- Add a column showing the user's institutional email (if any) with status badge
+- Quick-link to manage that email from the students table
+
+### 6. Student Dashboard — New "EduMail" Tab
+
+Add a dedicated `/dashboard/edumail` page:
+- Full-page institutional email hub (not just a small widget)
+- Show email address, status, validity period with progress bar
+- Webmail quick-launch button
+- IMAP/SMTP configuration details card
+- Email usage/quota display
+- Password info (last reset date)
+- Request button if no email exists yet
+- Expiry warning when < 30 days remaining
+
+### 7. Sidebar & Routing Updates
+
+- Add "EduMail" nav item to `DashboardSidebar.tsx` and `InstructorSidebar.tsx`
+- Add `/dashboard/edumail` route in `App.tsx`
+- Add `expired` status handling throughout
 
 ## Files to Create/Modify
 
-1. **New migration** — `institutional_email_requests` table + RLS
-2. **New edge function** — `supabase/functions/cpanel-email-provisioner/index.ts`
-3. **New admin page** — `src/pages/admin/AdminEmailRequests.tsx`
-4. **New student component** — institutional email request widget
-5. **Modify** `src/App.tsx` — add route for admin email requests page
-6. **Modify** `src/components/layout/AdminSidebar.tsx` — add sidebar link
-7. **Modify** `src/components/layout/DashboardSidebar.tsx` — add link
-8. **Modify** `src/components/layout/InstructorSidebar.tsx` — add link
-9. **Modify** `src/pages/dashboard/SettingsPage.tsx` — add email request section
-10. **Add 3 Supabase secrets** — CPANEL_API_TOKEN, CPANEL_USERNAME, CPANEL_HOSTNAME
+1. **New migration** — Add columns (`valid_from`, `valid_until`, `is_blocked`, `current_password`, etc.) + `expired` status
+2. **Edit** `supabase/functions/cpanel-email-provisioner/index.ts` — Add block/unblock/reset-password/delete/check-usage actions + validity calculation on approve
+3. **Create** `src/lib/ensureEmailValidity.ts` — Auto-extend validity on enrollment (mirrors `ensureStudentIdCard.ts`)
+4. **Create** `src/pages/dashboard/EduMailPage.tsx` — Full student EduMail dashboard tab
+5. **Edit** `src/pages/admin/AdminEmailRequests.tsx` — Add block, reset password, usage, validity, personal email display, bulk actions
+6. **Edit** `src/pages/admin/AdminStudents.tsx` — Show institutional email column
+7. **Edit** `src/components/layout/DashboardSidebar.tsx` — Add EduMail nav item
+8. **Edit** `src/components/layout/InstructorSidebar.tsx` — Add EduMail nav item
+9. **Edit** `src/App.tsx` — Add EduMail route
+10. **Edit** `src/components/InstitutionalEmailWidget.tsx` — Add validity display + expiry warning
+
+## Technical Details
+
+- cPanel UAPI endpoints used: `Email/add_pop`, `Email/suspend_login`, `Email/unsuspend_login`, `Email/passwd_pop`, `Email/delete_pop`, `Email/get_disk_usage`
+- Validity calculation: 6 months per paid enrollment, auto-extended when new courses are purchased (same logic as `ensureStudentIdCard.ts`)
+- Password stored encrypted in DB for admin visibility; also sent to user via SMTP on creation/reset
+- Expired emails are soft-deleted (status changed, cPanel account suspended), not hard-deleted immediately
 
