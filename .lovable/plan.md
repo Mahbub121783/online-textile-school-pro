@@ -1,28 +1,65 @@
 
 
-# Fix Both Chat Systems
+# Merge AI Tutor into Chat Widget & Fix Visibility
 
-## Root Causes Found
+## Problem
+Both the ChatWidget (person-to-person messaging) and AiTutorWidget (AI chatbot) are invisible because:
+1. **ChatWidget**: Returns `null` when no user is logged in (`if (!user) return null` at line 346). Since you're on the homepage without logging in, nothing renders.
+2. **AiTutorWidget**: Same auth gate (`if (!user) return null` at line 79). Also has two separate floating bubbles competing for space.
+3. **Two separate widgets** create confusion and overlap issues.
 
-### 1. AI Tutor Bubble: Off-Screen Due to Negative Default Position
-In `AiTutorWidget.tsx` line 13, the default position is `{ x: 24, y: -96 }`. Since `y` maps to `bottom` in CSS, `bottom: -96px` renders the bubble **below the viewport** — completely invisible. Should be `96` (positive).
-
-Additionally, any user who visited the page while this bug was active will have the bad position saved in localStorage under `ai-tutor-pos`, so even fixing the default won't help them until we add a sanity check on stored values.
-
-### 2. Both Widgets: Auth Gate
-Both widgets return `null` when no user is logged in (`if (!user) return null`). This is by design, but worth noting — you must be logged in to see them.
-
-### 3. ChatWidget Position Overlap
-The ChatWidget button sits at `right-4 bottom-20` which is correct. But the chat panel uses `lg:bottom-22` which is not a standard Tailwind class (Tailwind has `bottom-20`, `bottom-24`, but not `bottom-22`). This could cause layout issues on desktop.
+## Solution
+Merge the AI Tutor into the existing ChatWidget as an **"AI Tutor" tab**, and remove AiTutorWidget entirely. The unified widget will be visible to everyone (per your preference), with the AI tab available to all visitors and the Messages tabs requiring login.
 
 ## Changes
 
-### File: `src/components/chat/AiTutorWidget.tsx`
-- Fix `DEFAULT_POS` from `{ x: 24, y: -96 }` to `{ x: 24, y: 96 }`
-- Add validation in `getStoredPos()` to reject negative or out-of-bounds stored values (fixes users with corrupted localStorage)
-- Ensure the chat panel z-index is `z-[9999]` to match the bubble
+### 1. Remove AiTutorWidget (`src/App.tsx`)
+- Remove `import AiTutorWidget` and `<AiTutorWidget />` from App.tsx
+- Only `<ChatWidget />` remains
 
-### File: `src/components/chat/ChatWidget.tsx`
-- Fix `lg:bottom-22` to `lg:bottom-24` (valid Tailwind class)
-- Ensure the chat button doesn't overlap with the AI Tutor bubble (keep it on the right side, AI Tutor on the left)
+### 2. Delete `src/components/chat/AiTutorWidget.tsx`
+- No longer needed since AI is integrated into ChatWidget
+
+### 3. Rewrite ChatWidget (`src/components/chat/ChatWidget.tsx`)
+**Visibility fix:**
+- Remove `if (!user) return null` gate
+- Widget bubble shows for everyone (matching reference image: teal circle with chat icon)
+- z-index set to `z-[9999]` to ensure visibility above all elements
+
+**New "AI Tutor" tab:**
+- Add a 4th tab: `AI Tutor` (with Bot icon) alongside Chats, Requests, Sent
+- AI tab is available to everyone, even guests
+- Chats/Requests/Sent tabs show login prompt if not authenticated
+- AI tab contains the full AI Tutor UI: streaming chat, quick prompts, markdown rendering, clear history
+
+**Tab structure when open:**
+```text
+[AI Tutor] [Chats] [Requests] [Sent]
+     ^         ^        ^        ^
+  Everyone   Login   Login    Login
+             needed  needed   needed
+```
+
+**Bubble styling (matching reference image-64):**
+- Single teal/dark circle at bottom-right
+- `fixed bottom-6 right-6 z-[9999]`
+- Unread badge shows message count
+- No dragging complexity -- simple fixed position
+
+**AI chat features preserved:**
+- Streaming responses via ai-tutor edge function
+- ReactMarkdown rendering
+- Quick textile prompts
+- Clear chat button
+- Loading animation
+
+### 4. No database changes needed
+All existing tables (ai_chat_history, ai_search_index, ai_api_keys) remain intact.
+
+## Files
+| File | Action |
+|------|--------|
+| `src/App.tsx` | Remove AiTutorWidget import and usage |
+| `src/components/chat/AiTutorWidget.tsx` | Delete |
+| `src/components/chat/ChatWidget.tsx` | Add AI Tutor tab, remove auth gate, fix z-index |
 
