@@ -5,13 +5,15 @@ import { useAuth } from '@/hooks/useAuth';
 import { toast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Mail, CheckCircle, Clock, XCircle, AlertTriangle, Copy } from 'lucide-react';
+import { Progress } from '@/components/ui/progress';
+import { Mail, CheckCircle, Clock, XCircle, AlertTriangle, Copy, Calendar } from 'lucide-react';
 
 const statusConfig: Record<string, { icon: any; color: string; label: string }> = {
   pending: { icon: Clock, color: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400', label: 'Pending Approval' },
   approved: { icon: CheckCircle, color: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400', label: 'Active' },
   rejected: { icon: XCircle, color: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400', label: 'Rejected' },
   failed: { icon: AlertTriangle, color: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400', label: 'Failed' },
+  expired: { icon: Calendar, color: 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400', label: 'Expired' },
 };
 
 export default function InstitutionalEmailWidget() {
@@ -119,6 +121,16 @@ export default function InstitutionalEmailWidget() {
             </div>
           </div>
 
+          {existingRequest.status === 'approved' && existingRequest.valid_until && (
+            <div className="space-y-1">
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>Validity</span>
+                <span>{Math.max(0, Math.ceil((new Date(existingRequest.valid_until).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))} days left</span>
+              </div>
+              <Progress value={Math.min(100, ((Date.now() - new Date(existingRequest.valid_from || existingRequest.created_at).getTime()) / (new Date(existingRequest.valid_until).getTime() - new Date(existingRequest.valid_from || existingRequest.created_at).getTime())) * 100)} className="h-1.5" />
+            </div>
+          )}
+
           {existingRequest.status === 'approved' && (
             <div className="bg-primary/5 border border-primary/20 rounded-lg p-3 text-xs space-y-1">
               <p className="font-medium text-primary">Webmail Access:</p>
@@ -136,7 +148,7 @@ export default function InstitutionalEmailWidget() {
             </div>
           )}
 
-          {(existingRequest.status === 'rejected' || existingRequest.status === 'failed') && (
+          {(existingRequest.status === 'rejected' || existingRequest.status === 'failed' || existingRequest.status === 'expired') && (
             <Button
               variant="outline"
               size="sm"
