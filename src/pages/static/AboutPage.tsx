@@ -35,7 +35,14 @@ const AboutPage = () => {
 
   return (
     <>
-      <SEOHead title="About Us | Online Textile School" description="Learn about Bangladesh's premier online textile education platform." />
+      <SEOHead
+        title="About Us"
+        description="Learn about Online Textile School — Bangladesh's premier online textile engineering education platform. Our mission, vision, and why students choose us."
+        breadcrumbs={[
+          { name: 'Home', url: '/' },
+          { name: 'About Us', url: '/about' },
+        ]}
+      />
       <Header />
       <main className="min-h-screen bg-background">
         <section className="bg-primary text-primary-foreground py-16 md:py-24">

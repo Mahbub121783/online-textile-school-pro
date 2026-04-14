@@ -59,7 +59,34 @@ const BlogPost = () => {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <SEOHead title={post.title} description={post.excerpt || ''} />
+      <SEOHead
+        title={post.title}
+        description={post.excerpt || post.title}
+        ogImage={post.featured_image_url || undefined}
+        article={{
+          publishedTime: post.published_at || post.created_at,
+          modifiedTime: post.updated_at,
+          author: (post as any).user_profiles?.full_name || 'Online Textile School',
+          tags: post.tags || [],
+        }}
+        breadcrumbs={[
+          { name: 'Home', url: '/' },
+          { name: 'Blog', url: '/blog' },
+          { name: post.title, url: `/blog/${post.slug}` },
+        ]}
+        jsonLd={{
+          '@context': 'https://schema.org',
+          '@type': 'BlogPosting',
+          headline: post.title,
+          description: post.excerpt || '',
+          image: post.featured_image_url || undefined,
+          datePublished: post.published_at || post.created_at,
+          dateModified: post.updated_at,
+          author: { '@type': 'Person', name: (post as any).user_profiles?.full_name || 'Online Textile School' },
+          publisher: { '@type': 'Organization', name: 'Online Textile School', url: 'https://onlinetextileschool.com' },
+          mainEntityOfPage: `https://onlinetextileschool.com/blog/${post.slug}`,
+        }}
+      />
       <UtilityBar />
       <Header />
       <main className="flex-1 pb-14 lg:pb-0">
