@@ -10,13 +10,19 @@ type Msg = { role: 'user' | 'assistant'; content: string; provider?: string; mod
 const AI_TUTOR_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-tutor`;
 
 const STORAGE_KEY = 'ai-tutor-pos';
-const DEFAULT_POS = { x: 24, y: -96 }; // left:24, bottom:96
+const DEFAULT_POS = { x: 24, y: 96 };
 
 function getStoredPos() {
   try {
     const s = localStorage.getItem(STORAGE_KEY);
-    return s ? JSON.parse(s) : DEFAULT_POS;
-  } catch { return DEFAULT_POS; }
+    if (!s) return DEFAULT_POS;
+    const p = JSON.parse(s);
+    if (!p || typeof p.x !== 'number' || typeof p.y !== 'number' || p.y < 0 || p.x < 0) {
+      localStorage.removeItem(STORAGE_KEY);
+      return DEFAULT_POS;
+    }
+    return p;
+  } catch { localStorage.removeItem(STORAGE_KEY); return DEFAULT_POS; }
 }
 
 const AiTutorWidget = () => {

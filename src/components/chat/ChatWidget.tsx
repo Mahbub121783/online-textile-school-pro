@@ -362,7 +362,7 @@ const ChatWidget = () => {
 
       {/* Chat panel */}
       {open && (
-        <div className="fixed bottom-36 lg:bottom-22 right-4 z-50 w-80 sm:w-96 h-[30rem] bg-background border rounded-xl shadow-2xl flex flex-col overflow-hidden">
+        <div className="fixed bottom-36 lg:bottom-24 right-4 z-[9999] w-80 sm:w-96 h-[30rem] bg-background border rounded-xl shadow-2xl flex flex-col overflow-hidden">
           {selectedUser ? (
             <>
               {/* Chat header */}
