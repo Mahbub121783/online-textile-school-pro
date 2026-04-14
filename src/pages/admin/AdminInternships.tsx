@@ -57,7 +57,7 @@ const AdminInternships = () => {
         .from('internship_applications')
         .select('*, applicant:user_profiles!internship_applications_user_id_fkey(full_name, avatar_url)')
         .eq('internship_id', selectedInternship.id)
-        .order('applied_at', { ascending: false });
+        .order('created_at', { ascending: false });
       return data ?? [];
     },
     enabled: !!selectedInternship,
@@ -130,7 +130,7 @@ const AdminInternships = () => {
     if (!applications.length) return;
     const headers = ['Name', 'Status', 'Rating', 'Applied', 'Cover Letter', 'Resume', 'Portfolio', 'Skills'];
     const rows = applications.map((a: any) => [
-      (a as any).applicant?.full_name || '', a.status, a.rating || '', new Date(a.applied_at).toLocaleDateString(),
+      (a as any).applicant?.full_name || '', a.status, a.rating || '', new Date(a.created_at).toLocaleDateString(),
       a.cover_letter || '', a.resume_url || '', a.portfolio_url || '', a.skills?.join('; ') || '',
     ]);
     const csv = [headers, ...rows].map(r => r.map((c: any) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
@@ -336,7 +336,7 @@ const AdminInternships = () => {
                     <TableCell>
                       {a.resume_url ? <a href={a.resume_url} target="_blank" className="text-xs text-primary underline">View</a> : '—'}
                     </TableCell>
-                    <TableCell className="text-xs">{new Date(a.applied_at).toLocaleDateString()}</TableCell>
+                    <TableCell className="text-xs">{new Date(a.created_at).toLocaleDateString()}</TableCell>
                     <TableCell>
                       <Select value={a.status} onValueChange={v => updateAppStatusMutation.mutate({ appId: a.id, status: v })}>
                         <SelectTrigger className="h-7 text-xs w-[120px]"><SelectValue /></SelectTrigger>
