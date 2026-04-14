@@ -173,7 +173,7 @@ async function buildPlatformContext(sb: any, userId: string | null, lastMessage:
         context += "\n\n## 🎓 Student's Enrolled Courses:\n" +
           enrollRes.data.map((e: any) => {
             const slug = e.courses?.slug || "";
-            return `- ${e.courses?.title} (Progress: ${e.progress_pct || 0}%)${slug ? ` → /courses/${slug}` : ""}`;
+            return `- ${e.courses?.title} (Progress: ${e.progress_pct || 0}%)${slug ? ` → ${SITE_BASE}/courses/${slug}` : ""}`;
           }).join("\n");
       }
       if (quizRes.data?.length) {
@@ -198,7 +198,7 @@ async function buildPlatformContext(sb: any, userId: string | null, lastMessage:
       context += "\n\n## 📖 Available Courses:\n" +
         courses.map((c: any) => {
           const price = c.discount_price ? `~~${c.price}~~ ${c.discount_price} BDT` : (c.price ? `${c.price} BDT` : "Free");
-          return `- **${c.title}** (${c.difficulty_level || "All levels"}, ${price}): ${c.short_description || ""} → /courses/${c.slug}`;
+          return `- **${c.title}** (${c.difficulty_level || "All levels"}, ${price}): ${c.short_description || ""} → ${SITE_BASE}/courses/${c.slug}`;
         }).join("\n");
     }
   } catch (e) { console.error("Courses context error:", e); }
@@ -212,7 +212,7 @@ async function buildPlatformContext(sb: any, userId: string | null, lastMessage:
       .limit(15);
     if (ebooks?.length) {
       context += "\n\n## 📕 Available E-Books:\n" +
-        ebooks.map((e: any) => `- **${e.title}** by ${e.author || "Staff"} (${e.price ? `${e.price} BDT` : "Free"}): ${(e.description || "").slice(0, 200)} → /ebooks/${e.slug}`).join("\n");
+        ebooks.map((e: any) => `- **${e.title}** by ${e.author || "Staff"} (${e.price ? `${e.price} BDT` : "Free"}): ${(e.description || "").slice(0, 200)} → ${SITE_BASE}/ebooks/${e.slug}`).join("\n");
     }
   } catch (e) { console.error("Ebooks context error:", e); }
 
@@ -231,7 +231,7 @@ const EXPERT_SYSTEM_PROMPT = `You are the **Online Textile School AI Tutor** —
 - **Be specific**: Use exact numbers, formulas, trade names, and technical parameters.
 - **Show calculations**: For any calculation (GSM, yarn count, TPI, fabric cover factor, dye recipe, cost analysis), show: Formula → Substitution → Step-by-step → Result with units.
 - **Use markdown**: Structure with headings, bullet points, tables, and code blocks for formulas.
-- **Link to platform content**: When referencing courses, ebooks, or lessons available on the platform, include the direct link path.
+- **Link to platform content**: When referencing courses, ebooks, or lessons available on the platform, ALWAYS include the **full clickable URL** starting with https://www.onlinetextileschool.com/ (e.g., https://www.onlinetextileschool.com/ebooks/fabric-skewness). NEVER use relative paths like /ebooks/slug. Always format links as markdown: [Link Text](https://www.onlinetextileschool.com/path).
 - **Bilingual support**: If the student writes in Bengali, respond in Bengali with technical terms in English.
 
 ## Calculation Capabilities
