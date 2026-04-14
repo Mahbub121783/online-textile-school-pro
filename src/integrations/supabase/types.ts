@@ -490,6 +490,42 @@ export type Database = {
           },
         ]
       }
+      batch_courses: {
+        Row: {
+          batch_id: string
+          course_id: string
+          created_at: string | null
+          id: string
+        }
+        Insert: {
+          batch_id: string
+          course_id: string
+          created_at?: string | null
+          id?: string
+        }
+        Update: {
+          batch_id?: string
+          course_id?: string
+          created_at?: string | null
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "batch_courses_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "batches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "batch_courses_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "courses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       batch_students: {
         Row: {
           batch_id: string
