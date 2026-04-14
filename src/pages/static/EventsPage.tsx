@@ -71,7 +71,20 @@ const EventsPage = () => {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <SEOHead title="Events & Calendar | Online Textile School" description="Academic calendar, webinars, workshops and exam schedules" />
+      <SEOHead
+        title="Events & Academic Calendar"
+        description="Stay updated with upcoming webinars, workshops, exams, and important deadlines at Online Textile School."
+        breadcrumbs={[
+          { name: 'Home', url: '/' },
+          { name: 'Events', url: '/events' },
+        ]}
+        jsonLd={{
+          '@context': 'https://schema.org',
+          '@type': 'CollectionPage',
+          name: 'Events — Online Textile School',
+          url: 'https://onlinetextileschool.com/events',
+        }}
+      />
       <Header />
       <main className="flex-1 pb-14 lg:pb-0">
         <section className="bg-gradient-to-br from-primary/10 to-accent/10 py-12 md:py-16">
