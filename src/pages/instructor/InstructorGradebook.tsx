@@ -254,6 +254,14 @@ const InstructorGradebook = () => {
                         </div>
                       </td>
                       <td className="p-3 text-center">
+                        {attendanceRate !== null ? (
+                          <span className={`font-medium text-sm flex items-center justify-center gap-1 ${attendanceRate < 75 ? 'text-destructive' : ''}`}>
+                            {attendanceRate < 75 && <AlertTriangle className="h-3 w-3" />}
+                            {attendanceRate}%
+                          </span>
+                        ) : <span className="text-muted-foreground">—</span>}
+                      </td>
+                      <td className="p-3 text-center">
                         {avgQuiz !== null ? <span className="font-medium">{avgQuiz}%</span> : <span className="text-muted-foreground">—</span>}
                       </td>
                       <td className="p-3 text-center">
