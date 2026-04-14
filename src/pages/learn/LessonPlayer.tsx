@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useParams, useNavigate, Navigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -213,6 +213,24 @@ const LessonPlayer = () => {
       toast({ title: 'Posted!' });
     },
   });
+
+  // Realtime subscription for lesson discussions
+  useEffect(() => {
+    if (!course?.id || !lessonId) return;
+    const channelName = `lesson-discussions-${course.id}-${lessonId}-${Date.now()}`;
+    const channel = supabase
+      .channel(channelName)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'discussions',
+        filter: `course_id=eq.${course.id}`,
+      }, () => {
+        queryClient.invalidateQueries({ queryKey: ['lesson-discussions', course.id, lessonId] });
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [course?.id, lessonId, queryClient]);
 
   // Save video position periodically
   const handleVideoProgress = useCallback((seconds: number) => {

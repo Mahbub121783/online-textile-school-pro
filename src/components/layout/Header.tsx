@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Search, ShoppingCart, Menu, X, ChevronDown, Heart, User, LogOut, GraduationCap, Shield, BookOpen, Settings, TrendingUp } from 'lucide-react';
 import ThemeToggle from '@/components/ThemeToggle';
 import LanguageToggle from '@/components/LanguageToggle';
+import CurrencySelector from '@/components/CurrencySelector';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
 import { useCartStore } from '@/stores/cartStore';
@@ -185,6 +186,7 @@ const Header = () => {
 
           {/* Action icons — clean & minimal */}
           <div className="flex items-center gap-0.5 shrink-0">
+            <CurrencySelector />
             <LanguageToggle />
             <ThemeToggle />
 

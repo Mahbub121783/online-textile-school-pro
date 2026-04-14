@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Users, BookOpen, DollarSign, GraduationCap, Activity, CreditCard, UserCog, ShoppingCart, Clock, ArrowRight, Shield, Download, TrendingUp } from 'lucide-react';
+import { Users, BookOpen, DollarSign, GraduationCap, Activity, CreditCard, UserCog, ShoppingCart, Clock, ArrowRight, Shield, Download, TrendingUp, Calendar, AlertTriangle, Brain, Briefcase, FileText, Monitor } from 'lucide-react';
 import { format, subDays } from 'date-fns';
 import { Link } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
@@ -15,7 +15,8 @@ const AdminDashboard = () => {
   const { data: stats } = useQuery({
     queryKey: ['admin-stats'],
     queryFn: async () => {
-      const [usersRes, coursesRes, enrollmentsRes, ordersRes, instructorsRes, pendingOrdersRes, withdrawalsRes] = await Promise.all([
+      const [usersRes, coursesRes, enrollmentsRes, ordersRes, instructorsRes, pendingOrdersRes, withdrawalsRes,
+        batchesRes, liveClassesRes, internshipsRes, researchRes, aiSessionsRes] = await Promise.all([
         supabase.from('user_profiles').select('id', { count: 'exact', head: true }),
         supabase.from('courses').select('id', { count: 'exact', head: true }).eq('is_published', true),
         supabase.from('enrollments').select('id', { count: 'exact', head: true }),
@@ -23,6 +24,11 @@ const AdminDashboard = () => {
         supabase.from('user_roles').select('user_id', { count: 'exact', head: true }).eq('role', 'instructor'),
         supabase.from('orders').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
         supabase.from('wallet_transactions').select('id', { count: 'exact', head: true }).eq('type', 'withdrawal_request'),
+        supabase.from('batches').select('id', { count: 'exact', head: true }).eq('status', 'active'),
+        supabase.from('live_classes').select('id', { count: 'exact', head: true }).eq('status', 'scheduled'),
+        supabase.from('internships').select('id', { count: 'exact', head: true }).eq('status', 'open'),
+        supabase.from('research_papers').select('id', { count: 'exact', head: true }).eq('status', 'published'),
+        supabase.from('ai_chat_sessions').select('id', { count: 'exact', head: true }),
       ]);
       const totalRevenue = ordersRes.data?.reduce((sum, o) => sum + Number(o.total), 0) ?? 0;
       return {
@@ -33,6 +39,11 @@ const AdminDashboard = () => {
         totalInstructors: instructorsRes.count ?? 0,
         pendingOrders: pendingOrdersRes.count ?? 0,
         pendingWithdrawals: withdrawalsRes.count ?? 0,
+        activeBatches: batchesRes.count ?? 0,
+        scheduledClasses: liveClassesRes.count ?? 0,
+        openInternships: internshipsRes.count ?? 0,
+        publishedResearch: researchRes.count ?? 0,
+        aiSessions: aiSessionsRes.count ?? 0,
       };
     },
   });
@@ -169,7 +180,12 @@ const AdminDashboard = () => {
     { label: 'Enrollments', value: stats?.totalEnrollments ?? 0, icon: GraduationCap, color: 'text-accent', link: '/admin/cms' },
     { label: 'Total Revenue', value: `৳${(stats?.totalRevenue ?? 0).toLocaleString()}`, icon: DollarSign, color: 'text-primary', link: '/admin/payment' },
     { label: 'Pending Orders', value: stats?.pendingOrders ?? 0, icon: ShoppingCart, color: 'text-destructive', link: '/admin/payment' },
-    { label: 'Pending Withdrawals', value: stats?.pendingWithdrawals ?? 0, icon: Clock, color: 'text-destructive', link: '/admin/instructors/financials' },
+    { label: 'Withdrawals', value: stats?.pendingWithdrawals ?? 0, icon: Clock, color: 'text-destructive', link: '/admin/instructors/financials' },
+    { label: 'Active Batches', value: stats?.activeBatches ?? 0, icon: Calendar, color: 'text-primary', link: '/admin/batches' },
+    { label: 'Live Classes', value: stats?.scheduledClasses ?? 0, icon: Monitor, color: 'text-accent', link: '/admin/live-classes' },
+    { label: 'Internships', value: stats?.openInternships ?? 0, icon: Briefcase, color: 'text-primary', link: '/admin/internships' },
+    { label: 'Research', value: stats?.publishedResearch ?? 0, icon: FileText, color: 'text-accent', link: '/admin/research' },
+    { label: 'AI Sessions', value: stats?.aiSessions ?? 0, icon: Brain, color: 'text-primary', link: '/admin/ai-chatbot' },
   ];
 
   return (
@@ -195,7 +211,7 @@ const AdminDashboard = () => {
       </div>
 
       {/* Stat Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3">
         {statCards.map((s) => (
           <Link key={s.label} to={s.link} className="group">
             <Card className="transition-all duration-200 hover:shadow-md hover:border-primary/30 group-hover:scale-[1.02]">

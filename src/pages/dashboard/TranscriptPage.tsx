@@ -8,6 +8,7 @@ import { Separator } from '@/components/ui/separator';
 import { Download, GraduationCap, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 import jsPDF from 'jspdf';
+import QRCode from 'qrcode';
 
 const TranscriptPage = () => {
   const { user, profile } = useAuth();
@@ -71,7 +72,7 @@ const TranscriptPage = () => {
   const weightedPoints = grades.reduce((sum: number, g: any) => sum + (g.grade_point || 0) * (g.credits || 0), 0);
   const cgpa = totalCredits > 0 ? (weightedPoints / totalCredits).toFixed(2) : 'N/A';
 
-  const generatePDF = () => {
+  const generatePDF = async () => {
     const doc = new jsPDF();
     const universityName = settings?.university_name || 'Online Textile University';
     const location = settings?.location || '';
@@ -116,7 +117,7 @@ const TranscriptPage = () => {
 
     doc.setFont('helvetica', 'normal');
     for (const g of grades as any[]) {
-      if (y > 270) { doc.addPage(); y = 20; }
+      if (y > 250) { doc.addPage(); y = 20; }
       doc.text((g.courses?.title || 'Unknown').substring(0, 45), 22, y + 5);
       doc.text(g.letter_grade || '—', 122, y + 5);
       doc.text(String(g.grade_point ?? '—'), 147, y + 5);
@@ -130,17 +131,27 @@ const TranscriptPage = () => {
       doc.text('Completed Courses:', 22, y + 5);
       y += 10;
       for (const e of enrollments as any[]) {
-        if (y > 270) { doc.addPage(); y = 20; }
+        if (y > 250) { doc.addPage(); y = 20; }
         doc.text(`• ${e.courses?.title || 'Unknown'}`, 24, y + 5);
         doc.text(`Completed: ${new Date(e.completed_at).toLocaleDateString()}`, 120, y + 5);
         y += 8;
       }
     }
 
+    // QR Code for verification
+    try {
+      const verificationUrl = `${window.location.origin}/verify-transcript?student=${profile?.roll_id || user?.id}&cgpa=${cgpa}&credits=${totalCredits}`;
+      const qrDataUrl = await QRCode.toDataURL(verificationUrl, { width: 80, margin: 1 });
+      y = Math.max(y + 10, 230);
+      doc.addImage(qrDataUrl, 'PNG', 155, y, 25, 25);
+      doc.setFontSize(7);
+      doc.text('Scan to verify', 167.5, y + 28, { align: 'center' });
+    } catch {}
+
     // Footer
-    y = Math.max(y + 20, 250);
+    y = Math.max(y + 20, 260);
     doc.setFontSize(8);
-    doc.text('This is a digitally generated transcript.', 105, y, { align: 'center' });
+    doc.text('This is a digitally generated transcript with QR verification.', 105, y, { align: 'center' });
     if (settings?.authority_name) {
       doc.text(`${settings.authority_name} — ${settings.authority_position || ''}`, 105, y + 5, { align: 'center' });
     }

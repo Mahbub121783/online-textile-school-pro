@@ -1,9 +1,10 @@
-import { BookOpen, Award, Wallet, TrendingUp, Users, FileQuestion } from 'lucide-react';
+import { BookOpen, Award, Wallet, TrendingUp, Users, FileQuestion, CalendarClock } from 'lucide-react';
 import { useEnrollments, useWallet, useLessonProgress } from '@/hooks/useEnrollments';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
+import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useMemo } from 'react';
@@ -35,6 +36,22 @@ const DashboardOverview = () => {
     queryFn: async () => {
       const { data } = await supabase.from('referral_rewards').select('id').eq('referrer_id', user!.id);
       return data ?? [];
+    },
+  });
+
+  // Upcoming installment payments
+  const { data: upcomingInstallments = [] } = useQuery({
+    queryKey: ['upcoming-installments', user?.id],
+    enabled: !!user,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('installment_payments')
+        .select('*, payment_plans(course_id, courses(title))')
+        .eq('user_id', user!.id)
+        .eq('status', 'pending')
+        .order('due_date')
+        .limit(3);
+      return (data ?? []) as any[];
     },
   });
 
@@ -165,6 +182,28 @@ const DashboardOverview = () => {
           </div>
         )}
       </div>
+
+      {/* Upcoming Installments */}
+      {upcomingInstallments.length > 0 && (
+        <div className="bg-card border rounded-xl p-6">
+          <h3 className="font-heading font-bold text-lg mb-4 flex items-center gap-2">
+            <CalendarClock className="h-5 w-5 text-primary" /> Upcoming Payments
+          </h3>
+          <div className="space-y-3">
+            {upcomingInstallments.map((inst: any) => (
+              <div key={inst.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+                <div>
+                  <p className="text-sm font-medium">{inst.payment_plans?.courses?.title || 'Course'}</p>
+                  <p className="text-xs text-muted-foreground">
+                    Installment #{inst.installment_number} • Due {format(new Date(inst.due_date), 'MMM dd, yyyy')}
+                  </p>
+                </div>
+                <span className="font-heading font-bold text-sm">৳{Number(inst.amount).toLocaleString()}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Live Classes & Attendance */}
       <LiveClassesWidget />
