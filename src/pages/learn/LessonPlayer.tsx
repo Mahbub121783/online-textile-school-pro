@@ -214,6 +214,24 @@ const LessonPlayer = () => {
     },
   });
 
+  // Realtime subscription for lesson discussions
+  useEffect(() => {
+    if (!course?.id || !lessonId) return;
+    const channelName = `lesson-discussions-${course.id}-${lessonId}-${Date.now()}`;
+    const channel = supabase
+      .channel(channelName)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'discussions',
+        filter: `course_id=eq.${course.id}`,
+      }, () => {
+        queryClient.invalidateQueries({ queryKey: ['lesson-discussions', course.id, lessonId] });
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [course?.id, lessonId, queryClient]);
+
   // Save video position periodically
   const handleVideoProgress = useCallback((seconds: number) => {
     if (!lessonId || !user?.id || !course?.id) return;
