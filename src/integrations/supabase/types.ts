@@ -3788,56 +3788,228 @@ export type Database = {
           },
         ]
       }
+      research_paper_access: {
+        Row: {
+          access_type: string
+          created_at: string | null
+          id: string
+          paper_id: string
+          user_id: string
+        }
+        Insert: {
+          access_type?: string
+          created_at?: string | null
+          id?: string
+          paper_id: string
+          user_id: string
+        }
+        Update: {
+          access_type?: string
+          created_at?: string | null
+          id?: string
+          paper_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "research_paper_access_paper_id_fkey"
+            columns: ["paper_id"]
+            isOneToOne: false
+            referencedRelation: "research_papers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "research_paper_access_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      research_paper_bookmarks: {
+        Row: {
+          created_at: string | null
+          id: string
+          paper_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          paper_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          paper_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "research_paper_bookmarks_paper_id_fkey"
+            columns: ["paper_id"]
+            isOneToOne: false
+            referencedRelation: "research_papers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "research_paper_bookmarks_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      research_paper_reviews: {
+        Row: {
+          created_at: string | null
+          feedback: string | null
+          id: string
+          is_anonymous: boolean | null
+          paper_id: string
+          rating: number | null
+          reviewer_id: string
+          status: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          feedback?: string | null
+          id?: string
+          is_anonymous?: boolean | null
+          paper_id: string
+          rating?: number | null
+          reviewer_id: string
+          status?: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          feedback?: string | null
+          id?: string
+          is_anonymous?: boolean | null
+          paper_id?: string
+          rating?: number | null
+          reviewer_id?: string
+          status?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "research_paper_reviews_paper_id_fkey"
+            columns: ["paper_id"]
+            isOneToOne: false
+            referencedRelation: "research_papers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "research_paper_reviews_reviewer_id_fkey"
+            columns: ["reviewer_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       research_papers: {
         Row: {
           abstract: string | null
+          access_type: string
           admin_notes: string | null
           authors: Json | null
           category: string | null
+          citation_count: number
+          cover_image_url: string | null
           created_at: string
+          doi: string | null
           download_count: number
           file_url: string | null
           id: string
           is_approved: boolean
+          issue: string | null
           keywords: string | null
+          page_range: string | null
+          price: number | null
           published_date: string | null
+          reviewer_feedback: string | null
+          reviewer_id: string | null
+          revision_notes: string | null
+          status: string
           submitted_by: string | null
           title: string
           updated_at: string
+          view_count: number
+          volume: string | null
         }
         Insert: {
           abstract?: string | null
+          access_type?: string
           admin_notes?: string | null
           authors?: Json | null
           category?: string | null
+          citation_count?: number
+          cover_image_url?: string | null
           created_at?: string
+          doi?: string | null
           download_count?: number
           file_url?: string | null
           id?: string
           is_approved?: boolean
+          issue?: string | null
           keywords?: string | null
+          page_range?: string | null
+          price?: number | null
           published_date?: string | null
+          reviewer_feedback?: string | null
+          reviewer_id?: string | null
+          revision_notes?: string | null
+          status?: string
           submitted_by?: string | null
           title: string
           updated_at?: string
+          view_count?: number
+          volume?: string | null
         }
         Update: {
           abstract?: string | null
+          access_type?: string
           admin_notes?: string | null
           authors?: Json | null
           category?: string | null
+          citation_count?: number
+          cover_image_url?: string | null
           created_at?: string
+          doi?: string | null
           download_count?: number
           file_url?: string | null
           id?: string
           is_approved?: boolean
+          issue?: string | null
           keywords?: string | null
+          page_range?: string | null
+          price?: number | null
           published_date?: string | null
+          reviewer_feedback?: string | null
+          reviewer_id?: string | null
+          revision_notes?: string | null
+          status?: string
           submitted_by?: string | null
           title?: string
           updated_at?: string
+          view_count?: number
+          volume?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "research_papers_reviewer_id_fkey"
+            columns: ["reviewer_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "research_papers_submitted_by_fkey"
             columns: ["submitted_by"]
@@ -4526,6 +4698,14 @@ export type Database = {
       }
       increment_ebook_download: {
         Args: { _ebook_id: string }
+        Returns: undefined
+      }
+      increment_research_paper_download: {
+        Args: { _paper_id: string }
+        Returns: undefined
+      }
+      increment_research_paper_view: {
+        Args: { _paper_id: string }
         Returns: undefined
       }
       notify_admins: {
