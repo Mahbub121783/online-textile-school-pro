@@ -100,8 +100,22 @@ export default function AdminStudents() {
         });
       }
     },
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       toast.success('Student status updated');
+      // Send notifications to affected students
+      import('@/lib/notifications').then(({ createNotificationWithEmail, NOTIFICATION_TYPES }) => {
+        for (const uid of variables.ids) {
+          createNotificationWithEmail({
+            userId: uid,
+            type: variables.active ? NOTIFICATION_TYPES.ACCOUNT_UNBLOCKED : NOTIFICATION_TYPES.ACCOUNT_BLOCKED,
+            title: variables.active ? 'Account Activated ✅' : 'Account Blocked ⚠️',
+            message: variables.active
+              ? 'Your account has been reactivated. You can now access all platform features.'
+              : 'Your account has been temporarily blocked. Please contact support for assistance.',
+            link: '/dashboard',
+          });
+        }
+      });
       qc.invalidateQueries({ queryKey: ['admin-students'] });
       setSelectedIds(new Set());
       setConfirmAction(null);

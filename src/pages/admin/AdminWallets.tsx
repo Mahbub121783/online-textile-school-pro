@@ -120,6 +120,16 @@ const AdminWallets = () => {
         .eq('id', request.id);
       if (updateError) throw updateError;
 
+      // Notify user
+      const { createNotificationWithEmail, NOTIFICATION_TYPES } = await import('@/lib/notifications');
+      await createNotificationWithEmail({
+        userId: request.user_id,
+        type: NOTIFICATION_TYPES.WALLET_TOPUP_APPROVED,
+        title: 'Wallet Top-Up Approved ✅',
+        message: `Your wallet top-up of ৳${Number(request.amount).toLocaleString()} has been approved and credited.`,
+        link: '/dashboard/wallet',
+      });
+
       toast.success('Top-up approved and wallet credited!');
       queryClient.invalidateQueries({ queryKey: ['admin-topup-requests'] });
       queryClient.invalidateQueries({ queryKey: ['admin-wallets'] });
@@ -135,6 +145,16 @@ const AdminWallets = () => {
         .update({ status: 'rejected', admin_note: rejectNote || 'Rejected by admin', processed_at: new Date().toISOString() } as any)
         .eq('id', request.id);
       if (error) throw error;
+
+      // Notify user
+      const { createNotificationWithEmail, NOTIFICATION_TYPES } = await import('@/lib/notifications');
+      await createNotificationWithEmail({
+        userId: request.user_id,
+        type: NOTIFICATION_TYPES.WALLET_TOPUP_REJECTED,
+        title: 'Wallet Top-Up Rejected ❌',
+        message: `Your wallet top-up request of ৳${Number(request.amount).toLocaleString()} was rejected. ${rejectNote || ''}`,
+        link: '/dashboard/wallet',
+      });
 
       toast.success('Top-up request rejected');
       setRejectNote('');
