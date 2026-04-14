@@ -234,6 +234,9 @@ const App = () => (
                   <Route path="internships" element={<InstructorInternships />} />
                   <Route path="analytics" element={<InstructorAnalytics />} />
                   <Route path="plagiarism" element={<InstructorPlagiarism />} />
+                  <Route path="posts" element={<InstructorPosts />} />
+                  <Route path="posts/new" element={<PostEditor />} />
+                  <Route path="posts/:postId/edit" element={<PostEditor />} />
                   <Route path="notifications" element={<NotificationsPage />} />
                 </Route>
                 {/* Admin Panel */}
@@ -257,6 +260,8 @@ const App = () => (
                   <Route path="pages" element={<AdminPages />} />
                   <Route path="pages/:pageId" element={<PageEditor />} />
                   <Route path="posts" element={<AdminPosts />} />
+                  <Route path="posts/new" element={<PostEditor />} />
+                  <Route path="posts/:postId/edit" element={<PostEditor />} />
                   <Route path="media" element={<AdminMedia />} />
                   <Route path="menus" element={<AdminMenus />} />
                   <Route path="appearance" element={<AdminAppearance />} />
