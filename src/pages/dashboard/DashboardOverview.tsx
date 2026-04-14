@@ -1,9 +1,10 @@
-import { BookOpen, Award, Wallet, TrendingUp, Users, FileQuestion } from 'lucide-react';
+import { BookOpen, Award, Wallet, TrendingUp, Users, FileQuestion, CalendarClock } from 'lucide-react';
 import { useEnrollments, useWallet, useLessonProgress } from '@/hooks/useEnrollments';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
+import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useMemo } from 'react';
