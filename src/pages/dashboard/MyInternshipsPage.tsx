@@ -27,7 +27,7 @@ const MyInternshipsPage = () => {
   const [logOpen, setLogOpen] = useState(false);
   const [selectedApp, setSelectedApp] = useState<any>(null);
   const [logForm, setLogForm] = useState({ log_date: new Date().toISOString().split('T')[0], hours_worked: '', activities: '', learnings: '' });
-  const { uploadFile, uploading } = useFileUpload();
+  const { upload, uploading } = useFileUpload();
 
   const { data: applications = [], isLoading } = useQuery({
     queryKey: ['my-internship-apps-full', user?.id],

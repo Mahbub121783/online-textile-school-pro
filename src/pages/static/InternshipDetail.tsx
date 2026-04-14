@@ -23,7 +23,7 @@ const InternshipDetail = () => {
   const [applyOpen, setApplyOpen] = useState(false);
   const [step, setStep] = useState(1);
   const [form, setForm] = useState({ cover_letter: '', resume_url: '', portfolio_url: '', skills: '' as string, availability_date: '' });
-  const { uploadFile, uploading } = useFileUpload();
+  const { upload, uploading } = useFileUpload();
 
   const { data: internship, isLoading } = useQuery({
     queryKey: ['internship-detail', id],
@@ -99,7 +99,8 @@ const InternshipDetail = () => {
   const handleResumeUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const url = await uploadFile(file, { forceR2: true });
+    const result = await upload(file, { forceR2: true });
+    const url = result?.url;
     if (url) setForm(p => ({ ...p, resume_url: url }));
   };
 
