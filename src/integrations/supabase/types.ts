@@ -1114,6 +1114,7 @@ export type Database = {
           price: number | null
           rejection_reason: string | null
           revenue_share_pct: number | null
+          review_count: number | null
           review_status: string | null
           short_description: string | null
           slug: string
@@ -1150,6 +1151,7 @@ export type Database = {
           price?: number | null
           rejection_reason?: string | null
           revenue_share_pct?: number | null
+          review_count?: number | null
           review_status?: string | null
           short_description?: string | null
           slug: string
@@ -1186,6 +1188,7 @@ export type Database = {
           price?: number | null
           rejection_reason?: string | null
           revenue_share_pct?: number | null
+          review_count?: number | null
           review_status?: string | null
           short_description?: string | null
           slug?: string
@@ -4694,6 +4697,35 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      virtual_lab_completions: {
+        Row: {
+          completed_at: string
+          id: string
+          lab_id: string
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string
+          id?: string
+          lab_id: string
+          user_id: string
+        }
+        Update: {
+          completed_at?: string
+          id?: string
+          lab_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "virtual_lab_completions_lab_id_fkey"
+            columns: ["lab_id"]
+            isOneToOne: false
+            referencedRelation: "virtual_labs"
             referencedColumns: ["id"]
           },
         ]
