@@ -4,7 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import {
   MessageCircle, X, Send, ArrowLeft, UserPlus, Check, XIcon,
-  Ban, Trash2, Inbox, MessageSquare, Clock
+  Ban, Trash2, Inbox, MessageSquare, Clock, Bot, Loader2, Sparkles, LogIn
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,9 +13,228 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { formatDistanceToNow } from 'date-fns';
+import ReactMarkdown from 'react-markdown';
+import { useNavigate } from 'react-router-dom';
 
 const REACTIONS = ['👍', '❤️', '😂', '😮', '😢'];
 
+const AI_TUTOR_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-tutor`;
+
+type AiMsg = { role: 'user' | 'assistant'; content: string };
+
+// ─── AI Tutor Tab Content ───
+const AiTutorTab = ({ user }: { user: any }) => {
+  const [messages, setMessages] = useState<AiMsg[]>([]);
+  const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+  }, [messages]);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+
+  const sendMessage = async () => {
+    const text = input.trim();
+    if (!text || loading) return;
+
+    const userMsg: AiMsg = { role: 'user', content: text };
+    const allMessages = [...messages, userMsg];
+    setMessages(allMessages);
+    setInput('');
+    setLoading(true);
+
+    let assistantSoFar = '';
+
+    try {
+      const resp = await fetch(AI_TUTOR_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        },
+        body: JSON.stringify({
+          messages: allMessages.map(m => ({ role: m.role, content: m.content })),
+          user_id: user?.id || 'guest',
+        }),
+      });
+
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({ error: 'AI service error' }));
+        setMessages(prev => [...prev, { role: 'assistant', content: `⚠️ ${err.error || 'Something went wrong.'}` }]);
+        setLoading(false);
+        return;
+      }
+
+      if (!resp.body) throw new Error('No response body');
+
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let textBuffer = '';
+
+      const upsert = (chunk: string) => {
+        assistantSoFar += chunk;
+        setMessages(prev => {
+          const last = prev[prev.length - 1];
+          if (last?.role === 'assistant') {
+            return prev.map((m, i) => i === prev.length - 1 ? { ...m, content: assistantSoFar } : m);
+          }
+          return [...prev, { role: 'assistant', content: assistantSoFar }];
+        });
+      };
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        textBuffer += decoder.decode(value, { stream: true });
+
+        let newlineIndex: number;
+        while ((newlineIndex = textBuffer.indexOf('\n')) !== -1) {
+          let line = textBuffer.slice(0, newlineIndex);
+          textBuffer = textBuffer.slice(newlineIndex + 1);
+          if (line.endsWith('\r')) line = line.slice(0, -1);
+          if (line.startsWith(':') || line.trim() === '') continue;
+          if (!line.startsWith('data: ')) continue;
+          const jsonStr = line.slice(6).trim();
+          if (jsonStr === '[DONE]') break;
+          try {
+            const parsed = JSON.parse(jsonStr);
+            const content = parsed.choices?.[0]?.delta?.content;
+            if (content) upsert(content);
+          } catch { /* partial JSON */ }
+        }
+      }
+    } catch (e) {
+      console.error('AI Tutor error:', e);
+      setMessages(prev => [...prev, { role: 'assistant', content: '⚠️ Connection error. Please try again.' }]);
+    }
+    setLoading(false);
+  };
+
+  const quickPrompts = [
+    "What is GSM in textiles?",
+    "Explain ring spinning",
+    "Calculate yarn count",
+    "Dyeing process steps",
+  ];
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* Header bar */}
+      <div className="flex items-center justify-between px-3 py-2 border-b bg-gradient-to-r from-emerald-500 to-teal-600 text-white shrink-0">
+        <div className="flex items-center gap-2">
+          <div className="w-7 h-7 rounded-full bg-white/20 flex items-center justify-center">
+            <Bot className="h-4 w-4" />
+          </div>
+          <div>
+            <span className="font-heading font-semibold text-xs block leading-tight">AI Tutor</span>
+            <span className="text-[10px] text-emerald-100">Textile Engineering Expert</span>
+          </div>
+        </div>
+        <button onClick={() => setMessages([])} className="p-1 hover:bg-white/20 rounded-lg transition" title="Clear chat">
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
+      </div>
+
+      {/* Messages */}
+      <div ref={scrollRef} className="flex-1 overflow-y-auto p-3 space-y-3">
+        {messages.length === 0 && (
+          <div className="text-center text-muted-foreground text-sm py-4 px-3">
+            <div className="w-12 h-12 mx-auto mb-2 rounded-xl bg-gradient-to-br from-emerald-100 to-teal-100 dark:from-emerald-900/30 dark:to-teal-900/30 flex items-center justify-center">
+              <Bot className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
+            </div>
+            <p className="font-heading font-semibold text-foreground mb-1 text-xs">Hi! I'm your AI Tutor 🎓</p>
+            <p className="text-[11px] mb-3">Ask me about textile engineering, courses, or calculations!</p>
+            <div className="space-y-1.5">
+              {quickPrompts.map((q, i) => (
+                <button
+                  key={i}
+                  onClick={() => setInput(q)}
+                  className="block w-full text-left text-[11px] px-2.5 py-1.5 rounded-lg border hover:bg-muted transition"
+                >
+                  💡 {q}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        {messages.map((msg, i) => (
+          <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} gap-1.5`}>
+            {msg.role === 'assistant' && (
+              <div className="w-5 h-5 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shrink-0 mt-1">
+                <Bot className="h-3 w-3 text-white" />
+              </div>
+            )}
+            <div className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm ${
+              msg.role === 'user'
+                ? 'bg-primary text-primary-foreground rounded-br-md'
+                : 'bg-muted rounded-bl-md'
+            }`}>
+              {msg.role === 'assistant' ? (
+                <div className="prose prose-sm dark:prose-invert max-w-none [&>p]:mb-1 [&>p:last-child]:mb-0 [&>ul]:my-1 [&>ol]:my-1 [&>h3]:text-sm [&>h3]:font-semibold [&>h3]:mt-2 text-xs">
+                  <ReactMarkdown>{msg.content}</ReactMarkdown>
+                </div>
+              ) : (
+                <p className="text-xs">{msg.content}</p>
+              )}
+            </div>
+          </div>
+        ))}
+        {loading && messages[messages.length - 1]?.role === 'user' && (
+          <div className="flex justify-start gap-1.5">
+            <div className="w-5 h-5 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shrink-0">
+              <Bot className="h-3 w-3 text-white" />
+            </div>
+            <div className="bg-muted rounded-2xl rounded-bl-md px-3 py-2">
+              <div className="flex gap-1">
+                <span className="w-1.5 h-1.5 bg-muted-foreground/50 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                <span className="w-1.5 h-1.5 bg-muted-foreground/50 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                <span className="w-1.5 h-1.5 bg-muted-foreground/50 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Input */}
+      <div className="p-2 border-t shrink-0">
+        <form onSubmit={e => { e.preventDefault(); sendMessage(); }} className="flex gap-2">
+          <Input
+            ref={inputRef}
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            placeholder="Ask anything about textiles..."
+            className="text-xs rounded-xl h-8"
+            disabled={loading}
+          />
+          <Button type="submit" size="icon" disabled={loading || !input.trim()} className="rounded-xl shrink-0 h-8 w-8">
+            {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+          </Button>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+// ─── Login Prompt ───
+const LoginPrompt = ({ label }: { label: string }) => {
+  const navigate = useNavigate();
+  return (
+    <div className="flex-1 flex flex-col items-center justify-center gap-3 p-6 text-center">
+      <LogIn className="h-10 w-10 text-muted-foreground/50" />
+      <p className="text-sm text-muted-foreground">Log in to access {label}</p>
+      <Button size="sm" onClick={() => navigate('/auth/login')}>
+        Log in
+      </Button>
+    </div>
+  );
+};
+
+// ─── Main ChatWidget ───
 const ChatWidget = () => {
   const { user } = useAuth();
   const qc = useQueryClient();
@@ -23,7 +242,7 @@ const ChatWidget = () => {
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const [message, setMessage] = useState('');
   const [search, setSearch] = useState('');
-  const [activeTab, setActiveTab] = useState('chats');
+  const [activeTab, setActiveTab] = useState('ai');
   const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
   const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set());
   const [reactingMsgId, setReactingMsgId] = useState<string | null>(null);
@@ -79,7 +298,6 @@ const ChatWidget = () => {
     queryKey: ['chat-conversations', user?.id],
     enabled: !!user?.id && open,
     queryFn: async () => {
-      // Get accepted requests
       const { data: requests } = await supabase
         .from('chat_requests')
         .select('*')
@@ -90,7 +308,6 @@ const ChatWidget = () => {
 
       const contactIds = requests.map((r: any) => r.sender_id === user!.id ? r.receiver_id : r.sender_id);
 
-      // Get last message per contact
       const { data: messages } = await supabase
         .from('chat_messages')
         .select('sender_id, receiver_id, message, created_at, is_read, deleted_at')
@@ -114,7 +331,6 @@ const ChatWidget = () => {
         }
       });
 
-      // Add contacts with no messages yet
       contactIds.forEach(id => {
         if (!userMap.has(id)) userMap.set(id, { lastMessage: 'No messages yet', lastTime: new Date().toISOString(), unread: 0 });
       });
@@ -196,7 +412,7 @@ const ChatWidget = () => {
   // ── Search users ──
   const { data: searchResults = [] } = useQuery({
     queryKey: ['chat-search-users', search],
-    enabled: search.length >= 2 && !selectedUser,
+    enabled: search.length >= 2 && !selectedUser && !!user?.id,
     queryFn: async () => {
       const { data } = await supabase.from('user_profiles').select('id, full_name, avatar_url').ilike('full_name', `%${search}%`).neq('id', user!.id).limit(10);
       return (data ?? []).filter((u: any) => !blockedIds.includes(u.id));
@@ -234,7 +450,6 @@ const ChatWidget = () => {
   // ── Send request ──
   const sendRequest = useMutation({
     mutationFn: async (receiverId: string) => {
-      // Check if request already exists in either direction
       const { data: existing } = await supabase
         .from('chat_requests')
         .select('id, status')
@@ -246,7 +461,7 @@ const ChatWidget = () => {
           setSelectedUser({ userId: receiverId });
           return;
         }
-        return; // already pending
+        return;
       }
 
       await supabase.from('chat_requests').insert({ sender_id: user!.id, receiver_id: receiverId } as any);
@@ -303,13 +518,12 @@ const ChatWidget = () => {
   const reactToMessage = useMutation({
     mutationFn: async ({ msgId, emoji }: { msgId: string; emoji: string }) => {
       const msg = chatMessages.find((m: any) => m.id === msgId);
-      const reactions = (msg as any)?.reactions || {};
-      const key = emoji;
-      if (reactions[key]?.includes(user!.id)) {
-        reactions[key] = reactions[key].filter((id: string) => id !== user!.id);
-        if (reactions[key].length === 0) delete reactions[key];
+      const reactions = { ...((msg as any)?.reactions || {}) };
+      if (reactions[emoji]?.includes(user!.id)) {
+        reactions[emoji] = reactions[emoji].filter((id: string) => id !== user!.id);
+        if (reactions[emoji].length === 0) delete reactions[emoji];
       } else {
-        reactions[key] = [...(reactions[key] || []), user!.id];
+        reactions[emoji] = [...(reactions[emoji] || []), user!.id];
       }
       await supabase.from('chat_messages').update({ reactions } as any).eq('id', msgId);
     },
@@ -333,7 +547,6 @@ const ChatWidget = () => {
     typingTimeoutRef.current = setTimeout(() => {}, 3000);
   };
 
-  // Check if a search result is already a contact
   const getContactStatus = (userId: string): 'accepted' | 'pending' | 'none' => {
     if (conversations.some((c: any) => c.userId === userId)) return 'accepted';
     if (chatRequests.incoming.some((r: any) => r.sender_id === userId) || chatRequests.outgoing.some((r: any) => r.receiver_id === userId)) return 'pending';
@@ -343,14 +556,12 @@ const ChatWidget = () => {
   const totalUnread = conversations.reduce((sum: number, c: any) => sum + (c.unread || 0), 0);
   const pendingCount = chatRequests.incoming.length;
 
-  if (!user) return null;
-
   return (
     <>
-      {/* Floating button */}
+      {/* Floating bubble — always visible */}
       <button
         onClick={() => setOpen(!open)}
-        className="fixed bottom-20 lg:bottom-6 right-4 z-50 h-14 w-14 rounded-full bg-primary text-primary-foreground shadow-lg hover:shadow-xl transition-all flex items-center justify-center"
+        className="fixed bottom-6 right-6 z-[9999] h-14 w-14 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-lg hover:shadow-2xl transition-all flex items-center justify-center"
       >
         {open ? <X className="h-6 w-6" /> : <MessageCircle className="h-6 w-6" />}
         {!open && (totalUnread + pendingCount) > 0 && (
@@ -362,7 +573,7 @@ const ChatWidget = () => {
 
       {/* Chat panel */}
       {open && (
-        <div className="fixed bottom-36 lg:bottom-24 right-4 z-[9999] w-80 sm:w-96 h-[30rem] bg-background border rounded-xl shadow-2xl flex flex-col overflow-hidden">
+        <div className="fixed bottom-24 right-6 z-[9999] w-80 sm:w-96 h-[30rem] bg-background border rounded-xl shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 fade-in duration-200">
           {selectedUser ? (
             <>
               {/* Chat header */}
@@ -403,7 +614,7 @@ const ChatWidget = () => {
               <ScrollArea className="flex-1 p-3">
                 <div className="space-y-2">
                   {chatMessages.map((msg: any) => {
-                    const isMine = msg.sender_id === user.id;
+                    const isMine = msg.sender_id === user!.id;
                     const isDeleted = !!msg.deleted_at;
                     const reactions = msg.reactions || {};
 
@@ -426,7 +637,6 @@ const ChatWidget = () => {
                             </p>
                           </div>
 
-                          {/* Reactions display */}
                           {Object.keys(reactions).length > 0 && (
                             <div className="flex gap-0.5 mt-0.5 flex-wrap">
                               {Object.entries(reactions).map(([emoji, users]: [string, any]) => (
@@ -434,7 +644,7 @@ const ChatWidget = () => {
                                   key={emoji}
                                   onClick={() => reactToMessage.mutate({ msgId: msg.id, emoji })}
                                   className={`text-xs px-1 py-0.5 rounded-full border ${
-                                    users.includes(user.id) ? 'bg-primary/10 border-primary/30' : 'bg-muted border-border'
+                                    users.includes(user!.id) ? 'bg-primary/10 border-primary/30' : 'bg-muted border-border'
                                   }`}
                                 >
                                   {emoji} {users.length}
@@ -443,7 +653,6 @@ const ChatWidget = () => {
                             </div>
                           )}
 
-                          {/* Reaction picker */}
                           {reactingMsgId === msg.id && !isDeleted && (
                             <div className={`absolute ${isMine ? 'right-0' : 'left-0'} -top-8 bg-background border rounded-full shadow-lg px-1 py-0.5 flex gap-0.5 z-10`}>
                               {REACTIONS.map(emoji => (
@@ -498,121 +707,139 @@ const ChatWidget = () => {
                 <span className="font-heading font-bold text-sm">Messages</span>
               </div>
 
-              {/* Search */}
-              <div className="p-2 border-b">
-                <Input
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search users to connect..."
-                  className="h-8 text-sm"
-                />
-              </div>
+              {/* Tabs */}
+              <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col overflow-hidden">
+                <TabsList className="mx-2 mt-1 h-8 w-auto">
+                  <TabsTrigger value="ai" className="text-[11px] flex-1 gap-1 h-7">
+                    <Sparkles className="h-3 w-3" /> AI Tutor
+                  </TabsTrigger>
+                  <TabsTrigger value="chats" className="text-[11px] flex-1 gap-1 h-7">
+                    <MessageSquare className="h-3 w-3" /> Chats
+                    {totalUnread > 0 && <Badge variant="destructive" className="h-4 px-1 text-[9px]">{totalUnread}</Badge>}
+                  </TabsTrigger>
+                  <TabsTrigger value="requests" className="text-[11px] flex-1 gap-1 h-7">
+                    <Inbox className="h-3 w-3" /> Requests
+                    {pendingCount > 0 && <Badge variant="destructive" className="h-4 px-1 text-[9px]">{pendingCount}</Badge>}
+                  </TabsTrigger>
+                  <TabsTrigger value="sent" className="text-[11px] flex-1 gap-1 h-7">
+                    <Clock className="h-3 w-3" /> Sent
+                  </TabsTrigger>
+                </TabsList>
 
-              {/* Search results overlay */}
-              {search.length >= 2 && searchResults.length > 0 ? (
-                <ScrollArea className="flex-1">
-                  <div className="p-2">
-                    <p className="text-xs text-muted-foreground px-2 mb-1 font-medium">Send a message request</p>
-                    {searchResults.map((u: any) => {
-                      const status = getContactStatus(u.id);
-                      return (
-                        <div key={u.id} className="flex items-center gap-2 p-2 rounded-lg hover:bg-secondary transition-colors">
-                          <div className="relative">
-                            <Avatar className="h-8 w-8">
-                              <AvatarImage src={u.avatar_url} />
-                              <AvatarFallback>{u.full_name?.charAt(0)}</AvatarFallback>
-                            </Avatar>
-                            {onlineUsers.has(u.id) && (
-                              <span className="absolute bottom-0 right-0 h-2 w-2 bg-green-500 rounded-full border border-background" />
+                {/* AI Tutor — available to everyone */}
+                <TabsContent value="ai" className="flex-1 overflow-hidden mt-0">
+                  <AiTutorTab user={user} />
+                </TabsContent>
+
+                {/* Chats — requires login */}
+                <TabsContent value="chats" className="flex-1 overflow-hidden mt-0">
+                  {!user ? (
+                    <LoginPrompt label="your messages" />
+                  ) : (
+                    <>
+                      {/* Search */}
+                      <div className="p-2 border-b">
+                        <Input
+                          value={search}
+                          onChange={(e) => setSearch(e.target.value)}
+                          placeholder="Search users to connect..."
+                          className="h-8 text-sm"
+                        />
+                      </div>
+
+                      {search.length >= 2 && searchResults.length > 0 ? (
+                        <ScrollArea className="flex-1">
+                          <div className="p-2">
+                            <p className="text-xs text-muted-foreground px-2 mb-1 font-medium">Send a message request</p>
+                            {searchResults.map((u: any) => {
+                              const status = getContactStatus(u.id);
+                              return (
+                                <div key={u.id} className="flex items-center gap-2 p-2 rounded-lg hover:bg-secondary transition-colors">
+                                  <div className="relative">
+                                    <Avatar className="h-8 w-8">
+                                      <AvatarImage src={u.avatar_url} />
+                                      <AvatarFallback>{u.full_name?.charAt(0)}</AvatarFallback>
+                                    </Avatar>
+                                    {onlineUsers.has(u.id) && (
+                                      <span className="absolute bottom-0 right-0 h-2 w-2 bg-green-500 rounded-full border border-background" />
+                                    )}
+                                  </div>
+                                  <span className="text-sm font-medium truncate flex-1">{u.full_name}</span>
+                                  {status === 'accepted' ? (
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      className="h-7 text-xs"
+                                      onClick={() => { setSelectedUser({ userId: u.id, name: u.full_name, avatar: u.avatar_url }); setSearch(''); }}
+                                    >
+                                      <MessageSquare className="h-3 w-3 mr-1" /> Chat
+                                    </Button>
+                                  ) : status === 'pending' ? (
+                                    <Badge variant="secondary" className="text-[10px]">Pending</Badge>
+                                  ) : (
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="h-7 text-xs"
+                                      onClick={() => sendRequest.mutate(u.id)}
+                                      disabled={sendRequest.isPending}
+                                    >
+                                      <UserPlus className="h-3 w-3 mr-1" /> Request
+                                    </Button>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </ScrollArea>
+                      ) : (
+                        <ScrollArea className="h-full">
+                          <div className="p-2">
+                            {conversations.length === 0 ? (
+                              <p className="text-center text-sm text-muted-foreground py-8">No conversations yet. Search for users to connect!</p>
+                            ) : (
+                              conversations.map((conv: any) => (
+                                <button
+                                  key={conv.userId}
+                                  onClick={() => setSelectedUser(conv)}
+                                  className="w-full flex items-center gap-2.5 p-2 rounded-lg hover:bg-secondary transition-colors"
+                                >
+                                  <div className="relative">
+                                    <Avatar className="h-9 w-9">
+                                      <AvatarImage src={conv.avatar} />
+                                      <AvatarFallback>{conv.name?.charAt(0)}</AvatarFallback>
+                                    </Avatar>
+                                    {onlineUsers.has(conv.userId) && (
+                                      <span className="absolute bottom-0 right-0 h-2.5 w-2.5 bg-green-500 rounded-full border-2 border-background" />
+                                    )}
+                                    {conv.unread > 0 && (
+                                      <span className="absolute -top-1 -right-1 h-4 w-4 bg-destructive text-destructive-foreground text-[9px] rounded-full flex items-center justify-center">
+                                        {conv.unread}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="flex-1 min-w-0 text-left">
+                                    <p className="text-sm font-semibold truncate">{conv.name}</p>
+                                    <p className="text-xs text-muted-foreground truncate">{conv.lastMessage}</p>
+                                  </div>
+                                  <span className="text-[9px] text-muted-foreground shrink-0">
+                                    {formatDistanceToNow(new Date(conv.lastTime), { addSuffix: true })}
+                                  </span>
+                                </button>
+                              ))
                             )}
                           </div>
-                          <span className="text-sm font-medium truncate flex-1">{u.full_name}</span>
-                          {status === 'accepted' ? (
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-7 text-xs"
-                              onClick={() => { setSelectedUser({ userId: u.id, name: u.full_name, avatar: u.avatar_url }); setSearch(''); }}
-                            >
-                              <MessageSquare className="h-3 w-3 mr-1" /> Chat
-                            </Button>
-                          ) : status === 'pending' ? (
-                            <Badge variant="secondary" className="text-[10px]">Pending</Badge>
-                          ) : (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-7 text-xs"
-                              onClick={() => sendRequest.mutate(u.id)}
-                              disabled={sendRequest.isPending}
-                            >
-                              <UserPlus className="h-3 w-3 mr-1" /> Request
-                            </Button>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </ScrollArea>
-              ) : (
-                <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col overflow-hidden">
-                  <TabsList className="mx-2 mt-1 h-8">
-                    <TabsTrigger value="chats" className="text-xs flex-1 gap-1 h-7">
-                      <MessageSquare className="h-3 w-3" /> Chats
-                      {totalUnread > 0 && <Badge variant="destructive" className="h-4 px-1 text-[9px]">{totalUnread}</Badge>}
-                    </TabsTrigger>
-                    <TabsTrigger value="requests" className="text-xs flex-1 gap-1 h-7">
-                      <Inbox className="h-3 w-3" /> Requests
-                      {pendingCount > 0 && <Badge variant="destructive" className="h-4 px-1 text-[9px]">{pendingCount}</Badge>}
-                    </TabsTrigger>
-                    <TabsTrigger value="sent" className="text-xs flex-1 gap-1 h-7">
-                      <Clock className="h-3 w-3" /> Sent
-                    </TabsTrigger>
-                  </TabsList>
+                        </ScrollArea>
+                      )}
+                    </>
+                  )}
+                </TabsContent>
 
-                  {/* Conversations */}
-                  <TabsContent value="chats" className="flex-1 overflow-hidden mt-0">
-                    <ScrollArea className="h-full">
-                      <div className="p-2">
-                        {conversations.length === 0 ? (
-                          <p className="text-center text-sm text-muted-foreground py-8">No conversations yet. Search for users to connect!</p>
-                        ) : (
-                          conversations.map((conv: any) => (
-                            <button
-                              key={conv.userId}
-                              onClick={() => setSelectedUser(conv)}
-                              className="w-full flex items-center gap-2.5 p-2 rounded-lg hover:bg-secondary transition-colors"
-                            >
-                              <div className="relative">
-                                <Avatar className="h-9 w-9">
-                                  <AvatarImage src={conv.avatar} />
-                                  <AvatarFallback>{conv.name?.charAt(0)}</AvatarFallback>
-                                </Avatar>
-                                {onlineUsers.has(conv.userId) && (
-                                  <span className="absolute bottom-0 right-0 h-2.5 w-2.5 bg-green-500 rounded-full border-2 border-background" />
-                                )}
-                                {conv.unread > 0 && (
-                                  <span className="absolute -top-1 -right-1 h-4 w-4 bg-destructive text-destructive-foreground text-[9px] rounded-full flex items-center justify-center">
-                                    {conv.unread}
-                                  </span>
-                                )}
-                              </div>
-                              <div className="flex-1 min-w-0 text-left">
-                                <p className="text-sm font-semibold truncate">{conv.name}</p>
-                                <p className="text-xs text-muted-foreground truncate">{conv.lastMessage}</p>
-                              </div>
-                              <span className="text-[9px] text-muted-foreground shrink-0">
-                                {formatDistanceToNow(new Date(conv.lastTime), { addSuffix: true })}
-                              </span>
-                            </button>
-                          ))
-                        )}
-                      </div>
-                    </ScrollArea>
-                  </TabsContent>
-
-                  {/* Incoming requests */}
-                  <TabsContent value="requests" className="flex-1 overflow-hidden mt-0">
+                {/* Incoming requests */}
+                <TabsContent value="requests" className="flex-1 overflow-hidden mt-0">
+                  {!user ? (
+                    <LoginPrompt label="message requests" />
+                  ) : (
                     <ScrollArea className="h-full">
                       <div className="p-2">
                         {chatRequests.incoming.length === 0 ? (
@@ -666,10 +893,14 @@ const ChatWidget = () => {
                         )}
                       </div>
                     </ScrollArea>
-                  </TabsContent>
+                  )}
+                </TabsContent>
 
-                  {/* Sent requests */}
-                  <TabsContent value="sent" className="flex-1 overflow-hidden mt-0">
+                {/* Sent requests */}
+                <TabsContent value="sent" className="flex-1 overflow-hidden mt-0">
+                  {!user ? (
+                    <LoginPrompt label="sent requests" />
+                  ) : (
                     <ScrollArea className="h-full">
                       <div className="p-2">
                         {chatRequests.outgoing.length === 0 ? (
@@ -693,9 +924,9 @@ const ChatWidget = () => {
                         )}
                       </div>
                     </ScrollArea>
-                  </TabsContent>
-                </Tabs>
-              )}
+                  )}
+                </TabsContent>
+              </Tabs>
             </>
           )}
         </div>
