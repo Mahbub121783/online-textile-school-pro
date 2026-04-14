@@ -96,7 +96,20 @@ const EduMailPage = () => {
           action: 'change-password',
         },
       });
-      if (error) throw error;
+      if (error) {
+        // Try to extract the actual error message from the response
+        let msg = 'Password change failed';
+        try {
+          if (error instanceof Object && 'context' in error) {
+            const body = await (error as any).context?.json?.();
+            if (body?.error) msg = body.error;
+          }
+        } catch (_) {}
+        if (error.message && error.message !== 'Edge Function returned a non-2xx status code') {
+          msg = error.message;
+        }
+        throw new Error(msg);
+      }
       if (data?.error) throw new Error(data.error);
       return data;
     },
