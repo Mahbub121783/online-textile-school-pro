@@ -25,4 +25,4 @@ Disallow: /login
 Disallow: /forgot-password
 Disallow: /reset-password
 
-Sitemap: https://onlinetextileschool.com/sitemap.xml
+Sitemap: https://kaiiyssrwkapromkfidv.supabase.co/functions/v1/sitemap https://onlinetextileschool.com/sitemap.xml
