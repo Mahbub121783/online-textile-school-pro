@@ -131,6 +131,7 @@ const ResearchPaperReader = lazy(() => import("./pages/research/ResearchPaperRea
 const ResearchSubmit = lazy(() => import("./pages/research/ResearchSubmit"));
 const MyResearchPage = lazy(() => import("./pages/dashboard/MyResearchPage"));
 const InstructorResearch = lazy(() => import("./pages/instructor/InstructorResearch"));
+const VirtualLabsPage = lazy(() => import("./pages/static/VirtualLabsPage"));
 const AdminPaymentPlans = lazy(() => import("./pages/admin/AdminPaymentPlans"));
 const AdminCurrencies = lazy(() => import("./pages/admin/AdminCurrencies"));
 const StudentAnalytics = lazy(() => import("./pages/dashboard/StudentAnalytics"));
