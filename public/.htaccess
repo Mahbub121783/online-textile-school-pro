@@ -1,8 +1,5 @@
 RewriteEngine On
 
-# Dynamic sitemap — route sitemap.xml to PHP proxy
-RewriteRule ^sitemap\.xml$ sitemap.xml.php [L]
-
 # SPA fallback — serve index.html for all client-side routes
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
