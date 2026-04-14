@@ -36,7 +36,7 @@ const MyInternshipsPage = () => {
         .from('internship_applications')
         .select('*, internship:internships(*)')
         .eq('user_id', user!.id)
-        .order('applied_at', { ascending: false });
+        .order('created_at', { ascending: false });
       return data ?? [];
     },
     enabled: !!user,
@@ -146,7 +146,7 @@ const MyInternshipsPage = () => {
                     <div>
                       <h3 className="font-heading font-bold">{app.internship?.title}</h3>
                       <p className="text-sm text-muted-foreground">{app.internship?.company}</p>
-                      <p className="text-xs text-muted-foreground mt-1">Applied: {new Date(app.applied_at).toLocaleDateString()}</p>
+                      <p className="text-xs text-muted-foreground mt-1">Applied: {new Date(app.created_at).toLocaleDateString()}</p>
                       {app.interview_date && (
                         <p className="text-xs text-primary mt-1 flex items-center gap-1">
                           <Calendar className="h-3 w-3" /> Interview: {new Date(app.interview_date).toLocaleDateString()}

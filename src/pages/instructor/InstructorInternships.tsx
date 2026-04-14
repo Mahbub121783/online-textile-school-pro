@@ -52,7 +52,7 @@ const InstructorInternships = () => {
         .from('internship_applications')
         .select('*, internship:internships(title, company), applicant:user_profiles!internship_applications_user_id_fkey(full_name, avatar_url)')
         .in('internship_id', internshipIds)
-        .order('applied_at', { ascending: false });
+        .order('created_at', { ascending: false });
       return data ?? [];
     },
     enabled: internshipIds.length > 0,
@@ -213,7 +213,7 @@ const InstructorInternships = () => {
                         <TableCell className="text-sm">{(app as any).internship?.title}</TableCell>
                         <TableCell><Badge variant="outline" className="capitalize text-xs">{app.status}</Badge></TableCell>
                         <TableCell>{app.rating ? <span className="flex items-center gap-0.5 text-sm"><Star className="h-3 w-3 text-yellow-500" />{app.rating}/5</span> : '—'}</TableCell>
-                        <TableCell className="text-xs">{new Date(app.applied_at).toLocaleDateString()}</TableCell>
+                        <TableCell className="text-xs">{new Date(app.created_at).toLocaleDateString()}</TableCell>
                         <TableCell>
                           <div className="flex gap-1">
                             <Button size="sm" variant="outline" onClick={() => { setSelectedApp(app); setReviewForm({ status: app.status, rating: app.rating?.toString() || '', interview_notes: app.interview_notes || '' }); setReviewOpen(true); }}>
