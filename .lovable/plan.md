@@ -1,77 +1,108 @@
 
-# Make Academic System More Advanced & Strong
+
+# Advanced Research Journal & Publication System
 
 ## Current State
-The academic system has basic implementations: Batches, GPA/CGPA widget, Academic Calendar, Attendance (admin-only), Plagiarism (admin-only), Project Groups (admin-only), and Grade Config. However, several critical integrations are missing.
+The research papers system is minimal: a single `research_papers` table with basic fields, a simple public listing page, and an admin approval table. No file upload integration, no PDF reader, no review workflow, no paid access, no instructor involvement, no student dashboard integration.
 
-## Gaps Identified
-1. **No student-facing attendance page** -- students can't see their own attendance history
-2. **Instructors can't assign grades** -- only admins can via AdminGradeConfig; InstructorGradebook is read-only
-3. **Academic Calendar not batch-aware** for students -- shows all events regardless of batch
-4. **No semester/term management** -- semesters are just free-text strings
-5. **No student Project Groups view** -- only admin can see/manage
-6. **Batch doesn't link to courses** -- no auto-enrollment or course assignment per batch
-7. **No academic progress summary** (semester-wise GPA breakdown) on student dashboard
+## What We Will Build
 
-## Plan
+### Database Schema Changes (Migration)
 
-### 1. Student Attendance Page (`src/pages/dashboard/AttendancePage.tsx`)
-- Show all live classes the student attended with status (Present/Absent/Late/Excused)
-- Overall attendance rate with visual progress ring
-- Per-course attendance breakdown
-- Add "Attendance" nav item to DashboardSidebar
+**1. Extend `research_papers` table** with new columns:
+- `status` enum: `draft`, `submitted`, `under_review`, `revision_requested`, `approved`, `rejected` (replaces boolean `is_approved`)
+- `access_type`: `free`, `paid`, `enrolled_only`
+- `price` (numeric, default 0)
+- `doi` (text) -- Digital Object Identifier
+- `volume`, `issue`, `page_range` (journal metadata)
+- `reviewer_id` (uuid, references user_profiles) -- assigned reviewer
+- `reviewer_feedback` (text)
+- `revision_notes` (text) -- author's revision notes
+- `cover_image_url` (text)
+- `citation_count` (integer, default 0)
+- `view_count` (integer, default 0)
 
-### 2. Instructor Grade Assignment (enhance `InstructorGradebook.tsx`)
-- Add an "Assign Grade" button per student row that opens a dialog
-- Dialog lets instructor pick letter grade from `grade_configs`, enter semester, credits, notes
-- Upserts into `student_grades` table (same as admin flow)
-- Show existing grade if already assigned
+**2. New table: `research_paper_reviews`** -- peer review tracking
+- `id`, `paper_id`, `reviewer_id`, `status` (pending/completed), `rating` (1-5), `feedback`, `is_anonymous`, `created_at`
 
-### 3. Batch-Aware Academic Calendar Widget (update `AcademicCalendarWidget.tsx`)
-- Fetch student's batch IDs from `batch_students`
-- Filter calendar events: show global events + events matching student's batch IDs
-- Sort by start_date, limit to 5
+**3. New table: `research_paper_access`** -- tracks who purchased/has access
+- `id`, `paper_id`, `user_id`, `access_type` (purchased/granted), `created_at`
 
-### 4. Student Group Projects Page (`src/pages/dashboard/GroupProjectsPage.tsx` -- enhance existing)
-- Check if existing GroupProjectsPage already works; if stub, flesh it out
-- Show groups the student belongs to, group members, project details, submission status
+**4. New table: `research_paper_bookmarks`** -- user bookmarks/library
+- `id`, `paper_id`, `user_id`, `created_at`
 
-### 5. Semester-Wise GPA Breakdown (enhance `GpaWidget.tsx`)
-- Group grades by semester
-- Show per-semester GPA alongside CGPA
-- Add a small expandable section showing semester breakdown
+### Frontend Pages & Components
 
-### 6. Batch-Course Linking (new DB table + admin UI enhancement)
-- New `batch_courses` table: `batch_id`, `course_id` (many-to-many)
-- Admin can assign courses to batches from the Batch management page
-- Students in a batch see "Batch Courses" in their dashboard
+**5. Research Paper Detail Page** (`/research/:paperId`)
+- Full abstract, author info, metadata (DOI, volume, issue, date, citations, downloads)
+- Access control: free papers show "Read" button; paid papers show price + "Purchase" button
+- BibTeX/APA/MLA citation generator
+- Related papers section
+- Bookmark button for logged-in users
 
-## Database Migration
-```sql
-CREATE TABLE IF NOT EXISTS public.batch_courses (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  batch_id uuid REFERENCES public.batches(id) ON DELETE CASCADE NOT NULL,
-  course_id uuid REFERENCES public.courses(id) ON DELETE CASCADE NOT NULL,
-  created_at timestamptz DEFAULT now(),
-  UNIQUE(batch_id, course_id)
-);
-ALTER TABLE public.batch_courses ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Authenticated users can view batch_courses"
-  ON public.batch_courses FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Admins can manage batch_courses"
-  ON public.batch_courses FOR ALL TO authenticated
-  USING (public.has_role(auth.uid(), 'admin') OR public.has_role(auth.uid(), 'super_admin'));
-```
+**6. Research Paper Reader** (`/research/:paperId/read`)
+- Reuse the same PDF.js architecture as EbookReader
+- Reading modes (light/dark/sepia), zoom, fit-to-width/page
+- Page navigation, TOC extraction
+- Text highlighting and note-taking (persisted per user)
+- DRM protections (no copy, no print, watermark with user info)
+- Access verification via `research_paper_access` or free status
+
+**7. Enhanced Submit/Upload Flow** (students + instructors)
+- Multi-step submission form: metadata -> co-authors -> file upload (using existing R2 upload hook) -> preview -> submit
+- Real file upload via `useFileUpload` (R2 storage with `forceR2: true`)
+- Co-author management (add multiple authors with affiliations)
+- Draft saving -- users can save and come back
+
+**8. Student Dashboard: My Research** (`/dashboard/my-research`)
+- List of submitted papers with status badges (draft, submitted, under review, approved, rejected)
+- Revision requests with reviewer feedback
+- Resubmit capability
+- Bookmarked papers library
+- Download/citation stats for published papers
+
+**9. Instructor Research Management** (`/instructor/research`)
+- Papers submitted by their students
+- Peer review assignments -- review papers assigned by admin
+- Review interface: rating, feedback, approve/request revision/reject
+- Instructor can also submit their own papers
+
+**10. Enhanced Admin Panel** (`/admin/research-papers`)
+- Full workflow management: assign reviewers, change status through pipeline
+- Dashboard stats: total papers, pending reviews, published this month
+- Assign peer reviewers (instructors/other users)
+- Set access type (free/paid) and price
+- Journal metadata management (volume, issue assignment)
+- Bulk actions (approve, reject, delete)
+- Revenue tracking for paid papers
+
+**11. Public Research Catalog** (`/research`)
+- Advanced search with filters: category, date range, author, access type
+- Sort by: newest, most downloaded, most cited
+- Category/department browsing
+- Featured/trending papers section
+- Pagination
+
+### Integration Points
+- **Upload system**: Uses existing `useFileUpload` with `forceR2: true` for PDF storage
+- **Payment**: Paid papers go through existing cart/checkout flow (add to cart like courses/ebooks)
+- **Notifications**: Admin notified on submission; author notified on status change
+- **Navigation**: Add "My Research" to DashboardSidebar; add review section to InstructorSidebar
 
 ## Files to Create/Modify
-| File | Change |
+
+| File | Action |
 |------|--------|
-| `src/pages/dashboard/AttendancePage.tsx` | **New** -- student attendance view |
-| `src/components/layout/DashboardSidebar.tsx` | Add Attendance nav item |
-| `src/pages/instructor/InstructorGradebook.tsx` | Add grade assignment dialog per student |
-| `src/pages/dashboard/AcademicCalendarWidget.tsx` | Batch-aware filtering |
-| `src/pages/dashboard/GpaWidget.tsx` | Semester-wise GPA breakdown |
-| `src/pages/dashboard/GroupProjectsPage.tsx` | Enhance with full student view |
-| `src/pages/admin/AdminBatches.tsx` | Add course assignment to batches |
-| `src/App.tsx` | Add `/dashboard/attendance` route |
-| Migration SQL | Create `batch_courses` table |
+| Migration SQL | Extend `research_papers`, create 3 new tables |
+| `src/pages/static/ResearchPapersPage.tsx` | Complete rewrite -- advanced catalog |
+| `src/pages/research/ResearchPaperDetail.tsx` | **New** -- paper detail page |
+| `src/pages/research/ResearchPaperReader.tsx` | **New** -- PDF reader (based on EbookReader) |
+| `src/pages/research/ResearchSubmit.tsx` | **New** -- multi-step submission form |
+| `src/pages/dashboard/MyResearchPage.tsx` | **New** -- student research dashboard |
+| `src/pages/instructor/InstructorResearch.tsx` | **New** -- instructor review & management |
+| `src/pages/admin/AdminResearchPapers.tsx` | Full rewrite -- workflow dashboard |
+| `src/components/layout/DashboardSidebar.tsx` | Add "My Research" nav item |
+| `src/components/layout/InstructorSidebar.tsx` | Add "Research" nav item |
+| `src/App.tsx` | Add new routes |
+| `src/integrations/supabase/types.ts` | Auto-updated after migration |
+
