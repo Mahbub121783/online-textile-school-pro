@@ -63,6 +63,7 @@ const navGroups = [
     label: 'Account',
     items: [
       { title: 'EduMail', url: '/dashboard/edumail', icon: AtSign },
+      { title: 'Mail', url: '/dashboard/mail', icon: Mail },
     ],
   },
 ];
