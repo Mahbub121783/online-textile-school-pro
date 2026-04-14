@@ -62,11 +62,16 @@ Deno.serve(async (req) => {
 
     const { data: roles } = await sb.from("user_roles").select("role").eq("user_id", user.id);
     const isAdmin = roles?.some((r: any) => r.role === "admin" || r.role === "super_admin");
-    if (!isAdmin) {
-      return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers: corsHeaders });
-    }
 
     const { requestId, action, adminNotes } = await req.json();
+    if (!requestId || !action) {
+      return new Response(JSON.stringify({ error: "requestId and action required" }), { status: 400, headers: corsHeaders });
+    }
+
+    // Allow non-admins only for change-password action (self-service)
+    if (!isAdmin && action !== "change-password") {
+      return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers: corsHeaders });
+    }
     if (!requestId || !action) {
       return new Response(JSON.stringify({ error: "requestId and action required" }), { status: 400, headers: corsHeaders });
     }
