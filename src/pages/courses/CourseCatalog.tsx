@@ -145,14 +145,6 @@ const CourseCatalog = () => {
             name: c.title,
           })),
         }}
-        jsonLd={{
-          '@context': 'https://schema.org',
-          '@type': 'CollectionPage',
-          name: 'Course Catalog — Online Textile School',
-          description: 'Browse textile engineering courses.',
-          url: window.location.href,
-          provider: { '@type': 'EducationalOrganization', name: 'Online Textile School' },
-        }}
       />
       <UtilityBar />
       <Header />
