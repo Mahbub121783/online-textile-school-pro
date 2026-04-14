@@ -22,7 +22,7 @@ const GroupProjectsPage = () => {
   const [submitForm, setSubmitForm] = useState({ title: '', description: '' });
   const [uploadedUrl, setUploadedUrl] = useState('');
 
-  const { uploadFile, isUploading } = useFileUpload();
+  const { upload, uploading: isUploading } = useFileUpload();
 
   const { data: myGroups = [], isLoading } = useQuery({
     queryKey: ['my-project-groups', user?.id],
@@ -64,8 +64,8 @@ const GroupProjectsPage = () => {
     const file = e.target.files?.[0];
     if (!file) return;
     try {
-      const url = await uploadFile(file, { forceR2: true });
-      setUploadedUrl(url);
+      const result = await upload(file, { forceR2: true });
+      setUploadedUrl(result.url);
       toast.success('File uploaded');
     } catch (err: any) {
       toast.error(err.message || 'Upload failed');
