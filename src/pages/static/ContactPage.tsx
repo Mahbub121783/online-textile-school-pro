@@ -33,7 +33,14 @@ const ContactPage = () => {
 
   return (
     <>
-      <SEOHead title="Contact Us | Online Textile School" description="Get in touch with Online Textile School for inquiries, support, or partnership opportunities." />
+      <SEOHead
+        title="Contact Us"
+        description="Get in touch with Online Textile School for inquiries, support, or partnership opportunities. We're here to help."
+        breadcrumbs={[
+          { name: 'Home', url: '/' },
+          { name: 'Contact Us', url: '/contact' },
+        ]}
+      />
       <Header />
       <main className="min-h-screen bg-background">
         <section className="bg-primary text-primary-foreground py-16">

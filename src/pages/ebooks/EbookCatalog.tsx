@@ -105,13 +105,17 @@ const EbookCatalog = () => {
     <div className="min-h-screen flex flex-col">
       <SEOHead
         title="eBook Library"
-        description="Browse textile engineering eBooks covering Spinning, Weaving, Dyeing, Quality Control, Merchandising and more."
+        description="Browse textile engineering eBooks covering Spinning, Weaving, Dyeing, Quality Control, Merchandising and more. Download or read online."
+        breadcrumbs={[
+          { name: 'Home', url: '/' },
+          { name: 'eBooks', url: '/ebooks' },
+        ]}
         jsonLd={{
           '@context': 'https://schema.org', '@type': 'CollectionPage',
           name: 'eBook Library — Online Textile School',
           description: 'Comprehensive textile engineering eBooks for students and professionals.',
-          url: window.location.href,
-          provider: { '@type': 'EducationalOrganization', name: 'Online Textile School' },
+          url: 'https://onlinetextileschool.com/ebooks',
+          provider: { '@type': 'EducationalOrganization', name: 'Online Textile School', url: 'https://onlinetextileschool.com' },
         }}
       />
       <UtilityBar /><Header />

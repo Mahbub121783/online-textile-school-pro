@@ -229,16 +229,33 @@ const CourseDetail = () => {
     <div className="min-h-screen flex flex-col">
       <SEOHead
         title={course.meta_title || course.title}
-        description={course.meta_description || course.short_description || ''}
+        description={course.meta_description || course.short_description || `Learn ${course.title} online at Online Textile School. ${course.difficulty_level || 'All levels'}. ${totalLessons} lessons.`}
+        ogImage={course.og_image_url || course.thumbnail_url || undefined}
+        breadcrumbs={[
+          { name: 'Home', url: '/' },
+          { name: 'Courses', url: '/courses' },
+          { name: course.title, url: `/courses/${course.slug}` },
+        ]}
         jsonLd={{
           '@context': 'https://schema.org', '@type': 'Course',
           name: course.title,
           description: course.short_description || course.description || '',
-          provider: { '@type': 'EducationalOrganization', name: 'Online Textile School' },
-          instructor: { '@type': 'Person', name: instructor?.full_name || 'Instructor' },
-          aggregateRating: reviews.length > 0 ? { '@type': 'AggregateRating', ratingValue: course.avg_rating, reviewCount: reviews.length, bestRating: 5 } : undefined,
-          offers: { '@type': 'Offer', price: finalPrice, priceCurrency: 'BDT', availability: 'https://schema.org/InStock' },
-          courseMode: 'Online', inLanguage: course.language || 'en',
+          url: `https://onlinetextileschool.com/courses/${course.slug}`,
+          image: course.og_image_url || course.thumbnail_url || undefined,
+          provider: { '@type': 'EducationalOrganization', name: 'Online Textile School', url: 'https://onlinetextileschool.com' },
+          instructor: instructor ? { '@type': 'Person', name: instructor.full_name } : undefined,
+          aggregateRating: reviews.length > 0 ? { '@type': 'AggregateRating', ratingValue: course.avg_rating, reviewCount: reviews.length, bestRating: 5, worstRating: 1 } : undefined,
+          offers: { '@type': 'Offer', price: finalPrice, priceCurrency: 'BDT', availability: 'https://schema.org/InStock', url: `https://onlinetextileschool.com/courses/${course.slug}` },
+          courseMode: 'Online',
+          inLanguage: course.language || 'en',
+          numberOfCredits: totalLessons,
+          timeRequired: `PT${totalDuration}M`,
+          educationalLevel: course.difficulty_level || 'Beginner',
+          hasCourseInstance: {
+            '@type': 'CourseInstance',
+            courseMode: 'Online',
+            courseWorkload: `PT${totalDuration}M`,
+          },
         }}
       />
       <UtilityBar />

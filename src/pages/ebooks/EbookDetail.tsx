@@ -136,15 +136,22 @@ const EbookDetail = () => {
         title={ebook?.title}
         description={ebook?.description?.slice(0, 155) || `${ebook?.title} — available as an eBook at Online Textile School.`}
         ogImage={ebook?.cover_url || undefined}
+        breadcrumbs={ebook ? [
+          { name: 'Home', url: '/' },
+          { name: 'eBooks', url: '/ebooks' },
+          { name: ebook.title, url: `/ebooks/${ebook.slug}` },
+        ] : undefined}
         jsonLd={ebook ? {
           '@context': 'https://schema.org', '@type': 'Book',
           name: ebook.title,
+          url: `https://onlinetextileschool.com/ebooks/${ebook.slug}`,
           author: ebook.author ? { '@type': 'Person', name: ebook.author } : undefined,
           description: ebook.description,
           image: ebook.cover_url,
           numberOfPages: ebook.page_count,
+          bookFormat: 'EBook',
           offers: { '@type': 'Offer', price: price, priceCurrency: 'BDT', availability: 'https://schema.org/InStock' },
-          publisher: { '@type': 'Organization', name: 'Online Textile School' },
+          publisher: { '@type': 'Organization', name: 'Online Textile School', url: 'https://onlinetextileschool.com' },
         } : undefined}
       />
       <UtilityBar /><Header />
