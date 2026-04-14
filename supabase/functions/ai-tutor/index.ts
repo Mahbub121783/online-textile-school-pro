@@ -127,6 +127,8 @@ async function tryProviderCall(
   throw new Error(`All ${orderedKeys.length} API keys exhausted for ${provider}`);
 }
 
+const SITE_BASE = Deno.env.get("SITE_URL") || "https://www.onlinetextileschool.com";
+
 // Build deep platform context from database
 async function buildPlatformContext(sb: any, userId: string | null, lastMessage: string) {
   let context = "";
