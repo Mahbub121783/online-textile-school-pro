@@ -59,7 +59,7 @@ const Checkout = () => {
   const autoApplyCouponFromUrl = async () => {
     if (couponAutoApplied || !urlCoupon || appliedCoupon) return;
     setCouponAutoApplied(true);
-    await applyCoupon(urlCoupon, getTotal());
+    await applyCoupon(urlCoupon, getTotal(), user?.id, items);
   };
   if (urlCoupon && !couponAutoApplied && user) {
     autoApplyCouponFromUrl();
@@ -84,7 +84,7 @@ const Checkout = () => {
   }
 
   const subtotal = getTotal();
-  const discountAmount = calculateDiscount(subtotal);
+  const discountAmount = calculateDiscount(subtotal, items);
   const total = Math.max(subtotal - discountAmount, 0);
 
   const getActiveGateway = (name: string) => activeGateways.find((g: any) => g.gateway_name === name);
@@ -95,7 +95,7 @@ const Checkout = () => {
   const isManualPayment = paymentMethod === 'manual';
   const needsTxId = isManualPayment || paymentMethod === 'bank';
 
-  const handleApplyCoupon = () => applyCoupon(couponCode, subtotal);
+  const handleApplyCoupon = () => applyCoupon(couponCode, subtotal, user?.id, items);
   const handleRemoveCoupon = () => { removeCoupon(); setCouponCode(''); };
 
   const generateInvoiceNumber = () => {
@@ -207,6 +207,13 @@ const Checkout = () => {
       if (invoiceError) console.error('Invoice creation failed:', invoiceError);
 
       if (appliedCoupon) {
+        // Record in new coupon_usage table (per-user tracking)
+        await supabase.from('coupon_usage').insert({
+          coupon_id: appliedCoupon.id,
+          user_id: user.id,
+          order_id: orderId,
+        });
+        // Also keep legacy coupon_usages record
         await supabase.from('coupon_usages').insert({
           coupon_id: appliedCoupon.id,
           user_id: user.id,
