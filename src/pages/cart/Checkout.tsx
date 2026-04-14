@@ -16,8 +16,9 @@ import UtilityBar from '@/components/layout/UtilityBar';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import BottomNav from '@/components/layout/BottomNav';
-import { Tag, CreditCard, Smartphone, Loader2, Wallet, Building2, ChevronRight } from 'lucide-react';
+import { Tag, CreditCard, Smartphone, Loader2, Wallet, Building2, ChevronRight, CalendarClock } from 'lucide-react';
 import { useWallet } from '@/hooks/useEnrollments';
+import { useConvertPrice } from '@/hooks/useCurrency';
 
 const Checkout = () => {
   const { items, getTotal, clearCart } = useCartStore();
@@ -40,7 +41,8 @@ const Checkout = () => {
   const [transactionId, setTransactionId] = useState('');
   const [senderNumber, setSenderNumber] = useState('');
   const [submitting, setSubmitting] = useState(false);
-
+  const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
+  const convertPrice = useConvertPrice();
   const { data: allGateways = [] } = useQuery({
     queryKey: ['all-payment-gateways-checkout'],
     queryFn: async () => {
