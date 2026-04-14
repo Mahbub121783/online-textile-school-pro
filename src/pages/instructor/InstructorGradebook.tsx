@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { createNotification } from '@/lib/notifications';
 import { useAuth } from '@/hooks/useAuth';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
@@ -117,8 +118,19 @@ const InstructorGradebook = () => {
         if (error) throw error;
       }
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       queryClient.invalidateQueries({ queryKey: ['existing-student-grades', courseId] });
+      // Send grade published notification to student
+      try {
+        const courseName = courses.find((c: any) => c.id === courseId)?.title || 'your course';
+        await createNotification({
+          userId: gradeDialog.userId,
+          type: 'grade_published',
+          title: 'Grade Published',
+          message: `Your grade for "${courseName}" has been published: ${gradeForm.letter_grade} (${gradeForm.grade_point} pts).`,
+          link: '/dashboard/transcript',
+        });
+      } catch {}
       toast.success('Grade assigned successfully');
       setGradeDialog({ open: false, userId: '', name: '' });
     },

@@ -395,29 +395,38 @@ const CourseDetail = () => {
                 </TabsContent>
 
                 <TabsContent value="reviews" className="pt-6 space-y-6">
-                  {/* Review Form — only for enrolled users who haven't reviewed yet */}
-                  {isEnrolled && !userReview && (
-                    <div className="border rounded-lg p-4 space-y-3 bg-muted/30">
-                      <h3 className="font-heading font-semibold text-sm">Write a Review</h3>
-                      <div className="flex items-center gap-1">
-                        {Array.from({ length: 5 }).map((_, i) => (
-                          <button key={i} onClick={() => setReviewRating(i + 1)} className="p-0.5">
-                            <Star className={`h-5 w-5 ${i < reviewRating ? 'fill-warning text-warning' : 'text-muted-foreground'}`} />
-                          </button>
-                        ))}
-                        <span className="text-sm text-muted-foreground ml-2">{reviewRating}/5</span>
+                  {/* Review Form — only for enrolled users who haven't reviewed yet AND completed >50% */}
+                  {isEnrolled && !userReview && (() => {
+                    const enrollment = undefined; // We use progressData to check
+                    const progressPct = allLessons.length > 0 ? (completedIds.size / allLessons.length) * 100 : 0;
+                    const canReview = progressPct >= 50;
+                    return canReview ? (
+                      <div className="border rounded-lg p-4 space-y-3 bg-muted/30">
+                        <h3 className="font-heading font-semibold text-sm">Write a Review</h3>
+                        <div className="flex items-center gap-1">
+                          {Array.from({ length: 5 }).map((_, i) => (
+                            <button key={i} onClick={() => setReviewRating(i + 1)} className="p-0.5">
+                              <Star className={`h-5 w-5 ${i < reviewRating ? 'fill-warning text-warning' : 'text-muted-foreground'}`} />
+                            </button>
+                          ))}
+                          <span className="text-sm text-muted-foreground ml-2">{reviewRating}/5</span>
+                        </div>
+                        <Textarea
+                          placeholder="Share your experience with this course..."
+                          value={reviewComment}
+                          onChange={(e) => setReviewComment(e.target.value)}
+                          rows={3}
+                        />
+                        <Button size="sm" onClick={() => submitReview.mutate()} disabled={submitReview.isPending}>
+                          {submitReview.isPending ? 'Submitting...' : 'Submit Review'}
+                        </Button>
                       </div>
-                      <Textarea
-                        placeholder="Share your experience with this course..."
-                        value={reviewComment}
-                        onChange={(e) => setReviewComment(e.target.value)}
-                        rows={3}
-                      />
-                      <Button size="sm" onClick={() => submitReview.mutate()} disabled={submitReview.isPending}>
-                        {submitReview.isPending ? 'Submitting...' : 'Submit Review'}
-                      </Button>
-                    </div>
-                  )}
+                    ) : (
+                      <div className="border rounded-lg p-4 bg-muted/30 text-center">
+                        <p className="text-sm text-muted-foreground">Complete at least 50% of the course to leave a review. Current progress: {Math.round(progressPct)}%</p>
+                      </div>
+                    );
+                  })()}
 
                   {userReview && (
                     <div className="border rounded-lg p-4 bg-green-50 dark:bg-green-900/20">
