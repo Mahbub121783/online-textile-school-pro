@@ -876,6 +876,45 @@ export type Database = {
         }
         Relationships: []
       }
+      coupon_usage: {
+        Row: {
+          coupon_id: string
+          id: string
+          order_id: string | null
+          used_at: string
+          user_id: string
+        }
+        Insert: {
+          coupon_id: string
+          id?: string
+          order_id?: string | null
+          used_at?: string
+          user_id: string
+        }
+        Update: {
+          coupon_id?: string
+          id?: string
+          order_id?: string | null
+          used_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "coupon_usage_coupon_id_fkey"
+            columns: ["coupon_id"]
+            isOneToOne: false
+            referencedRelation: "coupons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "coupon_usage_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       coupon_usages: {
         Row: {
           coupon_id: string | null
@@ -924,7 +963,9 @@ export type Database = {
       }
       coupons: {
         Row: {
+          applicable_ids: string[] | null
           applicable_to: string | null
+          applicable_type: string
           code: string
           created_at: string | null
           description: string | null
@@ -934,13 +975,16 @@ export type Database = {
           is_active: boolean | null
           max_discount_amount: number | null
           min_order_amount: number | null
+          per_user_limit: number | null
           usage_limit: number | null
           used_count: number | null
           valid_from: string | null
           valid_until: string | null
         }
         Insert: {
+          applicable_ids?: string[] | null
           applicable_to?: string | null
+          applicable_type?: string
           code: string
           created_at?: string | null
           description?: string | null
@@ -950,13 +994,16 @@ export type Database = {
           is_active?: boolean | null
           max_discount_amount?: number | null
           min_order_amount?: number | null
+          per_user_limit?: number | null
           usage_limit?: number | null
           used_count?: number | null
           valid_from?: string | null
           valid_until?: string | null
         }
         Update: {
+          applicable_ids?: string[] | null
           applicable_to?: string | null
+          applicable_type?: string
           code?: string
           created_at?: string | null
           description?: string | null
@@ -966,6 +1013,7 @@ export type Database = {
           is_active?: boolean | null
           max_discount_amount?: number | null
           min_order_amount?: number | null
+          per_user_limit?: number | null
           usage_limit?: number | null
           used_count?: number | null
           valid_from?: string | null
