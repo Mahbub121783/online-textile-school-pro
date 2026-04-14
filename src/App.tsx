@@ -218,6 +218,7 @@ const App = () => (
                   <Route path="analytics" element={<StudentAnalytics />} />
                   <Route path="edumail" element={<EduMailPage />} />
                   <Route path="mail" element={<MailPage />} />
+                  <Route path="settings" element={<SettingsPage />} />
                 </Route>
                 {/* Instructor Portal */}
                 <Route path="/instructor" element={<InstructorLayout />}>
