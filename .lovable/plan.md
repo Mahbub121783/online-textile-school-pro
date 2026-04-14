@@ -1,98 +1,50 @@
 
 
-# Advanced Internship Management System
-
-## Current State
-- Basic `internships` table with title, company, description, requirements, stipend, duration, deadline, status, is_published
-- Basic `internship_applications` table with cover_letter, resume_url, status, admin_notes
-- Simple public listing page with search and apply dialog
-- Admin page with CRUD and basic application status management
-- No instructor involvement, no student dashboard view, no advanced features
+# Advanced Coupon System: Per-User Limits & Product-Specific Coupons
 
 ## What We Will Build
 
-### Database Migration
+### 1. Database Changes (Migration)
 
-**1. Extend `internships` table:**
-- `location` (text) -- city/remote
-- `internship_type` (text: onsite/remote/hybrid)
-- `department` (text) -- department/category
-- `positions_available` (integer, default 1)
-- `positions_filled` (integer, default 0)
-- `skills_required` (text[]) -- skills tags
-- `contact_email` (text)
-- `supervisor_id` (uuid, references user_profiles) -- assigned instructor supervisor
-- `is_featured` (boolean, default false)
-- `view_count` (integer, default 0)
+**New table: `coupon_usage`** -- tracks per-user coupon usage
+- `id` (uuid), `coupon_id` (uuid, FK to coupons), `user_id` (uuid, FK to auth.users), `order_id` (uuid, nullable), `used_at` (timestamptz, default now())
+- Unique constraint on `(coupon_id, user_id, order_id)` to prevent double-counting
 
-**2. Extend `internship_applications` table:**
-- `portfolio_url` (text)
-- `skills` (text[]) -- applicant's matching skills
-- `availability_date` (date)
-- `interview_date` (timestamptz)
-- `interview_notes` (text)
-- `rating` (integer 1-5) -- admin/instructor rating
-- `reviewed_by` (uuid) -- who reviewed
+**Extend `coupons` table:**
+- `per_user_limit` (integer, nullable) -- max times a single user can use this coupon (null = unlimited)
+- `applicable_type` (text, default 'all') -- 'all', 'course', 'ebook', 'research_paper'
+- `applicable_ids` (uuid[], nullable) -- specific course/ebook IDs this coupon applies to (null = all items of that type)
 
-**3. New table: `internship_tasks`** -- track intern progress
-- `id`, `internship_id`, `application_id`, `title`, `description`, `status` (pending/in_progress/completed/reviewed), `due_date`, `submitted_at`, `submission_url`, `feedback`, `assigned_by`, `created_at`
+### 2. Admin Coupon Form Enhancement (`AdminCoupons.tsx`)
 
-**4. New table: `internship_logs`** -- daily/weekly log entries
-- `id`, `application_id`, `user_id`, `log_date`, `hours_worked`, `activities`, `learnings`, `supervisor_feedback`, `created_at`
+Add to the create/edit dialog:
+- **Per-User Usage Limit** field (number input, placeholder "Unlimited") -- how many times one user can redeem
+- **Applies To** selector: All / Courses Only / Ebooks Only / Research Papers / Specific Items
+- When "Specific Items" chosen for a type, show a **multi-select picker** that loads courses/ebooks from the database so admin can pick which items the coupon is valid for
+- Display per-user limit and scope in the table columns
 
-### Frontend: 7 Major Components
+### 3. Validation Hook Enhancement (`useCouponValidation.ts`)
 
-**5. Enhanced Public Internship Catalog** (`/internships` -- rewrite)
-- Advanced filters: type (onsite/remote/hybrid), department, skills, stipend range
-- Featured internships section at top
-- Detailed internship detail view (requirements, skills, supervisor info)
-- Real file upload for resume via `useFileUpload` (R2)
-- Multi-step application: Personal Info -> Skills Match -> Resume Upload -> Cover Letter -> Submit
+Update `applyCoupon` to:
+- Accept `userId` and `cartItems` (with type info) as parameters
+- Query `coupon_usage` to check how many times the current user has used this coupon
+- Compare against `per_user_limit` -- reject if exceeded
+- Check `applicable_type` and `applicable_ids` against cart items -- reject if no matching items in cart
+- `calculateDiscount` updated to only apply discount to eligible items (not the full subtotal)
 
-**6. Student Dashboard: My Internships** (`/dashboard/internships`)
-- Active applications with status timeline (Applied -> Shortlisted -> Interviewed -> Offered/Rejected)
-- Accepted internship workspace: task list, daily log submission, progress tracking
-- Interview schedule calendar
-- Upload work submissions for assigned tasks
+### 4. Checkout Integration (`Checkout.tsx`)
 
-**7. Instructor Internship Supervision** (`/instructor/internships`)
-- View internships assigned to them as supervisor
-- Review applications (rate, provide feedback, shortlist)
-- Assign tasks to accepted interns
-- Review daily logs and provide feedback
-- Track intern progress with completion stats
-
-**8. Enhanced Admin Panel** (`/admin/internships` -- rewrite)
-- Dashboard stats: total internships, active applications, positions filled, acceptance rate
-- Full pipeline: create internship -> assign supervisor -> review apps -> schedule interviews -> offer/reject
-- Assign instructor supervisors to internships
-- Bulk actions on applications
-- Export applicant data (CSV)
-- Integration with registration system: link internship registration purposes to specific internships
-
-**9. Internship Detail Page** (`/internships/:id`)
-- Full description, requirements, skills needed, supervisor profile
-- Application form or status badge
-- Related internships
-- View count tracking
-
-### Integration Points
-- **Registration System**: Admin can create a registration purpose linked to an internship for external applicants
-- **Notifications**: Notify student on status change, instructor on new assignment, admin on new application
-- **File Upload**: Resume/portfolio upload via existing R2 `useFileUpload`
-- **Navigation**: Add "My Internships" to DashboardSidebar, "Internships" to InstructorSidebar
+- Pass user ID and cart items to the coupon validation
+- After successful order, insert a row into `coupon_usage` to record usage
+- Show which items the coupon applies to if it is product-specific
 
 ## Files to Create/Modify
 
 | File | Action |
 |------|--------|
-| Migration SQL | Extend `internships` + `internship_applications`, create `internship_tasks` + `internship_logs` |
-| `src/pages/static/InternshipsPage.tsx` | Complete rewrite -- advanced catalog with filters |
-| `src/pages/static/InternshipDetail.tsx` | **New** -- detailed internship page |
-| `src/pages/dashboard/MyInternshipsPage.tsx` | **New** -- student internship dashboard |
-| `src/pages/instructor/InstructorInternships.tsx` | **New** -- supervisor interface |
-| `src/pages/admin/AdminInternships.tsx` | Full rewrite -- workflow dashboard with stats |
-| `src/components/layout/DashboardSidebar.tsx` | Add "My Internships" nav item |
-| `src/components/layout/InstructorSidebar.tsx` | Add "Internships" nav item |
-| `src/App.tsx` | Add new routes |
+| Migration SQL | Add `coupon_usage` table, extend `coupons` with `per_user_limit`, `applicable_type`, `applicable_ids` |
+| `src/pages/admin/AdminCoupons.tsx` | Add per-user limit field, product scope selector with item picker |
+| `src/hooks/useCouponValidation.ts` | Add per-user check via `coupon_usage`, product-type filtering |
+| `src/pages/cart/Checkout.tsx` | Record usage in `coupon_usage` after order, pass cart context to validation |
+| `src/integrations/supabase/types.ts` | Update with new table/columns |
 
