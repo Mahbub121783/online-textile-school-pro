@@ -39,6 +39,22 @@ const DashboardOverview = () => {
     },
   });
 
+  // Upcoming installment payments
+  const { data: upcomingInstallments = [] } = useQuery({
+    queryKey: ['upcoming-installments', user?.id],
+    enabled: !!user,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('installment_payments')
+        .select('*, payment_plans(course_id, courses(title))')
+        .eq('user_id', user!.id)
+        .eq('status', 'pending')
+        .order('due_date')
+        .limit(3);
+      return (data ?? []) as any[];
+    },
+  });
+
   // Fetch lesson progress for all enrolled courses to find smart next lesson
   const inProgressEnrollments = enrollments.filter((e: any) => !e.completed_at);
   const firstInProgress = inProgressEnrollments[0];
