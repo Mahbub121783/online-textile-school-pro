@@ -161,13 +161,15 @@ const InstructorGradebook = () => {
           <h2 className="font-heading text-2xl font-bold">Gradebook</h2>
           {enrollments.length > 0 && (
             <Button variant="outline" size="sm" className="gap-1.5" onClick={() => {
-              const headers = ['Student', 'Progress', 'Quiz Avg', 'Assignments Graded', 'Grade', 'Status'];
+              const headers = ['Student', 'Progress', 'Attendance', 'Quiz Avg', 'Assignments Graded', 'Grade', 'Status'];
               const rows = enrollments.map((enr: any) => {
                 const sq = quizAttempts.filter((a: any) => a.user_id === enr.user_id && a.completed_at);
                 const avg = sq.length > 0 ? Math.round(sq.reduce((s: number, a: any) => s + (a.percentage || 0), 0) / sq.length) : '';
                 const sa = assignSubs.filter((s: any) => s.user_id === enr.user_id);
                 const graded = sa.filter((s: any) => s.status === 'graded');
                 const eg = existingGrades.find((g: any) => g.user_id === enr.user_id);
+                const ua = attendanceData.filter((a: any) => a.user_id === enr.user_id);
+                const aRate = ua.length > 0 ? Math.round((ua.filter((a: any) => a.status === 'present' || a.status === 'late').length / ua.length) * 100) + '%' : 'N/A';
                 return [enr.user_profiles?.full_name || 'Student', `${enr.progress_pct || 0}%`, avg ? `${avg}%` : 'N/A', `${graded.length}/${sa.length}`, eg ? `${eg.letter_grade} (${eg.grade_point})` : 'N/A', enr.completed_at ? 'Completed' : 'In Progress'];
               });
               const csv = [headers, ...rows].map(r => r.join(',')).join('\n');
