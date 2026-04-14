@@ -49,6 +49,7 @@ export default function AdminStudents() {
       const { data: orderItems } = await supabase.from('order_items').select('order_id, item_type').eq('item_type', 'ebook');
       const { data: certs } = await supabase.from('certificates').select('user_id').in('user_id', userIds);
       const { data: quizAttempts } = await supabase.from('quiz_attempts').select('user_id').in('user_id', userIds);
+      const { data: emailReqs } = await supabase.from('institutional_email_requests').select('user_id, requested_email, status, is_blocked').in('user_id', userIds);
 
       const orderIds = new Set((orders ?? []).map(o => o.id));
       const ebookCountMap: Record<string, number> = {};
@@ -71,6 +72,9 @@ export default function AdminStudents() {
       const quizCountMap: Record<string, number> = {};
       (quizAttempts ?? []).forEach(q => { quizCountMap[q.user_id] = (quizCountMap[q.user_id] || 0) + 1; });
 
+      const emailMap: Record<string, { email: string; status: string; is_blocked: boolean }> = {};
+      (emailReqs ?? []).forEach((e: any) => { emailMap[e.user_id] = { email: e.requested_email, status: e.status, is_blocked: e.is_blocked }; });
+
       return (profiles ?? []).map(p => ({
         ...p,
         coursesCount: enrollCountMap[p.id] || 0,
@@ -78,6 +82,7 @@ export default function AdminStudents() {
         totalSpend: spendMap[p.id] || 0,
         certsCount: certCountMap[p.id] || 0,
         quizCount: quizCountMap[p.id] || 0,
+        institutionalEmail: emailMap[p.id] || null,
       }));
     },
   });
