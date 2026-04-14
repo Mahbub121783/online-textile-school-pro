@@ -1,0 +1,16 @@
+{
+  "name": "Online Textile School",
+  "short_name": "OTS",
+  "description": "Bangladesh's premier online learning platform for textile engineering",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#0c4a6e",
+  "icons": [
+    {
+      "src": "/logo-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    }
+  ]
+}
