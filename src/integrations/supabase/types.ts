@@ -2305,6 +2305,7 @@ export type Database = {
           id: string
           is_blocked: boolean
           last_password_reset_at: string | null
+          last_synced_uid: number | null
           requested_email: string
           status: string
           updated_at: string
@@ -2325,6 +2326,7 @@ export type Database = {
           id?: string
           is_blocked?: boolean
           last_password_reset_at?: string | null
+          last_synced_uid?: number | null
           requested_email: string
           status?: string
           updated_at?: string
@@ -2345,6 +2347,7 @@ export type Database = {
           id?: string
           is_blocked?: boolean
           last_password_reset_at?: string | null
+          last_synced_uid?: number | null
           requested_email?: string
           status?: string
           updated_at?: string
