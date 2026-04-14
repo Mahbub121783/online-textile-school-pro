@@ -2160,33 +2160,54 @@ export type Database = {
       internship_applications: {
         Row: {
           admin_notes: string | null
+          availability_date: string | null
           cover_letter: string | null
           created_at: string
           id: string
           internship_id: string
+          interview_date: string | null
+          interview_notes: string | null
+          portfolio_url: string | null
+          rating: number | null
           resume_url: string | null
+          reviewed_by: string | null
+          skills: string[] | null
           status: string
           updated_at: string
           user_id: string
         }
         Insert: {
           admin_notes?: string | null
+          availability_date?: string | null
           cover_letter?: string | null
           created_at?: string
           id?: string
           internship_id: string
+          interview_date?: string | null
+          interview_notes?: string | null
+          portfolio_url?: string | null
+          rating?: number | null
           resume_url?: string | null
+          reviewed_by?: string | null
+          skills?: string[] | null
           status?: string
           updated_at?: string
           user_id: string
         }
         Update: {
           admin_notes?: string | null
+          availability_date?: string | null
           cover_letter?: string | null
           created_at?: string
           id?: string
           internship_id?: string
+          interview_date?: string | null
+          interview_notes?: string | null
+          portfolio_url?: string | null
+          rating?: number | null
           resume_url?: string | null
+          reviewed_by?: string | null
+          skills?: string[] | null
           status?: string
           updated_at?: string
           user_id?: string
@@ -2200,6 +2221,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "internship_applications_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "internship_applications_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
@@ -2208,56 +2236,211 @@ export type Database = {
           },
         ]
       }
+      internship_logs: {
+        Row: {
+          activities: string
+          application_id: string
+          created_at: string
+          hours_worked: number
+          id: string
+          learnings: string | null
+          log_date: string
+          supervisor_feedback: string | null
+          user_id: string
+        }
+        Insert: {
+          activities?: string
+          application_id: string
+          created_at?: string
+          hours_worked?: number
+          id?: string
+          learnings?: string | null
+          log_date: string
+          supervisor_feedback?: string | null
+          user_id: string
+        }
+        Update: {
+          activities?: string
+          application_id?: string
+          created_at?: string
+          hours_worked?: number
+          id?: string
+          learnings?: string | null
+          log_date?: string
+          supervisor_feedback?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "internship_logs_application_id_fkey"
+            columns: ["application_id"]
+            isOneToOne: false
+            referencedRelation: "internship_applications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "internship_logs_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      internship_tasks: {
+        Row: {
+          application_id: string
+          assigned_by: string | null
+          created_at: string
+          description: string | null
+          due_date: string | null
+          feedback: string | null
+          id: string
+          internship_id: string
+          status: string
+          submission_url: string | null
+          submitted_at: string | null
+          title: string
+        }
+        Insert: {
+          application_id: string
+          assigned_by?: string | null
+          created_at?: string
+          description?: string | null
+          due_date?: string | null
+          feedback?: string | null
+          id?: string
+          internship_id: string
+          status?: string
+          submission_url?: string | null
+          submitted_at?: string | null
+          title: string
+        }
+        Update: {
+          application_id?: string
+          assigned_by?: string | null
+          created_at?: string
+          description?: string | null
+          due_date?: string | null
+          feedback?: string | null
+          id?: string
+          internship_id?: string
+          status?: string
+          submission_url?: string | null
+          submitted_at?: string | null
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "internship_tasks_application_id_fkey"
+            columns: ["application_id"]
+            isOneToOne: false
+            referencedRelation: "internship_applications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "internship_tasks_assigned_by_fkey"
+            columns: ["assigned_by"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "internship_tasks_internship_id_fkey"
+            columns: ["internship_id"]
+            isOneToOne: false
+            referencedRelation: "internships"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       internships: {
         Row: {
           application_deadline: string | null
           company: string
+          contact_email: string | null
           created_at: string
+          department: string | null
           description: string | null
           duration: string | null
           id: string
+          internship_type: string
+          is_featured: boolean
           is_published: boolean
+          location: string | null
+          positions_available: number
+          positions_filled: number
           posted_by: string | null
           requirements: string | null
+          skills_required: string[] | null
           status: string
           stipend: string | null
+          supervisor_id: string | null
           title: string
           updated_at: string
+          view_count: number
         }
         Insert: {
           application_deadline?: string | null
           company: string
+          contact_email?: string | null
           created_at?: string
+          department?: string | null
           description?: string | null
           duration?: string | null
           id?: string
+          internship_type?: string
+          is_featured?: boolean
           is_published?: boolean
+          location?: string | null
+          positions_available?: number
+          positions_filled?: number
           posted_by?: string | null
           requirements?: string | null
+          skills_required?: string[] | null
           status?: string
           stipend?: string | null
+          supervisor_id?: string | null
           title: string
           updated_at?: string
+          view_count?: number
         }
         Update: {
           application_deadline?: string | null
           company?: string
+          contact_email?: string | null
           created_at?: string
+          department?: string | null
           description?: string | null
           duration?: string | null
           id?: string
+          internship_type?: string
+          is_featured?: boolean
           is_published?: boolean
+          location?: string | null
+          positions_available?: number
+          positions_filled?: number
           posted_by?: string | null
           requirements?: string | null
+          skills_required?: string[] | null
           status?: string
           stipend?: string | null
+          supervisor_id?: string | null
           title?: string
           updated_at?: string
+          view_count?: number
         }
         Relationships: [
           {
             foreignKeyName: "internships_posted_by_fkey"
             columns: ["posted_by"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "internships_supervisor_id_fkey"
+            columns: ["supervisor_id"]
             isOneToOne: false
             referencedRelation: "user_profiles"
             referencedColumns: ["id"]
@@ -4698,6 +4881,10 @@ export type Database = {
       }
       increment_ebook_download: {
         Args: { _ebook_id: string }
+        Returns: undefined
+      }
+      increment_internship_view: {
+        Args: { _internship_id: string }
         Returns: undefined
       }
       increment_research_paper_download: {
