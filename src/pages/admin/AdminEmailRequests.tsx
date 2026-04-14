@@ -94,7 +94,7 @@ const AdminEmailRequests = () => {
       toast({ title: messages[data.status || data.action] || 'Action completed' });
 
       // Send notification to user
-      const req = requests.find((r: any) => r.id === actionDialog?.requestId);
+      const req = requests.find((r: any) => r.id === actionDialog?.id);
       if (req) {
         const { createNotificationWithEmail, NOTIFICATION_TYPES } = await import('@/lib/notifications');
         const status = data.status || data.action;
