@@ -65,6 +65,17 @@ const InstructorAnnouncements = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['instructor-announcements'] });
       setShowModal(false);
+      // Notify enrolled students about new announcement
+      if (!editId && form.course_id) {
+        import('@/lib/notifications').then(({ notifyEnrolledStudents, NOTIFICATION_TYPES }) => {
+          notifyEnrolledStudents(form.course_id, {
+            type: NOTIFICATION_TYPES.ANNOUNCEMENT,
+            title: '📢 New Announcement',
+            message: `New announcement: "${form.title}"`,
+            link: `/learn/${form.course_id}`,
+          });
+        });
+      }
       setEditId(null);
       setForm({ title: '', content: '', course_id: '', is_pinned: false });
       toast.success(editId ? 'Announcement updated' : 'Announcement created');

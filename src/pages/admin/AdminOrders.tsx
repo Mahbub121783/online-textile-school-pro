@@ -147,10 +147,11 @@ const AdminOrders = () => {
         }
       }
 
-      // Send approval notification
-      await supabase.from('notifications').insert({
-        user_id: order.user_id,
-        type: 'order',
+      // Send approval notification + email
+      const { createNotificationWithEmail, NOTIFICATION_TYPES } = await import('@/lib/notifications');
+      await createNotificationWithEmail({
+        userId: order.user_id,
+        type: NOTIFICATION_TYPES.ORDER_APPROVED,
         title: 'Order Approved ✅',
         message: `Your order #${orderId.slice(0, 8)} has been approved. Your items are now accessible!`,
         link: '/dashboard/orders',
@@ -172,9 +173,10 @@ const AdminOrders = () => {
       await supabase.from('orders').update({ status: 'rejected' } as any).eq('id', orderId);
       await supabase.from('invoices').update({ payment_status: 'failed' } as any).eq('order_id', orderId);
 
-      await supabase.from('notifications').insert({
-        user_id: order.user_id,
-        type: 'order',
+      const { createNotificationWithEmail, NOTIFICATION_TYPES } = await import('@/lib/notifications');
+      await createNotificationWithEmail({
+        userId: order.user_id,
+        type: NOTIFICATION_TYPES.ORDER_REJECTED,
         title: 'Order Rejected ❌',
         message: `Your order #${orderId.slice(0, 8)} was rejected. Reason: ${reason || 'Not specified'}`,
         link: '/dashboard/orders',

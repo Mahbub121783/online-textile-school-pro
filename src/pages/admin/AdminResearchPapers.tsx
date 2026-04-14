@@ -77,10 +77,30 @@ const AdminResearchPapers = () => {
         });
       }
     },
-    onSuccess: () => {
+    onSuccess: (_, variables: any) => {
       queryClient.invalidateQueries({ queryKey: ['admin-research-papers'] });
       setManageOpen(false);
       toast.success('Paper updated');
+      // Notify author on status change
+      if (selectedPaper && variables.status && selectedPaper.author_id) {
+        import('@/lib/notifications').then(({ createNotificationWithEmail, NOTIFICATION_TYPES }) => {
+          const statusMsg: Record<string, string> = {
+            approved: `Your research paper "${selectedPaper.title}" has been approved and published! 🎉`,
+            rejected: `Your research paper "${selectedPaper.title}" was rejected. Please review feedback.`,
+            revision_requested: `Revisions requested for your paper "${selectedPaper.title}". Please update and resubmit.`,
+            under_review: `Your paper "${selectedPaper.title}" is now under review.`,
+          };
+          if (statusMsg[variables.status]) {
+            createNotificationWithEmail({
+              userId: selectedPaper.author_id,
+              type: NOTIFICATION_TYPES.RESEARCH_STATUS,
+              title: `Research Paper ${variables.status === 'approved' ? 'Approved ✅' : variables.status === 'rejected' ? 'Rejected ❌' : 'Updated'}`,
+              message: statusMsg[variables.status],
+              link: `/research/${selectedPaper.id}`,
+            });
+          }
+        });
+      }
     },
     onError: (e: any) => toast.error(e.message),
   });

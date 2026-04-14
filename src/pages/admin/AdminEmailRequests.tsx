@@ -82,7 +82,7 @@ const AdminEmailRequests = () => {
       if (data?.error) throw new Error(data.error);
       return data;
     },
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       const messages: Record<string, string> = {
         approved: `✅ Email ${data.email} created!`,
         rejected: '❌ Request rejected',
@@ -92,6 +92,27 @@ const AdminEmailRequests = () => {
         deleted: '🗑️ Email account deleted',
       };
       toast({ title: messages[data.status || data.action] || 'Action completed' });
+
+      // Send notification to user
+      const req = requests.find((r: any) => r.id === actionDialog?.id);
+      if (req) {
+        const { createNotificationWithEmail, NOTIFICATION_TYPES } = await import('@/lib/notifications');
+        const status = data.status || data.action;
+        const notifMap: Record<string, { type: string; title: string; message: string }> = {
+          approved: { type: NOTIFICATION_TYPES.EMAIL_APPROVED, title: 'Institutional Email Approved ✅', message: `Your email ${data.email} has been created! Check your EduMail dashboard for credentials.` },
+          rejected: { type: NOTIFICATION_TYPES.EMAIL_REJECTED, title: 'Email Request Rejected ❌', message: 'Your institutional email request was rejected. Please contact support for details.' },
+          blocked: { type: NOTIFICATION_TYPES.EMAIL_BLOCKED, title: 'Email Account Blocked 🔒', message: `Your institutional email ${req.requested_email} has been temporarily blocked.` },
+          unblocked: { type: NOTIFICATION_TYPES.EMAIL_UNBLOCKED, title: 'Email Account Unblocked 🔓', message: `Your institutional email ${req.requested_email} has been unblocked. You can now access it again.` },
+        };
+        if (notifMap[status]) {
+          createNotificationWithEmail({
+            userId: req.user_id,
+            ...notifMap[status],
+            link: '/dashboard/edumail',
+          });
+        }
+      }
+
       queryClient.invalidateQueries({ queryKey: ['institutional-email-requests'] });
       setActionDialog(null);
       setAdminNotes('');

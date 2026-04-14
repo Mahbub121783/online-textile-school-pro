@@ -42,8 +42,19 @@ const AdminEvents = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-events'] });
       setDialogOpen(false);
-      setEditing(null);
       toast({ title: editing ? 'Event updated' : 'Event created' });
+      // Notify all students about new events
+      if (!editing) {
+        import('@/lib/notifications').then(({ notifyAllStudentsWithEmail, NOTIFICATION_TYPES }) => {
+          notifyAllStudentsWithEmail({
+            type: NOTIFICATION_TYPES.EVENT_PUBLISHED,
+            title: '📅 New Event: ' + form.title,
+            message: `A new event "${form.title}" has been scheduled. Don't miss it!`,
+            link: '/events',
+          });
+        });
+      }
+      setEditing(null);
     },
   });
 

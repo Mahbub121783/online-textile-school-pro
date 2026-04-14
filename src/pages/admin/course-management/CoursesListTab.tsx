@@ -42,6 +42,25 @@ const CoursesListTab = () => {
       const { error } = await supabase.from('courses').update({ review_status: 'approved', is_published: true }).eq('id', courseId);
       if (error) throw error;
       await supabase.from('admin_activity_log').insert({ admin_id: user!.id, action: 'Approved course', target_type: 'course', target_id: courseId });
+      // Notify instructor
+      const { createNotificationWithEmail, notifyAllStudentsWithEmail, NOTIFICATION_TYPES } = await import('@/lib/notifications');
+      const course = courses?.find((c: any) => c.id === courseId);
+      if (course?.instructor_id) {
+        await createNotificationWithEmail({
+          userId: course.instructor_id,
+          type: NOTIFICATION_TYPES.COURSE_APPROVED,
+          title: 'Course Approved ✅',
+          message: `Your course "${course.title}" has been approved and is now published!`,
+          link: `/courses/${course.slug}`,
+        });
+      }
+      // Notify all students about new course
+      await notifyAllStudentsWithEmail({
+        type: NOTIFICATION_TYPES.COURSE_PUBLISHED,
+        title: 'New Course Available 📚',
+        message: `A new course "${course?.title}" is now available. Check it out!`,
+        link: `/courses/${course?.slug}`,
+      });
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-courses-list'] }); toast.success('Course approved'); },
   });
@@ -51,6 +70,18 @@ const CoursesListTab = () => {
       const { error } = await supabase.from('courses').update({ review_status: 'rejected', rejection_reason: reason, is_published: false }).eq('id', courseId);
       if (error) throw error;
       await supabase.from('admin_activity_log').insert({ admin_id: user!.id, action: 'Rejected course', target_type: 'course', target_id: courseId, details: { reason } as any });
+      // Notify instructor
+      const { createNotificationWithEmail, NOTIFICATION_TYPES } = await import('@/lib/notifications');
+      const course = courses?.find((c: any) => c.id === courseId);
+      if (course?.instructor_id) {
+        await createNotificationWithEmail({
+          userId: course.instructor_id,
+          type: NOTIFICATION_TYPES.COURSE_REJECTED,
+          title: 'Course Rejected ❌',
+          message: `Your course "${course?.title}" was rejected. Reason: ${reason}`,
+          link: '/instructor/courses',
+        });
+      }
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-courses-list'] }); setRejectDialog({ open: false, courseId: '' }); setRejectionReason(''); toast.success('Course rejected'); },
   });
