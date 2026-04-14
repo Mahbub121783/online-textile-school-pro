@@ -4462,6 +4462,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      cleanup_old_ai_chats: { Args: never; Returns: undefined }
       credit_wallet: {
         Args: {
           _amount: number
