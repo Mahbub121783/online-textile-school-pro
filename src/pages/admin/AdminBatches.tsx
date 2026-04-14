@@ -6,12 +6,13 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { toast } from 'sonner';
-import { Plus, Users, Edit, Trash2, UserPlus } from 'lucide-react';
+import { Plus, Users, Edit, Trash2, UserPlus, BookOpen } from 'lucide-react';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 
 interface Batch {
   id: string;
@@ -35,6 +36,7 @@ const AdminBatches = () => {
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
   const [showAssign, setShowAssign] = useState<string | null>(null);
+  const [showCourses, setShowCourses] = useState<string | null>(null);
   const [editBatch, setEditBatch] = useState<Batch | null>(null);
   const [form, setForm] = useState({ name: '', description: '', start_date: '', end_date: '', status: 'upcoming', max_students: '' });
   const [searchStudent, setSearchStudent] = useState('');
@@ -78,6 +80,26 @@ const AdminBatches = () => {
       return data || [];
     },
     enabled: searchStudent.length >= 2,
+  });
+
+  // All courses for batch-course linking
+  const { data: allCourses = [] } = useQuery({
+    queryKey: ['all-courses-list'],
+    queryFn: async () => {
+      const { data } = await supabase.from('courses').select('id, title').order('title');
+      return data ?? [];
+    },
+  });
+
+  // Courses assigned to the selected batch
+  const { data: batchCourses = [] } = useQuery({
+    queryKey: ['batch-courses', showCourses],
+    queryFn: async () => {
+      if (!showCourses) return [];
+      const { data } = await supabase.from('batch_courses' as any).select('*, courses:course_id(id, title)').eq('batch_id', showCourses);
+      return (data || []) as any[];
+    },
+    enabled: !!showCourses,
   });
 
   const saveBatch = useMutation({
@@ -145,11 +167,30 @@ const AdminBatches = () => {
     },
   });
 
+  const toggleBatchCourse = useMutation({
+    mutationFn: async ({ courseId, assigned }: { courseId: string; assigned: boolean }) => {
+      if (assigned) {
+        const { error } = await supabase.from('batch_courses' as any).delete().eq('batch_id', showCourses).eq('course_id', courseId);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from('batch_courses' as any).insert({ batch_id: showCourses, course_id: courseId });
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['batch-courses', showCourses] });
+      toast.success('Batch courses updated');
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
   const openEdit = (b: Batch) => {
     setEditBatch(b);
     setForm({ name: b.name, description: b.description || '', start_date: b.start_date, end_date: b.end_date || '', status: b.status, max_students: b.max_students?.toString() || '' });
     setShowForm(true);
   };
+
+  const assignedCourseIds = batchCourses.map((bc: any) => bc.course_id);
 
   return (
     <div className="space-y-6">
@@ -236,6 +277,29 @@ const AdminBatches = () => {
         </DialogContent>
       </Dialog>
 
+      {/* Assign Courses Dialog */}
+      <Dialog open={!!showCourses} onOpenChange={() => setShowCourses(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader><DialogTitle>Assign Courses — {batches.find(b => b.id === showCourses)?.name}</DialogTitle></DialogHeader>
+          <div className="space-y-2 max-h-96 overflow-auto">
+            {allCourses.map((c: any) => {
+              const isAssigned = assignedCourseIds.includes(c.id);
+              return (
+                <div
+                  key={c.id}
+                  className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50 cursor-pointer"
+                  onClick={() => toggleBatchCourse.mutate({ courseId: c.id, assigned: isAssigned })}
+                >
+                  <Checkbox checked={isAssigned} />
+                  <span className="text-sm">{c.title}</span>
+                </div>
+              );
+            })}
+            {allCourses.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">No courses found</p>}
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Batch List */}
       <Card>
         <Table>
@@ -262,6 +326,7 @@ const AdminBatches = () => {
                 <TableCell>{b.end_date || '-'}</TableCell>
                 <TableCell>{(batchStudentCounts as any)[b.id] || 0}{b.max_students ? `/${b.max_students}` : ''}</TableCell>
                 <TableCell className="space-x-1">
+                  <Button variant="ghost" size="sm" onClick={() => setShowCourses(b.id)} title="Assign Courses"><BookOpen className="h-4 w-4" /></Button>
                   <Button variant="ghost" size="sm" onClick={() => setShowAssign(b.id)}><Users className="h-4 w-4" /></Button>
                   <Button variant="ghost" size="sm" onClick={() => openEdit(b)}><Edit className="h-4 w-4" /></Button>
                   <Button variant="ghost" size="sm" onClick={() => deleteBatch.mutate(b.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
