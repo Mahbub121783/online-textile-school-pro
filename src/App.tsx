@@ -59,6 +59,8 @@ const AdminCoupons = lazy(() => import("./pages/admin/AdminCoupons"));
 const AdminWallets = lazy(() => import("./pages/admin/AdminWallets"));
 const AdminPages = lazy(() => import("./pages/admin/AdminPages"));
 const AdminPosts = lazy(() => import("./pages/admin/AdminPosts"));
+const PostEditor = lazy(() => import("./pages/admin/PostEditor"));
+const InstructorPosts = lazy(() => import("./pages/instructor/InstructorPosts"));
 const AdminMedia = lazy(() => import("./pages/admin/AdminMedia"));
 const AdminMenus = lazy(() => import("./pages/admin/AdminMenus"));
 const AdminAppearance = lazy(() => import("./pages/admin/AdminAppearance"));

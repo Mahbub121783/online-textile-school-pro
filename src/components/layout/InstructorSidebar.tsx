@@ -46,6 +46,7 @@ const navGroups = [
   {
     label: 'Community',
     items: [
+      { title: 'Blog Posts', url: '/instructor/posts', icon: FileText },
       { title: 'Forum', url: '/forum', icon: MessageSquare },
       { title: 'Research', url: '/instructor/research', icon: FlaskConical },
       { title: 'Internships', url: '/instructor/internships', icon: Briefcase },
