@@ -149,9 +149,11 @@ async function buildPlatformContext(sb: any, userId: string | null, lastMessage:
           const meta = r.metadata || {};
           const slug = meta.slug || "";
           let link = "";
-          if (r.entity_type === "course" && slug) link = ` → /courses/${slug}`;
-          else if (r.entity_type === "ebook" && slug) link = ` → /ebooks/${slug}`;
-          else if (r.entity_type === "event") link = ` → /events`;
+          if (r.entity_type === "course" && slug) link = ` → ${SITE_BASE}/courses/${slug}`;
+          else if (r.entity_type === "ebook" && slug) link = ` → ${SITE_BASE}/ebooks/${slug}`;
+          else if (r.entity_type === "event") link = ` → ${SITE_BASE}/events`;
+          else if (r.entity_type === "lesson" && slug) link = ` → ${SITE_BASE}/learn/${slug}`;
+          else if (r.entity_type === "learning_path" && slug) link = ` → ${SITE_BASE}/learning-paths/${slug}`;
           context += `- [${r.entity_type.toUpperCase()}] **${r.title}**: ${(r.content_summary || "").slice(0, 400)}${link}\n`;
         }
       }
