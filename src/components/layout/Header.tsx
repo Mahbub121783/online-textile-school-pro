@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Search, ShoppingCart, Menu, X, ChevronDown, ChevronRight, User, LogOut, GraduationCap, Shield, Heart, TrendingUp } from 'lucide-react';
+import { Search, ShoppingCart, Menu, X, ChevronDown, Heart, User, LogOut, GraduationCap, Shield, BookOpen, Settings, TrendingUp } from 'lucide-react';
 import ThemeToggle from '@/components/ThemeToggle';
 import LanguageToggle from '@/components/LanguageToggle';
 import { Button } from '@/components/ui/button';
@@ -9,6 +9,14 @@ import { useCartStore } from '@/stores/cartStore';
 import NotificationBell from '@/components/layout/NotificationBell';
 import { COURSE_CATEGORIES } from '@/lib/constants';
 import OTSLogo from '@/assets/OTS_LOGO.png';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 
 const TRENDING_SEARCHES = [
   'Spinning Technology',
@@ -18,50 +26,23 @@ const TRENDING_SEARCHES = [
   'Quality Control',
 ];
 
-const NAV_ITEMS = [
-  { label: 'Find Courses', href: '/courses' },
-  { label: 'Get Certified', href: '/learning-paths', hasDropdown: true },
-  { label: 'eBooks', href: '/ebooks' },
-];
-
-const CERTIFICATION_MENU = [
-  {
-    heading: 'Learning Paths',
-    items: [
-      { label: 'Spinning Expert', href: '/learning-paths' },
-      { label: 'Weaving Professional', href: '/learning-paths' },
-      { label: 'Dyeing & Finishing', href: '/learning-paths' },
-    ],
-  },
-  {
-    heading: 'Popular Certifications',
-    items: [
-      { label: 'Textile Quality Control', href: '/learning-paths' },
-      { label: 'Garments Technology', href: '/learning-paths' },
-      { label: 'Yarn Manufacturing', href: '/learning-paths' },
-      { label: 'Merchandising', href: '/learning-paths' },
-    ],
-  },
-];
-
-const RIGHT_NAV = [
-  { label: 'Become Instructor', href: '/become-instructor' },
-  { label: 'My Learning', href: '/dashboard/courses', requiresAuth: true },
-];
-
 const Header = () => {
   const [scrolled, setScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [searchFocused, setSearchFocused] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [certDropdown, setCertDropdown] = useState(false);
-  const { user, roles, signOut } = useAuth();
+  const { user, roles, signOut, profile } = useAuth();
   const itemCount = useCartStore((s) => s.getItemCount());
   const navigate = useNavigate();
   const searchRef = useRef<HTMLDivElement>(null);
 
   const isInstructor = roles.includes('instructor') || roles.includes('admin') || roles.includes('super_admin');
   const isAdmin = roles.includes('admin') || roles.includes('super_admin');
+
+  const userInitials = profile?.full_name
+    ? profile.full_name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2)
+    : user?.email?.[0]?.toUpperCase() || 'U';
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 10);
@@ -90,77 +71,87 @@ const Header = () => {
 
   return (
     <header className={`sticky top-0 z-50 w-full transition-all duration-300 ${scrolled ? 'bg-background/95 backdrop-blur-md shadow-md' : 'bg-background border-b'}`}>
-      {/* ===== ROW 1: Main header (desktop/tablet) ===== */}
+      {/* ===== DESKTOP HEADER ===== */}
       <div className="hidden md:block">
-        <div className="container flex items-center gap-4 h-[64px]">
+        <div className="container flex items-center gap-6 h-16">
           {/* Logo */}
-          <Link to="/" className="flex items-center gap-2 shrink-0">
-            <img src={OTSLogo} alt="Online Textile School" className="h-10 w-10 object-contain" />
-            <span className="font-heading font-bold text-base lg:text-lg text-primary leading-tight">
-              Online Textile<br className="hidden lg:block" /> School
+          <Link to="/" className="flex items-center gap-2.5 shrink-0">
+            <img src={OTSLogo} alt="Online Textile School" className="h-9 w-9 object-contain" />
+            <span className="font-heading font-bold text-base text-primary leading-tight hidden lg:block">
+              Online Textile<br />School
             </span>
           </Link>
 
-          {/* Primary Nav Links */}
-          <nav className="hidden lg:flex items-center gap-1 shrink-0">
-            {NAV_ITEMS.map((item) => (
-              <div
-                key={item.label}
-                className="relative"
-                onMouseEnter={() => item.hasDropdown && setCertDropdown(true)}
-                onMouseLeave={() => item.hasDropdown && setCertDropdown(false)}
-              >
-                <Link
-                  to={item.href}
-                  className={`flex items-center gap-1 px-3 py-2 text-sm font-medium transition-colors rounded-md hover:text-primary ${certDropdown && item.hasDropdown ? 'text-primary' : 'text-foreground'}`}
-                >
-                  {item.label}
-                  {item.hasDropdown && <ChevronDown className="h-3 w-3" />}
-                </Link>
+          {/* Nav links */}
+          <nav className="hidden lg:flex items-center gap-0.5 shrink-0">
+            <Link to="/courses" className="px-3 py-2 text-sm font-medium text-foreground hover:text-primary transition-colors rounded-md">
+              Find Courses
+            </Link>
 
-                {/* Certification dropdown */}
-                {item.hasDropdown && certDropdown && (
-                  <div className="absolute top-full left-0 w-[320px] bg-background border rounded-lg shadow-xl p-4 animate-fade-in z-50">
-                    {CERTIFICATION_MENU.map((section) => (
-                      <div key={section.heading} className="mb-3 last:mb-0">
-                        <p className="text-xs font-bold text-primary mb-1.5 uppercase tracking-wide">{section.heading}</p>
-                        {section.items.map((ci) => (
-                          <Link
-                            key={ci.label}
-                            to={ci.href}
-                            className="flex items-center justify-between px-2 py-1.5 text-sm rounded-md hover:bg-secondary transition-colors"
-                            onClick={() => setCertDropdown(false)}
-                          >
-                            {ci.label}
-                            <ChevronRight className="h-3 w-3 text-muted-foreground" />
-                          </Link>
-                        ))}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ))}
+            <div
+              className="relative"
+              onMouseEnter={() => setCertDropdown(true)}
+              onMouseLeave={() => setCertDropdown(false)}
+            >
+              <Link
+                to="/learning-paths"
+                className={`flex items-center gap-1 px-3 py-2 text-sm font-medium transition-colors rounded-md hover:text-primary ${certDropdown ? 'text-primary' : 'text-foreground'}`}
+              >
+                Get Certified
+                <ChevronDown className="h-3.5 w-3.5" />
+              </Link>
+
+              {certDropdown && (
+                <div className="absolute top-full left-0 w-[280px] bg-background border rounded-lg shadow-xl p-3 animate-fade-in z-50">
+                  <p className="text-xs font-bold text-primary mb-2 uppercase tracking-wide px-2">Learning Paths</p>
+                  {['Spinning Expert', 'Weaving Professional', 'Dyeing & Finishing'].map((item) => (
+                    <Link
+                      key={item}
+                      to="/learning-paths"
+                      className="block px-2 py-1.5 text-sm rounded-md hover:bg-secondary transition-colors"
+                      onClick={() => setCertDropdown(false)}
+                    >
+                      {item}
+                    </Link>
+                  ))}
+                  <div className="border-t my-2" />
+                  <p className="text-xs font-bold text-primary mb-2 uppercase tracking-wide px-2">Popular Certifications</p>
+                  {['Textile Quality Control', 'Garments Technology', 'Yarn Manufacturing', 'Merchandising'].map((item) => (
+                    <Link
+                      key={item}
+                      to="/learning-paths"
+                      className="block px-2 py-1.5 text-sm rounded-md hover:bg-secondary transition-colors"
+                      onClick={() => setCertDropdown(false)}
+                    >
+                      {item}
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <Link to="/ebooks" className="px-3 py-2 text-sm font-medium text-foreground hover:text-primary transition-colors rounded-md">
+              eBooks
+            </Link>
           </nav>
 
-          {/* Search Bar */}
-          <div ref={searchRef} className="flex-1 max-w-xl relative">
+          {/* Search */}
+          <div ref={searchRef} className="flex-1 max-w-lg relative">
             <form onSubmit={handleSearch} className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <input
                 type="text"
                 placeholder="Search for anything"
-                className="w-full h-10 pl-10 pr-4 rounded-full border-2 border-input bg-background text-sm focus:outline-none focus:border-primary transition-colors"
+                className="w-full h-10 pl-10 pr-4 rounded-full border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onFocus={() => setSearchFocused(true)}
               />
             </form>
 
-            {/* Trending dropdown */}
             {searchFocused && (
-              <div className="absolute top-full left-0 right-0 mt-1 bg-background border rounded-lg shadow-xl p-4 z-50 animate-fade-in">
-                <p className="text-sm font-bold text-foreground mb-2">Trending</p>
+              <div className="absolute top-full left-0 right-0 mt-1 bg-background border rounded-lg shadow-xl p-3 z-50 animate-fade-in">
+                <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Trending</p>
                 {TRENDING_SEARCHES.map((term) => (
                   <button
                     key={term}
@@ -172,7 +163,7 @@ const Header = () => {
                       setSearchFocused(false);
                     }}
                   >
-                    <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                    <TrendingUp className="h-3.5 w-3.5 text-muted-foreground" />
                     {term}
                   </button>
                 ))}
@@ -180,36 +171,36 @@ const Header = () => {
             )}
           </div>
 
-          {/* Right side nav */}
+          {/* Right nav */}
           <nav className="hidden lg:flex items-center gap-1 shrink-0">
-            {RIGHT_NAV.map((item) => {
-              if (item.requiresAuth && !user) return null;
-              return (
-                <Link key={item.label} to={item.href} className="px-3 py-2 text-sm font-medium text-foreground hover:text-primary transition-colors whitespace-nowrap">
-                  {item.label}
-                </Link>
-              );
-            })}
+            <Link to="/become-instructor" className="px-3 py-2 text-sm font-medium text-foreground hover:text-primary transition-colors whitespace-nowrap">
+              Become Instructor
+            </Link>
+            {user && (
+              <Link to="/dashboard/courses" className="px-3 py-2 text-sm font-medium text-foreground hover:text-primary transition-colors whitespace-nowrap">
+                My Learning
+              </Link>
+            )}
           </nav>
 
-          {/* Action icons */}
-          <div className="flex items-center gap-1 shrink-0">
+          {/* Action icons — clean & minimal */}
+          <div className="flex items-center gap-0.5 shrink-0">
             <LanguageToggle />
             <ThemeToggle />
 
             {user && (
               <Link to="/dashboard/wishlist">
-                <Button variant="ghost" size="icon" className="relative">
-                  <Heart className="h-5 w-5" />
+                <Button variant="ghost" size="icon" className="h-9 w-9">
+                  <Heart className="h-[18px] w-[18px]" />
                 </Button>
               </Link>
             )}
 
             <Link to="/cart" className="relative">
-              <Button variant="ghost" size="icon">
-                <ShoppingCart className="h-5 w-5" />
+              <Button variant="ghost" size="icon" className="h-9 w-9">
+                <ShoppingCart className="h-[18px] w-[18px]" />
                 {itemCount > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-accent text-accent-foreground text-xs w-5 h-5 flex items-center justify-center rounded-full font-bold">
+                  <span className="absolute -top-0.5 -right-0.5 bg-accent text-accent-foreground text-[10px] w-[18px] h-[18px] flex items-center justify-center rounded-full font-bold">
                     {itemCount}
                   </span>
                 )}
@@ -218,52 +209,80 @@ const Header = () => {
 
             {user && <NotificationBell basePath="/dashboard" />}
 
+            {/* User avatar dropdown or auth buttons */}
             {user ? (
-              <div className="flex items-center gap-1">
-                {isAdmin && (
-                  <Button variant="ghost" size="icon" onClick={() => navigate('/admin')} title="Admin">
-                    <Shield className="h-5 w-5" />
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-9 w-9 rounded-full p-0 ml-1">
+                    <Avatar className="h-8 w-8 border-2 border-primary/20">
+                      <AvatarFallback className="bg-primary text-primary-foreground text-xs font-bold">
+                        {userInitials}
+                      </AvatarFallback>
+                    </Avatar>
                   </Button>
-                )}
-                {isInstructor && (
-                  <Button variant="ghost" size="icon" onClick={() => navigate('/instructor')} title="Instructor">
-                    <GraduationCap className="h-5 w-5" />
-                  </Button>
-                )}
-                <Button variant="ghost" size="icon" onClick={() => navigate('/dashboard')} title="Dashboard">
-                  <User className="h-5 w-5" />
-                </Button>
-                <Button variant="ghost" size="icon" onClick={signOut} title="Sign Out">
-                  <LogOut className="h-5 w-5" />
-                </Button>
-              </div>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-52">
+                  <div className="px-3 py-2">
+                    <p className="text-sm font-medium truncate">{profile?.full_name || 'Student'}</p>
+                    <p className="text-xs text-muted-foreground truncate">{user.email}</p>
+                  </div>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => navigate('/dashboard')}>
+                    <User className="mr-2 h-4 w-4" /> Dashboard
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => navigate('/dashboard/courses')}>
+                    <BookOpen className="mr-2 h-4 w-4" /> My Courses
+                  </DropdownMenuItem>
+                  {isInstructor && (
+                    <DropdownMenuItem onClick={() => navigate('/instructor')}>
+                      <GraduationCap className="mr-2 h-4 w-4" /> Instructor Portal
+                    </DropdownMenuItem>
+                  )}
+                  {isAdmin && (
+                    <DropdownMenuItem onClick={() => navigate('/admin')}>
+                      <Shield className="mr-2 h-4 w-4" /> Admin Panel
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuItem onClick={() => navigate('/dashboard/settings')}>
+                    <Settings className="mr-2 h-4 w-4" /> Settings
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={signOut} className="text-destructive focus:text-destructive">
+                    <LogOut className="mr-2 h-4 w-4" /> Sign Out
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             ) : (
-              <div className="flex items-center gap-2">
-                <Button variant="ghost" size="sm" onClick={() => navigate('/auth/login')}>Login</Button>
-                <Button size="sm" className="bg-accent hover:bg-accent-hover text-accent-foreground" onClick={() => navigate('/auth/register')}>Register</Button>
+              <div className="flex items-center gap-2 ml-2">
+                <Button variant="ghost" size="sm" className="h-8 text-sm" onClick={() => navigate('/auth/login')}>
+                  Log in
+                </Button>
+                <Button size="sm" className="h-8 text-sm bg-primary hover:bg-primary/90 text-primary-foreground" onClick={() => navigate('/auth/register')}>
+                  Sign up
+                </Button>
               </div>
             )}
           </div>
         </div>
       </div>
 
-      {/* ===== ROW 2: Category bar (desktop only) ===== */}
-      <div className="hidden lg:block border-t">
+      {/* ===== CATEGORY BAR (desktop) ===== */}
+      <div className="hidden lg:block border-t bg-muted/30">
         <div className="container">
-          <nav className="flex items-center justify-center gap-1 h-[44px] overflow-x-auto">
+          <nav className="flex items-center gap-0.5 h-10 overflow-hidden">
             {COURSE_CATEGORIES.map((cat) => (
               <Link
                 key={cat.slug}
                 to={`/courses?category=${cat.slug}`}
-                className="px-3 py-1.5 text-sm text-foreground hover:text-primary transition-colors whitespace-nowrap"
+                className="px-2.5 py-1 text-[13px] text-foreground/80 hover:text-primary transition-colors whitespace-nowrap"
               >
                 {cat.name}
               </Link>
             ))}
-            <Link to="/events" className="px-3 py-1.5 text-sm text-foreground hover:text-primary transition-colors whitespace-nowrap">Events</Link>
-            <Link to="/blog" className="px-3 py-1.5 text-sm text-foreground hover:text-primary transition-colors whitespace-nowrap">Blog</Link>
-            <Link to="/forum" className="px-3 py-1.5 text-sm text-foreground hover:text-primary transition-colors whitespace-nowrap">Forum</Link>
-            <Link to="/about" className="px-3 py-1.5 text-sm text-foreground hover:text-primary transition-colors whitespace-nowrap">About</Link>
+            <Link to="/events" className="px-2.5 py-1 text-[13px] text-foreground/80 hover:text-primary transition-colors whitespace-nowrap">Events</Link>
+            <Link to="/blog" className="px-2.5 py-1 text-[13px] text-foreground/80 hover:text-primary transition-colors whitespace-nowrap">Blog</Link>
+            <Link to="/forum" className="px-2.5 py-1 text-[13px] text-foreground/80 hover:text-primary transition-colors whitespace-nowrap">Forum</Link>
+            <Link to="/about" className="px-2.5 py-1 text-[13px] text-foreground/80 hover:text-primary transition-colors whitespace-nowrap">About</Link>
           </nav>
         </div>
       </div>
@@ -272,25 +291,24 @@ const Header = () => {
       <div className="md:hidden">
         <div className="container flex items-center justify-between h-14">
           <Link to="/" className="flex items-center gap-2 shrink-0">
-            <img src={OTSLogo} alt="Online Textile School" className="h-9 w-9 object-contain" />
-            <span className="font-heading font-bold text-base text-primary">OTS</span>
+            <img src={OTSLogo} alt="OTS" className="h-8 w-8 object-contain" />
+            <span className="font-heading font-bold text-sm text-primary">OTS</span>
           </Link>
 
-          <div className="flex items-center gap-1">
-            <LanguageToggle />
+          <div className="flex items-center gap-0.5">
             <ThemeToggle />
             {user && <NotificationBell basePath="/dashboard" />}
             <Link to="/cart" className="relative">
-              <Button variant="ghost" size="icon">
-                <ShoppingCart className="h-5 w-5" />
+              <Button variant="ghost" size="icon" className="h-9 w-9">
+                <ShoppingCart className="h-[18px] w-[18px]" />
                 {itemCount > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-accent text-accent-foreground text-xs w-5 h-5 flex items-center justify-center rounded-full font-bold">
+                  <span className="absolute -top-0.5 -right-0.5 bg-accent text-accent-foreground text-[10px] w-[18px] h-[18px] flex items-center justify-center rounded-full font-bold">
                     {itemCount}
                   </span>
                 )}
               </Button>
             </Link>
-            <Button variant="ghost" size="icon" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
+            <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
               {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
             </Button>
           </div>
@@ -299,55 +317,57 @@ const Header = () => {
 
       {/* ===== MOBILE MENU ===== */}
       {mobileMenuOpen && (
-        <div className="md:hidden border-t bg-background animate-fade-in">
-          <div className="container py-4 space-y-2">
+        <div className="md:hidden border-t bg-background animate-fade-in max-h-[80vh] overflow-y-auto">
+          <div className="container py-3 space-y-1">
             <form onSubmit={handleSearch} className="relative mb-3">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <input
                 type="text"
                 placeholder="Search courses..."
-                className="w-full h-10 pl-10 pr-4 rounded-md border border-input bg-background text-sm"
+                className="w-full h-10 pl-10 pr-4 rounded-lg border border-input bg-background text-sm"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
             </form>
+
             {[
-              { label: 'Home', href: '/' },
               { label: 'Courses', href: '/courses' },
               { label: 'Learning Paths', href: '/learning-paths' },
               { label: 'eBooks', href: '/ebooks' },
-              { label: 'Departments', href: '/departments' },
               { label: 'Events', href: '/events' },
               { label: 'Blog', href: '/blog' },
               { label: 'Forum', href: '/forum' },
-              { label: 'Registration', href: '/register' },
-              { label: 'Faculty', href: '/faculty' },
               { label: 'About', href: '/about' },
             ].map((link) => (
               <Link key={link.label} to={link.href} className="block px-3 py-2.5 text-sm font-medium rounded-md hover:bg-secondary" onClick={() => setMobileMenuOpen(false)}>
                 {link.label}
               </Link>
             ))}
-            <div className="border-t pt-3 mt-3 space-y-2">
+
+            <div className="border-t pt-3 mt-2 space-y-1.5">
               {user ? (
                 <>
-                  {isAdmin && (
-                    <Button variant="outline" className="w-full" onClick={() => { navigate('/admin'); setMobileMenuOpen(false); }}>
-                      <Shield className="h-4 w-4 mr-2" /> Admin Panel
-                    </Button>
-                  )}
+                  <Button variant="outline" className="w-full justify-start" size="sm" onClick={() => { navigate('/dashboard'); setMobileMenuOpen(false); }}>
+                    <User className="h-4 w-4 mr-2" /> Dashboard
+                  </Button>
                   {isInstructor && (
-                    <Button variant="outline" className="w-full" onClick={() => { navigate('/instructor'); setMobileMenuOpen(false); }}>
-                      <GraduationCap className="h-4 w-4 mr-2" /> Instructor Portal
+                    <Button variant="outline" className="w-full justify-start" size="sm" onClick={() => { navigate('/instructor'); setMobileMenuOpen(false); }}>
+                      <GraduationCap className="h-4 w-4 mr-2" /> Instructor
                     </Button>
                   )}
-                  <Button variant="outline" className="w-full" onClick={() => { navigate('/dashboard'); setMobileMenuOpen(false); }}>Dashboard</Button>
-                  <Button variant="ghost" className="w-full" onClick={() => { signOut(); setMobileMenuOpen(false); }}>Sign Out</Button>
+                  {isAdmin && (
+                    <Button variant="outline" className="w-full justify-start" size="sm" onClick={() => { navigate('/admin'); setMobileMenuOpen(false); }}>
+                      <Shield className="h-4 w-4 mr-2" /> Admin
+                    </Button>
+                  )}
+                  <Button variant="ghost" className="w-full justify-start text-destructive" size="sm" onClick={() => { signOut(); setMobileMenuOpen(false); }}>
+                    <LogOut className="h-4 w-4 mr-2" /> Sign Out
+                  </Button>
                 </>
               ) : (
                 <>
-                  <Button variant="outline" className="w-full" onClick={() => { navigate('/auth/login'); setMobileMenuOpen(false); }}>Login</Button>
-                  <Button className="w-full bg-accent hover:bg-accent-hover text-accent-foreground" onClick={() => { navigate('/auth/register'); setMobileMenuOpen(false); }}>Register</Button>
+                  <Button variant="outline" className="w-full" size="sm" onClick={() => { navigate('/auth/login'); setMobileMenuOpen(false); }}>Log in</Button>
+                  <Button className="w-full bg-primary text-primary-foreground" size="sm" onClick={() => { navigate('/auth/register'); setMobileMenuOpen(false); }}>Sign up</Button>
                 </>
               )}
             </div>
