@@ -2142,37 +2142,61 @@ export type Database = {
           admin_notes: string | null
           approved_at: string | null
           approved_by: string | null
+          blocked_at: string | null
           created_at: string
+          current_password: string | null
+          disk_usage_bytes: number | null
+          email_quota_mb: number
           generated_password: string | null
           id: string
+          is_blocked: boolean
+          last_password_reset_at: string | null
           requested_email: string
           status: string
           updated_at: string
           user_id: string
+          valid_from: string | null
+          valid_until: string | null
         }
         Insert: {
           admin_notes?: string | null
           approved_at?: string | null
           approved_by?: string | null
+          blocked_at?: string | null
           created_at?: string
+          current_password?: string | null
+          disk_usage_bytes?: number | null
+          email_quota_mb?: number
           generated_password?: string | null
           id?: string
+          is_blocked?: boolean
+          last_password_reset_at?: string | null
           requested_email: string
           status?: string
           updated_at?: string
           user_id: string
+          valid_from?: string | null
+          valid_until?: string | null
         }
         Update: {
           admin_notes?: string | null
           approved_at?: string | null
           approved_by?: string | null
+          blocked_at?: string | null
           created_at?: string
+          current_password?: string | null
+          disk_usage_bytes?: number | null
+          email_quota_mb?: number
           generated_password?: string | null
           id?: string
+          is_blocked?: boolean
+          last_password_reset_at?: string | null
           requested_email?: string
           status?: string
           updated_at?: string
           user_id?: string
+          valid_from?: string | null
+          valid_until?: string | null
         }
         Relationships: []
       }
