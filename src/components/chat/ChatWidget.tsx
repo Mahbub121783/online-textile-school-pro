@@ -651,24 +651,37 @@ const ChatWidget = () => {
 
   return (
     <>
-      {/* Floating bubble — always visible */}
+      {/* Floating bubble — draggable, semi-transparent */}
       <button
-        onClick={() => setOpen(!open)}
-        className="fixed bottom-6 right-6 z-[9999] h-14 w-14 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-lg hover:shadow-2xl transition-all flex items-center justify-center"
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onClick={() => { if (!didDragRef.current) setOpen(!open); }}
+        className="fixed z-[9999] h-14 w-14 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-lg hover:shadow-2xl transition-shadow flex items-center justify-center touch-none select-none"
+        style={{
+          left: bubblePos.x,
+          top: bubblePos.y,
+          opacity: isDragging ? 0.9 : 0.6,
+          cursor: isDragging ? 'grabbing' : 'grab',
+        }}
       >
         {open ? <X className="h-6 w-6" /> : <MessageCircle className="h-6 w-6" />}
         {!open && (totalUnread + pendingCount) > 0 && (
-          <span className="absolute -top-1 -right-1 h-5 w-5 bg-destructive text-destructive-foreground text-xs rounded-full flex items-center justify-center">
+          <span className="absolute -top-1 -right-1 h-5 w-5 bg-destructive text-destructive-foreground text-xs rounded-full flex items-center justify-center opacity-100">
             {totalUnread + pendingCount}
           </span>
         )}
       </button>
 
-      {/* Chat panel */}
+      {/* Chat panel — positioned relative to bubble */}
       {open && (
-        <div className="fixed bottom-24 right-6 z-[9999] w-80 sm:w-96 h-[30rem] bg-background border rounded-xl shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 fade-in duration-200">
-          {selectedUser ? (
-            <>
+        <div
+          className="fixed z-[9999] w-80 sm:w-96 h-[30rem] bg-background/95 backdrop-blur-sm border rounded-xl shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 fade-in duration-200"
+          style={{
+            left: Math.min(bubblePos.x - 280, window.innerWidth - 400),
+            top: Math.max(8, bubblePos.y - 490),
+          }}
+        >
               {/* Chat header */}
               <div className="px-3 py-2.5 border-b bg-primary/5 flex items-center gap-2">
                 <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => { setSelectedUser(null); setReactingMsgId(null); }}>
