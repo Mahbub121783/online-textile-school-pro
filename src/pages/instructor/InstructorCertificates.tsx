@@ -60,6 +60,8 @@ const InstructorCertificates = () => {
       certificate_number: 'CERT-PREVIEW',
       completion_date: format(new Date(), 'MMMM dd, yyyy'),
       instructor_signature: 'Instructor',
+      grade_letter: 'A+',
+      grade_point: '4.00 / 4.00',
     };
     renderCertificateToCanvas(previewTemplate.background_url, previewTemplate.fields_config || [], sampleData).then(offscreen => {
       const canvas = previewCanvasRef.current!;

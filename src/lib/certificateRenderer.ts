@@ -28,6 +28,8 @@ export interface CertificateData {
   certificate_number: string;
   completion_date: string;
   instructor_signature: string;
+  grade_letter?: string;
+  grade_point?: string;
 }
 
 // Shared image cache
@@ -59,6 +61,8 @@ function getFieldText(field: CertificateField, data: CertificateData): string {
     case 'certificate_number': return data.certificate_number;
     case 'completion_date': return data.completion_date;
     case 'instructor_signature': return data.instructor_signature;
+    case 'grade_letter': return data.grade_letter || '';
+    case 'grade_point': return data.grade_point || '';
     case 'custom_text': return field.value || '';
     default: return field.value || '';
   }

@@ -10,6 +10,7 @@ import { format } from 'date-fns';
 import { useProfileCompleteness } from '@/hooks/useProfileCompleteness';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import { Skeleton } from '@/components/ui/skeleton';
 import { downloadCertificatePDF, type CertificateField, type CertificateData } from '@/lib/certificateRenderer';
 
 const CertificatesPage = () => {
@@ -72,6 +73,19 @@ const CertificatesPage = () => {
   });
   const templateMap = new Map(templates.map((t: any) => [t.id, t]));
 
+  // Grade configs for mapping score → letter grade
+  const { data: gradeConfigs = [] } = useQuery({
+    queryKey: ['grade-configs-cert'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('grade_configs')
+        .select('*')
+        .eq('is_active', true)
+        .order('min_pct', { ascending: false });
+      return data ?? [];
+    },
+  });
+
   // Best quiz scores per course
   const { data: quizAttempts = [] } = useQuery({
     queryKey: ['cert-quiz-attempts', user?.id],
@@ -94,17 +108,32 @@ const CertificatesPage = () => {
     },
   });
 
+  // Helper: map score to grade
+  const getGradeFromScore = (score: number | null) => {
+    if (score == null || gradeConfigs.length === 0) return { letter: '', point: '' };
+    const match = gradeConfigs.find((g: any) => score >= g.min_pct && score <= g.max_pct);
+    if (!match) return { letter: '', point: '' };
+    const maxGP = Math.max(...gradeConfigs.map((g: any) => g.grade_point));
+    return {
+      letter: match.letter_grade,
+      point: `${match.grade_point.toFixed(2)} / ${maxGP.toFixed(2)}`,
+    };
+  };
+
   const downloadMutation = useMutation({
     mutationFn: async (cert: any) => {
       const course = courses.find((c: any) => c.id === cert.course_id);
       const template = templateMap.get(course?.cert_template_id) || cert.template_snapshot;
       const fieldsConfig: CertificateField[] = template?.fields_config || [];
+      const grade = getGradeFromScore(cert.score_percentage);
       const data: CertificateData = {
         student_name: profile?.full_name || 'Student',
         course_title: course?.title || 'Course',
         certificate_number: cert.certificate_number,
         completion_date: cert.issued_at ? format(new Date(cert.issued_at), 'MMMM dd, yyyy') : '',
         instructor_signature: '',
+        grade_letter: grade.letter,
+        grade_point: grade.point,
       };
       await downloadCertificatePDF(template?.background_url || null, fieldsConfig, data, `certificate-${cert.certificate_number}.pdf`);
       await supabase.from('certificates').update({
