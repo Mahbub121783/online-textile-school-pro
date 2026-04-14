@@ -63,7 +63,9 @@ const DEFAULT_FIELDS: CertificateField[] = [
   { key: 'custom_text', label: 'Title Text', x: 50, y: 20, fontSize: 28, fontColor: '#1a1a1a', fontWeight: 'bold', fontStyle: 'normal', fontFamily: 'Georgia, serif', textAlign: 'center', visible: true, value: 'Certificate of Completion', type: 'text' },
   { key: 'student_name', label: 'Student Name', x: 50, y: 42, fontSize: 32, fontColor: '#1a1a1a', fontWeight: 'bold', fontStyle: 'normal', fontFamily: "'Great Vibes', cursive", textAlign: 'center', visible: true, type: 'text' },
   { key: 'course_title', label: 'Course Title', x: 50, y: 55, fontSize: 20, fontColor: '#333333', fontWeight: 'semibold', fontStyle: 'normal', fontFamily: 'Arial, sans-serif', textAlign: 'center', visible: true, type: 'text' },
-  { key: 'completion_date', label: 'Completion Date', x: 50, y: 68, fontSize: 14, fontColor: '#555555', fontWeight: 'normal', fontStyle: 'normal', fontFamily: 'Arial, sans-serif', textAlign: 'center', visible: true, type: 'text' },
+  { key: 'grade_letter', label: 'Grade', x: 30, y: 68, fontSize: 18, fontColor: '#1a1a1a', fontWeight: 'bold', fontStyle: 'normal', fontFamily: "'Cinzel', serif", textAlign: 'center', visible: true, type: 'text' },
+  { key: 'grade_point', label: 'Grade Point', x: 70, y: 68, fontSize: 14, fontColor: '#555555', fontWeight: 'normal', fontStyle: 'normal', fontFamily: 'Arial, sans-serif', textAlign: 'center', visible: true, type: 'text' },
+  { key: 'completion_date', label: 'Completion Date', x: 50, y: 76, fontSize: 14, fontColor: '#555555', fontWeight: 'normal', fontStyle: 'normal', fontFamily: 'Arial, sans-serif', textAlign: 'center', visible: true, type: 'text' },
   { key: 'certificate_number', label: 'Certificate #', x: 50, y: 88, fontSize: 11, fontColor: '#888888', fontWeight: 'normal', fontStyle: 'normal', fontFamily: 'Courier New, monospace', textAlign: 'center', visible: true, type: 'text' },
   { key: 'instructor_signature', label: 'Instructor Signature', x: 75, y: 82, fontSize: 16, fontColor: '#333333', fontWeight: 'normal', fontStyle: 'italic', fontFamily: "'Dancing Script', cursive", textAlign: 'center', visible: true, type: 'text' },
 ];
@@ -74,6 +76,8 @@ const SAMPLE_DATA: CertificateData = {
   certificate_number: 'CERT-2026-0001',
   completion_date: 'March 25, 2026',
   instructor_signature: 'Prof. Rahman',
+  grade_letter: 'A+',
+  grade_point: '4.00 / 4.00',
 };
 
 const AdminCertificates = () => {
