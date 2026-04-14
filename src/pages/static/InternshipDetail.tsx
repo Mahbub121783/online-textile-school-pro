@@ -202,7 +202,7 @@ const InternshipDetail = () => {
                   <div className="text-center space-y-2">
                     <p className="text-sm text-muted-foreground">You've applied</p>
                     <Badge className="capitalize text-sm">{myApp.status}</Badge>
-                    <p className="text-xs text-muted-foreground mt-1">Applied on {new Date(myApp.applied_at).toLocaleDateString()}</p>
+                    <p className="text-xs text-muted-foreground mt-1">Applied on {new Date(myApp.created_at).toLocaleDateString()}</p>
                   </div>
                 ) : user ? (
                   <Button className="w-full gap-2" onClick={() => setApplyOpen(true)}>

@@ -110,7 +110,8 @@ const MyInternshipsPage = () => {
   const handleTaskFileUpload = async (taskId: string, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const url = await uploadFile(file, { forceR2: true });
+    const result = await upload(file, { forceR2: true });
+    const url = result?.url;
     if (url) submitTaskMutation.mutate({ taskId, url });
   };
 
