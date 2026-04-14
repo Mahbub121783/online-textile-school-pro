@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -25,6 +25,7 @@ const MailPage = () => {
   const [searchQ, setSearchQ] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showSettings, setShowSettings] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   // Get user's institutional email
   const { data: emailReq } = useQuery({
@@ -74,6 +75,50 @@ const MailPage = () => {
       return { unread: unread || 0, drafts: drafts || 0 };
     },
   });
+
+  const syncInbox = useCallback(async (showToast = false) => {
+    if (!user || emailReq?.status !== 'approved') return;
+
+    setIsSyncing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('edumail-imap-sync');
+
+      if (error) {
+        let message = 'Inbox sync failed';
+        try {
+          const body = await (error as any).context?.json?.();
+          if (body?.error) message = body.error;
+        } catch (_) {}
+        if (error.message && error.message !== 'Edge Function returned a non-2xx status code') {
+          message = error.message;
+        }
+        throw new Error(message);
+      }
+
+      await Promise.all([
+        refetch(),
+        queryClient.invalidateQueries({ queryKey: ['edumail-counts'] }),
+      ]);
+
+      if (showToast) {
+        toast.success(
+          data?.new_messages > 0
+            ? `${data.new_messages} new message(s) received.`
+            : 'Inbox is up to date.'
+        );
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Inbox sync failed');
+    } finally {
+      setIsSyncing(false);
+    }
+  }, [emailReq?.status, queryClient, refetch, user]);
+
+  useEffect(() => {
+    if (folder === 'inbox' && emailReq?.status === 'approved') {
+      void syncInbox(false);
+    }
+  }, [emailReq?.id, emailReq?.status, folder, syncInbox]);
 
   // Send via edge function
   const sendMessage = async (data: ComposeData) => {
@@ -222,7 +267,9 @@ const MailPage = () => {
                 <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                 <Input className="h-8 pl-7 text-xs" placeholder="Search mail..." value={searchQ} onChange={e => setSearchQ(e.target.value)} />
               </div>
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => refetch()}><RefreshCw className="h-3.5 w-3.5" /></Button>
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => void syncInbox(true)} disabled={isSyncing}>
+                <RefreshCw className={`h-3.5 w-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+              </Button>
             </div>
             {selectedIds.size > 0 && (
               <div className="flex gap-1">
