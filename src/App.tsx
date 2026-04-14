@@ -144,6 +144,8 @@ const StudentAnalytics = lazy(() => import("./pages/dashboard/StudentAnalytics")
 const AdminAiChatbot = lazy(() => import("./pages/admin/AdminAiChatbot"));
 const AdminEmailRequests = lazy(() => import("./pages/admin/AdminEmailRequests"));
 const EduMailPage = lazy(() => import("./pages/dashboard/EduMailPage"));
+const MailPage = lazy(() => import("./pages/dashboard/MailPage"));
+const AdminMailPage = lazy(() => import("./pages/admin/AdminMailPage"));
 
 // Optimized QueryClient with aggressive caching
 const queryClient = new QueryClient({
@@ -215,6 +217,7 @@ const App = () => (
                   <Route path="internships" element={<MyInternshipsPage />} />
                   <Route path="analytics" element={<StudentAnalytics />} />
                   <Route path="edumail" element={<EduMailPage />} />
+                  <Route path="mail" element={<MailPage />} />
                   <Route path="settings" element={<SettingsPage />} />
                 </Route>
                 {/* Instructor Portal */}
@@ -301,6 +304,7 @@ const App = () => (
                   <Route path="currencies" element={<AdminCurrencies />} />
                   <Route path="ai-chatbot" element={<AdminAiChatbot />} />
                   <Route path="email-requests" element={<AdminEmailRequests />} />
+                  <Route path="mail" element={<AdminMailPage />} />
                 </Route>
                 <Route path="/learn/:courseSlug/:lessonId" element={<LessonPlayer />} />
                 <Route path="/quiz/:quizId" element={<QuizPlayer />} />

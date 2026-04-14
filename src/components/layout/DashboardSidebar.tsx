@@ -39,6 +39,7 @@ const navItems = [
   { title: 'Forum', url: '/forum', icon: MessageSquare },
   { title: 'Notifications', url: '/dashboard/notifications', icon: Bell },
   { title: 'EduMail', url: '/dashboard/edumail', icon: AtSign },
+  { title: 'Mail', url: '/dashboard/mail', icon: Mail },
   { title: 'Wallet', url: '/dashboard/wallet', icon: Wallet },
   { title: 'Settings', url: '/dashboard/settings', icon: Settings },
 ];

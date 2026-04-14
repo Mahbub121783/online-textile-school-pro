@@ -80,6 +80,7 @@ const careerSubItems = [
 
 const bottomItems = [
   { title: 'EduMail', url: '/admin/email-requests', icon: Mail },
+  { title: 'Admin Mail', url: '/admin/mail', icon: Send },
   { title: 'E-Books', url: '/admin/ebooks', icon: BookOpen },
   { title: 'Learning Paths', url: '/admin/learning-paths', icon: GraduationCap },
   { title: 'Events', url: '/admin/events', icon: Activity },

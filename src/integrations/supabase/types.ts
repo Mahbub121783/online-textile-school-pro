@@ -1518,6 +1518,160 @@ export type Database = {
           },
         ]
       }
+      edumail_contacts: {
+        Row: {
+          created_at: string
+          display_name: string | null
+          email: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          display_name?: string | null
+          email: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          display_name?: string | null
+          email?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "edumail_contacts_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      edumail_messages: {
+        Row: {
+          attachments: Json | null
+          bcc_emails: string[] | null
+          body_html: string | null
+          body_text: string | null
+          cc_emails: string[] | null
+          created_at: string
+          folder: string
+          from_email: string
+          has_attachments: boolean
+          id: string
+          in_reply_to: string | null
+          is_read: boolean
+          is_starred: boolean
+          owner_id: string
+          recalled_at: string | null
+          sent_at: string | null
+          signature_used: string | null
+          subject: string
+          thread_id: string | null
+          to_emails: string[]
+          updated_at: string
+        }
+        Insert: {
+          attachments?: Json | null
+          bcc_emails?: string[] | null
+          body_html?: string | null
+          body_text?: string | null
+          cc_emails?: string[] | null
+          created_at?: string
+          folder?: string
+          from_email?: string
+          has_attachments?: boolean
+          id?: string
+          in_reply_to?: string | null
+          is_read?: boolean
+          is_starred?: boolean
+          owner_id: string
+          recalled_at?: string | null
+          sent_at?: string | null
+          signature_used?: string | null
+          subject?: string
+          thread_id?: string | null
+          to_emails?: string[]
+          updated_at?: string
+        }
+        Update: {
+          attachments?: Json | null
+          bcc_emails?: string[] | null
+          body_html?: string | null
+          body_text?: string | null
+          cc_emails?: string[] | null
+          created_at?: string
+          folder?: string
+          from_email?: string
+          has_attachments?: boolean
+          id?: string
+          in_reply_to?: string | null
+          is_read?: boolean
+          is_starred?: boolean
+          owner_id?: string
+          recalled_at?: string | null
+          sent_at?: string | null
+          signature_used?: string | null
+          subject?: string
+          thread_id?: string | null
+          to_emails?: string[]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "edumail_messages_in_reply_to_fkey"
+            columns: ["in_reply_to"]
+            isOneToOne: false
+            referencedRelation: "edumail_messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "edumail_messages_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      edumail_signatures: {
+        Row: {
+          body_html: string
+          created_at: string
+          id: string
+          is_default: boolean
+          name: string
+          user_id: string
+        }
+        Insert: {
+          body_html?: string
+          created_at?: string
+          id?: string
+          is_default?: boolean
+          name?: string
+          user_id: string
+        }
+        Update: {
+          body_html?: string
+          created_at?: string
+          id?: string
+          is_default?: boolean
+          name?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "edumail_signatures_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       email_logs: {
         Row: {
           created_at: string
