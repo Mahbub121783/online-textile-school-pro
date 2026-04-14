@@ -59,6 +59,8 @@ const AdminCoupons = lazy(() => import("./pages/admin/AdminCoupons"));
 const AdminWallets = lazy(() => import("./pages/admin/AdminWallets"));
 const AdminPages = lazy(() => import("./pages/admin/AdminPages"));
 const AdminPosts = lazy(() => import("./pages/admin/AdminPosts"));
+const PostEditor = lazy(() => import("./pages/admin/PostEditor"));
+const InstructorPosts = lazy(() => import("./pages/instructor/InstructorPosts"));
 const AdminMedia = lazy(() => import("./pages/admin/AdminMedia"));
 const AdminMenus = lazy(() => import("./pages/admin/AdminMenus"));
 const AdminAppearance = lazy(() => import("./pages/admin/AdminAppearance"));
@@ -232,6 +234,9 @@ const App = () => (
                   <Route path="internships" element={<InstructorInternships />} />
                   <Route path="analytics" element={<InstructorAnalytics />} />
                   <Route path="plagiarism" element={<InstructorPlagiarism />} />
+                  <Route path="posts" element={<InstructorPosts />} />
+                  <Route path="posts/new" element={<PostEditor />} />
+                  <Route path="posts/:postId/edit" element={<PostEditor />} />
                   <Route path="notifications" element={<NotificationsPage />} />
                 </Route>
                 {/* Admin Panel */}
@@ -255,6 +260,8 @@ const App = () => (
                   <Route path="pages" element={<AdminPages />} />
                   <Route path="pages/:pageId" element={<PageEditor />} />
                   <Route path="posts" element={<AdminPosts />} />
+                  <Route path="posts/new" element={<PostEditor />} />
+                  <Route path="posts/:postId/edit" element={<PostEditor />} />
                   <Route path="media" element={<AdminMedia />} />
                   <Route path="menus" element={<AdminMenus />} />
                   <Route path="appearance" element={<AdminAppearance />} />
