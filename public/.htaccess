@@ -1,14 +1,9 @@
 RewriteEngine On
 
-# Dynamic sitemap — proxy to Supabase edge function
-RewriteRule ^sitemap\.xml$ https://kaiiyssrwkapromkfidv.supabase.co/functions/v1/sitemap [P,L]
+# Dynamic sitemap — route sitemap.xml to PHP proxy
+RewriteRule ^sitemap\.xml$ sitemap.xml.php [L]
 
-# If mod_proxy is not available, use redirect instead
-RewriteCond %{REQUEST_URI} ^/sitemap\.xml$
-RewriteCond %{HTTP:X-Forwarded-Proto} !=""
-RewriteRule ^sitemap\.xml$ https://kaiiyssrwkapromkfidv.supabase.co/functions/v1/sitemap [R=302,L]
-
-# SPA fallback — serve index.html for all routes (except real files)
+# SPA fallback — serve index.html for all client-side routes
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
 RewriteRule ^ index.html [L]
