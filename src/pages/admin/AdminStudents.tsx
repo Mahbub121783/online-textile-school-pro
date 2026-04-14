@@ -13,7 +13,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Search, BookOpen, Book, DollarSign, Users, UserCheck, FileQuestion, Award, ArrowUpDown, MoreHorizontal, Ban, CheckCircle, Download, Eye, UserX, ChevronLeft, ChevronRight, ShieldAlert, CalendarPlus, Gift } from 'lucide-react';
+import { Search, BookOpen, Book, DollarSign, Users, UserCheck, FileQuestion, Award, ArrowUpDown, MoreHorizontal, Ban, CheckCircle, Download, Eye, UserX, ChevronLeft, ChevronRight, ShieldAlert, CalendarPlus, Gift, AtSign } from 'lucide-react';
 import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from '@/components/ui/command';
