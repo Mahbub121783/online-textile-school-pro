@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import MailRichTextEditor from '@/components/mail/MailRichTextEditor';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -331,8 +332,8 @@ const AdminEmailCompose = () => {
                     <Input placeholder="Email subject line" value={subject} onChange={e => setSubject(e.target.value)} />
                   </div>
                   <div className="space-y-2">
-                    <Label>Body (HTML)</Label>
-                    <Textarea ref={bodyRef} rows={12} className="font-mono text-xs" placeholder="Write your email content here... HTML is supported." value={body} onChange={e => setBody(e.target.value)} />
+                    <Label>Body (Rich Text)</Label>
+                    <MailRichTextEditor content={body} onChange={setBody} placeholder="Write your email content here..." minHeight="300px" />
                   </div>
                 </>
               )}
