@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { BD_DISTRICTS, BLOOD_GROUPS } from '@/lib/constants';
 import { toast } from '@/hooks/use-toast';
 import { Save, Sun, Moon, Monitor, Camera, CheckCircle2, AlertCircle } from 'lucide-react';
+import InstitutionalEmailWidget from '@/components/InstitutionalEmailWidget';
 import { useTheme } from '@/components/ThemeProvider';
 import { Progress } from '@/components/ui/progress';
 import { useProfileCompleteness } from '@/hooks/useProfileCompleteness';
@@ -341,6 +342,9 @@ const SettingsPage = () => {
           ))}
         </div>
       </div>
+
+      {/* Institutional Email */}
+      <InstitutionalEmailWidget />
 
       {/* Account Info */}
       <div className="bg-card border rounded-xl p-6">

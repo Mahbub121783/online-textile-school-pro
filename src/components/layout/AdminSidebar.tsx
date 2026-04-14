@@ -44,6 +44,7 @@ const setupSubItems = [
   { title: 'Cloudflare R2', url: '/admin/setup/cloudflare-r2', icon: HardDrive },
   { title: 'ID Card Settings', url: '/admin/id-card-settings', icon: CreditCard },
   { title: 'ID Card Management', url: '/admin/id-card-management', icon: Shield },
+  { title: 'Email Requests', url: '/admin/email-requests', icon: Send },
 ];
 
 const paymentSubItems = [
