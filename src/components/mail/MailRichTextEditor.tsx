@@ -54,7 +54,7 @@ export default function MailRichTextEditor({ content, onChange, placeholder = 'W
 
   useEffect(() => {
     if (editor && content !== editor.getHTML()) {
-      editor.commands.setContent(content, false, { preserveWhitespace: true });
+      editor.commands.setContent(content);
     }
   }, [content]);
 
