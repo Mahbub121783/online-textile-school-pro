@@ -277,6 +277,41 @@ const ChatWidget = () => {
   const typingTimeoutRef = useRef<any>(null);
   const presenceChannelRef = useRef<any>(null);
 
+  // ── Draggable bubble state ──
+  const [bubblePos, setBubblePos] = useState(() => {
+    try {
+      const saved = localStorage.getItem('chat_bubble_pos');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return { x: window.innerWidth - 80, y: window.innerHeight - 140 };
+  });
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStartRef = useRef<{ x: number; y: number; bx: number; by: number } | null>(null);
+  const didDragRef = useRef(false);
+
+  const handlePointerDown = useCallback((e: React.PointerEvent) => {
+    setIsDragging(true);
+    didDragRef.current = false;
+    dragStartRef.current = { x: e.clientX, y: e.clientY, bx: bubblePos.x, by: bubblePos.y };
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+  }, [bubblePos]);
+
+  const handlePointerMove = useCallback((e: React.PointerEvent) => {
+    if (!isDragging || !dragStartRef.current) return;
+    const dx = e.clientX - dragStartRef.current.x;
+    const dy = e.clientY - dragStartRef.current.y;
+    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) didDragRef.current = true;
+    const newX = Math.max(0, Math.min(window.innerWidth - 56, dragStartRef.current.bx + dx));
+    const newY = Math.max(0, Math.min(window.innerHeight - 56, dragStartRef.current.by + dy));
+    setBubblePos({ x: newX, y: newY });
+  }, [isDragging]);
+
+  const handlePointerUp = useCallback(() => {
+    setIsDragging(false);
+    dragStartRef.current = null;
+    localStorage.setItem('chat_bubble_pos', JSON.stringify(bubblePos));
+  }, [bubblePos]);
+
   // ── Presence & Typing Channel ──
   useEffect(() => {
     if (!user?.id || !open) return;
@@ -616,22 +651,37 @@ const ChatWidget = () => {
 
   return (
     <>
-      {/* Floating bubble — always visible */}
+      {/* Floating bubble — draggable, semi-transparent */}
       <button
-        onClick={() => setOpen(!open)}
-        className="fixed bottom-6 right-6 z-[9999] h-14 w-14 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-lg hover:shadow-2xl transition-all flex items-center justify-center"
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onClick={() => { if (!didDragRef.current) setOpen(!open); }}
+        className="fixed z-[9999] h-14 w-14 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-lg hover:shadow-2xl transition-shadow flex items-center justify-center touch-none select-none"
+        style={{
+          left: bubblePos.x,
+          top: bubblePos.y,
+          opacity: isDragging ? 0.9 : 0.6,
+          cursor: isDragging ? 'grabbing' : 'grab',
+        }}
       >
         {open ? <X className="h-6 w-6" /> : <MessageCircle className="h-6 w-6" />}
         {!open && (totalUnread + pendingCount) > 0 && (
-          <span className="absolute -top-1 -right-1 h-5 w-5 bg-destructive text-destructive-foreground text-xs rounded-full flex items-center justify-center">
+          <span className="absolute -top-1 -right-1 h-5 w-5 bg-destructive text-destructive-foreground text-xs rounded-full flex items-center justify-center opacity-100">
             {totalUnread + pendingCount}
           </span>
         )}
       </button>
 
-      {/* Chat panel */}
+      {/* Chat panel — positioned relative to bubble */}
       {open && (
-        <div className="fixed bottom-24 right-6 z-[9999] w-80 sm:w-96 h-[30rem] bg-background border rounded-xl shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 fade-in duration-200">
+        <div
+          className="fixed z-[9999] w-80 sm:w-96 h-[30rem] bg-background/95 backdrop-blur-sm border rounded-xl shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 fade-in duration-200"
+          style={{
+            left: Math.min(bubblePos.x - 280, window.innerWidth - 400),
+            top: Math.max(8, bubblePos.y - 490),
+          }}
+        >
           {selectedUser ? (
             <>
               {/* Chat header */}

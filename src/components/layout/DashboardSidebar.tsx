@@ -3,6 +3,7 @@ import ProfileCompletenessWidget from '@/components/ProfileCompletenessWidget';
 import { NavLink } from '@/components/NavLink';
 import { useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+import { useEnrollments } from '@/hooks/useEnrollments';
 import {
   Sidebar,
   SidebarContent,
@@ -17,7 +18,7 @@ import {
 } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
 
-const navItems = [
+const baseNavItems = [
   { title: 'Overview', url: '/dashboard', icon: LayoutDashboard },
   { title: 'My Orders', url: '/dashboard/orders', icon: ShoppingCart },
   { title: 'My Courses', url: '/dashboard/courses', icon: BookOpen },
@@ -38,10 +39,13 @@ const navItems = [
   { title: 'Referrals', url: '/dashboard/referrals', icon: Users },
   { title: 'Forum', url: '/forum', icon: MessageSquare },
   { title: 'Notifications', url: '/dashboard/notifications', icon: Bell },
-  { title: 'EduMail', url: '/dashboard/edumail', icon: AtSign },
-  { title: 'Mail', url: '/dashboard/mail', icon: Mail },
   { title: 'Wallet', url: '/dashboard/wallet', icon: Wallet },
   { title: 'Settings', url: '/dashboard/settings', icon: Settings },
+];
+
+const enrolledOnlyItems = [
+  { title: 'EduMail', url: '/dashboard/edumail', icon: AtSign },
+  { title: 'Mail', url: '/dashboard/mail', icon: Mail },
 ];
 
 export function DashboardSidebar() {
@@ -49,6 +53,14 @@ export function DashboardSidebar() {
   const collapsed = state === 'collapsed';
   const location = useLocation();
   const { signOut, profile } = useAuth();
+  const { data: enrollments } = useEnrollments();
+
+  const hasPurchasedCourse = (enrollments ?? []).length > 0;
+
+  // Insert EduMail/Mail before Wallet if student has enrollments
+  const navItems = hasPurchasedCourse
+    ? [...baseNavItems.slice(0, 20), ...enrolledOnlyItems, ...baseNavItems.slice(20)]
+    : baseNavItems;
 
   const isActive = (path: string) =>
     path === '/dashboard' ? location.pathname === '/dashboard' : location.pathname.startsWith(path);
