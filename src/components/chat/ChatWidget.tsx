@@ -277,6 +277,41 @@ const ChatWidget = () => {
   const typingTimeoutRef = useRef<any>(null);
   const presenceChannelRef = useRef<any>(null);
 
+  // ── Draggable bubble state ──
+  const [bubblePos, setBubblePos] = useState(() => {
+    try {
+      const saved = localStorage.getItem('chat_bubble_pos');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return { x: window.innerWidth - 80, y: window.innerHeight - 140 };
+  });
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStartRef = useRef<{ x: number; y: number; bx: number; by: number } | null>(null);
+  const didDragRef = useRef(false);
+
+  const handlePointerDown = useCallback((e: React.PointerEvent) => {
+    setIsDragging(true);
+    didDragRef.current = false;
+    dragStartRef.current = { x: e.clientX, y: e.clientY, bx: bubblePos.x, by: bubblePos.y };
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+  }, [bubblePos]);
+
+  const handlePointerMove = useCallback((e: React.PointerEvent) => {
+    if (!isDragging || !dragStartRef.current) return;
+    const dx = e.clientX - dragStartRef.current.x;
+    const dy = e.clientY - dragStartRef.current.y;
+    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) didDragRef.current = true;
+    const newX = Math.max(0, Math.min(window.innerWidth - 56, dragStartRef.current.bx + dx));
+    const newY = Math.max(0, Math.min(window.innerHeight - 56, dragStartRef.current.by + dy));
+    setBubblePos({ x: newX, y: newY });
+  }, [isDragging]);
+
+  const handlePointerUp = useCallback(() => {
+    setIsDragging(false);
+    dragStartRef.current = null;
+    localStorage.setItem('chat_bubble_pos', JSON.stringify(bubblePos));
+  }, [bubblePos]);
+
   // ── Presence & Typing Channel ──
   useEffect(() => {
     if (!user?.id || !open) return;
