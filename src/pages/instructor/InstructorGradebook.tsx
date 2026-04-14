@@ -4,7 +4,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { GraduationCap, BookOpen, Download, Award } from 'lucide-react';
+import { GraduationCap, BookOpen, Download, Award, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -61,6 +61,19 @@ const InstructorGradebook = () => {
       const { data: assigns } = await supabase.from('assignments').select('id').eq('course_id', courseId!);
       if (!assigns?.length) return [];
       const { data } = await supabase.from('assignment_submissions').select('*').in('assignment_id', assigns.map(a => a.id));
+      return data ?? [];
+    },
+  });
+
+  // Attendance data for this course's live classes
+  const { data: attendanceData = [] } = useQuery({
+    queryKey: ['instructor-attendance-rates', courseId],
+    enabled: !!courseId,
+    queryFn: async () => {
+      const { data: liveClasses } = await supabase.from('live_classes').select('id').eq('course_id', courseId!);
+      if (!liveClasses?.length) return [];
+      const lcIds = liveClasses.map(lc => lc.id);
+      const { data } = await supabase.from('attendance_records').select('user_id, status').in('live_class_id', lcIds);
       return data ?? [];
     },
   });
@@ -148,14 +161,16 @@ const InstructorGradebook = () => {
           <h2 className="font-heading text-2xl font-bold">Gradebook</h2>
           {enrollments.length > 0 && (
             <Button variant="outline" size="sm" className="gap-1.5" onClick={() => {
-              const headers = ['Student', 'Progress', 'Quiz Avg', 'Assignments Graded', 'Grade', 'Status'];
+              const headers = ['Student', 'Progress', 'Attendance', 'Quiz Avg', 'Assignments Graded', 'Grade', 'Status'];
               const rows = enrollments.map((enr: any) => {
                 const sq = quizAttempts.filter((a: any) => a.user_id === enr.user_id && a.completed_at);
                 const avg = sq.length > 0 ? Math.round(sq.reduce((s: number, a: any) => s + (a.percentage || 0), 0) / sq.length) : '';
                 const sa = assignSubs.filter((s: any) => s.user_id === enr.user_id);
                 const graded = sa.filter((s: any) => s.status === 'graded');
                 const eg = existingGrades.find((g: any) => g.user_id === enr.user_id);
-                return [enr.user_profiles?.full_name || 'Student', `${enr.progress_pct || 0}%`, avg ? `${avg}%` : 'N/A', `${graded.length}/${sa.length}`, eg ? `${eg.letter_grade} (${eg.grade_point})` : 'N/A', enr.completed_at ? 'Completed' : 'In Progress'];
+                const ua = attendanceData.filter((a: any) => a.user_id === enr.user_id);
+                const aRate = ua.length > 0 ? Math.round((ua.filter((a: any) => a.status === 'present' || a.status === 'late').length / ua.length) * 100) + '%' : 'N/A';
+                return [enr.user_profiles?.full_name || 'Student', `${enr.progress_pct || 0}%`, aRate, avg ? `${avg}%` : 'N/A', `${graded.length}/${sa.length}`, eg ? `${eg.letter_grade} (${eg.grade_point})` : 'N/A', enr.completed_at ? 'Completed' : 'In Progress'];
               });
               const csv = [headers, ...rows].map(r => r.join(',')).join('\n');
               const blob = new Blob([csv], { type: 'text/csv' });
@@ -198,14 +213,15 @@ const InstructorGradebook = () => {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-muted/50 border-b">
-                  <th className="text-left p-3 font-medium">Student</th>
-                  <th className="text-center p-3 font-medium">Progress</th>
-                  <th className="text-center p-3 font-medium">Quiz Avg</th>
-                  <th className="text-center p-3 font-medium">Assignments</th>
-                  <th className="text-center p-3 font-medium">Grade</th>
-                  <th className="text-center p-3 font-medium">Status</th>
-                  <th className="text-center p-3 font-medium">Actions</th>
-                </tr>
+                   <th className="text-left p-3 font-medium">Student</th>
+                   <th className="text-center p-3 font-medium">Progress</th>
+                   <th className="text-center p-3 font-medium">Attendance</th>
+                   <th className="text-center p-3 font-medium">Quiz Avg</th>
+                   <th className="text-center p-3 font-medium">Assignments</th>
+                   <th className="text-center p-3 font-medium">Grade</th>
+                   <th className="text-center p-3 font-medium">Status</th>
+                   <th className="text-center p-3 font-medium">Actions</th>
+                 </tr>
               </thead>
               <tbody>
                 {enrollments.map((enr: any) => {
@@ -216,6 +232,10 @@ const InstructorGradebook = () => {
                   const studentAssigns = assignSubs.filter((s: any) => s.user_id === enr.user_id);
                   const gradedAssigns = studentAssigns.filter((s: any) => s.status === 'graded');
                   const eg = existingGrades.find((g: any) => g.user_id === enr.user_id);
+                  const userAttendance = attendanceData.filter((a: any) => a.user_id === enr.user_id);
+                  const totalClasses = userAttendance.length;
+                  const presentClasses = userAttendance.filter((a: any) => a.status === 'present' || a.status === 'late').length;
+                  const attendanceRate = totalClasses > 0 ? Math.round((presentClasses / totalClasses) * 100) : null;
 
                   return (
                     <tr key={enr.id} className="border-b hover:bg-muted/20">
@@ -234,6 +254,14 @@ const InstructorGradebook = () => {
                           </div>
                           <span className="text-xs">{enr.progress_pct || 0}%</span>
                         </div>
+                      </td>
+                      <td className="p-3 text-center">
+                        {attendanceRate !== null ? (
+                          <span className={`font-medium text-sm flex items-center justify-center gap-1 ${attendanceRate < 75 ? 'text-destructive' : ''}`}>
+                            {attendanceRate < 75 && <AlertTriangle className="h-3 w-3" />}
+                            {attendanceRate}%
+                          </span>
+                        ) : <span className="text-muted-foreground">—</span>}
                       </td>
                       <td className="p-3 text-center">
                         {avgQuiz !== null ? <span className="font-medium">{avgQuiz}%</span> : <span className="text-muted-foreground">—</span>}

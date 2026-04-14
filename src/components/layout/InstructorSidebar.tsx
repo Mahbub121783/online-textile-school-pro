@@ -1,4 +1,4 @@
-import { BookOpen, LayoutDashboard, PlusCircle, FileQuestion, ClipboardList, DollarSign, LogOut, GraduationCap, Wallet, Bell, FileText, Award, MessageSquare, Megaphone, BarChart3, Users, FlaskConical, Briefcase } from 'lucide-react';
+import { BookOpen, LayoutDashboard, PlusCircle, FileQuestion, ClipboardList, DollarSign, LogOut, GraduationCap, Wallet, Bell, FileText, Award, MessageSquare, Megaphone, BarChart3, Users, FlaskConical, Briefcase, ShieldAlert } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
@@ -37,6 +37,7 @@ const navGroups = [
     items: [
       { title: 'Students', url: '/instructor/students', icon: Users },
       { title: 'Gradebook', url: '/instructor/gradebook', icon: GraduationCap },
+      { title: 'Plagiarism', url: '/instructor/plagiarism', icon: ShieldAlert },
       { title: 'Discussions', url: '/instructor/discussions', icon: MessageSquare, badgeKey: 'discussions' },
       { title: 'Announcements', url: '/instructor/announcements', icon: Megaphone },
       { title: 'Analytics', url: '/instructor/analytics', icon: BarChart3 },

@@ -128,6 +128,7 @@ const InternshipsPage = lazy(() => import("./pages/static/InternshipsPage"));
 const InternshipDetail = lazy(() => import("./pages/static/InternshipDetail"));
 const MyInternshipsPage = lazy(() => import("./pages/dashboard/MyInternshipsPage"));
 const InstructorInternships = lazy(() => import("./pages/instructor/InstructorInternships"));
+const InstructorPlagiarism = lazy(() => import("./pages/instructor/InstructorPlagiarism"));
 const ResearchPapersPage = lazy(() => import("./pages/static/ResearchPapersPage"));
 const ResearchPaperDetail = lazy(() => import("./pages/research/ResearchPaperDetail"));
 const ResearchPaperReader = lazy(() => import("./pages/research/ResearchPaperReader"));
@@ -230,6 +231,7 @@ const App = () => (
                   <Route path="research" element={<InstructorResearch />} />
                   <Route path="internships" element={<InstructorInternships />} />
                   <Route path="analytics" element={<InstructorAnalytics />} />
+                  <Route path="plagiarism" element={<InstructorPlagiarism />} />
                   <Route path="notifications" element={<NotificationsPage />} />
                 </Route>
                 {/* Admin Panel */}
