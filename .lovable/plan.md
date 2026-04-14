@@ -1,108 +1,98 @@
 
 
-# Advanced Research Journal & Publication System
+# Advanced Internship Management System
 
 ## Current State
-The research papers system is minimal: a single `research_papers` table with basic fields, a simple public listing page, and an admin approval table. No file upload integration, no PDF reader, no review workflow, no paid access, no instructor involvement, no student dashboard integration.
+- Basic `internships` table with title, company, description, requirements, stipend, duration, deadline, status, is_published
+- Basic `internship_applications` table with cover_letter, resume_url, status, admin_notes
+- Simple public listing page with search and apply dialog
+- Admin page with CRUD and basic application status management
+- No instructor involvement, no student dashboard view, no advanced features
 
 ## What We Will Build
 
-### Database Schema Changes (Migration)
+### Database Migration
 
-**1. Extend `research_papers` table** with new columns:
-- `status` enum: `draft`, `submitted`, `under_review`, `revision_requested`, `approved`, `rejected` (replaces boolean `is_approved`)
-- `access_type`: `free`, `paid`, `enrolled_only`
-- `price` (numeric, default 0)
-- `doi` (text) -- Digital Object Identifier
-- `volume`, `issue`, `page_range` (journal metadata)
-- `reviewer_id` (uuid, references user_profiles) -- assigned reviewer
-- `reviewer_feedback` (text)
-- `revision_notes` (text) -- author's revision notes
-- `cover_image_url` (text)
-- `citation_count` (integer, default 0)
+**1. Extend `internships` table:**
+- `location` (text) -- city/remote
+- `internship_type` (text: onsite/remote/hybrid)
+- `department` (text) -- department/category
+- `positions_available` (integer, default 1)
+- `positions_filled` (integer, default 0)
+- `skills_required` (text[]) -- skills tags
+- `contact_email` (text)
+- `supervisor_id` (uuid, references user_profiles) -- assigned instructor supervisor
+- `is_featured` (boolean, default false)
 - `view_count` (integer, default 0)
 
-**2. New table: `research_paper_reviews`** -- peer review tracking
-- `id`, `paper_id`, `reviewer_id`, `status` (pending/completed), `rating` (1-5), `feedback`, `is_anonymous`, `created_at`
+**2. Extend `internship_applications` table:**
+- `portfolio_url` (text)
+- `skills` (text[]) -- applicant's matching skills
+- `availability_date` (date)
+- `interview_date` (timestamptz)
+- `interview_notes` (text)
+- `rating` (integer 1-5) -- admin/instructor rating
+- `reviewed_by` (uuid) -- who reviewed
 
-**3. New table: `research_paper_access`** -- tracks who purchased/has access
-- `id`, `paper_id`, `user_id`, `access_type` (purchased/granted), `created_at`
+**3. New table: `internship_tasks`** -- track intern progress
+- `id`, `internship_id`, `application_id`, `title`, `description`, `status` (pending/in_progress/completed/reviewed), `due_date`, `submitted_at`, `submission_url`, `feedback`, `assigned_by`, `created_at`
 
-**4. New table: `research_paper_bookmarks`** -- user bookmarks/library
-- `id`, `paper_id`, `user_id`, `created_at`
+**4. New table: `internship_logs`** -- daily/weekly log entries
+- `id`, `application_id`, `user_id`, `log_date`, `hours_worked`, `activities`, `learnings`, `supervisor_feedback`, `created_at`
 
-### Frontend Pages & Components
+### Frontend: 7 Major Components
 
-**5. Research Paper Detail Page** (`/research/:paperId`)
-- Full abstract, author info, metadata (DOI, volume, issue, date, citations, downloads)
-- Access control: free papers show "Read" button; paid papers show price + "Purchase" button
-- BibTeX/APA/MLA citation generator
-- Related papers section
-- Bookmark button for logged-in users
+**5. Enhanced Public Internship Catalog** (`/internships` -- rewrite)
+- Advanced filters: type (onsite/remote/hybrid), department, skills, stipend range
+- Featured internships section at top
+- Detailed internship detail view (requirements, skills, supervisor info)
+- Real file upload for resume via `useFileUpload` (R2)
+- Multi-step application: Personal Info -> Skills Match -> Resume Upload -> Cover Letter -> Submit
 
-**6. Research Paper Reader** (`/research/:paperId/read`)
-- Reuse the same PDF.js architecture as EbookReader
-- Reading modes (light/dark/sepia), zoom, fit-to-width/page
-- Page navigation, TOC extraction
-- Text highlighting and note-taking (persisted per user)
-- DRM protections (no copy, no print, watermark with user info)
-- Access verification via `research_paper_access` or free status
+**6. Student Dashboard: My Internships** (`/dashboard/internships`)
+- Active applications with status timeline (Applied -> Shortlisted -> Interviewed -> Offered/Rejected)
+- Accepted internship workspace: task list, daily log submission, progress tracking
+- Interview schedule calendar
+- Upload work submissions for assigned tasks
 
-**7. Enhanced Submit/Upload Flow** (students + instructors)
-- Multi-step submission form: metadata -> co-authors -> file upload (using existing R2 upload hook) -> preview -> submit
-- Real file upload via `useFileUpload` (R2 storage with `forceR2: true`)
-- Co-author management (add multiple authors with affiliations)
-- Draft saving -- users can save and come back
+**7. Instructor Internship Supervision** (`/instructor/internships`)
+- View internships assigned to them as supervisor
+- Review applications (rate, provide feedback, shortlist)
+- Assign tasks to accepted interns
+- Review daily logs and provide feedback
+- Track intern progress with completion stats
 
-**8. Student Dashboard: My Research** (`/dashboard/my-research`)
-- List of submitted papers with status badges (draft, submitted, under review, approved, rejected)
-- Revision requests with reviewer feedback
-- Resubmit capability
-- Bookmarked papers library
-- Download/citation stats for published papers
+**8. Enhanced Admin Panel** (`/admin/internships` -- rewrite)
+- Dashboard stats: total internships, active applications, positions filled, acceptance rate
+- Full pipeline: create internship -> assign supervisor -> review apps -> schedule interviews -> offer/reject
+- Assign instructor supervisors to internships
+- Bulk actions on applications
+- Export applicant data (CSV)
+- Integration with registration system: link internship registration purposes to specific internships
 
-**9. Instructor Research Management** (`/instructor/research`)
-- Papers submitted by their students
-- Peer review assignments -- review papers assigned by admin
-- Review interface: rating, feedback, approve/request revision/reject
-- Instructor can also submit their own papers
-
-**10. Enhanced Admin Panel** (`/admin/research-papers`)
-- Full workflow management: assign reviewers, change status through pipeline
-- Dashboard stats: total papers, pending reviews, published this month
-- Assign peer reviewers (instructors/other users)
-- Set access type (free/paid) and price
-- Journal metadata management (volume, issue assignment)
-- Bulk actions (approve, reject, delete)
-- Revenue tracking for paid papers
-
-**11. Public Research Catalog** (`/research`)
-- Advanced search with filters: category, date range, author, access type
-- Sort by: newest, most downloaded, most cited
-- Category/department browsing
-- Featured/trending papers section
-- Pagination
+**9. Internship Detail Page** (`/internships/:id`)
+- Full description, requirements, skills needed, supervisor profile
+- Application form or status badge
+- Related internships
+- View count tracking
 
 ### Integration Points
-- **Upload system**: Uses existing `useFileUpload` with `forceR2: true` for PDF storage
-- **Payment**: Paid papers go through existing cart/checkout flow (add to cart like courses/ebooks)
-- **Notifications**: Admin notified on submission; author notified on status change
-- **Navigation**: Add "My Research" to DashboardSidebar; add review section to InstructorSidebar
+- **Registration System**: Admin can create a registration purpose linked to an internship for external applicants
+- **Notifications**: Notify student on status change, instructor on new assignment, admin on new application
+- **File Upload**: Resume/portfolio upload via existing R2 `useFileUpload`
+- **Navigation**: Add "My Internships" to DashboardSidebar, "Internships" to InstructorSidebar
 
 ## Files to Create/Modify
 
 | File | Action |
 |------|--------|
-| Migration SQL | Extend `research_papers`, create 3 new tables |
-| `src/pages/static/ResearchPapersPage.tsx` | Complete rewrite -- advanced catalog |
-| `src/pages/research/ResearchPaperDetail.tsx` | **New** -- paper detail page |
-| `src/pages/research/ResearchPaperReader.tsx` | **New** -- PDF reader (based on EbookReader) |
-| `src/pages/research/ResearchSubmit.tsx` | **New** -- multi-step submission form |
-| `src/pages/dashboard/MyResearchPage.tsx` | **New** -- student research dashboard |
-| `src/pages/instructor/InstructorResearch.tsx` | **New** -- instructor review & management |
-| `src/pages/admin/AdminResearchPapers.tsx` | Full rewrite -- workflow dashboard |
-| `src/components/layout/DashboardSidebar.tsx` | Add "My Research" nav item |
-| `src/components/layout/InstructorSidebar.tsx` | Add "Research" nav item |
+| Migration SQL | Extend `internships` + `internship_applications`, create `internship_tasks` + `internship_logs` |
+| `src/pages/static/InternshipsPage.tsx` | Complete rewrite -- advanced catalog with filters |
+| `src/pages/static/InternshipDetail.tsx` | **New** -- detailed internship page |
+| `src/pages/dashboard/MyInternshipsPage.tsx` | **New** -- student internship dashboard |
+| `src/pages/instructor/InstructorInternships.tsx` | **New** -- supervisor interface |
+| `src/pages/admin/AdminInternships.tsx` | Full rewrite -- workflow dashboard with stats |
+| `src/components/layout/DashboardSidebar.tsx` | Add "My Internships" nav item |
+| `src/components/layout/InstructorSidebar.tsx` | Add "Internships" nav item |
 | `src/App.tsx` | Add new routes |
-| `src/integrations/supabase/types.ts` | Auto-updated after migration |
 
