@@ -682,6 +682,8 @@ const ChatWidget = () => {
             top: Math.max(8, bubblePos.y - 490),
           }}
         >
+          {selectedUser ? (
+            <>
               {/* Chat header */}
               <div className="px-3 py-2.5 border-b bg-primary/5 flex items-center gap-2">
                 <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => { setSelectedUser(null); setReactingMsgId(null); }}>
