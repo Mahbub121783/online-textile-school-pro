@@ -344,6 +344,38 @@ const Checkout = () => {
                 </div>
               </div>
 
+              {/* Installment Plan Selection */}
+              {installmentPlans.length > 0 && total > 0 && (
+                <div className="bg-card border rounded-xl p-6 space-y-4">
+                  <h2 className="font-heading font-bold text-lg flex items-center gap-2">
+                    <CalendarClock className="h-5 w-5" /> Payment Plan
+                  </h2>
+                  <RadioGroup value={selectedPlanId || 'full'} onValueChange={(v) => setSelectedPlanId(v === 'full' ? null : v)} className="space-y-2">
+                    <div className="flex items-center space-x-3 border rounded-lg p-3 cursor-pointer hover:bg-muted/50">
+                      <RadioGroupItem value="full" id="full-pay" />
+                      <Label htmlFor="full-pay" className="cursor-pointer flex-1">
+                        <p className="font-medium text-sm">Pay in Full</p>
+                        <p className="text-xs text-muted-foreground">One-time payment of ৳{total.toLocaleString()}</p>
+                      </Label>
+                    </div>
+                    {installmentPlans.map((plan: any) => {
+                      const perInstallment = Math.ceil(plan.total_amount / plan.installment_count);
+                      return (
+                        <div key={plan.id} className="flex items-center space-x-3 border rounded-lg p-3 cursor-pointer hover:bg-muted/50">
+                          <RadioGroupItem value={plan.id} id={`plan-${plan.id}`} />
+                          <Label htmlFor={`plan-${plan.id}`} className="cursor-pointer flex-1">
+                            <p className="font-medium text-sm">{plan.installment_count} Installments</p>
+                            <p className="text-xs text-muted-foreground">
+                              ৳{perInstallment.toLocaleString()} every {plan.interval_days} days • Total: ৳{plan.total_amount.toLocaleString()}
+                            </p>
+                          </Label>
+                        </div>
+                      );
+                    })}
+                  </RadioGroup>
+                </div>
+              )}
+
               {/* Payment Method - only show when total > 0 */}
               {total > 0 && (
               <div className="bg-card border rounded-xl p-6 space-y-4">
