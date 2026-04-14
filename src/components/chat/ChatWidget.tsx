@@ -466,6 +466,15 @@ const ChatWidget = () => {
     mutationFn: async () => {
       if (!message.trim() || !selectedUser) return;
       await supabase.from('chat_messages').insert({ sender_id: user!.id, receiver_id: selectedUser.userId, message: message.trim() } as any);
+      // Notify receiver
+      import('@/lib/notifications').then(({ createNotification, NOTIFICATION_TYPES }) => {
+        createNotification({
+          userId: selectedUser.userId,
+          type: NOTIFICATION_TYPES.NEW_MESSAGE,
+          title: '💬 New Message',
+          message: `You have a new message: "${message.trim().slice(0, 50)}${message.trim().length > 50 ? '...' : ''}"`,
+        });
+      });
     },
     onSuccess: () => {
       setMessage('');
@@ -492,6 +501,15 @@ const ChatWidget = () => {
       }
 
       await supabase.from('chat_requests').insert({ sender_id: user!.id, receiver_id: receiverId } as any);
+      // Notify receiver about friend request
+      import('@/lib/notifications').then(({ createNotification, NOTIFICATION_TYPES }) => {
+        createNotification({
+          userId: receiverId,
+          type: NOTIFICATION_TYPES.CHAT_REQUEST_RECEIVED,
+          title: '👋 New Friend Request',
+          message: 'Someone sent you a chat request. Check your messages!',
+        });
+      });
     },
     onSuccess: () => {
       setSearch('');
@@ -503,6 +521,18 @@ const ChatWidget = () => {
   const updateRequest = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: string }) => {
       await supabase.from('chat_requests').update({ status, updated_at: new Date().toISOString() } as any).eq('id', id);
+      // Notify the sender about acceptance/rejection
+      const req = chatRequests?.find((r: any) => r.id === id);
+      if (req) {
+        const senderId = req.sender_id === user!.id ? req.receiver_id : req.sender_id;
+        import('@/lib/notifications').then(({ createNotification, NOTIFICATION_TYPES }) => {
+          if (status === 'accepted') {
+            createNotification({ userId: senderId, type: NOTIFICATION_TYPES.CHAT_REQUEST_ACCEPTED, title: 'Friend Request Accepted ✅', message: 'Your chat request has been accepted! You can now start chatting.' });
+          } else if (status === 'declined') {
+            createNotification({ userId: senderId, type: NOTIFICATION_TYPES.CHAT_REQUEST_REJECTED, title: 'Friend Request Declined', message: 'Your chat request was declined.' });
+          }
+        });
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['chat-requests'] });
