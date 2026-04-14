@@ -8,18 +8,22 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Progress } from '@/components/ui/progress';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { Users, FileUp, Upload, Clock } from 'lucide-react';
+import { Users, FileUp, Upload, Clock, CalendarClock, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useFileUpload } from '@/hooks/useFileUpload';
 
 const GroupProjectsPage = () => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [submitOpen, setSubmitOpen] = useState(false);
   const [selectedGroup, setSelectedGroup] = useState<any>(null);
-  const [submitForm, setSubmitForm] = useState({ title: '', description: '', file_url: '' });
+  const [submitForm, setSubmitForm] = useState({ title: '', description: '' });
+  const [uploadedUrl, setUploadedUrl] = useState('');
 
-  // Get groups the student belongs to
+  const { uploadFile, isUploading } = useFileUpload();
+
   const { data: myGroups = [], isLoading } = useQuery({
     queryKey: ['my-project-groups', user?.id],
     queryFn: async () => {
@@ -41,7 +45,6 @@ const GroupProjectsPage = () => {
     enabled: !!user?.id,
   });
 
-  // Get submissions for all groups
   const groupIds = myGroups.map((g: any) => g.id);
   const { data: submissions = [] } = useQuery({
     queryKey: ['group-submissions', groupIds],
@@ -57,13 +60,25 @@ const GroupProjectsPage = () => {
     enabled: groupIds.length > 0,
   });
 
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const url = await uploadFile(file, { forceR2: true });
+      setUploadedUrl(url);
+      toast.success('File uploaded');
+    } catch (err: any) {
+      toast.error(err.message || 'Upload failed');
+    }
+  };
+
   const submitMutation = useMutation({
     mutationFn: async () => {
       const { error } = await supabase.from('project_submissions').insert({
         group_id: selectedGroup.id,
         title: submitForm.title,
         description: submitForm.description || null,
-        file_url: submitForm.file_url || null,
+        file_url: uploadedUrl || null,
         submitted_by: user!.id,
       });
       if (error) throw error;
@@ -71,11 +86,24 @@ const GroupProjectsPage = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['group-submissions'] });
       setSubmitOpen(false);
-      setSubmitForm({ title: '', description: '', file_url: '' });
+      setSubmitForm({ title: '', description: '' });
+      setUploadedUrl('');
       toast.success('Submission uploaded');
     },
     onError: (e: any) => toast.error(e.message),
   });
+
+  const getDeadlineInfo = (deadline: string | null) => {
+    if (!deadline) return null;
+    const d = new Date(deadline);
+    const now = new Date();
+    const diff = d.getTime() - now.getTime();
+    const days = Math.ceil(diff / (1000 * 60 * 60 * 24));
+    if (days < 0) return { text: 'Overdue', variant: 'destructive' as const };
+    if (days <= 3) return { text: `${days}d left`, variant: 'destructive' as const };
+    if (days <= 7) return { text: `${days}d left`, variant: 'default' as const };
+    return { text: `${days}d left`, variant: 'secondary' as const };
+  };
 
   return (
     <div className="space-y-6">
@@ -98,28 +126,45 @@ const GroupProjectsPage = () => {
       ) : (
         myGroups.map((group: any) => {
           const groupSubmissions = submissions.filter((s: any) => s.group_id === group.id);
+          const deadlineInfo = getDeadlineInfo(group.deadline);
+          const maxExpected = group.max_submissions || 5;
+          const progressPct = Math.min(100, Math.round((groupSubmissions.length / maxExpected) * 100));
 
           return (
             <Card key={group.id}>
               <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between flex-wrap gap-2">
                   <div>
                     <CardTitle className="text-lg">{group.name}</CardTitle>
                     <p className="text-sm text-muted-foreground">{group.courses?.title}</p>
                   </div>
-                  <Button
-                    size="sm"
-                    className="gap-1"
-                    onClick={() => { setSelectedGroup(group); setSubmitOpen(true); }}
-                  >
-                    <Upload className="h-3.5 w-3.5" /> Submit Work
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    {deadlineInfo && (
+                      <Badge variant={deadlineInfo.variant} className="gap-1">
+                        <CalendarClock className="h-3 w-3" /> {deadlineInfo.text}
+                      </Badge>
+                    )}
+                    <Button
+                      size="sm"
+                      className="gap-1"
+                      onClick={() => { setSelectedGroup(group); setSubmitOpen(true); }}
+                    >
+                      <Upload className="h-3.5 w-3.5" /> Submit Work
+                    </Button>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
                 {group.description && (
                   <p className="text-sm text-muted-foreground">{group.description}</p>
                 )}
+
+                {/* Progress */}
+                <div className="flex items-center gap-3">
+                  <span className="text-xs text-muted-foreground">Progress</span>
+                  <Progress value={progressPct} className="flex-1 h-2" />
+                  <span className="text-xs font-medium">{groupSubmissions.length}/{maxExpected}</span>
+                </div>
 
                 {/* Members */}
                 <div>
@@ -143,12 +188,15 @@ const GroupProjectsPage = () => {
                     <div className="space-y-2">
                       {groupSubmissions.map((s: any) => (
                         <div key={s.id} className="flex items-center justify-between p-3 border rounded-lg">
-                          <div>
-                            <p className="font-medium text-sm">{s.title}</p>
-                            <p className="text-xs text-muted-foreground flex items-center gap-1">
-                              <Clock className="h-3 w-3" />
-                              {new Date(s.created_at).toLocaleDateString()} by {s.user_profiles?.full_name}
-                            </p>
+                          <div className="flex items-center gap-2">
+                            <CheckCircle2 className="h-4 w-4 text-green-500 flex-shrink-0" />
+                            <div>
+                              <p className="font-medium text-sm">{s.title}</p>
+                              <p className="text-xs text-muted-foreground flex items-center gap-1">
+                                <Clock className="h-3 w-3" />
+                                {new Date(s.created_at).toLocaleDateString()} by {s.user_profiles?.full_name}
+                              </p>
+                            </div>
                           </div>
                           <div className="flex items-center gap-2">
                             {s.score != null && <Badge className="text-xs">{s.score} pts</Badge>}
@@ -178,11 +226,16 @@ const GroupProjectsPage = () => {
           <div className="space-y-4">
             <div><Label>Title *</Label><Input value={submitForm.title} onChange={e => setSubmitForm(p => ({ ...p, title: e.target.value }))} /></div>
             <div><Label>Description</Label><Textarea value={submitForm.description} onChange={e => setSubmitForm(p => ({ ...p, description: e.target.value }))} rows={3} /></div>
-            <div><Label>File URL</Label><Input value={submitForm.file_url} onChange={e => setSubmitForm(p => ({ ...p, file_url: e.target.value }))} placeholder="https://..." /></div>
+            <div>
+              <Label>Upload File</Label>
+              <Input type="file" onChange={handleFileUpload} disabled={isUploading} />
+              {isUploading && <p className="text-xs text-muted-foreground mt-1 animate-pulse">Uploading...</p>}
+              {uploadedUrl && <p className="text-xs text-green-600 mt-1">✓ File uploaded</p>}
+            </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setSubmitOpen(false)}>Cancel</Button>
-            <Button onClick={() => submitMutation.mutate()} disabled={!submitForm.title || submitMutation.isPending}>
+            <Button variant="outline" onClick={() => { setSubmitOpen(false); setUploadedUrl(''); }}>Cancel</Button>
+            <Button onClick={() => submitMutation.mutate()} disabled={!submitForm.title || submitMutation.isPending || isUploading}>
               {submitMutation.isPending ? 'Submitting...' : 'Submit'}
             </Button>
           </DialogFooter>
