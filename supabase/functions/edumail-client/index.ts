@@ -1,9 +1,49 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
+
+async function sendViaUserSmtp(
+  fromEmail: string,
+  password: string,
+  to: string[],
+  cc: string[],
+  bcc: string[],
+  subject: string,
+  bodyHtml: string
+): Promise<boolean> {
+  try {
+    const client = new SMTPClient({
+      connection: {
+        hostname: "mail.onlinetextileschool.com",
+        port: 465,
+        auth: { username: fromEmail, password },
+        tls: true,
+      },
+    });
+
+    const toStr = to.join(", ");
+    const sendOpts: any = {
+      from: fromEmail,
+      to: toStr,
+      subject: subject || "(No Subject)",
+      content: "auto",
+      html: bodyHtml || "",
+    };
+    if (cc.length) sendOpts.cc = cc.join(", ");
+    if (bcc.length) sendOpts.bcc = bcc.join(", ");
+
+    await client.send(sendOpts);
+    await client.close();
+    return true;
+  } catch (err) {
+    console.error("User SMTP send failed:", err);
+    return false;
+  }
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -18,14 +58,12 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-    // User client for auth
     const userClient = createClient(supabaseUrl, supabaseKey, {
       global: { headers: { Authorization: authHeader } },
     });
     const { data: { user }, error: authError } = await userClient.auth.getUser();
     if (authError || !user) throw new Error("Unauthorized");
 
-    // Service client for DB operations
     const adminClient = createClient(supabaseUrl, serviceKey);
 
     const body = await req.json();
@@ -54,31 +92,44 @@ Deno.serve(async (req) => {
         const ccEmails = cc ? cc.split(",").map((e: string) => e.trim()).filter(Boolean) : [];
         const bccEmails = bcc ? bcc.split(",").map((e: string) => e.trim()).filter(Boolean) : [];
 
-        // Send via SMTP through cPanel
-        const cpanelHost = Deno.env.get("CPANEL_HOSTNAME");
-        const cpanelUser = Deno.env.get("CPANEL_USERNAME");
-        const cpanelToken = Deno.env.get("CPANEL_API_TOKEN");
+        // Send via user's own SMTP credentials (direct from their mailbox)
+        const userPassword = emailReq.current_password;
+        let sentOk = false;
 
-        if (!cpanelHost || !cpanelUser || !cpanelToken) {
-          throw new Error("cPanel credentials not configured");
+        if (userPassword) {
+          sentOk = await sendViaUserSmtp(
+            emailReq.requested_email,
+            userPassword,
+            toEmails,
+            ccEmails,
+            bccEmails,
+            subject || "",
+            body_html || ""
+          );
         }
 
-        // Use cPanel's email sending via UAPI
-        // For actual SMTP sending, we use the platform's send-smtp-email function
-        // but with the user's institutional email as the from address
-        const smtpResult = await adminClient.functions.invoke("send-smtp-email", {
-          body: {
-            recipientEmail: toEmails[0],
-            subject: subject,
-            body: body_html,
-            metadata: {
-              from_override: emailReq.requested_email,
-              cc: ccEmails,
-              bcc: bccEmails,
-              source: "edumail",
-            },
-          },
-        });
+        // Fallback: use platform SMTP with from_override
+        if (!sentOk) {
+          console.log("Falling back to platform SMTP with from_override");
+          try {
+            await adminClient.functions.invoke("send-smtp-email", {
+              body: {
+                recipientEmail: toEmails[0],
+                subject: subject,
+                body: body_html,
+                metadata: {
+                  from_override: emailReq.requested_email,
+                  cc: ccEmails,
+                  bcc: bccEmails,
+                  source: "edumail",
+                },
+              },
+            });
+            sentOk = true;
+          } catch (fallbackErr) {
+            console.error("Fallback SMTP also failed:", fallbackErr);
+          }
+        }
 
         // Save sent message locally
         const sentMsg = {
@@ -123,7 +174,7 @@ Deno.serve(async (req) => {
               has_attachments: attachments.length > 0,
               attachments: attachments,
               sent_at: new Date().toISOString(),
-              thread_id: sentMsg.owner_id, // simplified threading
+              thread_id: sentMsg.owner_id,
             });
           }
         }
@@ -136,14 +187,13 @@ Deno.serve(async (req) => {
           );
         }
 
-        return new Response(JSON.stringify({ success: true }), {
+        return new Response(JSON.stringify({ success: true, sent_direct: sentOk }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
       case "recall-message": {
         const { message_id } = params;
-        // Only allow recall within 5 minutes and for internal messages
         const { data: msg } = await adminClient
           .from("edumail_messages")
           .select("*")
@@ -159,12 +209,10 @@ Deno.serve(async (req) => {
           throw new Error("Recall window expired (5 minutes)");
         }
 
-        // Mark sender's copy as recalled
         await adminClient.from("edumail_messages")
           .update({ recalled_at: new Date().toISOString() })
           .eq("id", message_id);
 
-        // Remove from recipients' inboxes (internal only)
         const toEmails = msg.to_emails || [];
         for (const recipientEmail of toEmails) {
           if (recipientEmail.endsWith("@onlinetextileschool.com")) {

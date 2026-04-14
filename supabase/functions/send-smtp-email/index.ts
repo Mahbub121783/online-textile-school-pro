@@ -382,10 +382,16 @@ serve(async (req) => {
     const client = new SMTPClient({ connection: connectionConfig });
 
     try {
-      await client.send({
-        from: cfg.smtp_from_email
+      // Support from_override for EduMail (institutional email sends)
+      const fromOverride = metadata?.from_override;
+      const fromAddress = fromOverride
+        ? `${fromOverride}`
+        : cfg.smtp_from_email
           ? `${cfg.smtp_from_name || "Online Textile School"} <${cfg.smtp_from_email}>`
-          : cfg.smtp_user,
+          : cfg.smtp_user;
+
+      await client.send({
+        from: fromAddress,
         to: recipientEmail,
         subject: emailSubject,
         content: "auto",
@@ -393,6 +399,7 @@ serve(async (req) => {
         headers: {
           "List-Unsubscribe": `<${unsubscribeUrl}>`,
           "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+          ...(metadata?.cc?.length ? {} : {}),
         },
       });
 

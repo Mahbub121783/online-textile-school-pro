@@ -6,8 +6,9 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
-import { Mail, CheckCircle, Clock, XCircle, AlertTriangle, Copy, ExternalLink, Shield, HardDrive, Key, Calendar, Server } from 'lucide-react';
-import { useEffect } from 'react';
+import { Input } from '@/components/ui/input';
+import { Mail, CheckCircle, Clock, XCircle, AlertTriangle, Copy, Shield, HardDrive, Key, Calendar, Server, Eye, EyeOff, RefreshCw, Lock } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { ensureEmailValidity } from '@/lib/ensureEmailValidity';
 
 const statusConfig: Record<string, { icon: any; color: string; label: string }> = {
@@ -21,6 +22,8 @@ const statusConfig: Record<string, { icon: any; color: string; label: string }> 
 const EduMailPage = () => {
   const { user, profile } = useAuth();
   const queryClient = useQueryClient();
+  const [showPassword, setShowPassword] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   const { data: emailReq, isLoading } = useQuery({
     queryKey: ['my-edumail', user?.id],
@@ -42,6 +45,13 @@ const EduMailPage = () => {
       ensureEmailValidity(user.id);
     }
   }, [user?.id, emailReq?.status]);
+
+  // Auto-sync inbox on load
+  useEffect(() => {
+    if (emailReq?.status === 'approved' && user) {
+      handleSyncInbox();
+    }
+  }, [emailReq?.status, user?.id]);
 
   const generateEmail = () => {
     if (!profile) return '';
@@ -71,6 +81,50 @@ const EduMailPage = () => {
     },
   });
 
+  // Password change with 15-day cooldown
+  const passwordCooldownDays = 15;
+  const lastPasswordReset = emailReq?.last_password_reset_at ? new Date(emailReq.last_password_reset_at) : null;
+  const cooldownExpires = lastPasswordReset ? new Date(lastPasswordReset.getTime() + passwordCooldownDays * 24 * 60 * 60 * 1000) : null;
+  const canChangePassword = !cooldownExpires || new Date() >= cooldownExpires;
+  const daysUntilChange = cooldownExpires ? Math.max(0, Math.ceil((cooldownExpires.getTime() - Date.now()) / (1000 * 60 * 60 * 24))) : 0;
+
+  const changePasswordMutation = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.functions.invoke('cpanel-email-provisioner', {
+        body: {
+          requestId: emailReq.id,
+          action: 'change-password',
+        },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      return data;
+    },
+    onSuccess: (data) => {
+      toast({ title: '🔑 Password Changed', description: 'Your email password has been updated successfully.' });
+      queryClient.invalidateQueries({ queryKey: ['my-edumail'] });
+    },
+    onError: (err: any) => {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    },
+  });
+
+  const handleSyncInbox = async () => {
+    if (isSyncing) return;
+    setIsSyncing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('edumail-imap-sync');
+      if (error) throw error;
+      if (data?.new_messages > 0) {
+        toast({ title: '📬 Inbox Synced', description: `${data.new_messages} new message(s) received.` });
+      }
+    } catch (err: any) {
+      console.error('Inbox sync error:', err);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
     toast({ title: 'Copied!' });
@@ -99,16 +153,23 @@ const EduMailPage = () => {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-heading font-bold flex items-center gap-2">
-          <Mail className="h-6 w-6 text-primary" />
-          EduMail — Institutional Email
-        </h1>
-        <p className="text-sm text-muted-foreground mt-1">Your professional academic email account</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-heading font-bold flex items-center gap-2">
+            <Mail className="h-6 w-6 text-primary" />
+            EduMail — Institutional Email
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">Your professional academic email account</p>
+        </div>
+        {emailReq?.status === 'approved' && (
+          <Button variant="outline" size="sm" onClick={handleSyncInbox} disabled={isSyncing}>
+            <RefreshCw className={`h-4 w-4 mr-2 ${isSyncing ? 'animate-spin' : ''}`} />
+            {isSyncing ? 'Syncing...' : 'Sync Inbox'}
+          </Button>
+        )}
       </div>
 
       {!emailReq ? (
-        /* No request yet */
         <Card>
           <CardContent className="p-8 text-center space-y-4">
             <div className="w-16 h-16 mx-auto rounded-full bg-primary/10 flex items-center justify-center">
@@ -152,22 +213,49 @@ const EduMailPage = () => {
                 </div>
               </div>
 
-              {emailReq.status === 'approved' && (
-                <a
-                  href="https://premium.us10.svlogins.com:2096"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-2 bg-primary text-primary-foreground rounded-lg p-3 hover:opacity-90 transition-opacity"
-                >
-                  <ExternalLink className="h-4 w-4" />
-                  <span className="font-medium text-sm">Open Webmail</span>
-                </a>
-              )}
+              {/* Password Section */}
+              {emailReq.status === 'approved' && emailReq.current_password && (
+                <div className="bg-muted/50 rounded-lg p-4 space-y-3">
+                  <p className="text-xs text-muted-foreground flex items-center gap-1">
+                    <Lock className="h-3 w-3" /> Email Password
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type={showPassword ? 'text' : 'password'}
+                      value={emailReq.current_password}
+                      readOnly
+                      className="font-mono text-sm h-8"
+                    />
+                    <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0" onClick={() => setShowPassword(!showPassword)}>
+                      {showPassword ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                    </Button>
+                    <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0" onClick={() => copyToClipboard(emailReq.current_password)}>
+                      <Copy className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
 
-              {emailReq.last_password_reset_at && (
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <Key className="h-3.5 w-3.5" />
-                  Last password reset: {new Date(emailReq.last_password_reset_at).toLocaleDateString()}
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full"
+                      disabled={!canChangePassword || changePasswordMutation.isPending}
+                      onClick={() => changePasswordMutation.mutate()}
+                    >
+                      <Key className="h-3.5 w-3.5 mr-2" />
+                      {changePasswordMutation.isPending
+                        ? 'Changing...'
+                        : canChangePassword
+                          ? 'Change Password'
+                          : `Change available in ${daysUntilChange} day(s)`}
+                    </Button>
+                  </div>
+
+                  {lastPasswordReset && (
+                    <p className="text-xs text-muted-foreground">
+                      Last changed: {lastPasswordReset.toLocaleDateString()}
+                    </p>
+                  )}
                 </div>
               )}
 
@@ -201,7 +289,6 @@ const EduMailPage = () => {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-5">
-                {/* Validity */}
                 <div className="space-y-2">
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Validity Period</span>
@@ -222,7 +309,6 @@ const EduMailPage = () => {
                   )}
                 </div>
 
-                {/* Disk Usage */}
                 <div className="space-y-2">
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground flex items-center gap-1"><HardDrive className="h-3.5 w-3.5" /> Storage</span>
