@@ -1,16 +1,24 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { GraduationCap, BookOpen, Download } from 'lucide-react';
+import { GraduationCap, BookOpen, Download, Award } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { useState } from 'react';
+import { toast } from 'sonner';
 
 const InstructorGradebook = () => {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [selectedCourse, setSelectedCourse] = useState<string>('');
+  const [gradeDialog, setGradeDialog] = useState<{ open: boolean; userId: string; name: string }>({ open: false, userId: '', name: '' });
+  const [gradeForm, setGradeForm] = useState({ letter_grade: '', grade_point: '', credits: '3', semester: '', notes: '' });
 
   const { data: courses = [], isLoading: loadingCourses } = useQuery({
     queryKey: ['instructor-courses-list', user?.id],
@@ -35,7 +43,6 @@ const InstructorGradebook = () => {
     },
   });
 
-  // Quiz attempts for this course
   const { data: quizAttempts = [] } = useQuery({
     queryKey: ['instructor-quiz-attempts', courseId],
     enabled: !!courseId,
@@ -47,7 +54,6 @@ const InstructorGradebook = () => {
     },
   });
 
-  // Assignment submissions
   const { data: assignSubs = [] } = useQuery({
     queryKey: ['instructor-assign-subs', courseId],
     enabled: !!courseId,
@@ -58,6 +64,78 @@ const InstructorGradebook = () => {
       return data ?? [];
     },
   });
+
+  // Grade configs for dropdown
+  const { data: gradeConfigs = [] } = useQuery({
+    queryKey: ['grade-configs'],
+    queryFn: async () => {
+      const { data } = await supabase.from('grade_configs').select('*').eq('is_active', true).order('sort_order');
+      return data ?? [];
+    },
+  });
+
+  // Existing grades for this course
+  const { data: existingGrades = [] } = useQuery({
+    queryKey: ['existing-student-grades', courseId],
+    enabled: !!courseId,
+    queryFn: async () => {
+      const { data } = await supabase.from('student_grades' as any).select('*').eq('course_id', courseId!);
+      return (data || []) as any[];
+    },
+  });
+
+  const assignGradeMutation = useMutation({
+    mutationFn: async () => {
+      const existing = existingGrades.find((g: any) => g.user_id === gradeDialog.userId);
+      const payload = {
+        user_id: gradeDialog.userId,
+        course_id: courseId,
+        letter_grade: gradeForm.letter_grade,
+        grade_point: parseFloat(gradeForm.grade_point),
+        credits: parseFloat(gradeForm.credits),
+        semester: gradeForm.semester || null,
+        notes: gradeForm.notes || null,
+      };
+      if (existing) {
+        const { error } = await supabase.from('student_grades' as any).update(payload).eq('id', existing.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from('student_grades' as any).insert(payload);
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['existing-student-grades', courseId] });
+      toast.success('Grade assigned successfully');
+      setGradeDialog({ open: false, userId: '', name: '' });
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const openGradeDialog = (userId: string, name: string) => {
+    const existing = existingGrades.find((g: any) => g.user_id === userId);
+    if (existing) {
+      setGradeForm({
+        letter_grade: existing.letter_grade || '',
+        grade_point: existing.grade_point?.toString() || '',
+        credits: existing.credits?.toString() || '3',
+        semester: existing.semester || '',
+        notes: existing.notes || '',
+      });
+    } else {
+      setGradeForm({ letter_grade: '', grade_point: '', credits: '3', semester: '', notes: '' });
+    }
+    setGradeDialog({ open: true, userId, name });
+  };
+
+  const handleGradeSelect = (letterGrade: string) => {
+    const config = gradeConfigs.find((g: any) => g.letter_grade === letterGrade);
+    setGradeForm(prev => ({
+      ...prev,
+      letter_grade: letterGrade,
+      grade_point: config ? config.grade_point.toString() : prev.grade_point,
+    }));
+  };
 
   if (loadingCourses) {
     return <div className="space-y-4">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}</div>;
@@ -70,13 +148,14 @@ const InstructorGradebook = () => {
           <h2 className="font-heading text-2xl font-bold">Gradebook</h2>
           {enrollments.length > 0 && (
             <Button variant="outline" size="sm" className="gap-1.5" onClick={() => {
-              const headers = ['Student', 'Progress', 'Quiz Avg', 'Assignments Graded', 'Status'];
+              const headers = ['Student', 'Progress', 'Quiz Avg', 'Assignments Graded', 'Grade', 'Status'];
               const rows = enrollments.map((enr: any) => {
                 const sq = quizAttempts.filter((a: any) => a.user_id === enr.user_id && a.completed_at);
                 const avg = sq.length > 0 ? Math.round(sq.reduce((s: number, a: any) => s + (a.percentage || 0), 0) / sq.length) : '';
                 const sa = assignSubs.filter((s: any) => s.user_id === enr.user_id);
                 const graded = sa.filter((s: any) => s.status === 'graded');
-                return [enr.user_profiles?.full_name || 'Student', `${enr.progress_pct || 0}%`, avg ? `${avg}%` : 'N/A', `${graded.length}/${sa.length}`, enr.completed_at ? 'Completed' : 'In Progress'];
+                const eg = existingGrades.find((g: any) => g.user_id === enr.user_id);
+                return [enr.user_profiles?.full_name || 'Student', `${enr.progress_pct || 0}%`, avg ? `${avg}%` : 'N/A', `${graded.length}/${sa.length}`, eg ? `${eg.letter_grade} (${eg.grade_point})` : 'N/A', enr.completed_at ? 'Completed' : 'In Progress'];
               });
               const csv = [headers, ...rows].map(r => r.join(',')).join('\n');
               const blob = new Blob([csv], { type: 'text/csv' });
@@ -123,7 +202,9 @@ const InstructorGradebook = () => {
                   <th className="text-center p-3 font-medium">Progress</th>
                   <th className="text-center p-3 font-medium">Quiz Avg</th>
                   <th className="text-center p-3 font-medium">Assignments</th>
+                  <th className="text-center p-3 font-medium">Grade</th>
                   <th className="text-center p-3 font-medium">Status</th>
+                  <th className="text-center p-3 font-medium">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -134,6 +215,7 @@ const InstructorGradebook = () => {
                     : null;
                   const studentAssigns = assignSubs.filter((s: any) => s.user_id === enr.user_id);
                   const gradedAssigns = studentAssigns.filter((s: any) => s.status === 'graded');
+                  const eg = existingGrades.find((g: any) => g.user_id === enr.user_id);
 
                   return (
                     <tr key={enr.id} className="border-b hover:bg-muted/20">
@@ -160,9 +242,27 @@ const InstructorGradebook = () => {
                         <span className="text-xs">{gradedAssigns.length}/{studentAssigns.length} graded</span>
                       </td>
                       <td className="p-3 text-center">
+                        {eg ? (
+                          <Badge variant="outline" className="text-xs">{eg.letter_grade} ({eg.grade_point})</Badge>
+                        ) : (
+                          <span className="text-muted-foreground text-xs">—</span>
+                        )}
+                      </td>
+                      <td className="p-3 text-center">
                         <Badge variant={enr.completed_at ? 'default' : 'secondary'} className="text-xs">
                           {enr.completed_at ? 'Completed' : 'In Progress'}
                         </Badge>
+                      </td>
+                      <td className="p-3 text-center">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-xs gap-1"
+                          onClick={() => openGradeDialog(enr.user_id, enr.user_profiles?.full_name || 'Student')}
+                        >
+                          <Award className="h-3 w-3" />
+                          {eg ? 'Edit' : 'Assign'} Grade
+                        </Button>
                       </td>
                     </tr>
                   );
@@ -172,6 +272,57 @@ const InstructorGradebook = () => {
           </div>
         </div>
       )}
+
+      {/* Grade Assignment Dialog */}
+      <Dialog open={gradeDialog.open} onOpenChange={(open) => setGradeDialog(prev => ({ ...prev, open }))}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Assign Grade — {gradeDialog.name}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Letter Grade *</Label>
+              <Select value={gradeForm.letter_grade} onValueChange={handleGradeSelect}>
+                <SelectTrigger><SelectValue placeholder="Select grade" /></SelectTrigger>
+                <SelectContent>
+                  {gradeConfigs.map((gc: any) => (
+                    <SelectItem key={gc.id} value={gc.letter_grade}>
+                      {gc.letter_grade} ({gc.grade_point} pts — {gc.min_pct}%-{gc.max_pct}%)
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Grade Point</Label>
+                <Input value={gradeForm.grade_point} onChange={e => setGradeForm(p => ({ ...p, grade_point: e.target.value }))} type="number" step="0.01" />
+              </div>
+              <div>
+                <Label>Credits</Label>
+                <Input value={gradeForm.credits} onChange={e => setGradeForm(p => ({ ...p, credits: e.target.value }))} type="number" step="0.5" />
+              </div>
+            </div>
+            <div>
+              <Label>Semester</Label>
+              <Input value={gradeForm.semester} onChange={e => setGradeForm(p => ({ ...p, semester: e.target.value }))} placeholder="e.g. Fall 2025" />
+            </div>
+            <div>
+              <Label>Notes</Label>
+              <Textarea value={gradeForm.notes} onChange={e => setGradeForm(p => ({ ...p, notes: e.target.value }))} rows={2} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setGradeDialog(prev => ({ ...prev, open: false }))}>Cancel</Button>
+            <Button
+              onClick={() => assignGradeMutation.mutate()}
+              disabled={!gradeForm.letter_grade || !gradeForm.grade_point || assignGradeMutation.isPending}
+            >
+              {assignGradeMutation.isPending ? 'Saving...' : 'Save Grade'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

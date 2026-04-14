@@ -120,6 +120,7 @@ const AdminPlagiarism = lazy(() => import("./pages/admin/AdminPlagiarism"));
 const AdminProjectGroups = lazy(() => import("./pages/admin/AdminProjectGroups"));
 const TranscriptPage = lazy(() => import("./pages/dashboard/TranscriptPage"));
 const GroupProjectsPage = lazy(() => import("./pages/dashboard/GroupProjectsPage"));
+const AttendancePage = lazy(() => import("./pages/dashboard/AttendancePage"));
 const AdminInternships = lazy(() => import("./pages/admin/AdminInternships"));
 const AdminResearchPapers = lazy(() => import("./pages/admin/AdminResearchPapers"));
 const AdminVirtualLabs = lazy(() => import("./pages/admin/AdminVirtualLabs"));
@@ -196,6 +197,7 @@ const App = () => (
                   <Route path="peer-reviews" element={<PeerReviewsPage />} />
                   <Route path="transcript" element={<TranscriptPage />} />
                   <Route path="group-projects" element={<GroupProjectsPage />} />
+                  <Route path="attendance" element={<AttendancePage />} />
                   <Route path="analytics" element={<StudentAnalytics />} />
                   <Route path="settings" element={<SettingsPage />} />
                 </Route>

@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Calendar } from 'lucide-react';
@@ -15,16 +16,43 @@ const typeColors: Record<string, string> = {
 };
 
 const AcademicCalendarWidget = () => {
+  const { user } = useAuth();
+
+  // Get student's batch IDs
+  const { data: myBatchIds = [] } = useQuery({
+    queryKey: ['my-batch-ids', user?.id],
+    queryFn: async () => {
+      if (!user) return [];
+      const { data } = await supabase
+        .from('batch_students')
+        .select('batch_id')
+        .eq('user_id', user.id);
+      return (data || []).map((r: any) => r.batch_id);
+    },
+    enabled: !!user,
+  });
+
   const { data: events = [] } = useQuery({
-    queryKey: ['academic-calendar-widget'],
+    queryKey: ['academic-calendar-widget', myBatchIds],
     queryFn: async () => {
       const today = new Date().toISOString().split('T')[0];
-      const { data } = await supabase.from('academic_calendar' as any)
+      let query = supabase.from('academic_calendar' as any)
         .select('*')
         .gte('start_date', today)
         .order('start_date')
-        .limit(5);
-      return (data || []) as any[];
+        .limit(10);
+
+      const { data } = await query;
+      const allEvents = (data || []) as any[];
+
+      // Filter: show global events + events matching student's batches
+      if (myBatchIds.length > 0) {
+        return allEvents.filter((e: any) =>
+          e.is_global || !e.batch_id || myBatchIds.includes(e.batch_id)
+        ).slice(0, 5);
+      }
+      // If no batches, show global only
+      return allEvents.filter((e: any) => e.is_global || !e.batch_id).slice(0, 5);
     },
   });
 
