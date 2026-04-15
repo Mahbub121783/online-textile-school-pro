@@ -40,7 +40,7 @@ const AssignmentTab = () => {
       let q = supabase.from('assignments').select('*, courses!assignments_course_id_fkey(title)').order('created_at', { ascending: false });
       if (courseFilter !== 'all') q = q.eq('course_id', courseFilter);
       if (search) q = q.ilike('title', `%${search}%`);
-      const { data } = await q;
+      const { data } = await q.limit(5000);
       return data ?? [];
     },
   });
@@ -77,6 +77,18 @@ const AssignmentTab = () => {
     mutationFn: async ({ id, score, feedback }: { id: string; score: number; feedback: string }) => {
       const { error } = await supabase.from('assignment_submissions').update({ score, feedback, status: 'graded', graded_at: new Date().toISOString() }).eq('id', id);
       if (error) throw error;
+      // Notify the student
+      const sub = submissions.find((s: any) => s.id === id);
+      if (sub?.user_id) {
+        const { createNotification } = await import('@/lib/notifications');
+        await createNotification({
+          userId: sub.user_id,
+          type: 'assignment_graded',
+          title: 'Assignment Graded ✅',
+          message: `Your assignment "${sub.assignments?.title || 'Unknown'}" scored ${score}/${sub.assignments?.max_score || 100}.${feedback ? ` Feedback: ${feedback}` : ''}`,
+          link: '/dashboard/assignments',
+        });
+      }
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-submissions'] }); setGradeDialog({ open: false }); toast.success('Graded successfully'); },
   });

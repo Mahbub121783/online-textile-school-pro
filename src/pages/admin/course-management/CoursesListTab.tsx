@@ -32,7 +32,7 @@ const CoursesListTab = () => {
       let q = supabase.from('courses').select('*, user_profiles!courses_instructor_id_fkey(full_name, avatar_url)').order('created_at', { ascending: false });
       if (tab !== 'all') q = q.eq('review_status', tab);
       if (search) q = q.ilike('title', `%${search}%`);
-      const { data } = await q;
+      const { data } = await q.limit(5000);
       return data ?? [];
     },
   });
