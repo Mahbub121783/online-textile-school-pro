@@ -50,8 +50,8 @@ function IdCardAdminControls({ userId }: { userId: string }) {
 
   const generateCard = useMutation({
     mutationFn: async () => {
-      const months = paidEnrollments.length * 6;
-      if (!months) throw new Error('No paid enrollments found');
+      // Allow admin to generate even without paid enrollments (minimum 6 months)
+      const months = Math.max(paidEnrollments.length * 6, 6);
       const validUntil = new Date();
       validUntil.setMonth(validUntil.getMonth() + months);
       const seq = Math.floor(Math.random() * 999999);
@@ -100,7 +100,7 @@ function IdCardAdminControls({ userId }: { userId: string }) {
       <CardHeader className="pb-3"><CardTitle className="text-sm">ID Card Management</CardTitle></CardHeader>
       <CardContent className="space-y-3">
         <div className="flex flex-wrap gap-2">
-          <Button size="sm" onClick={() => generateCard.mutate()} disabled={generateCard.isPending || !paidEnrollments.length}>
+          <Button size="sm" onClick={() => generateCard.mutate()} disabled={generateCard.isPending}>
             {idCard ? 'Recalculate Validity' : 'Generate ID Card'}
           </Button>
           {idCard && (
@@ -115,7 +115,7 @@ function IdCardAdminControls({ userId }: { userId: string }) {
           )}
         </div>
         <p className="text-xs text-muted-foreground">
-          Paid enrollments: {paidEnrollments.length} (= {paidEnrollments.length * 6} months validity)
+          Paid enrollments: {paidEnrollments.length} · Validity: {paidEnrollments.length > 0 ? `${paidEnrollments.length * 6} months` : '6 months (default)'}
         </p>
       </CardContent>
     </Card>
