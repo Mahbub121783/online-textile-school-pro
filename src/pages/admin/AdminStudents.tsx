@@ -39,17 +39,17 @@ export default function AdminStudents() {
   const { data: students = [], isLoading } = useQuery({
     queryKey: ['admin-students'],
     queryFn: async () => {
-      const { data: roles } = await supabase.from('user_roles').select('user_id').eq('role', 'student');
+      const { data: roles } = await supabase.from('user_roles').select('user_id').eq('role', 'student').limit(5000);
       if (!roles?.length) return [];
       const userIds = roles.map(r => r.user_id);
 
-      const { data: profiles } = await supabase.from('user_profiles').select('*').in('id', userIds);
-      const { data: enrollments } = await supabase.from('enrollments').select('user_id').in('user_id', userIds);
-      const { data: orders } = await supabase.from('orders').select('id, user_id, total, status').in('user_id', userIds).eq('status', 'completed');
-      const { data: orderItems } = await supabase.from('order_items').select('order_id, item_type').eq('item_type', 'ebook');
-      const { data: certs } = await supabase.from('certificates').select('user_id').in('user_id', userIds);
-      const { data: quizAttempts } = await supabase.from('quiz_attempts').select('user_id').in('user_id', userIds);
-      const { data: emailReqs } = await supabase.from('institutional_email_requests').select('user_id, requested_email, status, is_blocked').in('user_id', userIds);
+      const { data: profiles } = await supabase.from('user_profiles').select('*').in('id', userIds).limit(5000);
+      const { data: enrollments } = await supabase.from('enrollments').select('user_id').in('user_id', userIds).limit(5000);
+      const { data: orders } = await supabase.from('orders').select('id, user_id, total, status').in('user_id', userIds).eq('status', 'completed').limit(5000);
+      const { data: orderItems } = await supabase.from('order_items').select('order_id, item_type').eq('item_type', 'ebook').limit(5000);
+      const { data: certs } = await supabase.from('certificates').select('user_id').in('user_id', userIds).limit(5000);
+      const { data: quizAttempts } = await supabase.from('quiz_attempts').select('user_id').in('user_id', userIds).limit(5000);
+      const { data: emailReqs } = await supabase.from('institutional_email_requests').select('user_id, requested_email, status, is_blocked').in('user_id', userIds).limit(5000);
 
       const orderIds = new Set((orders ?? []).map(o => o.id));
       const ebookCountMap: Record<string, number> = {};
