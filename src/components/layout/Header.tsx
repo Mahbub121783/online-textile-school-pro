@@ -282,6 +282,7 @@ const Header = () => {
               </Link>
             ))}
             <Link to="/events" className="px-2.5 py-1 text-[13px] text-foreground/80 hover:text-primary transition-colors whitespace-nowrap">Events</Link>
+            <Link to="/workshops" className="px-2.5 py-1 text-[13px] text-foreground/80 hover:text-primary transition-colors whitespace-nowrap">Workshops</Link>
             <Link to="/blog" className="px-2.5 py-1 text-[13px] text-foreground/80 hover:text-primary transition-colors whitespace-nowrap">Blog</Link>
             <Link to="/forum" className="px-2.5 py-1 text-[13px] text-foreground/80 hover:text-primary transition-colors whitespace-nowrap">Forum</Link>
             <Link to="/about" className="px-2.5 py-1 text-[13px] text-foreground/80 hover:text-primary transition-colors whitespace-nowrap">About</Link>
@@ -337,6 +338,7 @@ const Header = () => {
               { label: 'Learning Paths', href: '/learning-paths' },
               { label: 'eBooks', href: '/ebooks' },
               { label: 'Events', href: '/events' },
+              { label: 'Workshops', href: '/workshops' },
               { label: 'Blog', href: '/blog' },
               { label: 'Forum', href: '/forum' },
               { label: 'About', href: '/about' },
