@@ -30,11 +30,22 @@ export default function WorkshopDetail() {
   const { data: workshop, isLoading } = useQuery({
     queryKey: ['workshop', slug],
     queryFn: async () => {
-      const { data, error } = await supabase
+      // Try slug first, then fallback to ID lookup
+      let { data, error } = await supabase
         .from('workshops')
         .select('*, instructor:user_profiles!workshops_instructor_id_fkey(id, full_name, avatar_url)')
         .eq('slug', slug!)
-        .single();
+        .maybeSingle();
+      if (!data) {
+        // Fallback: lookup by ID (for workshops with empty slug)
+        const res = await supabase
+          .from('workshops')
+          .select('*, instructor:user_profiles!workshops_instructor_id_fkey(id, full_name, avatar_url)')
+          .eq('id', slug!)
+          .maybeSingle();
+        data = res.data;
+        error = res.error;
+      }
       if (error) throw error;
       return data;
     },
