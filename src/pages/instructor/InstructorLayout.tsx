@@ -1,12 +1,14 @@
-import { Outlet, Navigate } from 'react-router-dom';
+import { Outlet, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import { InstructorSidebar } from '@/components/layout/InstructorSidebar';
 import { useInstructorRealtime } from '@/hooks/useRealtime';
 import NotificationBell from '@/components/layout/NotificationBell';
+import ErrorBoundary from '@/components/ErrorBoundary';
 
 const InstructorLayout = () => {
   const { user, roles, loading } = useAuth();
+  const location = useLocation();
   useInstructorRealtime();
 
   if (loading) {
@@ -42,9 +44,11 @@ const InstructorLayout = () => {
             <NotificationBell basePath="/instructor" />
           </header>
           <main className="flex-1 p-4 md:p-6 overflow-auto">
-            <div className="animate-in fade-in duration-200">
-              <Outlet />
-            </div>
+            <ErrorBoundary key={location.pathname}>
+              <div className="animate-in fade-in duration-200">
+                <Outlet />
+              </div>
+            </ErrorBoundary>
           </main>
         </div>
       </div>

@@ -1,12 +1,14 @@
-import { Outlet, Navigate } from 'react-router-dom';
+import { Outlet, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import { AdminSidebar } from '@/components/layout/AdminSidebar';
 import { useAdminRealtime } from '@/hooks/useRealtime';
 import NotificationBell from '@/components/layout/NotificationBell';
+import ErrorBoundary from '@/components/ErrorBoundary';
 
 const AdminLayout = () => {
   const { user, roles, loading } = useAuth();
+  const location = useLocation();
   useAdminRealtime();
 
   if (loading) {
@@ -42,9 +44,11 @@ const AdminLayout = () => {
             <NotificationBell basePath="/admin" />
           </header>
           <main className="flex-1 p-4 md:p-6 overflow-auto">
-            <div className="animate-in fade-in duration-200">
-              <Outlet />
-            </div>
+            <ErrorBoundary key={location.pathname}>
+              <div className="animate-in fade-in duration-200">
+                <Outlet />
+              </div>
+            </ErrorBoundary>
           </main>
         </div>
       </div>
