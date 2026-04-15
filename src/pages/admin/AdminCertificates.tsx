@@ -156,6 +156,108 @@ const AdminCertificates = () => {
     },
   });
 
+  // Students for manual issue
+  const { data: searchedStudents = [] } = useQuery({
+    queryKey: ['cert-student-search', manualStudentSearch],
+    enabled: manualIssueOpen && manualStudentSearch.length >= 2,
+    queryFn: async () => {
+      const { data } = await supabase.from('user_profiles').select('id, full_name, avatar_url, roll_id').ilike('full_name', `%${manualStudentSearch}%`).limit(20);
+      return data ?? [];
+    },
+  });
+
+  const generateCertNumber = () => `CERT-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+
+  const manualIssueMutation = useMutation({
+    mutationFn: async () => {
+      if (!manualSelectedStudent || !manualSelectedCourse) throw new Error('Select student and course');
+      const { data: existing } = await supabase.from('certificates').select('id').eq('user_id', manualSelectedStudent).eq('course_id', manualSelectedCourse).maybeSingle();
+      if (existing) throw new Error('Certificate already exists for this student/course');
+      const certNumber = generateCertNumber();
+      const { error } = await supabase.from('certificates').insert({
+        user_id: manualSelectedStudent,
+        course_id: manualSelectedCourse,
+        certificate_number: certNumber,
+        issued_at: new Date().toISOString(),
+      });
+      if (error) throw error;
+      await createNotification({
+        userId: manualSelectedStudent,
+        type: 'certificate',
+        title: '🎉 Certificate Issued!',
+        message: 'A certificate has been manually issued to you by an administrator.',
+        link: '/dashboard/certificates',
+      });
+    },
+    onSuccess: () => {
+      toast.success('Certificate issued!');
+      setManualIssueOpen(false);
+      setManualSelectedStudent(null);
+      setManualSelectedCourse(null);
+      setManualStudentSearch('');
+      queryClient.invalidateQueries({ queryKey: ['all-issued-certificates'] });
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const revokeMutation = useMutation({
+    mutationFn: async (cert: any) => {
+      const { error } = await supabase.from('certificates').delete().eq('id', cert.id);
+      if (error) throw error;
+      await createNotification({
+        userId: cert.user_id,
+        type: 'certificate',
+        title: '⚠️ Certificate Revoked',
+        message: `Your certificate #${cert.certificate_number} has been revoked by an administrator.`,
+        link: '/dashboard/certificates',
+      });
+    },
+    onSuccess: () => {
+      toast.success('Certificate revoked');
+      queryClient.invalidateQueries({ queryKey: ['all-issued-certificates'] });
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const handleBulkIssue = async () => {
+    if (!bulkCourseId) return;
+    setBulkIssuing(true);
+    try {
+      const { data: enrollments } = await supabase.from('enrollments').select('user_id, progress_pct').eq('course_id', bulkCourseId);
+      if (!enrollments?.length) { toast.info('No enrollments for this course'); setBulkIssuing(false); return; }
+      const { data: existingCerts } = await supabase.from('certificates').select('user_id').eq('course_id', bulkCourseId);
+      const existingSet = new Set((existingCerts ?? []).map(c => c.user_id));
+      const eligible = enrollments.filter(e => (e.progress_pct ?? 0) >= 100 && !existingSet.has(e.user_id));
+      if (eligible.length === 0) { toast.info('No eligible students without certificates'); setBulkIssuing(false); return; }
+      let issued = 0;
+      for (const e of eligible) {
+        const certNumber = generateCertNumber();
+        const { error } = await supabase.from('certificates').insert({
+          user_id: e.user_id,
+          course_id: bulkCourseId,
+          certificate_number: certNumber,
+          issued_at: new Date().toISOString(),
+        });
+        if (!error) {
+          issued++;
+          await createNotification({
+            userId: e.user_id,
+            type: 'certificate',
+            title: '🎉 Certificate Earned!',
+            message: 'A certificate has been issued for your completed course.',
+            link: '/dashboard/certificates',
+          });
+        }
+      }
+      toast.success(`${issued} certificate(s) issued!`);
+      queryClient.invalidateQueries({ queryKey: ['all-issued-certificates'] });
+      setBulkIssueOpen(false);
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setBulkIssuing(false);
+    }
+  };
   // Preload background image when URL changes
   useEffect(() => {
     if (backgroundUrl) {
