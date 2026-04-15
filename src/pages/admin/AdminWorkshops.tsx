@@ -264,11 +264,41 @@ export default function AdminWorkshops() {
         <Button onClick={openCreate} className="gap-1"><Plus className="h-4 w-4" />Create Workshop</Button>
       </div>
 
+      {/* Stats Overview */}
+      {!isLoading && workshops.length > 0 && (() => {
+        const ongoing = workshops.filter((w: any) => w.status === 'ongoing').length;
+        const upcoming = workshops.filter((w: any) => w.status === 'published').length;
+        const completed = workshops.filter((w: any) => w.status === 'completed').length;
+        const totalRegs = (allRegCounts as any).__total || 0;
+        return (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <Card><CardContent className="p-4 flex items-center gap-3">
+              <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center"><BarChart3 className="h-5 w-5 text-primary" /></div>
+              <div><p className="text-2xl font-bold">{workshops.length}</p><p className="text-xs text-muted-foreground">Total Workshops</p></div>
+            </CardContent></Card>
+            <Card><CardContent className="p-4 flex items-center gap-3">
+              <div className="h-10 w-10 rounded-lg bg-green-500/10 flex items-center justify-center"><TrendingUp className="h-5 w-5 text-green-600" /></div>
+              <div><p className="text-2xl font-bold">{ongoing + upcoming}</p><p className="text-xs text-muted-foreground">Active ({ongoing} live)</p></div>
+            </CardContent></Card>
+            <Card><CardContent className="p-4 flex items-center gap-3">
+              <div className="h-10 w-10 rounded-lg bg-blue-500/10 flex items-center justify-center"><Users className="h-5 w-5 text-blue-600" /></div>
+              <div><p className="text-2xl font-bold">{totalRegs}</p><p className="text-xs text-muted-foreground">Total Registrations</p></div>
+            </CardContent></Card>
+            <Card><CardContent className="p-4 flex items-center gap-3">
+              <div className="h-10 w-10 rounded-lg bg-amber-500/10 flex items-center justify-center"><CheckCircle className="h-5 w-5 text-amber-600" /></div>
+              <div><p className="text-2xl font-bold">{completed}</p><p className="text-xs text-muted-foreground">Completed</p></div>
+            </CardContent></Card>
+          </div>
+        );
+      })()}
+
       {isLoading ? (
         <div className="animate-pulse h-32 bg-muted rounded-lg" />
       ) : (
         <div className="grid gap-4">
-          {workshops.map((ws: any) => (
+          {workshops.map((ws: any) => {
+            const regCount = (allRegCounts as any)[ws.id] || 0;
+            return (
             <Card key={ws.id}>
               <CardContent className="p-4 flex flex-col md:flex-row md:items-center gap-4">
                 {ws.thumbnail_url && <img src={ws.thumbnail_url} className="w-24 h-16 rounded object-cover" />}
@@ -277,6 +307,7 @@ export default function AdminWorkshops() {
                     <h3 className="font-semibold">{ws.title}</h3>
                     <Badge>{ws.status}</Badge>
                     <Badge variant="outline">{ws.workshop_type === 'multi_day' ? 'Multi-Day' : 'One Day'}</Badge>
+                    {regCount > 0 && <Badge variant="secondary" className="text-[10px]">{regCount} registrations</Badge>}
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">
                     {format(new Date(ws.start_date), 'MMM dd, yyyy')} · /{ws.slug}
@@ -292,7 +323,8 @@ export default function AdminWorkshops() {
                 </div>
               </CardContent>
             </Card>
-          ))}
+            );
+          })}
           {workshops.length === 0 && <p className="text-center text-muted-foreground py-8">No workshops yet.</p>}
         </div>
       )}
