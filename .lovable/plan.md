@@ -1,70 +1,73 @@
 
 
-# Workshop System Enhancements
+# Sponsor System — Homepage Section + Admin Management
 
-## Changes Overview
+## Overview
+Add a dynamic "Our Sponsors & Partners" section on the homepage and a full admin management page for sponsors. Sponsors will have tiers (Platinum/Gold/Silver/Bronze), click-through URLs, animated marquee/carousel display, and rich admin CRUD with drag-and-drop ordering.
 
-### 1. Admin Workshop Form — Instructor Search (replace manual fields)
-- Remove `instructor_name`, `instructor_bio`, `instructor_avatar` text fields
-- Add an `instructor_id` UUID column to `workshops` table (FK to `user_profiles`)
-- Add instructor search: query `user_roles` for instructors/admins → search `user_profiles` by name
-- Display selected instructor's avatar and name automatically
-- On the public detail page, resolve instructor info from the joined `user_profiles` record
+## Database Migration
 
-### 2. Featured Image via MediaPickerModal
-- Replace the `thumbnail_url` text input with a MediaPickerModal button (matching existing patterns)
-- Show preview of selected image, allow clearing
-
-### 3. Workshop Curriculum/Lessons (course plan)
-- Add a new `workshop_lessons` table: `id`, `workshop_id` (FK), `title`, `description`, `content` (rich text), `sort_order`, `lesson_type` (lecture/practical/demo), timestamps
-- Add a "Curriculum" tab in the admin dialog alongside Details and Sessions
-- Admin can add/reorder/delete lessons with title + content
-- Public detail page shows the curriculum list
-
-### 4. Materials Upload via Cloudinary/R2
-- Replace manual URL input for materials with MediaPickerModal integration
-- Use `useFileUpload` hook (existing) which routes images to Cloudinary and files to R2
-- Material entries store: `name`, `url`, `type`, `storage_source`
-
-### 5. Registration Confirmation Email
-- On successful workshop registration, send workshop details to registrant's email
-- Use existing `send-smtp-email` edge function (project's own SMTP system, not Lovable transactional)
-- Include: workshop title, date/time, meet link (if published/ongoing), registration number, materials info
-- This matches the existing email pattern used throughout the project
-
-### Database Migration
+### Table: `sponsors`
 ```sql
--- Add instructor_id to workshops
-ALTER TABLE workshops ADD COLUMN instructor_id uuid REFERENCES user_profiles(id);
-
--- Workshop lessons table
-CREATE TABLE workshop_lessons (
+CREATE TABLE sponsors (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  workshop_id uuid REFERENCES workshops(id) ON DELETE CASCADE NOT NULL,
-  title text NOT NULL,
+  name text NOT NULL,
+  logo_url text NOT NULL,
+  website_url text,
+  tier text DEFAULT 'silver' CHECK (tier IN ('platinum','gold','silver','bronze')),
   description text,
-  content text,
-  lesson_type text DEFAULT 'lecture',
+  is_active boolean DEFAULT true,
   sort_order integer DEFAULT 0,
+  click_count integer DEFAULT 0,
+  created_by uuid REFERENCES auth.users(id),
   created_at timestamptz DEFAULT now(),
   updated_at timestamptz DEFAULT now()
 );
-ALTER TABLE workshop_lessons ENABLE ROW LEVEL SECURITY;
--- Public read, admin manage
-CREATE POLICY "Public read workshop_lessons" ON workshop_lessons FOR SELECT USING (true);
-CREATE POLICY "Admin manage workshop_lessons" ON workshop_lessons FOR ALL USING (
+ALTER TABLE sponsors ENABLE ROW LEVEL SECURITY;
+-- Public read active sponsors
+CREATE POLICY "Public read active sponsors" ON sponsors FOR SELECT USING (is_active = true);
+-- Admin full access
+CREATE POLICY "Admin manage sponsors" ON sponsors FOR ALL USING (
   EXISTS (SELECT 1 FROM user_roles WHERE user_id = auth.uid() AND role IN ('admin','super_admin'))
 );
 ```
 
-### Files to Edit
-- **`AdminWorkshops.tsx`**: Instructor search dropdown, MediaPickerModal for thumbnail + materials, Curriculum tab
-- **`WorkshopDetail.tsx`**: Join `user_profiles` via `instructor_id`, show curriculum section
-- **`WorkshopsPage.tsx`**: Join instructor profile for display
-- **`MyWorkshopsPage.tsx`**: Minor — show instructor from joined data
-- **`WorkshopDetail.tsx` registration mutation**: After successful insert, invoke `send-smtp-email` with workshop confirmation template
+## New Files
 
-### Email Content (sent via existing SMTP system)
-Subject: `Workshop Registration Confirmed: {title}`
-Body includes: title, date/time, meet link, registration number, materials count, reminder text.
+### 1. `src/components/features/home/SponsorsSection.tsx`
+- Fetches active sponsors from DB, grouped by tier
+- Tier headings with distinct styling (Platinum = largest logos, Bronze = smallest)
+- Infinite scrolling marquee animation for logo rows
+- Each logo links to `website_url` (opens new tab), increments `click_count` via RPC
+- Hover effect: logo scales up, shows sponsor name tooltip
+- Responsive grid fallback on mobile
+
+### 2. `src/pages/admin/AdminSponsors.tsx`
+- Full CRUD table with columns: Logo preview, Name, Tier (badge), Website, Active toggle, Click count, Actions
+- Create/Edit dialog with:
+  - Name (required), Website URL (validated), Description
+  - Tier selector (Platinum/Gold/Silver/Bronze)
+  - Logo upload via MediaPickerModal (Cloudinary)
+  - Active toggle, Sort order
+- Delete confirmation
+- Drag-and-drop reordering (sort_order)
+- Click analytics display per sponsor
+- Bulk toggle active/inactive
+
+## Modified Files
+
+### 3. `src/pages/Index.tsx`
+- Add lazy-loaded `SponsorsSection` between `TestimonialsSection` and `DemoClassCTA`
+
+### 4. `src/components/layout/AdminSidebar.tsx`
+- Add `{ title: 'Sponsors', url: '/admin/sponsors', icon: Crown }` to `bottomItems` array
+
+### 5. `src/App.tsx`
+- Add route: `/admin/sponsors` → `AdminSponsors`
+
+## Key Design Decisions
+- Marquee animation via CSS `@keyframes` (no extra library)
+- Click tracking: direct Supabase update `click_count = click_count + 1` on logo click
+- Tier-based sizing: Platinum 120px height, Gold 96px, Silver 72px, Bronze 56px
+- Admin follows existing dialog pattern (max-h-[90vh], overflow-y-auto, MediaPickerModal)
 
