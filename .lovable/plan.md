@@ -1,49 +1,68 @@
 
 
-# Admin Students Section — Bug Fixes & Improvements
+# Instructor Management — Deep Feature Audit & Fixes
 
-## Critical Bug Found
+## Issues Found
 
-### RLS Policy on `orders` table blocks admin ebook grants
-The screenshot shows: *"new row violates row-level security policy for table orders"*
+### 1. CommunicationsTab: "Dispatch Official Mark" is Fake
+`handleDispatchMark()` (line 87-98) only shows a toast — it does NOT save anything to the database. No grade record is created, no notification is sent to the student. Completely non-functional.
 
-**Root cause**: The `orders` INSERT policy is `auth.uid() = user_id`. When an admin grants an ebook to a student, it inserts an order with `user_id = student_id`, but the logged-in user is the admin — so RLS rejects it.
+**Fix**: Look up student by roll_id or email, find their enrollment in the selected course, upsert into `gradebook_entries` table, and send them a notification.
 
-The `order_items` and `enrollments` tables already have admin INSERT policies. Only `orders` is missing one.
+### 2. CommunicationsTab: Email Toggle is Ignored
+The `sendViaEmail` state is set by the Switch but never read in `handleSendNotification()`. When email is toggled on, notifications still only go in-app.
 
-## Other Issues Found
+**Fix**: When `sendViaEmail` is true, use `broadcastNotificationWithEmail` / `createNotificationWithEmail` instead of the non-email variants.
 
-### 1. Ebook revoke doesn't work
-In `StudentDetail.tsx` line 293-306, the `revokeAccess` mutation only handles `type === 'enrollment'` deletion. There is no code to revoke ebook access (delete the order/order_items). The UI doesn't even offer a Revoke button for ebooks.
+### 3. AccessBoardTab: "Reset Password" is Fake
+The Reset Password dropdown item (line 174-176) only shows a toast saying "A reset link has been sent" but does NOT actually trigger any password reset. This is misleading.
 
-### 2. Supabase 1000-row limit risk
-`AdminStudents.tsx` fetches ALL students via multiple queries without `.limit()`. If there are 1000+ students, data will be silently truncated. The `user_roles`, `enrollments`, `orders`, `order_items`, `certificates`, `quiz_attempts` queries all hit this limit.
+**Fix**: Cannot call `supabase.auth.admin.resetPasswordForEmail` from client (requires service role). Instead, look up the instructor's email from `instructor_applications` or use a lightweight edge function. For now, use the `send-smtp-email` edge function to send a password reset link via `supabase.auth.resetPasswordForEmail` (which works from the client for the anon key).
 
-### 3. Notification INSERT policy blocks student-targeted notifications
-The notification INSERT policy requires `auth.uid() = user_id` OR admin role. Admin role works, but the `sendNotification` mutation in StudentDetail correctly sets the student's `user_id` — this should work since admins have INSERT permission. Confirmed OK.
+### 4. AccessBoardTab: No "Remove Instructor Role" Option
+Admins can suspend accounts and revoke courses, but cannot demote an instructor back to student-only. This is a critical access control gap.
 
-## Fix Plan
+**Fix**: Add a "Remove Instructor Role" dropdown item that deletes the `user_roles` entry where `role = 'instructor'`.
 
-### Step 1: Database Migration — Add admin INSERT policy on `orders`
-```sql
-CREATE POLICY "Admins can insert orders"
-ON orders FOR INSERT
-WITH CHECK (
-  has_role(auth.uid(), 'admin'::app_role) 
-  OR has_role(auth.uid(), 'super_admin'::app_role)
-);
-```
+### 5. ApprovalsTab: No Notification on Approve/Reject
+When an instructor application is approved or rejected, no notification is sent to the applicant. They have no way to know the outcome.
 
-### Step 2: Fix ebook revoke in `StudentDetail.tsx`
-- Add handling for `type === 'ebook-order'` in the `revokeAccess` mutation to delete the order_items and order
-- Add a Revoke button to each ebook row in the Ebooks tab
+**Fix**: After approval, create a notification for the user. After rejection, create a notification with the reason.
 
-### Step 3: Handle large student counts
-- Add pagination at the Supabase query level using `.range()` instead of fetching all students client-side
-- OR add `.limit(5000)` to prevent silent truncation for now (simpler fix)
+### 6. FinancialsTab: Withdrawal Rejection Doesn't Notify Instructor
+When a withdrawal is rejected, the request is silently deleted with no notification to the instructor.
 
-## Files Modified
-1. **Database migration** — Add admin INSERT policy on `orders`
-2. **`src/pages/admin/StudentDetail.tsx`** — Fix ebook revoke, add revoke button to ebook rows
-3. **`src/pages/admin/AdminStudents.tsx`** — Add query limits to prevent silent data truncation
+**Fix**: Send a notification to the instructor when their withdrawal is rejected, including the reason.
+
+### 7. AccessBoardTab: Revenue Shows `$` Instead of `৳`
+The revenue column uses `$` (line 149) while the rest of the app uses `৳` (Bangladeshi Taka).
+
+**Fix**: Change to `৳`.
+
+## Implementation Plan
+
+### Files Modified
+
+1. **`src/pages/admin/instructor-management/CommunicationsTab.tsx`**
+   - Wire `handleDispatchMark` to actually look up the student (by roll_id or email), upsert a `gradebook_entries` record, and send a notification
+   - Use `sendViaEmail` toggle to call email-enabled notification functions when toggled on
+
+2. **`src/pages/admin/instructor-management/AccessBoardTab.tsx`**
+   - Replace fake "Reset Password" with real `supabase.auth.resetPasswordForEmail()` call (works from client)
+   - Add "Remove Instructor Role" dropdown item that deletes the role and sends a notification
+   - Fix currency symbol from `$` to `৳`
+
+3. **`src/pages/admin/instructor-management/ApprovalsTab.tsx`**
+   - After approve mutation succeeds: send notification to applicant's user_id ("Your instructor application has been approved!")
+   - After reject mutation succeeds: send notification with admin notes as reason
+
+4. **`src/pages/admin/instructor-management/FinancialsTab.tsx`**
+   - After withdrawal rejection: send notification to the instructor with the rejection reason
+
+## Technical Details
+
+- All notifications use existing `createNotification` from `@/lib/notifications`
+- Password reset uses `supabase.auth.resetPasswordForEmail(email)` which requires knowing the email — will fetch from `instructor_applications` table
+- Grade dispatch uses existing `gradebook_entries` table with upsert on `(student_id, course_id)`
+- No database migrations needed — all tables already exist
 
