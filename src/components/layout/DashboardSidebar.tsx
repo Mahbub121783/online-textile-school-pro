@@ -1,4 +1,4 @@
-import { BookOpen, LayoutDashboard, Library, Wallet, Settings, LogOut, FileQuestion, ClipboardList, Award, Users, FileText, Bell, ShoppingCart, Heart, Trophy, MessageSquare, ClipboardCheck, GraduationCap, FolderKanban, BarChart3, CalendarCheck, FlaskConical, Briefcase, Mail, AtSign } from 'lucide-react';
+import { BookOpen, LayoutDashboard, Library, Wallet, Settings, LogOut, FileQuestion, ClipboardList, Award, Users, FileText, Bell, ShoppingCart, Heart, Trophy, MessageSquare, ClipboardCheck, GraduationCap, FolderKanban, BarChart3, CalendarCheck, FlaskConical, Briefcase, Mail, AtSign, Presentation } from 'lucide-react';
 import ProfileCompletenessWidget from '@/components/ProfileCompletenessWidget';
 import { NavLink } from '@/components/NavLink';
 import { useLocation } from 'react-router-dom';
@@ -37,6 +37,7 @@ const baseNavItems = [
   { title: 'My Internships', url: '/dashboard/internships', icon: Briefcase },
   { title: 'Invoices', url: '/dashboard/invoices', icon: FileText },
   { title: 'Referrals', url: '/dashboard/referrals', icon: Users },
+  { title: 'Workshops', url: '/dashboard/workshops', icon: Presentation },
   { title: 'Forum', url: '/forum', icon: MessageSquare },
   { title: 'Notifications', url: '/dashboard/notifications', icon: Bell },
   { title: 'Wallet', url: '/dashboard/wallet', icon: Wallet },
@@ -59,7 +60,7 @@ export function DashboardSidebar() {
 
   // Insert EduMail/Mail before Wallet if student has enrollments
   const navItems = hasPurchasedCourse
-    ? [...baseNavItems.slice(0, 20), ...enrolledOnlyItems, ...baseNavItems.slice(20)]
+    ? [...baseNavItems.slice(0, 21), ...enrolledOnlyItems, ...baseNavItems.slice(21)]
     : baseNavItems;
 
   const isActive = (path: string) =>
