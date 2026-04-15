@@ -104,6 +104,16 @@ const AdminCertificates = () => {
   const [customFieldCounter, setCustomFieldCounter] = useState(1);
   const [fontsLoaded, setFontsLoaded] = useState(false);
 
+  // Manual issue state
+  const [manualIssueOpen, setManualIssueOpen] = useState(false);
+  const [manualStudentSearch, setManualStudentSearch] = useState('');
+  const [manualSelectedStudent, setManualSelectedStudent] = useState<string | null>(null);
+  const [manualSelectedCourse, setManualSelectedCourse] = useState<string | null>(null);
+  // Bulk issue state
+  const [bulkIssueOpen, setBulkIssueOpen] = useState(false);
+  const [bulkCourseId, setBulkCourseId] = useState<string | null>(null);
+  const [bulkIssuing, setBulkIssuing] = useState(false);
+
   // Load Google Fonts
   useEffect(() => {
     if (document.querySelector('link[data-cert-fonts]')) { setFontsLoaded(true); return; }
