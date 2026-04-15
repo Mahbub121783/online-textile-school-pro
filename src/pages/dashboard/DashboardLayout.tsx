@@ -1,13 +1,15 @@
-import { Outlet, Navigate } from 'react-router-dom';
+import { Outlet, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import { DashboardSidebar } from '@/components/layout/DashboardSidebar';
 import BottomNav from '@/components/layout/BottomNav';
 import { useStudentRealtime } from '@/hooks/useRealtime';
 import NotificationBell from '@/components/layout/NotificationBell';
+import ErrorBoundary from '@/components/ErrorBoundary';
 
 const DashboardLayout = () => {
   const { user, loading } = useAuth();
+  const location = useLocation();
   useStudentRealtime();
 
   if (loading) {
@@ -31,9 +33,11 @@ const DashboardLayout = () => {
             <NotificationBell basePath="/dashboard" />
           </header>
           <main className="flex-1 p-4 md:p-6 pb-20 lg:pb-6 overflow-auto">
-            <div className="animate-in fade-in duration-200">
-              <Outlet />
-            </div>
+            <ErrorBoundary key={location.pathname}>
+              <div className="animate-in fade-in duration-200">
+                <Outlet />
+              </div>
+            </ErrorBoundary>
           </main>
         </div>
       </div>
