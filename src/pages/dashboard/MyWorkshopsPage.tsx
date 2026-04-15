@@ -1,16 +1,26 @@
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { CountdownTimer } from '@/components/workshop/CountdownTimer';
-import { Calendar, Download, Video } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Calendar, Download, Video, ExternalLink, FileText, FileImage, FileArchive, File, Play } from 'lucide-react';
 import { format } from 'date-fns';
 import { Link } from 'react-router-dom';
 
+const fileIcon = (type: string) => {
+  if (['pdf'].includes(type)) return <FileText className="h-4 w-4 text-red-500" />;
+  if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].includes(type)) return <FileImage className="h-4 w-4 text-blue-500" />;
+  if (['zip', 'rar', '7z', 'tar', 'gz'].includes(type)) return <FileArchive className="h-4 w-4 text-amber-500" />;
+  return <File className="h-4 w-4 text-muted-foreground" />;
+};
+
 export default function MyWorkshopsPage() {
   const { user } = useAuth();
+  const [materialsWs, setMaterialsWs] = useState<any>(null);
 
   const { data: registrations = [], isLoading } = useQuery({
     queryKey: ['my-workshop-registrations', user?.id],
@@ -27,6 +37,8 @@ export default function MyWorkshopsPage() {
   });
 
   if (isLoading) return <div className="p-6"><div className="animate-pulse h-32 bg-muted rounded-lg" /></div>;
+
+  const materialsList = (materialsWs?.materials as any[]) || [];
 
   return (
     <div className="space-y-6">
@@ -50,38 +62,71 @@ export default function MyWorkshopsPage() {
             const startDt = new Date(`${ws.start_date}T${ws.start_time || '00:00'}`);
             const isUpcoming = startDt > new Date();
             const isOngoing = ws.status === 'ongoing';
+            const isLive = isOngoing || (!isUpcoming && ws.status !== 'completed' && ws.status !== 'cancelled');
             const materials = (ws.materials as any[]) || [];
 
             return (
-              <Card key={reg.id}>
-                <CardContent className="p-5">
-                  <div className="flex flex-col md:flex-row md:items-center gap-4">
-                    {ws.thumbnail_url && (
-                      <img src={ws.thumbnail_url} alt={ws.title} className="w-full md:w-32 h-20 rounded-lg object-cover" />
-                    )}
-                    <div className="flex-1 space-y-2">
+              <Card key={reg.id} className="overflow-hidden">
+                <CardContent className="p-0">
+                  <div className="flex flex-col md:flex-row">
+                    {/* Thumbnail */}
+                    <div className="relative md:w-48 h-32 md:h-auto shrink-0">
+                      {ws.thumbnail_url ? (
+                        <img src={ws.thumbnail_url} alt={ws.title} className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full bg-gradient-to-br from-primary/10 to-accent/10 flex items-center justify-center">
+                          <Play className="h-8 w-8 text-muted-foreground/40" />
+                        </div>
+                      )}
+                      {isLive && (
+                        <div className="absolute top-2 left-2">
+                          <Badge className="bg-green-500 text-white border-none animate-pulse text-[10px]">● LIVE</Badge>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Content */}
+                    <div className="flex-1 p-5 space-y-3">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <h3 className="font-heading font-semibold">{ws.title}</h3>
-                        <Badge variant="outline">{ws.status}</Badge>
+                        <h3 className="font-heading font-semibold text-base">{ws.title}</h3>
+                        <Badge variant="outline" className="text-[10px]">{ws.status}</Badge>
                         <Badge variant="secondary" className="text-[10px]">#{reg.registration_number}</Badge>
                       </div>
-                      <div className="flex items-center gap-3 text-xs text-muted-foreground">
+
+                      <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
                         <span className="flex items-center gap-1"><Calendar className="h-3 w-3" />{format(new Date(ws.start_date), 'MMM dd, yyyy')}</span>
                         {ws.instructor?.full_name && <span>by {ws.instructor.full_name}</span>}
+                        {ws.workshop_type === 'multi_day' && <Badge variant="outline" className="text-[10px]">Multi-Day</Badge>}
                       </div>
+
                       {isUpcoming && <CountdownTimer targetDate={startDt} compact className="text-xs" />}
 
-                      <div className="flex flex-wrap gap-2 mt-2">
-                        <Link to={`/workshops/${ws.slug}`}>
-                          <Button size="sm" variant="outline">View Details</Button>
+                      <div className="flex flex-wrap gap-2 pt-1">
+                        <Link to={`/workshops/${ws.slug || ws.id}`}>
+                          <Button size="sm" variant="outline" className="gap-1 text-xs">
+                            <ExternalLink className="h-3 w-3" /> View Details
+                          </Button>
                         </Link>
-                        {(isOngoing || !isUpcoming) && ws.meet_link && (
+
+                        {/* Start Workshop / Join Meet — prominent green button */}
+                        {isLive && ws.meet_link && (
                           <a href={ws.meet_link} target="_blank" rel="noopener noreferrer">
-                            <Button size="sm" className="gap-1"><Video className="h-3.5 w-3.5" />Join</Button>
+                            <Button size="sm" className="gap-1.5 bg-green-600 hover:bg-green-700 text-white text-xs">
+                              <Video className="h-3.5 w-3.5" /> Start Workshop
+                            </Button>
                           </a>
                         )}
+
+                        {/* Materials download button */}
                         {materials.length > 0 && (
-                          <Badge variant="outline" className="gap-1"><Download className="h-3 w-3" />{materials.length} materials</Badge>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="gap-1 text-xs"
+                            onClick={() => setMaterialsWs(ws)}
+                          >
+                            <Download className="h-3 w-3" /> {materials.length} Material{materials.length > 1 ? 's' : ''}
+                          </Button>
                         )}
                       </div>
                     </div>
@@ -92,6 +137,45 @@ export default function MyWorkshopsPage() {
           })}
         </div>
       )}
+
+      {/* Materials Download Modal */}
+      <Dialog open={!!materialsWs} onOpenChange={(open) => { if (!open) setMaterialsWs(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Download className="h-5 w-5 text-primary" />
+              Workshop Materials
+            </DialogTitle>
+          </DialogHeader>
+          {materialsWs && (
+            <p className="text-sm text-muted-foreground -mt-2">{materialsWs.title}</p>
+          )}
+          <div className="space-y-2 max-h-[60vh] overflow-y-auto">
+            {materialsList.map((m: any, i: number) => (
+              <a
+                key={i}
+                href={m.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                download
+                className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted/50 transition-colors group"
+              >
+                {fileIcon(m.type || '')}
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate group-hover:text-primary transition-colors">{m.name}</p>
+                  <p className="text-[10px] text-muted-foreground uppercase">{m.type || 'file'}</p>
+                </div>
+                <Button variant="ghost" size="sm" className="shrink-0 h-8 w-8 p-0">
+                  <Download className="h-4 w-4" />
+                </Button>
+              </a>
+            ))}
+            {materialsList.length === 0 && (
+              <p className="text-sm text-muted-foreground text-center py-4">No materials available</p>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
