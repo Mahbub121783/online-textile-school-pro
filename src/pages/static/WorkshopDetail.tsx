@@ -12,8 +12,9 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { CountdownTimer } from '@/components/workshop/CountdownTimer';
-import { Calendar, Clock, Users, Download, ExternalLink, CheckCircle, Video } from 'lucide-react';
+import { Calendar, Clock, Users, Download, ExternalLink, CheckCircle, Video, BookOpen } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 
@@ -29,7 +30,11 @@ export default function WorkshopDetail() {
   const { data: workshop, isLoading } = useQuery({
     queryKey: ['workshop', slug],
     queryFn: async () => {
-      const { data, error } = await supabase.from('workshops').select('*').eq('slug', slug!).single();
+      const { data, error } = await supabase
+        .from('workshops')
+        .select('*, instructor:user_profiles!workshops_instructor_id_fkey(id, full_name, avatar_url)')
+        .eq('slug', slug!)
+        .single();
       if (error) throw error;
       return data;
     },
@@ -43,6 +48,15 @@ export default function WorkshopDetail() {
       return data || [];
     },
     enabled: !!workshop?.id && workshop?.workshop_type === 'multi_day',
+  });
+
+  const { data: lessons = [] } = useQuery({
+    queryKey: ['workshop-lessons', workshop?.id],
+    queryFn: async () => {
+      const { data } = await supabase.from('workshop_lessons').select('*').eq('workshop_id', workshop!.id).order('sort_order');
+      return data || [];
+    },
+    enabled: !!workshop?.id,
   });
 
   const { data: regCount = 0 } = useQuery({
@@ -64,15 +78,6 @@ export default function WorkshopDetail() {
     enabled: !!workshop?.id && !!user,
   });
 
-  const { data: quizzes = [] } = useQuery({
-    queryKey: ['workshop-quizzes', workshop?.id],
-    queryFn: async () => {
-      const { data } = await supabase.from('workshop_quizzes').select('*').eq('workshop_id', workshop!.id).eq('is_active', true);
-      return data || [];
-    },
-    enabled: !!workshop?.id,
-  });
-
   // Auto-fill for logged-in users
   const [autoFilled, setAutoFilled] = useState(false);
   if (!autoFilled && profile) {
@@ -84,6 +89,32 @@ export default function WorkshopDetail() {
       institution: '',
     });
   }
+
+  const sendConfirmationEmail = async (regData: any, ws: any) => {
+    try {
+      const emailBody = `
+        <h2>Workshop Registration Confirmed!</h2>
+        <p>You have been successfully registered for <strong>${ws.title}</strong>.</p>
+        <table style="margin:16px 0;border-collapse:collapse;">
+          <tr><td style="padding:4px 12px 4px 0;font-weight:bold;">Registration #</td><td>${regData.registration_number}</td></tr>
+          <tr><td style="padding:4px 12px 4px 0;font-weight:bold;">Date</td><td>${format(new Date(ws.start_date), 'MMMM dd, yyyy')}</td></tr>
+          ${ws.start_time ? `<tr><td style="padding:4px 12px 4px 0;font-weight:bold;">Time</td><td>${ws.start_time.slice(0, 5)}${ws.end_time ? ' - ' + ws.end_time.slice(0, 5) : ''}</td></tr>` : ''}
+          ${ws.meet_link ? `<tr><td style="padding:4px 12px 4px 0;font-weight:bold;">Meet Link</td><td><a href="${ws.meet_link}">${ws.meet_link}</a></td></tr>` : ''}
+        </table>
+        <p>Please join on time. We look forward to seeing you!</p>
+      `;
+
+      await supabase.functions.invoke('send-smtp-email', {
+        body: {
+          to: regData.email,
+          subject: `Workshop Registration Confirmed: ${ws.title}`,
+          html: emailBody,
+        },
+      });
+    } catch {
+      // Email is non-critical, don't block registration
+    }
+  };
 
   const registerMutation = useMutation({
     mutationFn: async () => {
@@ -108,6 +139,8 @@ export default function WorkshopDetail() {
       setRegNumber(data.registration_number);
       queryClient.invalidateQueries({ queryKey: ['workshop-reg-count'] });
       toast.success('Registration successful!');
+      // Send confirmation email
+      sendConfirmationEmail(data, workshop);
     },
     onError: (e: any) => toast.error(e.message),
   });
@@ -123,6 +156,7 @@ export default function WorkshopDetail() {
   const isRegistered = !!myRegistration || registered;
   const materials = (workshop.materials as any[]) || [];
   const whatYouLearn = (workshop.what_you_learn as string[]) || [];
+  const instructor = (workshop as any).instructor;
 
   return (
     <>
@@ -169,6 +203,27 @@ export default function WorkshopDetail() {
                         <li key={i} className="flex items-start gap-2"><CheckCircle className="h-4 w-4 text-green-500 mt-0.5 shrink-0" /><span className="text-sm">{item}</span></li>
                       ))}
                     </ul>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Curriculum */}
+              {lessons.length > 0 && (
+                <Card>
+                  <CardHeader><CardTitle className="text-lg flex items-center gap-2"><BookOpen className="h-5 w-5" />Course Plan</CardTitle></CardHeader>
+                  <CardContent className="space-y-2">
+                    {lessons.map((l: any, idx: number) => (
+                      <div key={l.id} className="flex items-start gap-3 p-3 rounded-lg bg-muted/50">
+                        <span className="text-xs font-mono bg-primary/10 text-primary rounded-full w-6 h-6 flex items-center justify-center shrink-0 mt-0.5">{idx + 1}</span>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <p className="font-medium text-sm">{l.title}</p>
+                            <Badge variant="outline" className="text-[10px]">{l.lesson_type}</Badge>
+                          </div>
+                          {l.description && <p className="text-xs text-muted-foreground mt-0.5">{l.description}</p>}
+                        </div>
+                      </div>
+                    ))}
                   </CardContent>
                 </Card>
               )}
@@ -232,24 +287,22 @@ export default function WorkshopDetail() {
               )}
             </div>
 
-            {/* Sidebar — Registration + Instructor */}
+            {/* Sidebar */}
             <div className="space-y-6">
-              {/* Instructor */}
-              {workshop.instructor_name && (
+              {/* Instructor from profile */}
+              {instructor && (
                 <Card>
                   <CardContent className="p-5">
                     <div className="flex items-center gap-3 mb-3">
-                      {workshop.instructor_avatar ? (
-                        <img src={workshop.instructor_avatar} className="w-12 h-12 rounded-full object-cover" />
-                      ) : (
-                        <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold">{workshop.instructor_name[0]}</div>
-                      )}
+                      <Avatar className="h-12 w-12">
+                        <AvatarImage src={instructor.avatar_url || ''} />
+                        <AvatarFallback>{instructor.full_name?.[0] || '?'}</AvatarFallback>
+                      </Avatar>
                       <div>
-                        <p className="font-semibold text-sm">{workshop.instructor_name}</p>
+                        <p className="font-semibold text-sm">{instructor.full_name}</p>
                         <p className="text-xs text-muted-foreground">Instructor</p>
                       </div>
                     </div>
-                    {workshop.instructor_bio && <p className="text-xs text-muted-foreground">{workshop.instructor_bio}</p>}
                   </CardContent>
                 </Card>
               )}
