@@ -115,7 +115,7 @@ function IdCardAdminControls({ userId }: { userId: string }) {
           )}
         </div>
         <p className="text-xs text-muted-foreground">
-          Paid enrollments: {paidEnrollments.length} (= {paidEnrollments.length * 6} months validity)
+          Paid enrollments: {paidEnrollments.length} · Validity: {paidEnrollments.length > 0 ? `${paidEnrollments.length * 6} months` : '6 months (default)'}
         </p>
       </CardContent>
     </Card>
