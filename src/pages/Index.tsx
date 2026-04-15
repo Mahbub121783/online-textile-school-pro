@@ -14,6 +14,7 @@ const TestimonialsSection = lazy(() => import('@/components/features/home/Testim
 const DemoClassCTA = lazy(() => import('@/components/features/home/DemoClassCTA'));
 const UpcomingEvents = lazy(() => import('@/components/features/home/UpcomingEvents'));
 const LearningPathsPreview = lazy(() => import('@/components/features/home/LearningPathsPreview'));
+const SponsorsSection = lazy(() => import('@/components/features/home/SponsorsSection'));
 
 const SectionFallback = () => (
   <div className="py-12 flex items-center justify-center">
@@ -53,6 +54,9 @@ const Index = () => {
         </Suspense>
         <Suspense fallback={<SectionFallback />}>
           <TestimonialsSection />
+        </Suspense>
+        <Suspense fallback={<SectionFallback />}>
+          <SponsorsSection />
         </Suspense>
         <Suspense fallback={<SectionFallback />}>
           <DemoClassCTA />

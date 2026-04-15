@@ -94,6 +94,7 @@ const bottomItems = [
   { title: 'Media', url: '/admin/media', icon: ImageIcon },
   { title: 'Menus', url: '/admin/menus', icon: Menu },
   { title: 'Appearance', url: '/admin/appearance', icon: Palette },
+  { title: 'Sponsors', url: '/admin/sponsors', icon: Crown },
   { title: 'Hero Slides', url: '/admin/hero-slides', icon: Image },
   { title: 'Notifications', url: '/admin/notifications', icon: Bell },
   { title: 'Activity Log', url: '/admin/activity', icon: Activity },
