@@ -100,7 +100,7 @@ function IdCardAdminControls({ userId }: { userId: string }) {
       <CardHeader className="pb-3"><CardTitle className="text-sm">ID Card Management</CardTitle></CardHeader>
       <CardContent className="space-y-3">
         <div className="flex flex-wrap gap-2">
-          <Button size="sm" onClick={() => generateCard.mutate()} disabled={generateCard.isPending || !paidEnrollments.length}>
+          <Button size="sm" onClick={() => generateCard.mutate()} disabled={generateCard.isPending}>
             {idCard ? 'Recalculate Validity' : 'Generate ID Card'}
           </Button>
           {idCard && (
