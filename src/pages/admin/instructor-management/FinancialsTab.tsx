@@ -341,7 +341,7 @@ const FinancialsTab = () => {
                                   <Label>Reason (optional)</Label>
                                   <Textarea value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} placeholder="Reason for rejection..." />
                                 </div>
-                                <Button variant="destructive" className="w-full" onClick={() => rejectWithdrawal.mutate({ id: w.id, reason: rejectReason })}>
+                                <Button variant="destructive" className="w-full" onClick={() => rejectWithdrawal.mutate({ id: w.id, reason: rejectReason, instructorId: w.instructor_id })}>
                                   Confirm Rejection
                                 </Button>
                               </div>

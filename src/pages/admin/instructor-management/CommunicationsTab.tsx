@@ -185,6 +185,8 @@ const CommunicationsTab = () => {
           user_id: student.id,
           course_id: selectedCourse,
           letter_grade: grade.toUpperCase(),
+          grade_point: 0,
+          credits: 0,
           graded_by: user?.id,
           notes: 'Dispatched via admin communications',
         });
