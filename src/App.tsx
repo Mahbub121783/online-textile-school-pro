@@ -1,7 +1,8 @@
 import { lazy, Suspense } from 'react';
 import ChatWidget from '@/components/chat/ChatWidget';
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Route, Routes, Navigate } from "react-router-dom";
+import { BrowserRouter, Route, Routes, Navigate, useLocation } from "react-router-dom";
+import ErrorBoundary from "@/components/ErrorBoundary";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -179,9 +180,8 @@ const App = () => (
         <TooltipProvider delayDuration={300}>
           <Toaster />
           <Sonner />
-          <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-            <Suspense fallback={<PageLoader />}>
-              <Routes>
+          <BrowserRouter future={{ v7_relativeSplatPath: true }}>
+            <AppRoutes />
                 <Route path="/" element={<Index />} />
                 <Route path="/courses" element={<CourseCatalog />} />
                 <Route path="/courses/:slug" element={<CourseDetail />} />
