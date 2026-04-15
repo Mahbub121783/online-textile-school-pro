@@ -1,73 +1,64 @@
 
 
-# Sponsor System — Homepage Section + Admin Management
+# Performance Fix — Eliminate Slow Loading & Double-Refresh Issues
 
-## Overview
-Add a dynamic "Our Sponsors & Partners" section on the homepage and a full admin management page for sponsors. Sponsors will have tiers (Platinum/Gold/Silver/Bronze), click-through URLs, animated marquee/carousel display, and rich admin CRUD with drag-and-drop ordering.
+## Root Cause Analysis
 
-## Database Migration
+The app suffers from **three compounding performance problems**:
 
-### Table: `sponsors`
-```sql
-CREATE TABLE sponsors (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  name text NOT NULL,
-  logo_url text NOT NULL,
-  website_url text,
-  tier text DEFAULT 'silver' CHECK (tier IN ('platinum','gold','silver','bronze')),
-  description text,
-  is_active boolean DEFAULT true,
-  sort_order integer DEFAULT 0,
-  click_count integer DEFAULT 0,
-  created_by uuid REFERENCES auth.users(id),
-  created_at timestamptz DEFAULT now(),
-  updated_at timestamptz DEFAULT now()
-);
-ALTER TABLE sponsors ENABLE ROW LEVEL SECURITY;
--- Public read active sponsors
-CREATE POLICY "Public read active sponsors" ON sponsors FOR SELECT USING (is_active = true);
--- Admin full access
-CREATE POLICY "Admin manage sponsors" ON sponsors FOR ALL USING (
-  EXISTS (SELECT 1 FROM user_roles WHERE user_id = auth.uid() AND role IN ('admin','super_admin'))
-);
+### Problem 1: Auth Race Condition (causes "double refresh" behavior)
+The `AuthProvider` uses `getSession()` followed by `onAuthStateChange()`. When `onAuthStateChange` fires with `INITIAL_SESSION` before `getSession` resolves, it triggers a duplicate `fetchUserData` call. This causes components to flash between loading/loaded states, making users think they need to refresh twice.
+
+### Problem 2: Homepage Fires 10+ Parallel Supabase Queries on Mount
+The Index page eagerly loads 10 sections, each making 1-4 Supabase queries simultaneously. With `refetchOnMount: 'always'` in QueryClient defaults, every navigation back to home re-fires all queries. Combined with auth loading, this creates a waterfall of blocked renders.
+
+### Problem 3: Duplicate Realtime Channels + Notification Subscriptions
+- `NotificationBell` (via `useNotifications`) creates its own realtime channel with `Date.now()` suffix on every mount
+- Layout-level realtime hooks (`useStudentRealtime`, `useAdminRealtime`) also subscribe to notification inserts
+- This means duplicate subscriptions that trigger redundant query invalidations
+
+## Fix Plan
+
+### Step 1: Fix Auth — Prevent Race Condition
+**File: `src/hooks/useAuth.tsx`**
+- Skip the `onAuthStateChange` callback when it's the `INITIAL_SESSION` event (the `getSession()` call already handles initial load)
+- This eliminates the double-fetch of `fetchUserData` and the loading flicker
+
+```
+Before:  onAuthStateChange((_event, session) => { ... })
+After:   onAuthStateChange((event, session) => {
+           if (event === 'INITIAL_SESSION') return; // already handled by getSession
+           ...
+         })
 ```
 
-## New Files
+### Step 2: Fix QueryClient — Remove Aggressive Refetch
+**File: `src/App.tsx`**
+- Remove `refetchOnMount: 'always'` — this forces every query to re-fetch even when data is fresh, defeating the purpose of `staleTime: 5min`
+- The 5-minute staleTime already handles freshness correctly
 
-### 1. `src/components/features/home/SponsorsSection.tsx`
-- Fetches active sponsors from DB, grouped by tier
-- Tier headings with distinct styling (Platinum = largest logos, Bronze = smallest)
-- Infinite scrolling marquee animation for logo rows
-- Each logo links to `website_url` (opens new tab), increments `click_count` via RPC
-- Hover effect: logo scales up, shows sponsor name tooltip
-- Responsive grid fallback on mobile
+### Step 3: Optimize Homepage — Intersection Observer Loading
+**File: `src/pages/Index.tsx`**
+- Wrap below-the-fold sections in a simple visibility check so their queries don't fire until the section is scrolled into view
+- HeroSlider + StatsSection load immediately; everything else loads when visible
 
-### 2. `src/pages/admin/AdminSponsors.tsx`
-- Full CRUD table with columns: Logo preview, Name, Tier (badge), Website, Active toggle, Click count, Actions
-- Create/Edit dialog with:
-  - Name (required), Website URL (validated), Description
-  - Tier selector (Platinum/Gold/Silver/Bronze)
-  - Logo upload via MediaPickerModal (Cloudinary)
-  - Active toggle, Sort order
-- Delete confirmation
-- Drag-and-drop reordering (sort_order)
-- Click analytics display per sponsor
-- Bulk toggle active/inactive
+### Step 4: Deduplicate Notification Realtime
+**File: `src/hooks/useNotifications.ts`**
+- Remove the per-component realtime subscription from `useNotifications` hook since the layout-level hooks (`useStudentRealtime`, `useAdminRealtime`, `useInstructorRealtime`) already handle notification invalidation
+- This eliminates duplicate channels and redundant re-renders
 
-## Modified Files
+### Step 5: Add `enabled` Guards on Unauthenticated Pages
+Several homepage components (Header's `useAuth`, `NotificationBell`) trigger queries even on public pages where no user exists. Ensure all user-dependent queries have proper `enabled: !!user` guards (most already do, but the notification hook's realtime channel creates connections regardless).
 
-### 3. `src/pages/Index.tsx`
-- Add lazy-loaded `SponsorsSection` between `TestimonialsSection` and `DemoClassCTA`
+## Files Modified
+1. `src/hooks/useAuth.tsx` — Skip `INITIAL_SESSION` event
+2. `src/App.tsx` — Remove `refetchOnMount: 'always'`
+3. `src/pages/Index.tsx` — Add intersection-observer lazy loading for sections
+4. `src/hooks/useNotifications.ts` — Remove duplicate realtime subscription
 
-### 4. `src/components/layout/AdminSidebar.tsx`
-- Add `{ title: 'Sponsors', url: '/admin/sponsors', icon: Crown }` to `bottomItems` array
-
-### 5. `src/App.tsx`
-- Add route: `/admin/sponsors` → `AdminSponsors`
-
-## Key Design Decisions
-- Marquee animation via CSS `@keyframes` (no extra library)
-- Click tracking: direct Supabase update `click_count = click_count + 1` on logo click
-- Tier-based sizing: Platinum 120px height, Gold 96px, Silver 72px, Bronze 56px
-- Admin follows existing dialog pattern (max-h-[90vh], overflow-y-auto, MediaPickerModal)
+## Expected Impact
+- Initial page load: ~50% fewer Supabase queries
+- No more "double refresh" — auth resolves in one pass
+- Dashboard/admin pages load on first visit without flicker
+- Reduced WebSocket connections (fewer realtime channels)
 
