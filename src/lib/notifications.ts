@@ -205,4 +205,7 @@ export const NOTIFICATION_TYPES = {
   UNREPLIED_MESSAGE: 'unreplied_message',
   // Mail
   EDUMAIL_RECEIVED: 'edumail_received',
+  // Workshop
+  WORKSHOP_NOTIFICATION: 'workshop_notification',
+  WORKSHOP_REMINDER: 'workshop_reminder',
 } as const;
