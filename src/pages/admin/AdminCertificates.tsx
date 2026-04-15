@@ -11,12 +11,15 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Award, Plus, Trash2, Eye, Upload, Save, GripVertical, Italic, AlignLeft, AlignCenter, AlignRight, Download, Type, Image as ImageIcon, Copy, RotateCcw, Move, Maximize2 } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Award, Plus, Trash2, Eye, Upload, Save, GripVertical, Italic, AlignLeft, AlignCenter, AlignRight, Download, Type, Image as ImageIcon, Copy, RotateCcw, Move, Maximize2, MoreHorizontal, UserPlus, XCircle, Users } from 'lucide-react';
 import { useFileUpload } from '@/hooks/useFileUpload';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import type { CertificateField, CertificateData } from '@/lib/certificateRenderer';
 import { renderFieldsSync, preloadImage, getCachedImage, downloadCertificatePDF } from '@/lib/certificateRenderer';
+import { createNotification } from '@/lib/notifications';
 
 // ── Font system with handwritten/calligraphy fonts ──
 const FONT_FAMILIES = [
