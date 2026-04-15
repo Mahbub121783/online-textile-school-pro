@@ -55,7 +55,7 @@ const QuizDashboard = ({ onCreateNew, onEdit, onResults }: Props) => {
   const { data: questionCounts = {} } = useQuery({
     queryKey: ['quiz-question-counts'],
     queryFn: async () => {
-      const { data } = await supabase.from('quiz_questions').select('quiz_id').eq('is_instruction', false);
+      const { data } = await supabase.from('quiz_questions').select('quiz_id').eq('is_instruction', false).limit(5000);
       const counts: Record<string, number> = {};
       (data ?? []).forEach((r: any) => { counts[r.quiz_id] = (counts[r.quiz_id] || 0) + 1; });
       return counts;
@@ -65,7 +65,7 @@ const QuizDashboard = ({ onCreateNew, onEdit, onResults }: Props) => {
   const { data: attemptCounts = {} } = useQuery({
     queryKey: ['quiz-attempt-counts'],
     queryFn: async () => {
-      const { data } = await supabase.from('quiz_attempts').select('quiz_id');
+      const { data } = await supabase.from('quiz_attempts').select('quiz_id').limit(5000);
       const counts: Record<string, number> = {};
       (data ?? []).forEach((r: any) => { counts[r.quiz_id] = (counts[r.quiz_id] || 0) + 1; });
       return counts;

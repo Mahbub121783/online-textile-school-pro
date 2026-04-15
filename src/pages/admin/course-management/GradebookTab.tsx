@@ -109,6 +109,7 @@ const GradebookTab = () => {
     queryFn: async () => {
       let q = supabase.from('enrollments').select('*, user_profiles!enrollments_user_id_fkey(full_name, avatar_url), courses!enrollments_course_id_fkey(title)').order('enrolled_at', { ascending: false });
       if (courseFilter !== 'all') q = q.eq('course_id', courseFilter);
+      q = q.limit(5000);
       const { data } = await q;
       let results = data ?? [];
       if (search) results = results.filter((e: any) => e.user_profiles?.full_name?.toLowerCase().includes(search.toLowerCase()));
@@ -121,7 +122,7 @@ const GradebookTab = () => {
     queryFn: async () => {
       let q = supabase.from('quiz_attempts').select('*, quizzes!quiz_attempts_quiz_id_fkey(course_id, title)');
       if (courseFilter !== 'all') q = q.eq('quizzes.course_id', courseFilter);
-      const { data } = await q;
+      const { data } = await q.limit(5000);
       return data ?? [];
     },
   });
@@ -131,7 +132,7 @@ const GradebookTab = () => {
     queryFn: async () => {
       let q = supabase.from('assignment_submissions').select('*, assignments!assignment_submissions_assignment_id_fkey(course_id, title, max_score)');
       if (courseFilter !== 'all') q = q.eq('assignments.course_id', courseFilter);
-      const { data } = await q;
+      const { data } = await q.limit(5000);
       return data ?? [];
     },
   });
@@ -141,7 +142,7 @@ const GradebookTab = () => {
     queryFn: async () => {
       let q = supabase.from('gradebook_manual_marks').select('*');
       if (courseFilter !== 'all') q = q.eq('course_id', courseFilter);
-      const { data } = await q;
+      const { data } = await q.limit(5000);
       return data ?? [];
     },
   });
@@ -157,8 +158,22 @@ const GradebookTab = () => {
         if (error) throw error;
       }
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       qc.invalidateQueries({ queryKey: ['gradebook-manual-marks'] });
+      // Notify student about the manual mark
+      if (manualDialog.userId) {
+        try {
+          const { createNotification } = await import('@/lib/notifications');
+          const course = courses.find((c: any) => c.id === manualDialog.courseId);
+          await createNotification({
+            userId: manualDialog.userId,
+            type: 'grade_updated',
+            title: 'Grade Updated 📊',
+            message: `A manual mark "${manualForm.label}" (${manualForm.score}/${manualForm.max_score}) has been recorded${course ? ` for "${course.title}"` : ''}.`,
+            link: '/dashboard',
+          });
+        } catch {}
+      }
       setManualDialog({ open: false });
       toast.success('Manual mark saved');
     },

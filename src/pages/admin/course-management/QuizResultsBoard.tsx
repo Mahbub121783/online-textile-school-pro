@@ -125,8 +125,21 @@ const QuizResultsBoard = ({ quizId, onBack }: Props) => {
       }).eq('id', attemptId);
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: async (_: any, variables: any) => {
       qc.invalidateQueries({ queryKey: ['quiz-results-attempts'] });
+      // Notify the student about score override
+      if (justifyView?.user_id) {
+        try {
+          const { createNotification } = await import('@/lib/notifications');
+          await createNotification({
+            userId: justifyView.user_id,
+            type: 'quiz_score_updated',
+            title: 'Quiz Score Updated 📝',
+            message: `Your score for "${quiz?.title || 'Quiz'}" has been reviewed and updated by an admin.${variables.fb ? ` Feedback: ${variables.fb}` : ''}`,
+            link: '/dashboard/quizzes',
+          });
+        } catch {}
+      }
       toast.success('Feedback saved & rankings updated');
       setJustifyView(null);
     },

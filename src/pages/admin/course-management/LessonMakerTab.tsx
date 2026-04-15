@@ -95,7 +95,7 @@ const LessonMakerTab = () => {
       }
       if (statusFilter !== 'all') q = q.eq('status', statusFilter);
       if (search) q = q.ilike('title', `%${search}%`);
-      const { data } = await q;
+      const { data } = await q.limit(5000);
       return data ?? [];
     },
     enabled: courseFilter === 'all' || courseFilter === 'independent' || sections.length > 0,
