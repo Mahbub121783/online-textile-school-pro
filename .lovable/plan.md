@@ -1,77 +1,86 @@
 
 
-# CMS Section Deep Audit — Issues & Fixes
+# Certificate System — Deep Audit & Fixes
 
 ## Issues Found
 
-### 1. Route Conflict: `cms/:tab` Catches `cms/courses/new` and `cms/courses/:courseId`
-**File: `src/App.tsx` lines 260-263**
-React Router v6 matches the **most specific** path, so `cms/courses/new` WILL match correctly over `cms/:tab`. However, `cms/:tab` matches `courses` as a tab parameter — so clicking "Create Course" navigates to `/admin/cms/courses/new` which works. **No bug here** — React Router 6 handles specificity correctly.
+### 1. "Verify" Button is Non-Functional (Student Page)
+`CertificatesPage.tsx` line 254-256: The "Verify" button renders but has no `onClick` handler — it does absolutely nothing. There's no public verification page for certificate numbers.
 
-### 2. Assignment Grading Does NOT Notify Students (Critical)
-**File: `src/pages/admin/course-management/AssignmentTab.tsx` lines 76-81**
-When an admin grades an assignment submission, only the DB record is updated. The student receives **no notification** that their assignment was graded and scored. This is a significant UX gap — students have to manually check.
+**Fix**: Create a public `/verify-certificate` page where anyone can enter a certificate number and see the student name, course, and issue date. Link the Verify button to it.
 
-**Fix**: After `gradeSubmission` mutation succeeds, send a notification to the student with their score and feedback.
+### 2. `as any` Type Casts Are Unnecessary
+`cert_template_id` exists in the Supabase types (`string | null`). All `as any` casts in `AdminCertificates.tsx` (lines 183, 188, 202), `CourseSettingsTab.tsx` (line 92), and `CourseBuilder.tsx` (line 82) are unnecessary and reduce type safety.
 
-### 3. Quiz Results "Justify & Re-rank" Does NOT Notify Students
-**File: `src/pages/admin/course-management/QuizResultsBoard.tsx` lines 103-134**
-When an admin overrides quiz scores via the Justify dialog, the student gets no notification about the score change.
+**Fix**: Remove all `as any` casts for `cert_template_id` updates.
 
-**Fix**: After `saveFeedback` mutation succeeds, send notification to the student.
+### 3. No Admin Manual Certificate Issuance
+Admins cannot manually issue a certificate to a student. The only path is auto-issuance at 100% progress. If a student has an edge case (transferred credit, admin override), there's no way to issue.
 
-### 4. Gradebook Manual Mark Does NOT Notify Students
-**File: `src/pages/admin/course-management/GradebookTab.tsx` lines 149-166**
-When admins add or update manual marks, students are not notified.
+**Fix**: Add a "Manual Issue" button in the Issued Certificates tab with a student/course picker dialog.
 
-**Fix**: After `saveManualMark` mutation succeeds, send notification.
+### 4. No Admin Certificate Revocation
+Once issued, a certificate cannot be revoked by an admin. If issued in error or for a refunded student, it remains forever.
 
-### 5. No Query Limits on Several CMS Queries
-Multiple queries across CMS tabs lack `.limit()`, risking silent truncation at 1000 rows:
-- `GradebookTab.tsx`: `enrollments`, `quiz_attempts`, `submissions`, `manualMarks` queries
-- `QuizDashboard.tsx`: `questionCounts`, `attemptCounts` queries (fetch ALL quiz_questions and quiz_attempts)
-- `CoursesListTab.tsx`: courses query
-- `LessonMakerTab.tsx`: lessons, sections, quizzes, assignments queries
+**Fix**: Add a "Revoke" action on each issued certificate row that deletes the record and notifies the student.
 
-**Fix**: Add `.limit(5000)` to prevent silent truncation.
+### 5. No Email Sent on Auto-Issuance
+The `autoIssueCertificate` function creates an in-app notification but does NOT send the `certificate_issued` email template (which already exists in the SMTP system).
 
-### 6. Course Delete is Actually "Archive" But No Real Delete Option
-**File: `CoursesListTab.tsx` lines 89-95**
-The "delete" mutation just sets `is_published: false, review_status: 'draft'`. The dropdown says "Archive" which is correct, but there's no way to permanently delete a course. This is acceptable behavior but worth noting.
+**Fix**: After inserting the certificate, invoke `send-smtp-email` with the `certificate_issued` template.
 
-### 7. QuizBuilder Deletes All Questions on Edit (Destructive)
-**File: `QuizBuilder.tsx` line 181**
-When editing an existing quiz, ALL questions are deleted and re-inserted: `await supabase.from('quiz_questions').delete().eq('quiz_id', quizId!)`. This means if the save fails partway, existing questions are lost. Not ideal but works for small question sets.
+### 6. `downloaded_at` / `download_count` Update Uses `as any`
+`CertificatesPage.tsx` line 139-142 casts the update payload. These columns exist in the DB but may not be in the generated types. This works but is a type gap.
 
-### 8. Certificate Assignment Uses `as any` Type Cast
-**File: `CourseSettingsTab.tsx` line 93**
-`await supabase.from('courses').update({ cert_template_id: templateId } as any)` — indicates `cert_template_id` might not be in the generated types. This works at runtime but is a type safety gap.
+**Fix**: Remove `as any` or keep as-is (minor).
+
+### 7. Instructor Signature Not Populated in Student Download
+`CertificatesPage.tsx` line 136 sets `instructor_signature: ''` — always empty. Should fetch the course instructor's name.
+
+**Fix**: Join `courses` with `user_profiles` via `instructor_id` to get the instructor name.
+
+### 8. No Bulk Certificate Operations in Admin
+No way to bulk-issue or bulk-revoke certificates for an entire course cohort.
+
+**Fix**: Add a "Bulk Issue" action for a selected course that generates certificates for all eligible students who don't have one yet.
 
 ## Implementation Plan
 
-### Step 1: Add Student Notifications on Assignment Grading
-**File: `src/pages/admin/course-management/AssignmentTab.tsx`**
-- In `gradeSubmission.onSuccess`, look up the submission's `user_id` and send a notification with score and feedback
+### Step 1: Fix Type Safety — Remove `as any` Casts
+**Files**: `AdminCertificates.tsx`, `CourseSettingsTab.tsx`, `CourseBuilder.tsx`
+- Remove unnecessary `as any` on `cert_template_id` updates (it's already in the types)
 
-### Step 2: Add Student Notifications on Quiz Score Override
-**File: `src/pages/admin/course-management/QuizResultsBoard.tsx`**
-- In `saveFeedback.onSuccess`, send notification to the student about their updated score
+### Step 2: Create Public Certificate Verification Page
+**New file**: `src/pages/verify/VerifyCertificate.tsx`
+- Input field for certificate number
+- Queries `certificates` joined with `user_profiles` and `courses`
+- Shows student name, course title, issue date, score (if any)
+- Add route `/verify-certificate` to `App.tsx`
+- Wire the "Verify" button on student certificates page to open this URL
 
-### Step 3: Add Student Notifications on Manual Mark
-**File: `src/pages/admin/course-management/GradebookTab.tsx`**
-- In `saveManualMark.onSuccess`, send notification to the student
+### Step 3: Add Instructor Signature to Student Downloads
+**File**: `CertificatesPage.tsx`
+- Modify the courses query to join `user_profiles` via `instructor_id`
+- Pass instructor's `full_name` as `instructor_signature` in `CertificateData`
 
-### Step 4: Add Query Limits Across CMS Tabs
-**Files**: `GradebookTab.tsx`, `QuizDashboard.tsx`, `CoursesListTab.tsx`, `LessonMakerTab.tsx`
-- Add `.limit(5000)` to all queries that currently lack limits
+### Step 4: Add Email Notification on Auto-Issuance
+**File**: `src/hooks/useEnrollments.ts`
+- After certificate INSERT, fetch the user's email and invoke `send-smtp-email` edge function with the `certificate_issued` template
+
+### Step 5: Admin Manual Issue & Revoke
+**File**: `src/pages/admin/AdminCertificates.tsx`
+- Add "Manual Issue" button → dialog with student search + course select → issues certificate
+- Add "Revoke" dropdown action on each issued certificate row → deletes certificate + notifies student
+- Add "Bulk Issue" button → selects a course → issues to all eligible students without existing certs
 
 ## Files Modified
-1. `src/pages/admin/course-management/AssignmentTab.tsx` — Grade notification + query limits
-2. `src/pages/admin/course-management/QuizResultsBoard.tsx` — Score override notification
-3. `src/pages/admin/course-management/GradebookTab.tsx` — Manual mark notification + query limits
-4. `src/pages/admin/course-management/QuizDashboard.tsx` — Query limits
-5. `src/pages/admin/course-management/CoursesListTab.tsx` — Query limits
-6. `src/pages/admin/course-management/LessonMakerTab.tsx` — Query limits
+1. `src/pages/admin/AdminCertificates.tsx` — Remove `as any`, add manual issue/revoke/bulk
+2. `src/pages/admin/course-management/CourseSettingsTab.tsx` — Remove `as any`
+3. `src/pages/instructor/CourseBuilder.tsx` — Remove `as any`
+4. `src/pages/dashboard/CertificatesPage.tsx` — Wire Verify button, add instructor signature
+5. `src/hooks/useEnrollments.ts` — Add email on auto-issuance
+6. `src/pages/verify/VerifyCertificate.tsx` — New public verification page
+7. `src/App.tsx` — Add `/verify-certificate` route
 
-No database migrations needed — all notification tables and functions already exist.
+No database migrations needed — all tables and columns already exist.
 
