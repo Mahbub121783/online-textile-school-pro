@@ -40,8 +40,6 @@ export default function AdminWorkshops() {
   // Notification state
   const [notifyWs, setNotifyWs] = useState<any>(null);
   const [notifyForm, setNotifyForm] = useState({ title: '', message: '' });
-  const [newLearnItem, setNewLearnItem] = useState('');
-
   // Media picker state
   const [mediaPickerOpen, setMediaPickerOpen] = useState(false);
   const [mediaPickerTarget, setMediaPickerTarget] = useState<'thumbnail' | 'material'>('thumbnail');
