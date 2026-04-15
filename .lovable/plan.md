@@ -1,86 +1,71 @@
 
 
-# Certificate System — Deep Audit & Fixes
+# Dashboard Issues — Deep Audit & Fixes
 
 ## Issues Found
 
-### 1. "Verify" Button is Non-Functional (Student Page)
-`CertificatesPage.tsx` line 254-256: The "Verify" button renders but has no `onClick` handler — it does absolutely nothing. There's no public verification page for certificate numbers.
+### 1. Avatar Upload Fails: Missing Storage UPDATE Policy (Critical)
+**Root cause**: The `storage.objects` table has an INSERT policy for authenticated users but **no UPDATE policy**. When using `supabase.storage.upload(path, file, { upsert: true })`, Supabase attempts an UPDATE if the file already exists. Without an UPDATE policy, replacing a photo always fails with "new row violates row-level security policy".
 
-**Fix**: Create a public `/verify-certificate` page where anyone can enter a certificate number and see the student name, course, and issue date. Link the Verify button to it.
+**Fix**: Add an UPDATE policy on `storage.objects` allowing authenticated users to update their own files in the `media` bucket.
 
-### 2. `as any` Type Casts Are Unnecessary
-`cert_template_id` exists in the Supabase types (`string | null`). All `as any` casts in `AdminCertificates.tsx` (lines 183, 188, 202), `CourseSettingsTab.tsx` (line 92), and `CourseBuilder.tsx` (line 82) are unnecessary and reduce type safety.
+### 2. Institutional Email Widget Visible to All Users
+The `InstitutionalEmailWidget` is unconditionally rendered in `SettingsPage.tsx` (line 347). Per the memory notes, institutional email should only be available to students who have **purchased at least one course**.
 
-**Fix**: Remove all `as any` casts for `cert_template_id` updates.
+**Fix**: In `InstitutionalEmailWidget`, check if the user has any enrollment. If none, don't render the widget.
 
-### 3. No Admin Manual Certificate Issuance
-Admins cannot manually issue a certificate to a student. The only path is auto-issuance at 100% progress. If a student has an edge case (transferred credit, admin override), there's no way to issue.
+### 3. Referral System is Completely Non-Functional
+The registration page (`Register.tsx`) does **not**:
+- Read the `?ref=` query parameter from the URL
+- Save it to the user's `referred_by` field in `user_profiles`
+- Create a `referral_rewards` record when the referred user pays
 
-**Fix**: Add a "Manual Issue" button in the Issued Certificates tab with a student/course picker dialog.
+The `ReferralsPage.tsx` displays correctly but will always be empty because no referral data is ever created. The entire referral pipeline is missing.
 
-### 4. No Admin Certificate Revocation
-Once issued, a certificate cannot be revoked by an admin. If issued in error or for a refunded student, it remains forever.
+**Fix**:
+- **Register.tsx**: Read `?ref=` param, pass it as `user_metadata` during signup
+- **`handle_new_user` DB trigger**: Update to read `ref` from `raw_user_meta_data`, look up the referrer by `referral_code`, set `referred_by` on the new user's profile, and insert a `pending` row into `referral_rewards`
+- **Payment flow**: After successful payment (in `process-payment` edge function or checkout), check if the paying user was referred, and credit the referrer's wallet + update the referral_reward status to `credited`
 
-**Fix**: Add a "Revoke" action on each issued certificate row that deletes the record and notifies the student.
+### 4. No Storage UPDATE Policy for Instructors/Admins Either
+The same UPDATE gap affects any file replacement across the platform.
 
-### 5. No Email Sent on Auto-Issuance
-The `autoIssueCertificate` function creates an in-app notification but does NOT send the `certificate_issued` email template (which already exists in the SMTP system).
-
-**Fix**: After inserting the certificate, invoke `send-smtp-email` with the `certificate_issued` template.
-
-### 6. `downloaded_at` / `download_count` Update Uses `as any`
-`CertificatesPage.tsx` line 139-142 casts the update payload. These columns exist in the DB but may not be in the generated types. This works but is a type gap.
-
-**Fix**: Remove `as any` or keep as-is (minor).
-
-### 7. Instructor Signature Not Populated in Student Download
-`CertificatesPage.tsx` line 136 sets `instructor_signature: ''` — always empty. Should fetch the course instructor's name.
-
-**Fix**: Join `courses` with `user_profiles` via `instructor_id` to get the instructor name.
-
-### 8. No Bulk Certificate Operations in Admin
-No way to bulk-issue or bulk-revoke certificates for an entire course cohort.
-
-**Fix**: Add a "Bulk Issue" action for a selected course that generates certificates for all eligible students who don't have one yet.
+**Fix**: The UPDATE policy should mirror the INSERT policy.
 
 ## Implementation Plan
 
-### Step 1: Fix Type Safety — Remove `as any` Casts
-**Files**: `AdminCertificates.tsx`, `CourseSettingsTab.tsx`, `CourseBuilder.tsx`
-- Remove unnecessary `as any` on `cert_template_id` updates (it's already in the types)
+### Step 1: Database Migration — Storage UPDATE Policy
+Add an UPDATE policy on `storage.objects`:
+```sql
+CREATE POLICY "Authenticated users can update media"
+ON storage.objects FOR UPDATE
+TO authenticated
+USING (bucket_id = 'media')
+WITH CHECK (bucket_id = 'media');
+```
 
-### Step 2: Create Public Certificate Verification Page
-**New file**: `src/pages/verify/VerifyCertificate.tsx`
-- Input field for certificate number
-- Queries `certificates` joined with `user_profiles` and `courses`
-- Shows student name, course title, issue date, score (if any)
-- Add route `/verify-certificate` to `App.tsx`
-- Wire the "Verify" button on student certificates page to open this URL
+### Step 2: Database Migration — Update `handle_new_user` Trigger
+Modify the trigger to:
+- Read `ref` from `raw_user_meta_data`
+- Look up referrer by `referral_code` in `user_profiles`
+- Set `referred_by` on the new user's profile
+- Insert a `pending` record into `referral_rewards`
 
-### Step 3: Add Instructor Signature to Student Downloads
-**File**: `CertificatesPage.tsx`
-- Modify the courses query to join `user_profiles` via `instructor_id`
-- Pass instructor's `full_name` as `instructor_signature` in `CertificateData`
+### Step 3: Register.tsx — Capture Referral Code
+- Read `?ref=` from `useSearchParams`
+- Pass it as `data: { full_name, ref: refCode }` in the `signUp` call
 
-### Step 4: Add Email Notification on Auto-Issuance
-**File**: `src/hooks/useEnrollments.ts`
-- After certificate INSERT, fetch the user's email and invoke `send-smtp-email` edge function with the `certificate_issued` template
+### Step 4: InstitutionalEmailWidget — Gate by Enrollment
+- Query `enrollments` count for the current user
+- If count is 0, return null (hide the widget)
 
-### Step 5: Admin Manual Issue & Revoke
-**File**: `src/pages/admin/AdminCertificates.tsx`
-- Add "Manual Issue" button → dialog with student search + course select → issues certificate
-- Add "Revoke" dropdown action on each issued certificate row → deletes certificate + notifies student
-- Add "Bulk Issue" button → selects a course → issues to all eligible students without existing certs
+### Step 5: Credit Referrer on Payment
+- In the `process-payment` edge function, after successful enrollment, check if the user has `referred_by` set
+- If yes, update the matching `referral_rewards` row to `credited` and call `credit_wallet` for the referrer
 
 ## Files Modified
-1. `src/pages/admin/AdminCertificates.tsx` — Remove `as any`, add manual issue/revoke/bulk
-2. `src/pages/admin/course-management/CourseSettingsTab.tsx` — Remove `as any`
-3. `src/pages/instructor/CourseBuilder.tsx` — Remove `as any`
-4. `src/pages/dashboard/CertificatesPage.tsx` — Wire Verify button, add instructor signature
-5. `src/hooks/useEnrollments.ts` — Add email on auto-issuance
-6. `src/pages/verify/VerifyCertificate.tsx` — New public verification page
-7. `src/App.tsx` — Add `/verify-certificate` route
-
-No database migrations needed — all tables and columns already exist.
+1. **Database migration** — Storage UPDATE policy + `handle_new_user` trigger update
+2. **`src/pages/auth/Register.tsx`** — Capture `?ref=` and pass to signup metadata
+3. **`src/components/InstitutionalEmailWidget.tsx`** — Gate rendering behind enrollment check
+4. **`supabase/functions/process-payment/index.ts`** — Credit referrer wallet on payment
 
