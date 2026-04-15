@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -10,21 +11,31 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Send, GraduationCap } from 'lucide-react';
-import { createNotification, broadcastNotification, notifyAllStudents } from '@/lib/notifications';
+import {
+  createNotification,
+  createNotificationWithEmail,
+  broadcastNotification,
+  broadcastNotificationWithEmail,
+  notifyAllStudents,
+  notifyAllStudentsWithEmail,
+} from '@/lib/notifications';
 
 const CommunicationsTab = () => {
   const { toast } = useToast();
+  const { user } = useAuth();
 
   // Notification Engine state
   const [recipientTarget, setRecipientTarget] = useState('');
   const [subject, setSubject] = useState('');
   const [message, setMessage] = useState('');
   const [sendViaEmail, setSendViaEmail] = useState(false);
+  const [sending, setSending] = useState(false);
 
   // Course Marks Sender state
   const [selectedCourse, setSelectedCourse] = useState('');
   const [studentRoll, setStudentRoll] = useState('');
   const [grade, setGrade] = useState('');
+  const [dispatching, setDispatching] = useState(false);
 
   // Fetch instructors for specific targeting
   const { data: instructors } = useQuery({
@@ -63,38 +74,143 @@ const CommunicationsTab = () => {
       toast({ title: 'Missing fields', description: 'Please fill in all required fields.', variant: 'destructive' });
       return;
     }
+    setSending(true);
 
-    const payload = { type: 'announcement' as const, title: subject, message, link: null };
+    try {
+      const payload = { type: 'announcement' as const, title: subject, message, link: undefined };
 
-    if (recipientTarget === 'all-instructors') {
-      const { data: roles } = await supabase.from('user_roles').select('user_id').eq('role', 'instructor');
-      if (roles?.length) await broadcastNotification({ userIds: roles.map(r => r.user_id), ...payload });
-    } else if (recipientTarget === 'all-users') {
-      await notifyAllStudents(payload);
-    } else {
-      await createNotification({ userId: recipientTarget, ...payload });
+      if (recipientTarget === 'all-instructors') {
+        const { data: roles } = await supabase.from('user_roles').select('user_id').eq('role', 'instructor');
+        if (roles?.length) {
+          const ids = roles.map(r => r.user_id);
+          if (sendViaEmail) {
+            await broadcastNotificationWithEmail({ userIds: ids, ...payload });
+          } else {
+            await broadcastNotification({ userIds: ids, ...payload });
+          }
+        }
+      } else if (recipientTarget === 'all-users') {
+        if (sendViaEmail) {
+          await notifyAllStudentsWithEmail(payload);
+        } else {
+          await notifyAllStudents(payload);
+        }
+      } else {
+        if (sendViaEmail) {
+          await createNotificationWithEmail({ userId: recipientTarget, ...payload });
+        } else {
+          await createNotification({ userId: recipientTarget, ...payload });
+        }
+      }
+
+      toast({
+        title: 'Notification Sent',
+        description: `${sendViaEmail ? 'Email + in-app' : 'In-app'} notification sent to ${recipientTarget === 'all-instructors' ? 'all instructors' : recipientTarget === 'all-users' ? 'all users' : 'selected instructor'}.`,
+      });
+      setSubject('');
+      setMessage('');
+      setRecipientTarget('');
+    } catch (err: any) {
+      toast({ title: 'Failed to send', description: err.message, variant: 'destructive' });
+    } finally {
+      setSending(false);
     }
-
-    toast({
-      title: 'Notification Sent',
-      description: `In-app notification sent to ${recipientTarget === 'all-instructors' ? 'all instructors' : recipientTarget === 'all-users' ? 'all users' : 'selected instructor'}.`,
-    });
-    setSubject('');
-    setMessage('');
-    setRecipientTarget('');
   };
 
-  const handleDispatchMark = () => {
+  const handleDispatchMark = async () => {
     if (!selectedCourse || !studentRoll || !grade) {
       toast({ title: 'Missing fields', description: 'Please fill in all required fields.', variant: 'destructive' });
       return;
     }
-    toast({
-      title: 'Mark Dispatched',
-      description: `Grade ${grade} sent to ${studentRoll} for the selected course.`,
-    });
-    setStudentRoll('');
-    setGrade('');
+
+    setDispatching(true);
+    try {
+      // Look up student by roll_id or email
+      const trimmed = studentRoll.trim();
+      let studentQuery = supabase.from('user_profiles').select('id, full_name').limit(1);
+
+      if (trimmed.includes('@')) {
+        // Search by email — look up auth user via instructor_applications or institutional_email_requests
+        const { data: emailMatch } = await supabase
+          .from('instructor_applications')
+          .select('user_id')
+          .eq('email', trimmed)
+          .limit(1);
+        if (emailMatch?.length) {
+          const { data: prof } = await supabase.from('user_profiles').select('id, full_name').eq('id', emailMatch[0].user_id).single();
+          if (!prof) throw new Error('Student profile not found for that email.');
+          var student = prof;
+        } else {
+          throw new Error('No user found with that email address.');
+        }
+      } else {
+        // Search by roll_id
+        const { data: rollMatch } = await supabase
+          .from('user_profiles')
+          .select('id, full_name')
+          .eq('roll_id', trimmed)
+          .limit(1);
+        if (!rollMatch?.length) throw new Error(`No student found with Roll ID "${trimmed}".`);
+        var student = rollMatch[0];
+      }
+
+      // Check enrollment
+      const { data: enrollment } = await supabase
+        .from('enrollments')
+        .select('id')
+        .eq('user_id', student.id)
+        .eq('course_id', selectedCourse)
+        .limit(1);
+      if (!enrollment?.length) throw new Error(`Student "${student.full_name || student.id}" is not enrolled in this course.`);
+
+      // Parse grade — could be letter (A+) or numeric (95)
+      const numericScore = parseFloat(grade);
+      const isNumeric = !isNaN(numericScore);
+
+      // Insert into gradebook_manual_marks
+      const { error: insertErr } = await supabase.from('gradebook_manual_marks').insert({
+        user_id: student.id,
+        course_id: selectedCourse,
+        label: 'Official Mark',
+        score: isNumeric ? numericScore : null,
+        max_score: isNumeric ? 100 : null,
+        notes: isNumeric ? `Score: ${grade}` : `Grade: ${grade}`,
+        updated_by: user?.id,
+      });
+      if (insertErr) throw insertErr;
+
+      // Also upsert into student_grades for letter grades
+      if (!isNumeric) {
+        await supabase.from('student_grades').insert({
+          user_id: student.id,
+          course_id: selectedCourse,
+          letter_grade: grade.toUpperCase(),
+          graded_by: user?.id,
+          notes: 'Dispatched via admin communications',
+        });
+      }
+
+      // Send notification to student
+      const courseName = courses?.find(c => c.id === selectedCourse)?.title || 'your course';
+      await createNotification({
+        userId: student.id,
+        type: 'result_published',
+        title: 'Official Mark Published',
+        message: `Your mark for "${courseName}" has been published: ${grade}`,
+        link: '/dashboard/grades',
+      });
+
+      toast({
+        title: 'Mark Dispatched ✓',
+        description: `Grade "${grade}" recorded for ${student.full_name || trimmed} and notification sent.`,
+      });
+      setStudentRoll('');
+      setGrade('');
+    } catch (err: any) {
+      toast({ title: 'Failed to dispatch mark', description: err.message, variant: 'destructive' });
+    } finally {
+      setDispatching(false);
+    }
   };
 
   return (
@@ -147,8 +263,8 @@ const CommunicationsTab = () => {
               <Switch id="send-method" checked={sendViaEmail} onCheckedChange={setSendViaEmail} />
               <Label htmlFor="send-method" className="text-sm">Email</Label>
             </div>
-            <Button onClick={handleSendNotification} className="bg-primary text-primary-foreground">
-              <Send className="h-4 w-4 mr-2" /> Send Notification
+            <Button onClick={handleSendNotification} className="bg-primary text-primary-foreground" disabled={sending}>
+              <Send className="h-4 w-4 mr-2" /> {sending ? 'Sending...' : 'Send Notification'}
             </Button>
           </div>
         </CardContent>
@@ -196,9 +312,9 @@ const CommunicationsTab = () => {
           <Button
             className="bg-accent text-accent-foreground hover:bg-accent-hover"
             onClick={handleDispatchMark}
-            disabled={!selectedCourse || !studentRoll || !grade}
+            disabled={!selectedCourse || !studentRoll || !grade || dispatching}
           >
-            <GraduationCap className="h-4 w-4 mr-2" /> Dispatch Official Mark
+            <GraduationCap className="h-4 w-4 mr-2" /> {dispatching ? 'Dispatching...' : 'Dispatch Official Mark'}
           </Button>
         </CardContent>
       </Card>

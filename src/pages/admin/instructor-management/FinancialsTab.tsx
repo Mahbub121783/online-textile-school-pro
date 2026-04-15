@@ -15,6 +15,7 @@ import { Label } from '@/components/ui/label';
 import { DollarSign, TrendingUp, Clock, Gift, Check, X, ExternalLink } from 'lucide-react';
 import { format } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
+import { createNotification } from '@/lib/notifications';
 
 const FinancialsTab = () => {
   const { toast } = useToast();
@@ -155,15 +156,23 @@ const FinancialsTab = () => {
 
   // Reject withdrawal
   const rejectWithdrawal = useMutation({
-    mutationFn: async ({ id, reason }: { id: string; reason: string }) => {
-      // Delete the request (or update description)
+    mutationFn: async ({ id, reason, instructorId }: { id: string; reason: string; instructorId: string }) => {
       await supabase.from('wallet_transactions').delete().eq('id', id);
+      return { instructorId, reason };
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       setRejectingId(null);
       setRejectReason('');
       queryClient.invalidateQueries({ queryKey: ['withdrawal-requests'] });
       toast({ title: 'Withdrawal request rejected' });
+      // Notify the instructor
+      createNotification({
+        userId: data.instructorId,
+        type: 'system',
+        title: 'Withdrawal Request Rejected',
+        message: `Your withdrawal request has been rejected.${data.reason ? ` Reason: ${data.reason}` : ''} Please contact support if you have questions.`,
+        link: '/instructor/wallet',
+      });
     },
   });
 
