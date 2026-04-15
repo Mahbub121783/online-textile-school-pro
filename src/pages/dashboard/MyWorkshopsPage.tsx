@@ -1,11 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { CountdownTimer } from '@/components/workshop/CountdownTimer';
-import { Calendar, ExternalLink, Download, Video } from 'lucide-react';
+import { Calendar, Download, Video } from 'lucide-react';
 import { format } from 'date-fns';
 import { Link } from 'react-router-dom';
 
@@ -17,7 +17,7 @@ export default function MyWorkshopsPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('workshop_registrations')
-        .select('*, workshops(*)')
+        .select('*, workshops(*, instructor:user_profiles!workshops_instructor_id_fkey(id, full_name, avatar_url))')
         .eq('user_id', user!.id)
         .order('created_at', { ascending: false });
       if (error) throw error;
@@ -67,6 +67,7 @@ export default function MyWorkshopsPage() {
                       </div>
                       <div className="flex items-center gap-3 text-xs text-muted-foreground">
                         <span className="flex items-center gap-1"><Calendar className="h-3 w-3" />{format(new Date(ws.start_date), 'MMM dd, yyyy')}</span>
+                        {ws.instructor?.full_name && <span>by {ws.instructor.full_name}</span>}
                       </div>
                       {isUpcoming && <CountdownTimer targetDate={startDt} compact className="text-xs" />}
 

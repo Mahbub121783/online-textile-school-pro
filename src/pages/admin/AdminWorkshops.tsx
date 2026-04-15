@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -13,16 +13,18 @@ import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Plus, Edit, Trash2, Users, Eye, Calendar } from 'lucide-react';
+import { Plus, Edit, Trash2, Users, Calendar, Image, Upload, Search, X, GripVertical } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import MediaPickerModal from '@/components/shared/MediaPickerModal';
 
 const emptyWs = {
   title: '', slug: '', description: '', short_description: '', thumbnail_url: '',
   workshop_type: 'one_day' as const, start_date: '', end_date: '', start_time: '', end_time: '',
   meet_link: '', max_participants: '' as any, status: 'draft' as const, is_featured: false,
-  registration_deadline: '', instructor_name: '', instructor_bio: '', instructor_avatar: '',
+  registration_deadline: '', instructor_id: null as string | null,
   prerequisites: '', what_you_learn: [] as string[], materials: [] as any[],
 };
 
@@ -34,7 +36,18 @@ export default function AdminWorkshops() {
   const [viewRegs, setViewRegs] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('workshops');
   const [newLearnItem, setNewLearnItem] = useState('');
-  const [newMaterial, setNewMaterial] = useState({ name: '', url: '', type: 'pdf' });
+
+  // Media picker state
+  const [mediaPickerOpen, setMediaPickerOpen] = useState(false);
+  const [mediaPickerTarget, setMediaPickerTarget] = useState<'thumbnail' | 'material'>('thumbnail');
+
+  // Instructor search
+  const [instructorSearch, setInstructorSearch] = useState('');
+  const [showInstructorDropdown, setShowInstructorDropdown] = useState(false);
+
+  // Curriculum state
+  const [lessonForm, setLessonForm] = useState({ title: '', description: '', content: '', lesson_type: 'lecture' });
+  const [showLessonForm, setShowLessonForm] = useState(false);
 
   // Sessions state
   const [sessionForm, setSessionForm] = useState({ title: '', session_date: '', start_time: '', end_time: '', meet_link: '', description: '' });
@@ -43,7 +56,7 @@ export default function AdminWorkshops() {
   const { data: workshops = [], isLoading } = useQuery({
     queryKey: ['admin-workshops'],
     queryFn: async () => {
-      const { data, error } = await supabase.from('workshops').select('*').order('created_at', { ascending: false });
+      const { data, error } = await supabase.from('workshops').select('*, instructor:user_profiles!workshops_instructor_id_fkey(id, full_name, avatar_url)').order('created_at', { ascending: false });
       if (error) throw error;
       return data;
     },
@@ -67,6 +80,42 @@ export default function AdminWorkshops() {
     enabled: !!editWs?.id,
   });
 
+  const { data: lessons = [] } = useQuery({
+    queryKey: ['admin-workshop-lessons', editWs?.id],
+    queryFn: async () => {
+      const { data } = await supabase.from('workshop_lessons').select('*').eq('workshop_id', editWs!.id).order('sort_order');
+      return data || [];
+    },
+    enabled: !!editWs?.id,
+  });
+
+  // Instructor search query
+  const { data: instructorResults = [] } = useQuery({
+    queryKey: ['instructor-search', instructorSearch],
+    queryFn: async () => {
+      // Get users with instructor/admin roles
+      const { data: roleUsers } = await supabase.from('user_roles').select('user_id').in('role', ['admin', 'super_admin', 'instructor']);
+      if (!roleUsers?.length) return [];
+      const ids = roleUsers.map((r: any) => r.user_id);
+      const { data } = await supabase.from('user_profiles').select('id, full_name, avatar_url')
+        .in('id', ids)
+        .ilike('full_name', `%${instructorSearch}%`)
+        .limit(10);
+      return data || [];
+    },
+    enabled: instructorSearch.length >= 1,
+  });
+
+  // Selected instructor profile
+  const { data: selectedInstructor } = useQuery({
+    queryKey: ['instructor-profile', editWs?.instructor_id],
+    queryFn: async () => {
+      const { data } = await supabase.from('user_profiles').select('id, full_name, avatar_url').eq('id', editWs!.instructor_id).single();
+      return data;
+    },
+    enabled: !!editWs?.instructor_id,
+  });
+
   const saveMutation = useMutation({
     mutationFn: async (ws: any) => {
       const payload = {
@@ -74,11 +123,17 @@ export default function AdminWorkshops() {
         max_participants: ws.max_participants ? Number(ws.max_participants) : null,
         registration_deadline: ws.registration_deadline || null,
         end_date: ws.end_date || null,
+        instructor_id: ws.instructor_id || null,
         created_by: user?.id,
       };
+      // Remove fields not in DB
       delete payload.id;
       delete payload.created_at;
       delete payload.updated_at;
+      delete payload.instructor;
+      delete payload.instructor_name;
+      delete payload.instructor_bio;
+      delete payload.instructor_avatar;
       if (editWs?.id) {
         const { error } = await supabase.from('workshops').update(payload).eq('id', editWs.id);
         if (error) throw error;
@@ -132,12 +187,47 @@ export default function AdminWorkshops() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-workshop-sessions'] }),
   });
 
-  const openEdit = (ws: any) => { setEditWs(ws); setShowForm(true); };
-  const openCreate = () => { setEditWs({ ...emptyWs }); setShowForm(true); };
+  const saveLessonMutation = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase.from('workshop_lessons').insert({
+        ...lessonForm,
+        workshop_id: editWs.id,
+        sort_order: lessons.length,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-workshop-lessons'] });
+      setLessonForm({ title: '', description: '', content: '', lesson_type: 'lecture' });
+      setShowLessonForm(false);
+      toast.success('Lesson added');
+    },
+  });
 
-  const getRegCount = (wsId: string) => {
-    // We don't preload all counts, so this is shown via the view button
-    return null;
+  const deleteLessonMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('workshop_lessons').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-workshop-lessons'] }),
+  });
+
+  const openEdit = (ws: any) => { setEditWs(ws); setShowForm(true); setActiveTab('workshops'); };
+  const openCreate = () => { setEditWs({ ...emptyWs }); setShowForm(true); setActiveTab('workshops'); };
+
+  const handleMediaSelect = (url: string) => {
+    if (mediaPickerTarget === 'thumbnail') {
+      setEditWs({ ...editWs, thumbnail_url: url });
+    } else {
+      // Add as material
+      const name = url.split('/').pop() || 'file';
+      const ext = name.split('.').pop()?.toLowerCase() || 'file';
+      setEditWs({
+        ...editWs,
+        materials: [...(editWs.materials || []), { name, url, type: ext }],
+      });
+    }
+    setMediaPickerOpen(false);
   };
 
   return (
@@ -145,7 +235,7 @@ export default function AdminWorkshops() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-heading font-bold">Workshops</h1>
-          <p className="text-sm text-muted-foreground">Manage workshops, registrations, sessions & quizzes</p>
+          <p className="text-sm text-muted-foreground">Manage workshops, registrations, sessions & curriculum</p>
         </div>
         <Button onClick={openCreate} className="gap-1"><Plus className="h-4 w-4" />Create Workshop</Button>
       </div>
@@ -166,6 +256,7 @@ export default function AdminWorkshops() {
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">
                     {format(new Date(ws.start_date), 'MMM dd, yyyy')} · /{ws.slug}
+                    {ws.instructor?.full_name && ` · by ${ws.instructor.full_name}`}
                   </p>
                 </div>
                 <div className="flex gap-2">
@@ -192,6 +283,7 @@ export default function AdminWorkshops() {
                 <TabsList className="mb-4">
                   <TabsTrigger value="workshops">Details</TabsTrigger>
                   {editWs.id && <TabsTrigger value="sessions">Sessions</TabsTrigger>}
+                  {editWs.id && <TabsTrigger value="curriculum">Curriculum</TabsTrigger>}
                 </TabsList>
                 <TabsContent value="workshops" className="space-y-4">
                   <div className="grid grid-cols-2 gap-3">
@@ -223,21 +315,89 @@ export default function AdminWorkshops() {
                     <div><Label>Google Meet Link</Label><Input value={editWs.meet_link || ''} onChange={(e) => setEditWs({ ...editWs, meet_link: e.target.value })} /></div>
                     <div><Label>Max Participants</Label><Input type="number" value={editWs.max_participants || ''} onChange={(e) => setEditWs({ ...editWs, max_participants: e.target.value })} placeholder="Unlimited" /></div>
                     <div><Label>Registration Deadline</Label><Input type="datetime-local" value={editWs.registration_deadline || ''} onChange={(e) => setEditWs({ ...editWs, registration_deadline: e.target.value })} /></div>
-                    <div><Label>Thumbnail URL</Label><Input value={editWs.thumbnail_url || ''} onChange={(e) => setEditWs({ ...editWs, thumbnail_url: e.target.value })} /></div>
+
+                    {/* Thumbnail via MediaPicker */}
+                    <div className="col-span-2">
+                      <Label>Featured Image</Label>
+                      <div className="mt-1">
+                        {editWs.thumbnail_url ? (
+                          <div className="relative inline-block">
+                            <img src={editWs.thumbnail_url} className="h-24 rounded-lg object-cover" />
+                            <Button variant="destructive" size="sm" className="absolute -top-2 -right-2 h-6 w-6 p-0 rounded-full"
+                              onClick={() => setEditWs({ ...editWs, thumbnail_url: '' })}>
+                              <X className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        ) : (
+                          <Button variant="outline" size="sm" className="gap-1" onClick={() => { setMediaPickerTarget('thumbnail'); setMediaPickerOpen(true); }}>
+                            <Image className="h-4 w-4" />Select Image
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+
                     <div className="flex items-center gap-2 col-span-2">
                       <Switch checked={editWs.is_featured} onCheckedChange={(v) => setEditWs({ ...editWs, is_featured: v })} />
                       <Label>Featured</Label>
                     </div>
                   </div>
+
+                  {/* Instructor Search */}
                   <div className="border-t pt-3">
                     <Label className="text-sm font-semibold">Instructor</Label>
-                    <div className="grid grid-cols-2 gap-3 mt-2">
-                      <div><Label>Name</Label><Input value={editWs.instructor_name || ''} onChange={(e) => setEditWs({ ...editWs, instructor_name: e.target.value })} /></div>
-                      <div><Label>Avatar URL</Label><Input value={editWs.instructor_avatar || ''} onChange={(e) => setEditWs({ ...editWs, instructor_avatar: e.target.value })} /></div>
-                      <div className="col-span-2"><Label>Bio</Label><Textarea rows={2} value={editWs.instructor_bio || ''} onChange={(e) => setEditWs({ ...editWs, instructor_bio: e.target.value })} /></div>
-                    </div>
+                    {editWs.instructor_id && selectedInstructor ? (
+                      <div className="flex items-center gap-3 mt-2 p-2 border rounded-lg">
+                        <Avatar className="h-10 w-10">
+                          <AvatarImage src={selectedInstructor.avatar_url || ''} />
+                          <AvatarFallback>{selectedInstructor.full_name?.[0] || '?'}</AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1">
+                          <p className="font-medium text-sm">{selectedInstructor.full_name}</p>
+                          <p className="text-xs text-muted-foreground">Instructor</p>
+                        </div>
+                        <Button variant="ghost" size="sm" onClick={() => setEditWs({ ...editWs, instructor_id: null })}>
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="relative mt-2">
+                        <div className="flex items-center gap-1">
+                          <Search className="h-4 w-4 text-muted-foreground" />
+                          <Input
+                            value={instructorSearch}
+                            onChange={(e) => { setInstructorSearch(e.target.value); setShowInstructorDropdown(true); }}
+                            onFocus={() => setShowInstructorDropdown(true)}
+                            placeholder="Search instructor by name..."
+                            className="text-sm"
+                          />
+                        </div>
+                        {showInstructorDropdown && instructorResults.length > 0 && (
+                          <div className="absolute z-50 top-full mt-1 w-full bg-popover border rounded-lg shadow-lg max-h-48 overflow-auto">
+                            {instructorResults.map((inst: any) => (
+                              <button
+                                key={inst.id}
+                                className="w-full flex items-center gap-2 p-2 hover:bg-muted text-left text-sm"
+                                onClick={() => {
+                                  setEditWs({ ...editWs, instructor_id: inst.id });
+                                  setInstructorSearch('');
+                                  setShowInstructorDropdown(false);
+                                }}
+                              >
+                                <Avatar className="h-7 w-7">
+                                  <AvatarImage src={inst.avatar_url || ''} />
+                                  <AvatarFallback>{inst.full_name?.[0] || '?'}</AvatarFallback>
+                                </Avatar>
+                                <span>{inst.full_name}</span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
+
                   <div className="border-t pt-3"><Label>Prerequisites</Label><Textarea rows={2} value={editWs.prerequisites || ''} onChange={(e) => setEditWs({ ...editWs, prerequisites: e.target.value })} /></div>
+
                   {/* What you'll learn */}
                   <div className="border-t pt-3">
                     <Label className="text-sm font-semibold">What You'll Learn</Label>
@@ -263,13 +423,15 @@ export default function AdminWorkshops() {
                       </div>
                     </div>
                   </div>
-                  {/* Materials */}
+
+                  {/* Materials via MediaPicker */}
                   <div className="border-t pt-3">
                     <Label className="text-sm font-semibold">Materials</Label>
                     <div className="space-y-1 mt-2">
                       {(editWs.materials || []).map((m: any, i: number) => (
-                        <div key={i} className="flex items-center gap-2 text-sm">
-                          <span className="flex-1">{m.name} ({m.type})</span>
+                        <div key={i} className="flex items-center gap-2 text-sm p-2 border rounded">
+                          <span className="flex-1 truncate">{m.name}</span>
+                          <Badge variant="outline" className="text-[10px]">{m.type}</Badge>
                           <Button variant="ghost" size="sm" onClick={() => {
                             const arr = [...editWs.materials];
                             arr.splice(i, 1);
@@ -277,25 +439,18 @@ export default function AdminWorkshops() {
                           }}><Trash2 className="h-3 w-3" /></Button>
                         </div>
                       ))}
-                      <div className="grid grid-cols-3 gap-2">
-                        <Input value={newMaterial.name} onChange={(e) => setNewMaterial({ ...newMaterial, name: e.target.value })} placeholder="Name" className="text-sm" />
-                        <Input value={newMaterial.url} onChange={(e) => setNewMaterial({ ...newMaterial, url: e.target.value })} placeholder="URL" className="text-sm" />
-                        <div className="flex gap-1">
-                          <Input value={newMaterial.type} onChange={(e) => setNewMaterial({ ...newMaterial, type: e.target.value })} placeholder="Type" className="text-sm" />
-                          <Button size="sm" onClick={() => {
-                            if (newMaterial.name && newMaterial.url) {
-                              setEditWs({ ...editWs, materials: [...(editWs.materials || []), { ...newMaterial }] });
-                              setNewMaterial({ name: '', url: '', type: 'pdf' });
-                            }
-                          }}>+</Button>
-                        </div>
-                      </div>
+                      <Button variant="outline" size="sm" className="gap-1" onClick={() => { setMediaPickerTarget('material'); setMediaPickerOpen(true); }}>
+                        <Upload className="h-4 w-4" />Upload / Select Material
+                      </Button>
                     </div>
                   </div>
+
                   <Button className="w-full" onClick={() => saveMutation.mutate(editWs)} disabled={saveMutation.isPending}>
                     {saveMutation.isPending ? 'Saving...' : 'Save Workshop'}
                   </Button>
                 </TabsContent>
+
+                {/* Sessions Tab */}
                 {editWs.id && (
                   <TabsContent value="sessions" className="space-y-4">
                     <div className="flex justify-between items-center">
@@ -322,6 +477,52 @@ export default function AdminWorkshops() {
                           <p className="text-xs text-muted-foreground">{s.session_date} · {s.start_time?.slice(0, 5)} - {s.end_time?.slice(0, 5)}</p>
                         </div>
                         <Button variant="ghost" size="sm" className="text-destructive" onClick={() => deleteSessionMutation.mutate(s.id)}><Trash2 className="h-3 w-3" /></Button>
+                      </div>
+                    ))}
+                  </TabsContent>
+                )}
+
+                {/* Curriculum Tab */}
+                {editWs.id && (
+                  <TabsContent value="curriculum" className="space-y-4">
+                    <div className="flex justify-between items-center">
+                      <Label className="text-sm font-semibold">Lessons ({lessons.length})</Label>
+                      <Button size="sm" onClick={() => setShowLessonForm(!showLessonForm)}><Plus className="h-3 w-3 mr-1" />Add Lesson</Button>
+                    </div>
+                    {showLessonForm && (
+                      <div className="p-3 border rounded-lg space-y-2">
+                        <div className="grid grid-cols-2 gap-2">
+                          <div className="col-span-2"><Label>Title</Label><Input value={lessonForm.title} onChange={(e) => setLessonForm({ ...lessonForm, title: e.target.value })} /></div>
+                          <div><Label>Type</Label>
+                            <Select value={lessonForm.lesson_type} onValueChange={(v) => setLessonForm({ ...lessonForm, lesson_type: v })}>
+                              <SelectTrigger><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="lecture">Lecture</SelectItem>
+                                <SelectItem value="practical">Practical</SelectItem>
+                                <SelectItem value="demo">Demo</SelectItem>
+                                <SelectItem value="discussion">Discussion</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="col-span-2"><Label>Description</Label><Input value={lessonForm.description || ''} onChange={(e) => setLessonForm({ ...lessonForm, description: e.target.value })} /></div>
+                          <div className="col-span-2"><Label>Content</Label><Textarea rows={3} value={lessonForm.content || ''} onChange={(e) => setLessonForm({ ...lessonForm, content: e.target.value })} /></div>
+                        </div>
+                        <Button size="sm" onClick={() => saveLessonMutation.mutate()} disabled={saveLessonMutation.isPending}>Save Lesson</Button>
+                      </div>
+                    )}
+                    {lessons.map((l: any, idx: number) => (
+                      <div key={l.id} className="flex items-center justify-between p-3 border rounded-lg">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-mono text-muted-foreground w-6">{idx + 1}.</span>
+                          <div>
+                            <p className="font-medium text-sm">{l.title}</p>
+                            <div className="flex gap-2 mt-0.5">
+                              <Badge variant="outline" className="text-[10px]">{l.lesson_type}</Badge>
+                              {l.description && <p className="text-xs text-muted-foreground line-clamp-1">{l.description}</p>}
+                            </div>
+                          </div>
+                        </div>
+                        <Button variant="ghost" size="sm" className="text-destructive" onClick={() => deleteLessonMutation.mutate(l.id)}><Trash2 className="h-3 w-3" /></Button>
                       </div>
                     ))}
                   </TabsContent>
@@ -369,6 +570,13 @@ export default function AdminWorkshops() {
           </ScrollArea>
         </DialogContent>
       </Dialog>
+
+      {/* Media Picker */}
+      <MediaPickerModal
+        open={mediaPickerOpen}
+        onClose={() => setMediaPickerOpen(false)}
+        onSelect={handleMediaSelect}
+      />
     </div>
   );
 }

@@ -6,8 +6,9 @@ import BottomNav from '@/components/layout/BottomNav';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { CountdownTimer } from '@/components/workshop/CountdownTimer';
-import { Calendar, Users, MapPin, Clock } from 'lucide-react';
+import { Calendar, Users, Clock } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { format } from 'date-fns';
 import SEOHead from '@/components/SEOHead';
@@ -25,7 +26,7 @@ export default function WorkshopsPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('workshops')
-        .select('*')
+        .select('*, instructor:user_profiles!workshops_instructor_id_fkey(id, full_name, avatar_url)')
         .neq('status', 'draft')
         .order('start_date', { ascending: true });
       if (error) throw error;
@@ -33,7 +34,6 @@ export default function WorkshopsPage() {
     },
   });
 
-  // Get registration counts
   const { data: regCounts = {} } = useQuery({
     queryKey: ['workshop-reg-counts'],
     queryFn: async () => {
@@ -81,6 +81,7 @@ export default function WorkshopsPage() {
                 const count = regCounts[ws.id] || 0;
                 const slotsLeft = ws.max_participants ? ws.max_participants - count : null;
                 const isFull = slotsLeft !== null && slotsLeft <= 0;
+                const instructor = ws.instructor;
 
                 return (
                   <Card key={ws.id} className="overflow-hidden hover:shadow-lg transition-shadow">
@@ -97,6 +98,15 @@ export default function WorkshopsPage() {
                       <h3 className="font-heading font-semibold text-lg line-clamp-2">{ws.title}</h3>
                       {ws.short_description && (
                         <p className="text-sm text-muted-foreground line-clamp-2">{ws.short_description}</p>
+                      )}
+                      {instructor && (
+                        <div className="flex items-center gap-2">
+                          <Avatar className="h-6 w-6">
+                            <AvatarImage src={instructor.avatar_url || ''} />
+                            <AvatarFallback className="text-[10px]">{instructor.full_name?.[0]}</AvatarFallback>
+                          </Avatar>
+                          <span className="text-xs text-muted-foreground">{instructor.full_name}</span>
+                        </div>
                       )}
                       <div className="flex items-center gap-4 text-xs text-muted-foreground">
                         <span className="flex items-center gap-1"><Calendar className="h-3.5 w-3.5" />{format(new Date(ws.start_date), 'MMM dd, yyyy')}</span>
