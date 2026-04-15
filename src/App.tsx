@@ -350,12 +350,26 @@ const App = () => (
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </Suspense>
-            <ChatWidget />
-          </BrowserRouter>
-        </TooltipProvider>
-      </AuthProvider>
-    </ThemeProvider>
-  </QueryClientProvider>
-);
+          </ErrorBoundary>
+        );
+      };
+
+      return (
+        <QueryClientProvider client={queryClient}>
+          <ThemeProvider>
+            <AuthProvider>
+              <TooltipProvider delayDuration={300}>
+                <Toaster />
+                <Sonner />
+                <BrowserRouter future={{ v7_relativeSplatPath: true }}>
+                  <AppRoutes />
+                  <ChatWidget />
+                </BrowserRouter>
+              </TooltipProvider>
+            </AuthProvider>
+          </ThemeProvider>
+        </QueryClientProvider>
+      );
+    };
 
 export default App;
