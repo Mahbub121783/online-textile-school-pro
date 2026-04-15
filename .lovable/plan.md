@@ -1,114 +1,70 @@
 
 
-# Workshop System — Full Implementation Plan
+# Workshop System Enhancements
 
-## Overview
-Build a complete Workshop system (1-day or multi-day) with public pre-registration (no login required), admin management, countdown timers, Google Meet integration, material distribution, quizzes, and student dashboard integration.
+## Changes Overview
 
-## Database Schema (Migration)
+### 1. Admin Workshop Form — Instructor Search (replace manual fields)
+- Remove `instructor_name`, `instructor_bio`, `instructor_avatar` text fields
+- Add an `instructor_id` UUID column to `workshops` table (FK to `user_profiles`)
+- Add instructor search: query `user_roles` for instructors/admins → search `user_profiles` by name
+- Display selected instructor's avatar and name automatically
+- On the public detail page, resolve instructor info from the joined `user_profiles` record
 
-### Table: `workshops`
-Core workshop entity with fields:
-- `id`, `title`, `slug` (unique), `description`, `short_description`, `thumbnail_url`
-- `workshop_type` enum: `one_day`, `multi_day`
-- `start_date`, `end_date`, `start_time`, `end_time`
-- `meet_link` (Google Meet URL)
-- `max_participants` (nullable = unlimited)
-- `status` enum: `draft`, `published`, `ongoing`, `completed`, `cancelled`
-- `is_featured`, `registration_deadline`
-- `materials` JSONB array (name, url, type for downloadable instruments/resources)
-- `instructor_name`, `instructor_bio`, `instructor_avatar`
-- `prerequisites` text, `what_you_learn` JSONB array
-- `created_by` (references auth.users), timestamps
+### 2. Featured Image via MediaPickerModal
+- Replace the `thumbnail_url` text input with a MediaPickerModal button (matching existing patterns)
+- Show preview of selected image, allow clearing
 
-### Table: `workshop_registrations`
-- `id`, `workshop_id` (FK workshops), `user_id` (nullable — for guest registrations)
-- `full_name`, `email`, `mobile`, `institution`
-- `status` enum: `registered`, `attended`, `cancelled`, `no_show`
-- `registration_number` (auto-generated like `WS-XXXXXX`)
-- `checked_in_at`, timestamps
-- Unique constraint on `(workshop_id, email)`
+### 3. Workshop Curriculum/Lessons (course plan)
+- Add a new `workshop_lessons` table: `id`, `workshop_id` (FK), `title`, `description`, `content` (rich text), `sort_order`, `lesson_type` (lecture/practical/demo), timestamps
+- Add a "Curriculum" tab in the admin dialog alongside Details and Sessions
+- Admin can add/reorder/delete lessons with title + content
+- Public detail page shows the curriculum list
 
-### Table: `workshop_sessions` (for multi-day)
-- `id`, `workshop_id` (FK), `title`, `session_date`, `start_time`, `end_time`
-- `meet_link` (can override main), `description`, `sort_order`
+### 4. Materials Upload via Cloudinary/R2
+- Replace manual URL input for materials with MediaPickerModal integration
+- Use `useFileUpload` hook (existing) which routes images to Cloudinary and files to R2
+- Material entries store: `name`, `url`, `type`, `storage_source`
 
-### Table: `workshop_quizzes`
-- `id`, `workshop_id` (FK), `title`, `description`, `questions` JSONB
-- `time_limit_minutes`, `is_active`, timestamps
+### 5. Registration Confirmation Email
+- On successful workshop registration, send workshop details to registrant's email
+- Use existing `send-smtp-email` edge function (project's own SMTP system, not Lovable transactional)
+- Include: workshop title, date/time, meet link (if published/ongoing), registration number, materials info
+- This matches the existing email pattern used throughout the project
 
-### Table: `workshop_quiz_attempts`
-- `id`, `quiz_id` (FK), `registration_id` (FK), `answers` JSONB
-- `score`, `max_score`, `submitted_at`
+### Database Migration
+```sql
+-- Add instructor_id to workshops
+ALTER TABLE workshops ADD COLUMN instructor_id uuid REFERENCES user_profiles(id);
 
-RLS: Public read for published workshops. Public insert for registrations. Admin full access. Authenticated users can read their own registrations.
-
----
-
-## New Pages & Components
-
-### 1. Public Workshop Pages
-- **`/workshops`** — `src/pages/static/WorkshopsPage.tsx`: Catalog of all published workshops with countdown timers, registration counts, status badges
-- **`/workshops/:slug`** — `src/pages/static/WorkshopDetail.tsx`: Full detail page with:
-  - Hero section with thumbnail, countdown to start
-  - Registration form (name, email, mobile, institution — no login needed)
-  - Schedule/sessions list for multi-day
-  - Materials download section (available after registration)
-  - Instructor info
-  - Live registration count / slots remaining
-  - Quiz section (if active, after workshop starts)
-
-### 2. Student Dashboard
-- **`/dashboard/workshops`** — `src/pages/dashboard/MyWorkshopsPage.tsx`: List of registered workshops with status, countdown, meet links, materials, and quiz access
-- Add "My Workshops" to `DashboardSidebar.tsx` (visible to all users, no enrollment check)
-
-### 3. Admin Workshop Management
-- **`/admin/workshops`** — `src/pages/admin/AdminWorkshops.tsx`: Full CRUD with:
-  - Workshop creation form (title, type, dates, meet link, materials upload, max participants)
-  - Registration dashboard per workshop (count, registered profiles, export)
-  - Session builder for multi-day workshops
-  - Quiz builder (reuse existing quiz pattern)
-  - Status management (draft → published → ongoing → completed)
-  - Bulk actions (email all registrants, mark attendance)
-- Add "Workshops" to `AdminSidebar.tsx` under the "Engagement" group
-
-### 4. Profile Integration
-- Show upcoming workshop registrations on `Profile.tsx` as a stats card
-
----
-
-## Routes (App.tsx additions)
-```text
-/workshops                    → WorkshopsPage
-/workshops/:slug              → WorkshopDetail
-/dashboard/workshops          → MyWorkshopsPage
-/admin/workshops              → AdminWorkshops
+-- Workshop lessons table
+CREATE TABLE workshop_lessons (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  workshop_id uuid REFERENCES workshops(id) ON DELETE CASCADE NOT NULL,
+  title text NOT NULL,
+  description text,
+  content text,
+  lesson_type text DEFAULT 'lecture',
+  sort_order integer DEFAULT 0,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now()
+);
+ALTER TABLE workshop_lessons ENABLE ROW LEVEL SECURITY;
+-- Public read, admin manage
+CREATE POLICY "Public read workshop_lessons" ON workshop_lessons FOR SELECT USING (true);
+CREATE POLICY "Admin manage workshop_lessons" ON workshop_lessons FOR ALL USING (
+  EXISTS (SELECT 1 FROM user_roles WHERE user_id = auth.uid() AND role IN ('admin','super_admin'))
+);
 ```
 
----
+### Files to Edit
+- **`AdminWorkshops.tsx`**: Instructor search dropdown, MediaPickerModal for thumbnail + materials, Curriculum tab
+- **`WorkshopDetail.tsx`**: Join `user_profiles` via `instructor_id`, show curriculum section
+- **`WorkshopsPage.tsx`**: Join instructor profile for display
+- **`MyWorkshopsPage.tsx`**: Minor — show instructor from joined data
+- **`WorkshopDetail.tsx` registration mutation**: After successful insert, invoke `send-smtp-email` with workshop confirmation template
 
-## Key Features per Component
-
-**Countdown Timer**: Reusable component showing days/hours/minutes/seconds until workshop starts. Used on catalog cards, detail page, and dashboard.
-
-**Registration Flow**: No login required. Simple form → insert into `workshop_registrations` → show confirmation with registration number. If logged in, auto-fill from profile and link `user_id`.
-
-**Materials Distribution**: Admin uploads files via existing MediaPickerModal → stored in `materials` JSONB → downloadable from detail page and dashboard after registration.
-
-**Quiz System**: Lightweight quiz builder in admin (JSONB questions array with MCQ format). Participants take quiz on the workshop detail page. Results stored in `workshop_quiz_attempts`.
-
-**Meet Link**: Displayed only after registration and when workshop is ongoing. Hidden before start time.
-
-**Admin Analytics**: Registration count, attendance rate, quiz completion stats per workshop.
-
----
-
-## Technical Details
-
-- Follows existing patterns: React Query for data, Supabase client, toast notifications, MediaPickerModal for uploads
-- Countdown uses `date-fns` differenceInSeconds with `setInterval`
-- Registration number generated via DB default: `'WS-' || LPAD(FLOOR(RANDOM() * 999999)::TEXT, 6, '0')`
-- Workshop notifications via existing `notifyAllStudentsWithEmail` on publish
-- All pages use existing Header/Footer/BottomNav layout pattern
-- Admin page uses Dialog-based forms matching existing admin patterns (scrollable, max-h-[90vh])
+### Email Content (sent via existing SMTP system)
+Subject: `Workshop Registration Confirmed: {title}`
+Body includes: title, date/time, meet link, registration number, materials count, reminder text.
 
