@@ -1,4 +1,4 @@
-import { lazy, Suspense, memo } from 'react';
+import { lazy, Suspense, memo, useRef, useState, useEffect, ReactNode } from 'react';
 import SEOHead from '@/components/SEOHead';
 import UtilityBar from '@/components/layout/UtilityBar';
 import Header from '@/components/layout/Header';
@@ -22,6 +22,38 @@ const SectionFallback = () => (
   </div>
 );
 
+/** Renders children only after the wrapper scrolls into view */
+const LazySection = ({ children }: { children: ReactNode }) => {
+  const ref = useRef<HTMLDivElement>(null);
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setVisible(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: '200px' }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <div ref={ref}>
+      {visible ? (
+        <Suspense fallback={<SectionFallback />}>{children}</Suspense>
+      ) : (
+        <SectionFallback />
+      )}
+    </div>
+  );
+};
+
 const MemoHeader = memo(Header);
 const MemoFooter = memo(Footer);
 const MemoBottomNav = memo(BottomNav);
@@ -37,30 +69,14 @@ const Index = () => {
         <Suspense fallback={<SectionFallback />}>
           <StatsSection />
         </Suspense>
-        <Suspense fallback={<SectionFallback />}>
-          <FeaturedCourses />
-        </Suspense>
-        <Suspense fallback={<SectionFallback />}>
-          <LearningPathsPreview />
-        </Suspense>
-        <Suspense fallback={<SectionFallback />}>
-          <EbookShowcase />
-        </Suspense>
-        <Suspense fallback={<SectionFallback />}>
-          <UpcomingEvents />
-        </Suspense>
-        <Suspense fallback={<SectionFallback />}>
-          <InstructorSpotlight />
-        </Suspense>
-        <Suspense fallback={<SectionFallback />}>
-          <TestimonialsSection />
-        </Suspense>
-        <Suspense fallback={<SectionFallback />}>
-          <DemoClassCTA />
-        </Suspense>
-        <Suspense fallback={<SectionFallback />}>
-          <SponsorsSection />
-        </Suspense>
+        <LazySection><FeaturedCourses /></LazySection>
+        <LazySection><LearningPathsPreview /></LazySection>
+        <LazySection><EbookShowcase /></LazySection>
+        <LazySection><UpcomingEvents /></LazySection>
+        <LazySection><InstructorSpotlight /></LazySection>
+        <LazySection><TestimonialsSection /></LazySection>
+        <LazySection><DemoClassCTA /></LazySection>
+        <LazySection><SponsorsSection /></LazySection>
       </main>
       <MemoFooter />
       <MemoBottomNav />
