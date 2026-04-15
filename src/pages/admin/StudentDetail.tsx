@@ -50,8 +50,8 @@ function IdCardAdminControls({ userId }: { userId: string }) {
 
   const generateCard = useMutation({
     mutationFn: async () => {
-      const months = paidEnrollments.length * 6;
-      if (!months) throw new Error('No paid enrollments found');
+      // Allow admin to generate even without paid enrollments (minimum 6 months)
+      const months = Math.max(paidEnrollments.length * 6, 6);
       const validUntil = new Date();
       validUntil.setMonth(validUntil.getMonth() + months);
       const seq = Math.floor(Math.random() * 999999);
