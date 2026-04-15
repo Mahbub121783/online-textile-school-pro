@@ -56,10 +56,10 @@ const Index = () => {
           <TestimonialsSection />
         </Suspense>
         <Suspense fallback={<SectionFallback />}>
-          <SponsorsSection />
+          <DemoClassCTA />
         </Suspense>
         <Suspense fallback={<SectionFallback />}>
-          <DemoClassCTA />
+          <SponsorsSection />
         </Suspense>
       </main>
       <MemoFooter />
