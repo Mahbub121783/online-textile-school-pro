@@ -74,16 +74,16 @@ export default function WorkshopDetail() {
   });
 
   // Auto-fill for logged-in users
-  useState(() => {
-    if (profile) {
-      setForm((f) => ({
-        ...f,
-        full_name: f.full_name || profile.full_name || '',
-        email: f.email || user?.email || '',
-        mobile: f.mobile || (profile as any).mobile || '',
-      }));
-    }
-  });
+  const [autoFilled, setAutoFilled] = useState(false);
+  if (!autoFilled && profile) {
+    setAutoFilled(true);
+    setForm({
+      full_name: profile.full_name || '',
+      email: user?.email || '',
+      mobile: (profile as any).mobile || '',
+      institution: '',
+    });
+  }
 
   const registerMutation = useMutation({
     mutationFn: async () => {
