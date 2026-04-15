@@ -1,71 +1,114 @@
 
 
-# Fix EduMail: Sender Address, Inbox Sync & Password Management
+# Workshop System — Full Implementation Plan
 
-## Problems Identified
+## Overview
+Build a complete Workshop system (1-day or multi-day) with public pre-registration (no login required), admin management, countdown timers, Google Meet integration, material distribution, quizzes, and student dashboard integration.
 
-1. **Wrong sender address**: `edumail-client` calls `send-smtp-email` with `from_override` in metadata, but `send-smtp-email` ignores it entirely — it always uses the global `smtp_from_email` (likely `info@onlinetextileschool.com`). The fix: `send-smtp-email` must read `metadata.from_override` and use it as the SMTP `from` field.
+## Database Schema (Migration)
 
-2. **Inbox not receiving external emails**: The platform only stores locally-created `edumail_messages` records. When someone external sends an email to `md_mahbubul_alam_033@onlinetextileschool.com`, it lands in the cPanel mailbox but the platform never fetches it. Need an IMAP fetch mechanism.
+### Table: `workshops`
+Core workshop entity with fields:
+- `id`, `title`, `slug` (unique), `description`, `short_description`, `thumbnail_url`
+- `workshop_type` enum: `one_day`, `multi_day`
+- `start_date`, `end_date`, `start_time`, `end_time`
+- `meet_link` (Google Meet URL)
+- `max_participants` (nullable = unlimited)
+- `status` enum: `draft`, `published`, `ongoing`, `completed`, `cancelled`
+- `is_featured`, `registration_deadline`
+- `materials` JSONB array (name, url, type for downloadable instruments/resources)
+- `instructor_name`, `instructor_bio`, `instructor_avatar`
+- `prerequisites` text, `what_you_learn` JSONB array
+- `created_by` (references auth.users), timestamps
 
-3. **EduMail page changes**: Remove "Open Webmail" link. Add auto-generated password display (already generated on approve). Add password change with 15-day cooldown. Sync password changes to cPanel and update DB.
+### Table: `workshop_registrations`
+- `id`, `workshop_id` (FK workshops), `user_id` (nullable — for guest registrations)
+- `full_name`, `email`, `mobile`, `institution`
+- `status` enum: `registered`, `attended`, `cancelled`, `no_show`
+- `registration_number` (auto-generated like `WS-XXXXXX`)
+- `checked_in_at`, timestamps
+- Unique constraint on `(workshop_id, email)`
+
+### Table: `workshop_sessions` (for multi-day)
+- `id`, `workshop_id` (FK), `title`, `session_date`, `start_time`, `end_time`
+- `meet_link` (can override main), `description`, `sort_order`
+
+### Table: `workshop_quizzes`
+- `id`, `workshop_id` (FK), `title`, `description`, `questions` JSONB
+- `time_limit_minutes`, `is_active`, timestamps
+
+### Table: `workshop_quiz_attempts`
+- `id`, `quiz_id` (FK), `registration_id` (FK), `answers` JSONB
+- `score`, `max_score`, `submitted_at`
+
+RLS: Public read for published workshops. Public insert for registrations. Admin full access. Authenticated users can read their own registrations.
 
 ---
 
-## Plan
+## New Pages & Components
 
-### Step 1 — Fix sender address in `send-smtp-email`
-**File**: `supabase/functions/send-smtp-email/index.ts`
+### 1. Public Workshop Pages
+- **`/workshops`** — `src/pages/static/WorkshopsPage.tsx`: Catalog of all published workshops with countdown timers, registration counts, status badges
+- **`/workshops/:slug`** — `src/pages/static/WorkshopDetail.tsx`: Full detail page with:
+  - Hero section with thumbnail, countdown to start
+  - Registration form (name, email, mobile, institution — no login needed)
+  - Schedule/sessions list for multi-day
+  - Materials download section (available after registration)
+  - Instructor info
+  - Live registration count / slots remaining
+  - Quiz section (if active, after workshop starts)
 
-In the SMTP `send()` call (line ~385-397), check if `metadata?.from_override` exists. If so, use that as the `from` address instead of `cfg.smtp_from_email`. This makes EduMail sends appear from the user's institutional email.
+### 2. Student Dashboard
+- **`/dashboard/workshops`** — `src/pages/dashboard/MyWorkshopsPage.tsx`: List of registered workshops with status, countdown, meet links, materials, and quiz access
+- Add "My Workshops" to `DashboardSidebar.tsx` (visible to all users, no enrollment check)
 
-### Step 2 — Also send via user's own SMTP credentials
-**File**: `supabase/functions/edumail-client/index.ts`
+### 3. Admin Workshop Management
+- **`/admin/workshops`** — `src/pages/admin/AdminWorkshops.tsx`: Full CRUD with:
+  - Workshop creation form (title, type, dates, meet link, materials upload, max participants)
+  - Registration dashboard per workshop (count, registered profiles, export)
+  - Session builder for multi-day workshops
+  - Quiz builder (reuse existing quiz pattern)
+  - Status management (draft → published → ongoing → completed)
+  - Bulk actions (email all registrants, mark attendance)
+- Add "Workshops" to `AdminSidebar.tsx` under the "Engagement" group
 
-Instead of delegating to `send-smtp-email` (which uses the platform's global SMTP account), send directly using the user's own cPanel SMTP credentials (`mail.onlinetextileschool.com:465` with the user's email + stored password). This ensures the email truly originates from the user's mailbox. Fall back to the override approach if direct SMTP fails.
+### 4. Profile Integration
+- Show upcoming workshop registrations on `Profile.tsx` as a stats card
 
-### Step 3 — Add IMAP inbox sync via new edge function
-**New file**: `supabase/functions/edumail-imap-sync/index.ts`
+---
 
-Create an edge function that:
-- Accepts a user ID (or runs for all active email users)
-- Connects to `mail.onlinetextileschool.com:993` via IMAP using the user's stored credentials
-- Fetches new messages from the INBOX folder
-- Inserts them into `edumail_messages` with `folder = 'inbox'`
-- Tracks last-synced UID to avoid duplicates
+## Routes (App.tsx additions)
+```text
+/workshops                    → WorkshopsPage
+/workshops/:slug              → WorkshopDetail
+/dashboard/workshops          → MyWorkshopsPage
+/admin/workshops              → AdminWorkshops
+```
 
-The user's Mail page will call this on load (or via a "Refresh" button) to pull new emails.
+---
 
-### Step 4 — Update EduMail page (password management, remove webmail)
-**File**: `src/pages/dashboard/EduMailPage.tsx`
+## Key Features per Component
 
-- Remove the "Open Webmail" link (lines 155-165)
-- Show current password (masked, with reveal toggle) from `emailReq.current_password`
-- Add "Change Password" button with 15-day cooldown enforcement:
-  - Check `last_password_reset_at` — if < 15 days ago, disable button with countdown
-  - On click: call `cpanel-email-provisioner` with `action: 'change-password'` (new action)
-  - Auto-generate new password, update cPanel, update DB
+**Countdown Timer**: Reusable component showing days/hours/minutes/seconds until workshop starts. Used on catalog cards, detail page, and dashboard.
 
-### Step 5 — Add user-initiated password change action to provisioner
-**File**: `supabase/functions/cpanel-email-provisioner/index.ts`
+**Registration Flow**: No login required. Simple form → insert into `workshop_registrations` → show confirmation with registration number. If logged in, auto-fill from profile and link `user_id`.
 
-Add a new `action: 'change-password'` that:
-- Can be called by the email owner (not just admin)
-- Validates 15-day cooldown from `last_password_reset_at`
-- Generates new password, updates cPanel via UAPI
-- Updates `current_password` and `last_password_reset_at` in DB
-- Admin reset-password action also updates `last_password_reset_at` (already does)
+**Materials Distribution**: Admin uploads files via existing MediaPickerModal → stored in `materials` JSONB → downloadable from detail page and dashboard after registration.
 
-### Step 6 — Redeploy edge functions
-Deploy: `send-smtp-email`, `edumail-client`, `cpanel-email-provisioner`, `edumail-imap-sync`
+**Quiz System**: Lightweight quiz builder in admin (JSONB questions array with MCQ format). Participants take quiz on the workshop detail page. Results stored in `workshop_quiz_attempts`.
+
+**Meet Link**: Displayed only after registration and when workshop is ongoing. Hidden before start time.
+
+**Admin Analytics**: Registration count, attendance rate, quiz completion stats per workshop.
 
 ---
 
 ## Technical Details
 
-- IMAP in Deno: Use `https://deno.land/x/imap/` or raw TLS socket with IMAP commands
-- Password stored in `institutional_email_requests.current_password` column (already exists)
-- 15-day cooldown: compare `last_password_reset_at` + 15 days vs `now()`
-- The `from_override` fix in `send-smtp-email` is a 3-line change checking `metadata?.from_override`
-- For direct SMTP sending from user accounts, credentials are: email = `requested_email`, password = `current_password`, server = `mail.onlinetextileschool.com`, port = 465
+- Follows existing patterns: React Query for data, Supabase client, toast notifications, MediaPickerModal for uploads
+- Countdown uses `date-fns` differenceInSeconds with `setInterval`
+- Registration number generated via DB default: `'WS-' || LPAD(FLOOR(RANDOM() * 999999)::TEXT, 6, '0')`
+- Workshop notifications via existing `notifyAllStudentsWithEmail` on publish
+- All pages use existing Header/Footer/BottomNav layout pattern
+- Admin page uses Dialog-based forms matching existing admin patterns (scrollable, max-h-[90vh])
 
