@@ -4,12 +4,13 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { MoreHorizontal, ShieldOff, KeyRound, BookX, Search } from 'lucide-react';
+import { MoreHorizontal, ShieldOff, KeyRound, BookX, Search, UserMinus } from 'lucide-react';
+import { createNotification } from '@/lib/notifications';
 
 const AccessBoardTab = () => {
   const { toast } = useToast();
@@ -65,6 +66,14 @@ const AccessBoardTab = () => {
         title: vars.isActive ? 'Account Suspended' : 'Account Reactivated',
         description: `Instructor account has been ${vars.isActive ? 'suspended' : 'reactivated'}.`,
       });
+      createNotification({
+        userId: vars.userId,
+        type: 'system',
+        title: vars.isActive ? 'Account Suspended' : 'Account Reactivated',
+        message: vars.isActive
+          ? 'Your instructor account has been suspended by an administrator.'
+          : 'Your instructor account has been reactivated.',
+      });
     },
   });
 
@@ -79,6 +88,55 @@ const AccessBoardTab = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['access-board-instructors'] });
       toast({ title: 'Course Access Revoked', description: 'All courses have been unpublished.' });
+    },
+  });
+
+  const resetPasswordMutation = useMutation({
+    mutationFn: async (userId: string) => {
+      // Look up email from instructor_applications
+      const { data: app } = await supabase
+        .from('instructor_applications')
+        .select('email')
+        .eq('user_id', userId)
+        .limit(1);
+      const email = (app as any)?.[0]?.email;
+      if (!email) throw new Error('Could not find instructor email. Please reset manually from Supabase Auth dashboard.');
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/auth/reset-password`,
+      });
+      if (error) throw error;
+      return email;
+    },
+    onSuccess: (email) => {
+      toast({ title: 'Password Reset Sent', description: `A password reset link has been sent to ${email}.` });
+    },
+    onError: (err: any) => {
+      toast({ title: 'Reset Failed', description: err.message, variant: 'destructive' });
+    },
+  });
+
+  const removeRoleMutation = useMutation({
+    mutationFn: async (userId: string) => {
+      const { error } = await supabase
+        .from('user_roles')
+        .delete()
+        .eq('user_id', userId)
+        .eq('role', 'instructor');
+      if (error) throw error;
+      return userId;
+    },
+    onSuccess: (userId) => {
+      queryClient.invalidateQueries({ queryKey: ['access-board-instructors'] });
+      toast({ title: 'Instructor Role Removed', description: 'The user has been demoted to student-only.' });
+      createNotification({
+        userId,
+        type: 'system',
+        title: 'Instructor Role Removed',
+        message: 'Your instructor role has been removed by an administrator. You now have student-only access.',
+      });
+    },
+    onError: (err: any) => {
+      toast({ title: 'Failed', description: err.message, variant: 'destructive' });
     },
   });
 
@@ -146,7 +204,7 @@ const AccessBoardTab = () => {
                     <TableRow key={inst.id}>
                       <TableCell className="font-medium">{inst.full_name || 'N/A'}</TableCell>
                       <TableCell>{inst.activeCourses}</TableCell>
-                      <TableCell>${inst.totalRevenue.toFixed(2)}</TableCell>
+                      <TableCell>৳{inst.totalRevenue.toFixed(2)}</TableCell>
                       <TableCell>
                         <Badge
                           variant="outline"
@@ -172,17 +230,29 @@ const AccessBoardTab = () => {
                               {inst.is_active ? 'Suspend Account' : 'Reactivate Account'}
                             </DropdownMenuItem>
                             <DropdownMenuItem
-                              onClick={() => toast({ title: 'Password reset requested', description: 'A reset link has been sent to the instructor.' })}
+                              onClick={() => resetPasswordMutation.mutate(inst.id)}
+                              disabled={resetPasswordMutation.isPending}
                             >
                               <KeyRound className="h-4 w-4 mr-2" />
                               Reset Password
                             </DropdownMenuItem>
                             <DropdownMenuItem
-                              className="text-destructive"
                               onClick={() => revokeCourseMutation.mutate(inst.id)}
                             >
                               <BookX className="h-4 w-4 mr-2" />
                               Revoke Course Access
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              className="text-destructive"
+                              onClick={() => {
+                                if (confirm('Remove instructor role? This will demote them to student-only.')) {
+                                  removeRoleMutation.mutate(inst.id);
+                                }
+                              }}
+                            >
+                              <UserMinus className="h-4 w-4 mr-2" />
+                              Remove Instructor Role
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>

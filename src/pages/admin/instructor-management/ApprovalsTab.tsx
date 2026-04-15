@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { CheckCircle, XCircle, UserPlus, Search, Eye, ExternalLink } from 'lucide-react';
 import { format } from 'date-fns';
 import { useAuth } from '@/hooks/useAuth';
+import { createNotification } from '@/lib/notifications';
 
 interface Application {
   id: string;
@@ -70,11 +71,19 @@ const ApprovalsTab = () => {
         .insert({ user_id: app.user_id, role: 'instructor' });
       if (roleErr && !roleErr.message.includes('duplicate')) throw roleErr;
     },
-    onSuccess: () => {
+    onSuccess: (_, app) => {
       queryClient.invalidateQueries({ queryKey: ['instructor-applications'] });
       setSelectedApp(null);
       setAdminNotes('');
       toast({ title: 'Instructor Approved', description: 'The instructor role has been granted.' });
+      // Notify the applicant
+      createNotification({
+        userId: app.user_id,
+        type: 'system',
+        title: 'Instructor Application Approved! 🎉',
+        message: 'Congratulations! Your instructor application has been approved. You can now create and manage courses.',
+        link: '/instructor/dashboard',
+      });
     },
     onError: (err: any) => toast({ title: 'Error', description: err.message, variant: 'destructive' }),
   });
@@ -87,11 +96,19 @@ const ApprovalsTab = () => {
         .eq('id', app.id);
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: (_, app) => {
       queryClient.invalidateQueries({ queryKey: ['instructor-applications'] });
       setSelectedApp(null);
+      const reason = adminNotes || 'No reason specified.';
       setAdminNotes('');
       toast({ title: 'Application Rejected', variant: 'destructive' });
+      // Notify the applicant
+      createNotification({
+        userId: app.user_id,
+        type: 'system',
+        title: 'Instructor Application Update',
+        message: `Your instructor application has been reviewed and was not approved. Reason: ${reason}`,
+      });
     },
     onError: (err: any) => toast({ title: 'Error', description: err.message, variant: 'destructive' }),
   });
