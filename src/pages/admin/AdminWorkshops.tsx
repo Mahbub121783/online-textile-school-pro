@@ -62,6 +62,30 @@ export default function AdminWorkshops() {
     },
   });
 
+  // All registration counts for stats
+  const { data: allRegCounts = {} } = useQuery({
+    queryKey: ['admin-workshop-all-reg-counts'],
+    queryFn: async () => {
+      const ids = workshops.map((w: any) => w.id);
+      if (!ids.length) return {};
+      const { data } = await supabase
+        .from('workshop_registrations')
+        .select('workshop_id, status')
+        .in('workshop_id', ids);
+      const counts: Record<string, number> = {};
+      let total = 0;
+      (data || []).forEach((r: any) => {
+        if (r.status === 'registered') {
+          counts[r.workshop_id] = (counts[r.workshop_id] || 0) + 1;
+          total++;
+        }
+      });
+      counts.__total = total;
+      return counts;
+    },
+    enabled: workshops.length > 0,
+  });
+
   const { data: registrations = [] } = useQuery({
     queryKey: ['admin-workshop-regs', viewRegs],
     queryFn: async () => {
