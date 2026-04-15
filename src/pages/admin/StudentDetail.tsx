@@ -294,6 +294,12 @@ export default function StudentDetail() {
       if (type === 'enrollment') {
         const { error } = await supabase.from('enrollments').delete().eq('id', targetId);
         if (error) throw error;
+      } else if (type === 'ebook-order') {
+        // Delete order_items first, then the order
+        const { error: oiErr } = await supabase.from('order_items').delete().eq('order_id', targetId);
+        if (oiErr) throw oiErr;
+        const { error: oErr } = await supabase.from('orders').delete().eq('id', targetId);
+        if (oErr) throw oErr;
       }
       const adminId = (await supabase.auth.getUser()).data.user!.id;
       await supabase.from('admin_activity_log').insert({
@@ -613,6 +619,7 @@ export default function StudentDetail() {
                   <TableHead>Ebook</TableHead>
                   <TableHead className="text-center">Reading Progress</TableHead>
                   <TableHead className="text-right">Price</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -646,10 +653,17 @@ export default function StudentDetail() {
                         )}
                       </TableCell>
                       <TableCell className="text-right">৳{i.price}</TableCell>
+                      <TableCell className="text-right">
+                        {parentOrder && (
+                          <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => setRevokeTarget({ type: 'ebook-order', id: parentOrder.id, name: ebook?.title || 'Ebook' })}>
+                            <XCircle className="h-3.5 w-3.5 mr-1" /> Revoke
+                          </Button>
+                        )}
+                      </TableCell>
                     </TableRow>
                   );
                 })}
-                {!ebookItems.length && <TableRow><TableCell colSpan={3} className="text-center py-6 text-muted-foreground">No ebooks purchased</TableCell></TableRow>}
+                {!ebookItems.length && <TableRow><TableCell colSpan={4} className="text-center py-6 text-muted-foreground">No ebooks purchased</TableCell></TableRow>}
               </TableBody>
             </Table>
           </Card>
