@@ -152,6 +152,30 @@ Deno.serve(async (req) => {
               }
             }
           }
+
+          // Credit referrer if this user was referred
+          const { data: profile } = await supabaseAdmin
+            .from("user_profiles")
+            .select("referred_by")
+            .eq("id", order.user_id)
+            .single();
+
+          if (profile?.referred_by) {
+            // Update referral reward to credited
+            await supabaseAdmin
+              .from("referral_rewards")
+              .update({ status: "credited", reward_amount: 50, credited_at: new Date().toISOString() })
+              .eq("referred_id", order.user_id)
+              .eq("status", "pending");
+
+            // Credit referrer wallet
+            await supabaseAdmin.rpc("credit_wallet", {
+              _user_id: profile.referred_by,
+              _amount: 50,
+              _description: `Referral reward for order ${order.id.slice(0, 8)}`,
+              _reference_id: order.id,
+            });
+          }
         }
 
         return new Response(

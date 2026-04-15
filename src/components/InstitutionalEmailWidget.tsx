@@ -21,9 +21,21 @@ export default function InstitutionalEmailWidget() {
   const queryClient = useQueryClient();
   const [requesting, setRequesting] = useState(false);
 
+  const { data: enrollmentCount, isLoading: enrollLoading } = useQuery({
+    queryKey: ['my-enrollment-count', user?.id],
+    enabled: !!user,
+    queryFn: async () => {
+      const { count } = await supabase
+        .from('enrollments')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', user!.id);
+      return count || 0;
+    },
+  });
+
   const { data: existingRequest, isLoading } = useQuery({
     queryKey: ['my-institutional-email', user?.id],
-    enabled: !!user,
+    enabled: !!user && (enrollmentCount ?? 0) > 0,
     queryFn: async () => {
       const { data } = await supabase
         .from('institutional_email_requests')
@@ -63,7 +75,8 @@ export default function InstitutionalEmailWidget() {
     },
   });
 
-  if (isLoading) return null;
+  if (enrollLoading || isLoading) return null;
+  if ((enrollmentCount ?? 0) === 0) return null;
 
   const config = existingRequest ? statusConfig[existingRequest.status] : null;
   const StatusIcon = config?.icon;

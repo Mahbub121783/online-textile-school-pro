@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Eye, EyeOff, Mail, Lock, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,6 +15,8 @@ const Register = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const refCode = searchParams.get('ref') || '';
 
   const update = (field: string, value: string) => setFormData((prev) => ({ ...prev, [field]: value }));
 
@@ -36,6 +38,7 @@ const Register = () => {
         emailRedirectTo: window.location.origin,
         data: {
           full_name: formData.fullName,
+          ...(refCode ? { ref: refCode } : {}),
         },
       },
     });
