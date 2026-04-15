@@ -318,7 +318,8 @@ export default function AdminWorkshops() {
                   </p>
                 </div>
                 <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={() => setViewRegs(ws.id)}><Users className="h-4 w-4" /></Button>
+                  <Button variant="outline" size="sm" onClick={() => setViewRegs(ws.id)} title="View Registrations"><Users className="h-4 w-4" /></Button>
+                  <Button variant="outline" size="sm" onClick={() => { setNotifyWs(ws); setNotifyForm({ title: '', message: '' }); }} title="Send Notification"><Bell className="h-4 w-4" /></Button>
                   <Button variant="outline" size="sm" onClick={() => openEdit(ws)}><Edit className="h-4 w-4" /></Button>
                   <Button variant="outline" size="sm" className="text-destructive" onClick={() => {
                     if (confirm('Delete this workshop?')) deleteMutation.mutate(ws.id);
