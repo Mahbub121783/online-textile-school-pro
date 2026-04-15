@@ -89,7 +89,7 @@ const CourseSettingsTab = () => {
 
   const assignCert = useMutation({
     mutationFn: async ({ courseId, templateId }: { courseId: string; templateId: string | null }) => {
-      const { error } = await supabase.from('courses').update({ cert_template_id: templateId } as any).eq('id', courseId);
+      const { error } = await supabase.from('courses').update({ cert_template_id: templateId }).eq('id', courseId);
       if (error) throw error;
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['course-settings-list'] }); setCertDialog({ open: false, courseId: '' }); toast.success('Certificate template updated'); },

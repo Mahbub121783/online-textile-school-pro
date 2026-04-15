@@ -180,12 +180,12 @@ const AdminCertificates = () => {
         setEditingId(data.id);
       }
       if (editingId) {
-        await supabase.from('courses').update({ cert_template_id: null } as any).eq('cert_template_id', editingId);
+        await supabase.from('courses').update({ cert_template_id: null }).eq('cert_template_id', editingId);
       }
       const templateId = editingId || (await supabase.from('certificate_templates').select('id').eq('name', templateName).single()).data?.id;
       if (templateId && assignedCourses.length > 0) {
         for (const cid of assignedCourses) {
-          await supabase.from('courses').update({ cert_template_id: templateId } as any).eq('id', cid);
+          await supabase.from('courses').update({ cert_template_id: templateId }).eq('id', cid);
         }
       }
     },
@@ -199,7 +199,7 @@ const AdminCertificates = () => {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      await supabase.from('courses').update({ cert_template_id: null } as any).eq('cert_template_id', id);
+      await supabase.from('courses').update({ cert_template_id: null }).eq('cert_template_id', id);
       const { error } = await supabase.from('certificate_templates').delete().eq('id', id);
       if (error) throw error;
     },

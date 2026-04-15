@@ -33,14 +33,14 @@ const CertificatesPage = () => {
   const courseIds = enrollments.map((e: any) => e.course_id);
   const enrollmentMap = new Map(enrollments.map((e: any) => [e.course_id, e]));
 
-  // Courses with cert_template_id
+  // Courses with cert_template_id + instructor name
   const { data: courses = [] } = useQuery({
     queryKey: ['enrolled-courses-detail', courseIds],
     enabled: courseIds.length > 0,
     queryFn: async () => {
       const { data } = await supabase
         .from('courses')
-        .select('id, title, slug, thumbnail_url, cert_template_id, certificate_threshold_pct')
+        .select('id, title, slug, thumbnail_url, cert_template_id, certificate_threshold_pct, instructor_id, user_profiles!courses_instructor_id_fkey(full_name)')
         .in('id', courseIds);
       return data ?? [];
     },
@@ -131,7 +131,7 @@ const CertificatesPage = () => {
         course_title: course?.title || 'Course',
         certificate_number: cert.certificate_number,
         completion_date: cert.issued_at ? format(new Date(cert.issued_at), 'MMMM dd, yyyy') : '',
-        instructor_signature: '',
+        instructor_signature: (course as any)?.user_profiles?.full_name || '',
         grade_letter: grade.letter,
         grade_point: grade.point,
       };
@@ -251,7 +251,7 @@ const CertificatesPage = () => {
                       >
                         {eligible ? <><Download className="h-3.5 w-3.5" /> Download PDF</> : <><Lock className="h-3.5 w-3.5" /> Locked</>}
                       </Button>
-                      <Button size="sm" variant="ghost" className="gap-1">
+                      <Button size="sm" variant="ghost" className="gap-1" onClick={() => window.open(`/verify-certificate?cert=${cert.certificate_number}`, '_blank')}>
                         <ExternalLink className="h-3.5 w-3.5" /> Verify
                       </Button>
                     </div>
