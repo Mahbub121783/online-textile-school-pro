@@ -5148,6 +5148,279 @@ export type Database = {
           },
         ]
       }
+      workshop_quiz_attempts: {
+        Row: {
+          answers: Json
+          id: string
+          max_score: number | null
+          quiz_id: string
+          registration_id: string
+          score: number | null
+          submitted_at: string
+        }
+        Insert: {
+          answers?: Json
+          id?: string
+          max_score?: number | null
+          quiz_id: string
+          registration_id: string
+          score?: number | null
+          submitted_at?: string
+        }
+        Update: {
+          answers?: Json
+          id?: string
+          max_score?: number | null
+          quiz_id?: string
+          registration_id?: string
+          score?: number | null
+          submitted_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workshop_quiz_attempts_quiz_id_fkey"
+            columns: ["quiz_id"]
+            isOneToOne: false
+            referencedRelation: "workshop_quizzes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workshop_quiz_attempts_registration_id_fkey"
+            columns: ["registration_id"]
+            isOneToOne: false
+            referencedRelation: "workshop_registrations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      workshop_quizzes: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          is_active: boolean
+          questions: Json
+          time_limit_minutes: number | null
+          title: string
+          updated_at: string
+          workshop_id: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          questions?: Json
+          time_limit_minutes?: number | null
+          title: string
+          updated_at?: string
+          workshop_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          questions?: Json
+          time_limit_minutes?: number | null
+          title?: string
+          updated_at?: string
+          workshop_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workshop_quizzes_workshop_id_fkey"
+            columns: ["workshop_id"]
+            isOneToOne: false
+            referencedRelation: "workshops"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      workshop_registrations: {
+        Row: {
+          checked_in_at: string | null
+          created_at: string
+          email: string
+          full_name: string
+          id: string
+          institution: string | null
+          mobile: string | null
+          registration_number: string
+          status: Database["public"]["Enums"]["workshop_registration_status"]
+          updated_at: string
+          user_id: string | null
+          workshop_id: string
+        }
+        Insert: {
+          checked_in_at?: string | null
+          created_at?: string
+          email: string
+          full_name: string
+          id?: string
+          institution?: string | null
+          mobile?: string | null
+          registration_number?: string
+          status?: Database["public"]["Enums"]["workshop_registration_status"]
+          updated_at?: string
+          user_id?: string | null
+          workshop_id: string
+        }
+        Update: {
+          checked_in_at?: string | null
+          created_at?: string
+          email?: string
+          full_name?: string
+          id?: string
+          institution?: string | null
+          mobile?: string | null
+          registration_number?: string
+          status?: Database["public"]["Enums"]["workshop_registration_status"]
+          updated_at?: string
+          user_id?: string | null
+          workshop_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workshop_registrations_workshop_id_fkey"
+            columns: ["workshop_id"]
+            isOneToOne: false
+            referencedRelation: "workshops"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      workshop_sessions: {
+        Row: {
+          created_at: string
+          description: string | null
+          end_time: string | null
+          id: string
+          meet_link: string | null
+          session_date: string
+          sort_order: number | null
+          start_time: string | null
+          title: string
+          workshop_id: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          end_time?: string | null
+          id?: string
+          meet_link?: string | null
+          session_date: string
+          sort_order?: number | null
+          start_time?: string | null
+          title: string
+          workshop_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          end_time?: string | null
+          id?: string
+          meet_link?: string | null
+          session_date?: string
+          sort_order?: number | null
+          start_time?: string | null
+          title?: string
+          workshop_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workshop_sessions_workshop_id_fkey"
+            columns: ["workshop_id"]
+            isOneToOne: false
+            referencedRelation: "workshops"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      workshops: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          description: string | null
+          end_date: string | null
+          end_time: string | null
+          id: string
+          instructor_avatar: string | null
+          instructor_bio: string | null
+          instructor_name: string | null
+          is_featured: boolean
+          materials: Json | null
+          max_participants: number | null
+          meet_link: string | null
+          prerequisites: string | null
+          registration_deadline: string | null
+          short_description: string | null
+          slug: string
+          start_date: string
+          start_time: string | null
+          status: Database["public"]["Enums"]["workshop_status"]
+          thumbnail_url: string | null
+          title: string
+          updated_at: string
+          what_you_learn: Json | null
+          workshop_type: Database["public"]["Enums"]["workshop_type"]
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          end_date?: string | null
+          end_time?: string | null
+          id?: string
+          instructor_avatar?: string | null
+          instructor_bio?: string | null
+          instructor_name?: string | null
+          is_featured?: boolean
+          materials?: Json | null
+          max_participants?: number | null
+          meet_link?: string | null
+          prerequisites?: string | null
+          registration_deadline?: string | null
+          short_description?: string | null
+          slug: string
+          start_date: string
+          start_time?: string | null
+          status?: Database["public"]["Enums"]["workshop_status"]
+          thumbnail_url?: string | null
+          title: string
+          updated_at?: string
+          what_you_learn?: Json | null
+          workshop_type?: Database["public"]["Enums"]["workshop_type"]
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          end_date?: string | null
+          end_time?: string | null
+          id?: string
+          instructor_avatar?: string | null
+          instructor_bio?: string | null
+          instructor_name?: string | null
+          is_featured?: boolean
+          materials?: Json | null
+          max_participants?: number | null
+          meet_link?: string | null
+          prerequisites?: string | null
+          registration_deadline?: string | null
+          short_description?: string | null
+          slug?: string
+          start_date?: string
+          start_time?: string | null
+          status?: Database["public"]["Enums"]["workshop_status"]
+          thumbnail_url?: string | null
+          title?: string
+          updated_at?: string
+          what_you_learn?: Json | null
+          workshop_type?: Database["public"]["Enums"]["workshop_type"]
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -5235,6 +5508,18 @@ export type Database = {
         | "content_writer"
         | "instructor"
         | "student"
+      workshop_registration_status:
+        | "registered"
+        | "attended"
+        | "cancelled"
+        | "no_show"
+      workshop_status:
+        | "draft"
+        | "published"
+        | "ongoing"
+        | "completed"
+        | "cancelled"
+      workshop_type: "one_day" | "multi_day"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -5370,6 +5655,20 @@ export const Constants = {
         "instructor",
         "student",
       ],
+      workshop_registration_status: [
+        "registered",
+        "attended",
+        "cancelled",
+        "no_show",
+      ],
+      workshop_status: [
+        "draft",
+        "published",
+        "ongoing",
+        "completed",
+        "cancelled",
+      ],
+      workshop_type: ["one_day", "multi_day"],
     },
   },
 } as const

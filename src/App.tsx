@@ -146,6 +146,10 @@ const AdminEmailRequests = lazy(() => import("./pages/admin/AdminEmailRequests")
 const EduMailPage = lazy(() => import("./pages/dashboard/EduMailPage"));
 const MailPage = lazy(() => import("./pages/dashboard/MailPage"));
 const AdminMailPage = lazy(() => import("./pages/admin/AdminMailPage"));
+const WorkshopsPage = lazy(() => import("./pages/static/WorkshopsPage"));
+const WorkshopDetail = lazy(() => import("./pages/static/WorkshopDetail"));
+const MyWorkshopsPage = lazy(() => import("./pages/dashboard/MyWorkshopsPage"));
+const AdminWorkshops = lazy(() => import("./pages/admin/AdminWorkshops"));
 
 // Optimized QueryClient with aggressive caching
 const queryClient = new QueryClient({
@@ -218,6 +222,7 @@ const App = () => (
                   <Route path="analytics" element={<StudentAnalytics />} />
                   <Route path="edumail" element={<EduMailPage />} />
                   <Route path="mail" element={<MailPage />} />
+                  <Route path="workshops" element={<MyWorkshopsPage />} />
                   <Route path="settings" element={<SettingsPage />} />
                 </Route>
                 {/* Instructor Portal */}
@@ -305,6 +310,7 @@ const App = () => (
                   <Route path="ai-chatbot" element={<AdminAiChatbot />} />
                   <Route path="email-requests" element={<AdminEmailRequests />} />
                   <Route path="mail" element={<AdminMailPage />} />
+                  <Route path="workshops" element={<AdminWorkshops />} />
                 </Route>
                 <Route path="/learn/:courseSlug/:lessonId" element={<LessonPlayer />} />
                 <Route path="/quiz/:quizId" element={<QuizPlayer />} />
@@ -327,6 +333,8 @@ const App = () => (
                 <Route path="/research/:paperId" element={<ResearchPaperDetail />} />
                 <Route path="/research/:paperId/read" element={<ResearchPaperReader />} />
                 <Route path="/labs" element={<VirtualLabsPage />} />
+                <Route path="/workshops" element={<WorkshopsPage />} />
+                <Route path="/workshops/:slug" element={<WorkshopDetail />} />
                 <Route path="/register" element={<PublicRegistration />} />
                 <Route path="/register/:slug" element={<PublicRegistration />} />
                 {/* Forum */}
