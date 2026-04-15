@@ -915,6 +915,15 @@ const AdminCertificates = () => {
 
         {/* ── Issued Certificates Tab ── */}
         <TabsContent value="issued" className="space-y-4">
+          <div className="flex gap-2 flex-wrap">
+            <Button onClick={() => setManualIssueOpen(true)} className="gap-2">
+              <UserPlus className="h-4 w-4" /> Manual Issue
+            </Button>
+            <Button variant="outline" onClick={() => setBulkIssueOpen(true)} className="gap-2">
+              <Users className="h-4 w-4" /> Bulk Issue
+            </Button>
+          </div>
+
           {certsLoading ? (
             <div className="space-y-3">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}</div>
           ) : issuedCerts.length === 0 ? (
@@ -933,6 +942,7 @@ const AdminCertificates = () => {
                     <TableHead className="text-center">Score</TableHead>
                     <TableHead className="text-center">Downloads</TableHead>
                     <TableHead className="text-right">Issued</TableHead>
+                    <TableHead className="w-10" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -950,12 +960,93 @@ const AdminCertificates = () => {
                       <TableCell className="text-right text-xs text-muted-foreground">
                         {cert.issued_at ? format(new Date(cert.issued_at), 'MMM dd, yyyy') : '—'}
                       </TableCell>
+                      <TableCell>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8"><MoreHorizontal className="h-4 w-4" /></Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem className="text-destructive" onClick={() => { if (confirm('Revoke this certificate? The student will be notified.')) revokeMutation.mutate(cert); }}>
+                              <XCircle className="h-4 w-4 mr-2" /> Revoke Certificate
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
             </div>
           )}
+
+          {/* Manual Issue Dialog */}
+          <Dialog open={manualIssueOpen} onOpenChange={setManualIssueOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Manual Certificate Issuance</DialogTitle>
+                <DialogDescription>Issue a certificate to a student manually.</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div>
+                  <Label className="text-sm">Search Student</Label>
+                  <Input placeholder="Type student name..." value={manualStudentSearch} onChange={e => setManualStudentSearch(e.target.value)} />
+                  {searchedStudents.length > 0 && (
+                    <div className="max-h-40 overflow-y-auto border rounded-lg mt-2 divide-y">
+                      {searchedStudents.map((s: any) => (
+                        <button key={s.id} className={`w-full text-left px-3 py-2 text-sm hover:bg-muted/50 flex items-center gap-2 ${manualSelectedStudent === s.id ? 'bg-primary/10' : ''}`} onClick={() => setManualSelectedStudent(s.id)}>
+                          <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center text-xs font-bold shrink-0 overflow-hidden">
+                            {s.avatar_url ? <img src={s.avatar_url} alt="" className="w-full h-full object-cover" /> : s.full_name?.[0]?.toUpperCase() || '?'}
+                          </div>
+                          <span>{s.full_name}</span>
+                          {s.roll_id && <span className="text-xs text-muted-foreground ml-auto">{s.roll_id}</span>}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <Label className="text-sm">Select Course</Label>
+                  <Select value={manualSelectedCourse || ''} onValueChange={v => setManualSelectedCourse(v)}>
+                    <SelectTrigger><SelectValue placeholder="Choose a course" /></SelectTrigger>
+                    <SelectContent>
+                      {courses.map((c: any) => (
+                        <SelectItem key={c.id} value={c.id}>{c.title}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button onClick={() => manualIssueMutation.mutate()} disabled={!manualSelectedStudent || !manualSelectedCourse || manualIssueMutation.isPending} className="w-full gap-2">
+                  <Award className="h-4 w-4" /> {manualIssueMutation.isPending ? 'Issuing...' : 'Issue Certificate'}
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+
+          {/* Bulk Issue Dialog */}
+          <Dialog open={bulkIssueOpen} onOpenChange={setBulkIssueOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Bulk Certificate Issuance</DialogTitle>
+                <DialogDescription>Issue certificates to all eligible students (100% completion) in a course who don't have one yet.</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div>
+                  <Label className="text-sm">Select Course</Label>
+                  <Select value={bulkCourseId || ''} onValueChange={v => setBulkCourseId(v)}>
+                    <SelectTrigger><SelectValue placeholder="Choose a course" /></SelectTrigger>
+                    <SelectContent>
+                      {courses.map((c: any) => (
+                        <SelectItem key={c.id} value={c.id}>{c.title}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button onClick={handleBulkIssue} disabled={!bulkCourseId || bulkIssuing} className="w-full gap-2">
+                  <Users className="h-4 w-4" /> {bulkIssuing ? 'Issuing...' : 'Issue to All Eligible'}
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
         </TabsContent>
       </Tabs>
     </div>
