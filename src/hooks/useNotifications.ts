@@ -37,22 +37,8 @@ export function useNotifications() {
 
   const unreadCount = notifications.filter(n => !n.is_read).length;
 
-  useEffect(() => {
-    if (!user) return;
-    const channelName = `notifications-${user.id}-${Date.now()}`;
-    const channel = supabase
-      .channel(channelName)
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'notifications',
-        filter: `user_id=eq.${user.id}`,
-      }, () => {
-        queryClient.invalidateQueries({ queryKey: ['notifications', user.id] });
-      })
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [user?.id, queryClient]);
+  // Realtime subscription removed — layout-level hooks (useStudentRealtime,
+  // useAdminRealtime, useInstructorRealtime) already invalidate notifications.
 
   const markAsRead = useMutation({
     mutationFn: async (id: string) => {

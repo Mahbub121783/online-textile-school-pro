@@ -64,7 +64,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     // 2. Listener — fire-and-forget, NO await to prevent deadlocks
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
+      (event, session) => {
+        if (event === 'INITIAL_SESSION') return; // Already handled by getSession above
         setSession(session);
         setUser(session?.user ?? null);
         if (session?.user) {
