@@ -655,8 +655,8 @@ export default function StudentDetail() {
                       <TableCell className="text-right">৳{i.price}</TableCell>
                       <TableCell className="text-right">
                         {parentOrder && (
-                          <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => setRevokeTarget({ type: 'ebook-order', targetId: parentOrder.id, label: ebook?.title || 'Ebook' })}>
-                            <UserX className="h-3.5 w-3.5 mr-1" /> Revoke
+                          <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => setRevokeTarget({ type: 'ebook-order', id: parentOrder.id, name: ebook?.title || 'Ebook' })}>
+                            <XCircle className="h-3.5 w-3.5 mr-1" /> Revoke
                           </Button>
                         )}
                       </TableCell>
