@@ -13,7 +13,7 @@ import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Plus, Edit, Trash2, Users, Calendar, Image, Upload, Search, X, GripVertical, BarChart3, TrendingUp, Clock, CheckCircle } from 'lucide-react';
+import { Plus, Edit, Trash2, Users, Calendar, Image, Upload, Search, X, GripVertical, BarChart3, TrendingUp, Clock, CheckCircle, Bell, Send, Video } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { ScrollArea } from '@/components/ui/scroll-area';
