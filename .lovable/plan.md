@@ -1,64 +1,49 @@
 
 
-# Performance Fix — Eliminate Slow Loading & Double-Refresh Issues
+# Admin Students Section — Bug Fixes & Improvements
 
-## Root Cause Analysis
+## Critical Bug Found
 
-The app suffers from **three compounding performance problems**:
+### RLS Policy on `orders` table blocks admin ebook grants
+The screenshot shows: *"new row violates row-level security policy for table orders"*
 
-### Problem 1: Auth Race Condition (causes "double refresh" behavior)
-The `AuthProvider` uses `getSession()` followed by `onAuthStateChange()`. When `onAuthStateChange` fires with `INITIAL_SESSION` before `getSession` resolves, it triggers a duplicate `fetchUserData` call. This causes components to flash between loading/loaded states, making users think they need to refresh twice.
+**Root cause**: The `orders` INSERT policy is `auth.uid() = user_id`. When an admin grants an ebook to a student, it inserts an order with `user_id = student_id`, but the logged-in user is the admin — so RLS rejects it.
 
-### Problem 2: Homepage Fires 10+ Parallel Supabase Queries on Mount
-The Index page eagerly loads 10 sections, each making 1-4 Supabase queries simultaneously. With `refetchOnMount: 'always'` in QueryClient defaults, every navigation back to home re-fires all queries. Combined with auth loading, this creates a waterfall of blocked renders.
+The `order_items` and `enrollments` tables already have admin INSERT policies. Only `orders` is missing one.
 
-### Problem 3: Duplicate Realtime Channels + Notification Subscriptions
-- `NotificationBell` (via `useNotifications`) creates its own realtime channel with `Date.now()` suffix on every mount
-- Layout-level realtime hooks (`useStudentRealtime`, `useAdminRealtime`) also subscribe to notification inserts
-- This means duplicate subscriptions that trigger redundant query invalidations
+## Other Issues Found
+
+### 1. Ebook revoke doesn't work
+In `StudentDetail.tsx` line 293-306, the `revokeAccess` mutation only handles `type === 'enrollment'` deletion. There is no code to revoke ebook access (delete the order/order_items). The UI doesn't even offer a Revoke button for ebooks.
+
+### 2. Supabase 1000-row limit risk
+`AdminStudents.tsx` fetches ALL students via multiple queries without `.limit()`. If there are 1000+ students, data will be silently truncated. The `user_roles`, `enrollments`, `orders`, `order_items`, `certificates`, `quiz_attempts` queries all hit this limit.
+
+### 3. Notification INSERT policy blocks student-targeted notifications
+The notification INSERT policy requires `auth.uid() = user_id` OR admin role. Admin role works, but the `sendNotification` mutation in StudentDetail correctly sets the student's `user_id` — this should work since admins have INSERT permission. Confirmed OK.
 
 ## Fix Plan
 
-### Step 1: Fix Auth — Prevent Race Condition
-**File: `src/hooks/useAuth.tsx`**
-- Skip the `onAuthStateChange` callback when it's the `INITIAL_SESSION` event (the `getSession()` call already handles initial load)
-- This eliminates the double-fetch of `fetchUserData` and the loading flicker
-
-```
-Before:  onAuthStateChange((_event, session) => { ... })
-After:   onAuthStateChange((event, session) => {
-           if (event === 'INITIAL_SESSION') return; // already handled by getSession
-           ...
-         })
+### Step 1: Database Migration — Add admin INSERT policy on `orders`
+```sql
+CREATE POLICY "Admins can insert orders"
+ON orders FOR INSERT
+WITH CHECK (
+  has_role(auth.uid(), 'admin'::app_role) 
+  OR has_role(auth.uid(), 'super_admin'::app_role)
+);
 ```
 
-### Step 2: Fix QueryClient — Remove Aggressive Refetch
-**File: `src/App.tsx`**
-- Remove `refetchOnMount: 'always'` — this forces every query to re-fetch even when data is fresh, defeating the purpose of `staleTime: 5min`
-- The 5-minute staleTime already handles freshness correctly
+### Step 2: Fix ebook revoke in `StudentDetail.tsx`
+- Add handling for `type === 'ebook-order'` in the `revokeAccess` mutation to delete the order_items and order
+- Add a Revoke button to each ebook row in the Ebooks tab
 
-### Step 3: Optimize Homepage — Intersection Observer Loading
-**File: `src/pages/Index.tsx`**
-- Wrap below-the-fold sections in a simple visibility check so their queries don't fire until the section is scrolled into view
-- HeroSlider + StatsSection load immediately; everything else loads when visible
-
-### Step 4: Deduplicate Notification Realtime
-**File: `src/hooks/useNotifications.ts`**
-- Remove the per-component realtime subscription from `useNotifications` hook since the layout-level hooks (`useStudentRealtime`, `useAdminRealtime`, `useInstructorRealtime`) already handle notification invalidation
-- This eliminates duplicate channels and redundant re-renders
-
-### Step 5: Add `enabled` Guards on Unauthenticated Pages
-Several homepage components (Header's `useAuth`, `NotificationBell`) trigger queries even on public pages where no user exists. Ensure all user-dependent queries have proper `enabled: !!user` guards (most already do, but the notification hook's realtime channel creates connections regardless).
+### Step 3: Handle large student counts
+- Add pagination at the Supabase query level using `.range()` instead of fetching all students client-side
+- OR add `.limit(5000)` to prevent silent truncation for now (simpler fix)
 
 ## Files Modified
-1. `src/hooks/useAuth.tsx` — Skip `INITIAL_SESSION` event
-2. `src/App.tsx` — Remove `refetchOnMount: 'always'`
-3. `src/pages/Index.tsx` — Add intersection-observer lazy loading for sections
-4. `src/hooks/useNotifications.ts` — Remove duplicate realtime subscription
-
-## Expected Impact
-- Initial page load: ~50% fewer Supabase queries
-- No more "double refresh" — auth resolves in one pass
-- Dashboard/admin pages load on first visit without flicker
-- Reduced WebSocket connections (fewer realtime channels)
+1. **Database migration** — Add admin INSERT policy on `orders`
+2. **`src/pages/admin/StudentDetail.tsx`** — Fix ebook revoke, add revoke button to ebook rows
+3. **`src/pages/admin/AdminStudents.tsx`** — Add query limits to prevent silent data truncation
 
