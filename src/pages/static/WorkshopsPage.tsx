@@ -98,10 +98,13 @@ export default function WorkshopsPage() {
                   <Card
                     key={ws.id}
                     className="group overflow-hidden hover:shadow-xl transition-all duration-300 cursor-pointer border-border/60 hover:border-primary/30 flex flex-col"
-                    onClick={() => navigate(`/workshops/${ws.slug}`)}
+                    onClick={() => {
+                      if (ws.slug) navigate(`/workshops/${ws.slug}`);
+                      else navigate(`/workshops/${ws.id}`);
+                    }}
                   >
-                    {/* Image Container — pixel-perfect fit */}
-                    <div className="relative aspect-[16/9] overflow-hidden bg-muted">
+                    {/* Image Container — square ratio */}
+                    <div className="relative aspect-square overflow-hidden bg-muted">
                       {ws.thumbnail_url ? (
                         <img
                           src={ws.thumbnail_url}
@@ -188,7 +191,8 @@ export default function WorkshopsPage() {
                         disabled={isFull && ws.status === 'published'}
                         onClick={(e) => {
                           e.stopPropagation();
-                          navigate(`/workshops/${ws.slug}`);
+                          if (ws.slug) navigate(`/workshops/${ws.slug}`);
+                          else navigate(`/workshops/${ws.id}`);
                         }}
                       >
                         {isFull ? 'Fully Booked' : 'View & Register'}
