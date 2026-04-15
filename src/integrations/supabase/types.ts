@@ -5148,6 +5148,50 @@ export type Database = {
           },
         ]
       }
+      workshop_lessons: {
+        Row: {
+          content: string | null
+          created_at: string | null
+          description: string | null
+          id: string
+          lesson_type: string | null
+          sort_order: number | null
+          title: string
+          updated_at: string | null
+          workshop_id: string
+        }
+        Insert: {
+          content?: string | null
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          lesson_type?: string | null
+          sort_order?: number | null
+          title: string
+          updated_at?: string | null
+          workshop_id: string
+        }
+        Update: {
+          content?: string | null
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          lesson_type?: string | null
+          sort_order?: number | null
+          title?: string
+          updated_at?: string | null
+          workshop_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workshop_lessons_workshop_id_fkey"
+            columns: ["workshop_id"]
+            isOneToOne: false
+            referencedRelation: "workshops"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       workshop_quiz_attempts: {
         Row: {
           answers: Json
@@ -5347,6 +5391,7 @@ export type Database = {
           id: string
           instructor_avatar: string | null
           instructor_bio: string | null
+          instructor_id: string | null
           instructor_name: string | null
           is_featured: boolean
           materials: Json | null
@@ -5374,6 +5419,7 @@ export type Database = {
           id?: string
           instructor_avatar?: string | null
           instructor_bio?: string | null
+          instructor_id?: string | null
           instructor_name?: string | null
           is_featured?: boolean
           materials?: Json | null
@@ -5401,6 +5447,7 @@ export type Database = {
           id?: string
           instructor_avatar?: string | null
           instructor_bio?: string | null
+          instructor_id?: string | null
           instructor_name?: string | null
           is_featured?: boolean
           materials?: Json | null
@@ -5419,7 +5466,15 @@ export type Database = {
           what_you_learn?: Json | null
           workshop_type?: Database["public"]["Enums"]["workshop_type"]
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "workshops_instructor_id_fkey"
+            columns: ["instructor_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
