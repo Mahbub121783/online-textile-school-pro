@@ -673,13 +673,16 @@ const ChatWidget = () => {
         )}
       </button>
 
-      {/* Chat panel — positioned relative to bubble */}
+      {/* Chat panel — responsive: full-screen on mobile, positioned on desktop */}
       {open && (
         <div
-          className="fixed z-[9999] w-80 sm:w-96 h-[30rem] bg-background/95 backdrop-blur-sm border rounded-xl shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 fade-in duration-200"
+          className="fixed z-[9999] bg-background/95 backdrop-blur-sm border rounded-xl shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 fade-in duration-200
+            inset-2 sm:inset-auto sm:w-96 sm:h-[30rem]"
           style={{
-            left: Math.min(bubblePos.x - 280, window.innerWidth - 400),
-            top: Math.max(8, bubblePos.y - 490),
+            ...(window.innerWidth >= 640 ? {
+              left: Math.min(Math.max(8, bubblePos.x - 320), window.innerWidth - 400),
+              top: Math.max(8, Math.min(bubblePos.y - 490, window.innerHeight - 490)),
+            } : {}),
           }}
         >
           {selectedUser ? (
