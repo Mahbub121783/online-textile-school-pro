@@ -173,6 +173,184 @@ const PageLoader = () => (
   </div>
 );
 
+const AppRoutes = () => {
+  const location = useLocation();
+  return (
+    <ErrorBoundary key={location.pathname}>
+      <Suspense fallback={<PageLoader />}>
+        <Routes>
+          <Route path="/" element={<Index />} />
+          <Route path="/courses" element={<CourseCatalog />} />
+          <Route path="/courses/:slug" element={<CourseDetail />} />
+          <Route path="/ebooks" element={<EbookCatalog />} />
+          <Route path="/ebooks/:slug" element={<EbookDetail />} />
+          <Route path="/learning-paths" element={<LearningPaths />} />
+          <Route path="/learning-paths/:slug" element={<LearningPathDetail />} />
+          <Route path="/cart" element={<CartPage />} />
+          <Route path="/checkout" element={<Checkout />} />
+          <Route path="/payment/success" element={<PaymentSuccess />} />
+          <Route path="/payment/cancel" element={<PaymentCancel />} />
+          <Route path="/auth/login" element={<Login />} />
+          <Route path="/auth/register" element={<Register />} />
+          <Route path="/auth/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/profile" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/blog" element={<BlogList />} />
+          <Route path="/blog/:slug" element={<BlogPost />} />
+          {/* Student Dashboard */}
+          <Route path="/dashboard" element={<DashboardLayout />}>
+            <Route index element={<DashboardOverview />} />
+            <Route path="orders" element={<OrdersPage />} />
+            <Route path="courses" element={<MyCourses />} />
+            <Route path="ebooks" element={<MyEbooks />} />
+            <Route path="quizzes" element={<QuizzesPage />} />
+            <Route path="assignments" element={<AssignmentsPage />} />
+            <Route path="certificates" element={<CertificatesPage />} />
+            <Route path="invoices" element={<InvoicesPage />} />
+            <Route path="referrals" element={<ReferralsPage />} />
+            <Route path="notifications" element={<NotificationsPage />} />
+            <Route path="wallet" element={<WalletPage />} />
+            <Route path="wishlist" element={<WishlistPage />} />
+            <Route path="leaderboard" element={<LeaderboardPage />} />
+            <Route path="peer-reviews" element={<PeerReviewsPage />} />
+            <Route path="transcript" element={<TranscriptPage />} />
+            <Route path="group-projects" element={<GroupProjectsPage />} />
+            <Route path="attendance" element={<AttendancePage />} />
+            <Route path="my-research" element={<MyResearchPage />} />
+            <Route path="internships" element={<MyInternshipsPage />} />
+            <Route path="analytics" element={<StudentAnalytics />} />
+            <Route path="edumail" element={<EduMailPage />} />
+            <Route path="mail" element={<MailPage />} />
+            <Route path="workshops" element={<MyWorkshopsPage />} />
+            <Route path="settings" element={<SettingsPage />} />
+          </Route>
+          {/* Instructor Portal */}
+          <Route path="/instructor" element={<InstructorLayout />}>
+            <Route index element={<InstructorDashboard />} />
+            <Route path="courses" element={<InstructorCourses />} />
+            <Route path="courses/new" element={<CourseBuilder />} />
+            <Route path="courses/:courseId" element={<CourseBuilder />} />
+            <Route path="lessons" element={<InstructorLessons />} />
+            <Route path="quizzes" element={<InstructorQuizzes />} />
+            <Route path="assignments" element={<InstructorAssignments />} />
+            <Route path="gradebook" element={<InstructorGradebook />} />
+            <Route path="certificates" element={<InstructorCertificates />} />
+            <Route path="revenue" element={<RevenueDashboard />} />
+            <Route path="wallet" element={<InstructorWallet />} />
+            <Route path="students" element={<InstructorStudents />} />
+            <Route path="discussions" element={<InstructorDiscussions />} />
+            <Route path="announcements" element={<InstructorAnnouncements />} />
+            <Route path="research" element={<InstructorResearch />} />
+            <Route path="internships" element={<InstructorInternships />} />
+            <Route path="analytics" element={<InstructorAnalytics />} />
+            <Route path="plagiarism" element={<InstructorPlagiarism />} />
+            <Route path="posts" element={<InstructorPosts />} />
+            <Route path="posts/new" element={<PostEditor />} />
+            <Route path="posts/:postId/edit" element={<PostEditor />} />
+            <Route path="notifications" element={<NotificationsPage />} />
+          </Route>
+          {/* Admin Panel */}
+          <Route path="/admin" element={<AdminLayout />}>
+            <Route index element={<AdminDashboard />} />
+            <Route path="users" element={<AdminUsers />} />
+            <Route path="instructors" element={<AdminInstructors />} />
+            <Route path="instructors/:tab" element={<AdminInstructors />} />
+            <Route path="cms" element={<AdminCourses />} />
+            <Route path="cms/:tab" element={<AdminCourses />} />
+            <Route path="cms/courses/new" element={<CourseBuilder />} />
+            <Route path="cms/courses/:courseId" element={<CourseBuilder />} />
+            <Route path="setup" element={<AdminSetup />} />
+            <Route path="setup/:tab" element={<AdminSetup />} />
+            <Route path="payment" element={<AdminPayment />} />
+            <Route path="payment/:tab" element={<AdminPayment />} />
+            <Route path="orders" element={<AdminOrders />} />
+            <Route path="ebooks" element={<AdminEbooks />} />
+            <Route path="coupons" element={<AdminCoupons />} />
+            <Route path="wallets" element={<AdminWallets />} />
+            <Route path="pages" element={<AdminPages />} />
+            <Route path="pages/:pageId" element={<PageEditor />} />
+            <Route path="posts" element={<AdminPosts />} />
+            <Route path="posts/new" element={<PostEditor />} />
+            <Route path="posts/:postId/edit" element={<PostEditor />} />
+            <Route path="media" element={<AdminMedia />} />
+            <Route path="menus" element={<AdminMenus />} />
+            <Route path="appearance" element={<AdminAppearance />} />
+            <Route path="certificates" element={<AdminCertificates />} />
+            <Route path="hero-slides" element={<AdminHeroSlides />} />
+            <Route path="settings" element={<AdminSettings />} />
+            <Route path="notifications" element={<NotificationsPage />} />
+            <Route path="activity" element={<AdminActivity />} />
+            <Route path="admin-management" element={<AdminManagement />} />
+            <Route path="system-controls" element={<SystemControls />} />
+            <Route path="events" element={<AdminEvents />} />
+            <Route path="success-stories" element={<AdminSuccessStories />} />
+            <Route path="learning-paths" element={<AdminLearningPaths />} />
+            <Route path="id-card-settings" element={<AdminIdCardSettings />} />
+            <Route path="id-card-management" element={<AdminIdCardManagement />} />
+            <Route path="forum" element={<AdminForum />} />
+            <Route path="students" element={<AdminStudents />} />
+            <Route path="students/:id" element={<StudentDetail />} />
+            <Route path="registrations" element={<AdminRegistrations />} />
+            <Route path="site-content" element={<AdminSiteContent />} />
+            <Route path="batches" element={<AdminBatches />} />
+            <Route path="academic-calendar" element={<AdminAcademicCalendar />} />
+            <Route path="grade-config" element={<AdminGradeConfig />} />
+            <Route path="reviews" element={<AdminReviews />} />
+            <Route path="live-classes" element={<AdminLiveClasses />} />
+            <Route path="attendance" element={<AdminAttendance />} />
+            <Route path="faculty" element={<AdminFaculty />} />
+            <Route path="plagiarism" element={<AdminPlagiarism />} />
+            <Route path="project-groups" element={<AdminProjectGroups />} />
+            <Route path="internships" element={<AdminInternships />} />
+            <Route path="research-papers" element={<AdminResearchPapers />} />
+            <Route path="virtual-labs" element={<AdminVirtualLabs />} />
+            <Route path="payment-plans" element={<AdminPaymentPlans />} />
+            <Route path="currencies" element={<AdminCurrencies />} />
+            <Route path="ai-chatbot" element={<AdminAiChatbot />} />
+            <Route path="email-requests" element={<AdminEmailRequests />} />
+            <Route path="mail" element={<AdminMailPage />} />
+            <Route path="workshops" element={<AdminWorkshops />} />
+            <Route path="sponsors" element={<AdminSponsors />} />
+          </Route>
+          <Route path="/learn/:courseSlug/:lessonId" element={<LessonPlayer />} />
+          <Route path="/quiz/:quizId" element={<QuizPlayer />} />
+          <Route path="/assignment/:assignmentId" element={<AssignmentSubmit />} />
+          <Route path="/read/:ebookId" element={<EbookReader />} />
+          {/* Static pages */}
+          <Route path="/about" element={<AboutPage />} />
+          <Route path="/contact" element={<ContactPage />} />
+          <Route path="/privacy" element={<PrivacyPage />} />
+          <Route path="/terms" element={<TermsPage />} />
+          <Route path="/become-instructor" element={<BecomeInstructor />} />
+          <Route path="/departments" element={<DepartmentsPage />} />
+          <Route path="/events" element={<EventsPage />} />
+          <Route path="/alumni" element={<AlumniPage />} />
+          <Route path="/faculty" element={<FacultyPage />} />
+          <Route path="/internships" element={<InternshipsPage />} />
+          <Route path="/internships/:id" element={<InternshipDetail />} />
+          <Route path="/research" element={<ResearchPapersPage />} />
+          <Route path="/research/submit" element={<ResearchSubmit />} />
+          <Route path="/research/:paperId" element={<ResearchPaperDetail />} />
+          <Route path="/research/:paperId/read" element={<ResearchPaperReader />} />
+          <Route path="/labs" element={<VirtualLabsPage />} />
+          <Route path="/workshops" element={<WorkshopsPage />} />
+          <Route path="/workshops/:slug" element={<WorkshopDetail />} />
+          <Route path="/register" element={<PublicRegistration />} />
+          <Route path="/verify-certificate" element={<VerifyCertificate />} />
+          <Route path="/register/:slug" element={<PublicRegistration />} />
+          {/* Forum */}
+          <Route path="/forum" element={<ForumHome />} />
+          <Route path="/forum/new" element={<CreateForumPost />} />
+          <Route path="/forum/:postId" element={<ForumPost />} />
+          {/* Dynamic CMS pages - must be before 404 */}
+          <Route path="/:slug" element={<DynamicPage />} />
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </Suspense>
+    </ErrorBoundary>
+  );
+};
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <ThemeProvider>
@@ -182,194 +360,12 @@ const App = () => (
           <Sonner />
           <BrowserRouter future={{ v7_relativeSplatPath: true }}>
             <AppRoutes />
-                <Route path="/" element={<Index />} />
-                <Route path="/courses" element={<CourseCatalog />} />
-                <Route path="/courses/:slug" element={<CourseDetail />} />
-                <Route path="/ebooks" element={<EbookCatalog />} />
-                <Route path="/ebooks/:slug" element={<EbookDetail />} />
-                <Route path="/learning-paths" element={<LearningPaths />} />
-                <Route path="/learning-paths/:slug" element={<LearningPathDetail />} />
-                <Route path="/cart" element={<CartPage />} />
-                <Route path="/checkout" element={<Checkout />} />
-                <Route path="/payment/success" element={<PaymentSuccess />} />
-                <Route path="/payment/cancel" element={<PaymentCancel />} />
-                <Route path="/auth/login" element={<Login />} />
-                <Route path="/auth/register" element={<Register />} />
-                <Route path="/auth/forgot-password" element={<ForgotPassword />} />
-                <Route path="/reset-password" element={<ResetPassword />} />
-                <Route path="/profile" element={<Navigate to="/dashboard" replace />} />
-                <Route path="/blog" element={<BlogList />} />
-                <Route path="/blog/:slug" element={<BlogPost />} />
-                {/* Student Dashboard */}
-                <Route path="/dashboard" element={<DashboardLayout />}>
-                  <Route index element={<DashboardOverview />} />
-                  <Route path="orders" element={<OrdersPage />} />
-                  <Route path="courses" element={<MyCourses />} />
-                  <Route path="ebooks" element={<MyEbooks />} />
-                  <Route path="quizzes" element={<QuizzesPage />} />
-                  <Route path="assignments" element={<AssignmentsPage />} />
-                  <Route path="certificates" element={<CertificatesPage />} />
-                  <Route path="invoices" element={<InvoicesPage />} />
-                  <Route path="referrals" element={<ReferralsPage />} />
-                  <Route path="notifications" element={<NotificationsPage />} />
-                  <Route path="wallet" element={<WalletPage />} />
-                  <Route path="wishlist" element={<WishlistPage />} />
-                  <Route path="leaderboard" element={<LeaderboardPage />} />
-                  <Route path="peer-reviews" element={<PeerReviewsPage />} />
-                  <Route path="transcript" element={<TranscriptPage />} />
-                  <Route path="group-projects" element={<GroupProjectsPage />} />
-                  <Route path="attendance" element={<AttendancePage />} />
-                  <Route path="my-research" element={<MyResearchPage />} />
-                  <Route path="internships" element={<MyInternshipsPage />} />
-                  <Route path="analytics" element={<StudentAnalytics />} />
-                  <Route path="edumail" element={<EduMailPage />} />
-                  <Route path="mail" element={<MailPage />} />
-                  <Route path="workshops" element={<MyWorkshopsPage />} />
-                  <Route path="settings" element={<SettingsPage />} />
-                </Route>
-                {/* Instructor Portal */}
-                <Route path="/instructor" element={<InstructorLayout />}>
-                  <Route index element={<InstructorDashboard />} />
-                  <Route path="courses" element={<InstructorCourses />} />
-                  <Route path="courses/new" element={<CourseBuilder />} />
-                  <Route path="courses/:courseId" element={<CourseBuilder />} />
-                  <Route path="lessons" element={<InstructorLessons />} />
-                  <Route path="quizzes" element={<InstructorQuizzes />} />
-                  <Route path="assignments" element={<InstructorAssignments />} />
-                  <Route path="gradebook" element={<InstructorGradebook />} />
-                  <Route path="certificates" element={<InstructorCertificates />} />
-                  <Route path="revenue" element={<RevenueDashboard />} />
-                  <Route path="wallet" element={<InstructorWallet />} />
-                  <Route path="students" element={<InstructorStudents />} />
-                  <Route path="discussions" element={<InstructorDiscussions />} />
-                  <Route path="announcements" element={<InstructorAnnouncements />} />
-                  <Route path="research" element={<InstructorResearch />} />
-                  <Route path="internships" element={<InstructorInternships />} />
-                  <Route path="analytics" element={<InstructorAnalytics />} />
-                  <Route path="plagiarism" element={<InstructorPlagiarism />} />
-                  <Route path="posts" element={<InstructorPosts />} />
-                  <Route path="posts/new" element={<PostEditor />} />
-                  <Route path="posts/:postId/edit" element={<PostEditor />} />
-                  <Route path="notifications" element={<NotificationsPage />} />
-                </Route>
-                {/* Admin Panel */}
-                <Route path="/admin" element={<AdminLayout />}>
-                  <Route index element={<AdminDashboard />} />
-                  <Route path="users" element={<AdminUsers />} />
-                  <Route path="instructors" element={<AdminInstructors />} />
-                  <Route path="instructors/:tab" element={<AdminInstructors />} />
-                  <Route path="cms" element={<AdminCourses />} />
-                  <Route path="cms/:tab" element={<AdminCourses />} />
-                  <Route path="cms/courses/new" element={<CourseBuilder />} />
-                  <Route path="cms/courses/:courseId" element={<CourseBuilder />} />
-                  <Route path="setup" element={<AdminSetup />} />
-                  <Route path="setup/:tab" element={<AdminSetup />} />
-                  <Route path="payment" element={<AdminPayment />} />
-                  <Route path="payment/:tab" element={<AdminPayment />} />
-                  <Route path="orders" element={<AdminOrders />} />
-                  <Route path="ebooks" element={<AdminEbooks />} />
-                  <Route path="coupons" element={<AdminCoupons />} />
-                  <Route path="wallets" element={<AdminWallets />} />
-                  <Route path="pages" element={<AdminPages />} />
-                  <Route path="pages/:pageId" element={<PageEditor />} />
-                  <Route path="posts" element={<AdminPosts />} />
-                  <Route path="posts/new" element={<PostEditor />} />
-                  <Route path="posts/:postId/edit" element={<PostEditor />} />
-                  <Route path="media" element={<AdminMedia />} />
-                  <Route path="menus" element={<AdminMenus />} />
-                  <Route path="appearance" element={<AdminAppearance />} />
-                  <Route path="certificates" element={<AdminCertificates />} />
-                  <Route path="hero-slides" element={<AdminHeroSlides />} />
-                  <Route path="settings" element={<AdminSettings />} />
-                  <Route path="notifications" element={<NotificationsPage />} />
-                  <Route path="activity" element={<AdminActivity />} />
-                  <Route path="admin-management" element={<AdminManagement />} />
-                  <Route path="system-controls" element={<SystemControls />} />
-                  <Route path="events" element={<AdminEvents />} />
-                  <Route path="success-stories" element={<AdminSuccessStories />} />
-                  <Route path="learning-paths" element={<AdminLearningPaths />} />
-                  <Route path="id-card-settings" element={<AdminIdCardSettings />} />
-                  <Route path="id-card-management" element={<AdminIdCardManagement />} />
-                  <Route path="forum" element={<AdminForum />} />
-                  <Route path="students" element={<AdminStudents />} />
-                  <Route path="students/:id" element={<StudentDetail />} />
-                  <Route path="registrations" element={<AdminRegistrations />} />
-                  <Route path="site-content" element={<AdminSiteContent />} />
-                  <Route path="batches" element={<AdminBatches />} />
-                  <Route path="academic-calendar" element={<AdminAcademicCalendar />} />
-                  <Route path="grade-config" element={<AdminGradeConfig />} />
-                  <Route path="reviews" element={<AdminReviews />} />
-                  <Route path="live-classes" element={<AdminLiveClasses />} />
-                  <Route path="attendance" element={<AdminAttendance />} />
-                  <Route path="faculty" element={<AdminFaculty />} />
-                  <Route path="plagiarism" element={<AdminPlagiarism />} />
-                  <Route path="project-groups" element={<AdminProjectGroups />} />
-                  <Route path="internships" element={<AdminInternships />} />
-                  <Route path="research-papers" element={<AdminResearchPapers />} />
-                  <Route path="virtual-labs" element={<AdminVirtualLabs />} />
-                  <Route path="payment-plans" element={<AdminPaymentPlans />} />
-                  <Route path="currencies" element={<AdminCurrencies />} />
-                  <Route path="ai-chatbot" element={<AdminAiChatbot />} />
-                  <Route path="email-requests" element={<AdminEmailRequests />} />
-                  <Route path="mail" element={<AdminMailPage />} />
-                  <Route path="workshops" element={<AdminWorkshops />} />
-                  <Route path="sponsors" element={<AdminSponsors />} />
-                </Route>
-                <Route path="/learn/:courseSlug/:lessonId" element={<LessonPlayer />} />
-                <Route path="/quiz/:quizId" element={<QuizPlayer />} />
-                <Route path="/assignment/:assignmentId" element={<AssignmentSubmit />} />
-                <Route path="/read/:ebookId" element={<EbookReader />} />
-                {/* Static pages */}
-                <Route path="/about" element={<AboutPage />} />
-                <Route path="/contact" element={<ContactPage />} />
-                <Route path="/privacy" element={<PrivacyPage />} />
-                <Route path="/terms" element={<TermsPage />} />
-                <Route path="/become-instructor" element={<BecomeInstructor />} />
-                <Route path="/departments" element={<DepartmentsPage />} />
-                <Route path="/events" element={<EventsPage />} />
-                <Route path="/alumni" element={<AlumniPage />} />
-                <Route path="/faculty" element={<FacultyPage />} />
-                <Route path="/internships" element={<InternshipsPage />} />
-                <Route path="/internships/:id" element={<InternshipDetail />} />
-                <Route path="/research" element={<ResearchPapersPage />} />
-                <Route path="/research/submit" element={<ResearchSubmit />} />
-                <Route path="/research/:paperId" element={<ResearchPaperDetail />} />
-                <Route path="/research/:paperId/read" element={<ResearchPaperReader />} />
-                <Route path="/labs" element={<VirtualLabsPage />} />
-                <Route path="/workshops" element={<WorkshopsPage />} />
-                <Route path="/workshops/:slug" element={<WorkshopDetail />} />
-                <Route path="/register" element={<PublicRegistration />} />
-                <Route path="/verify-certificate" element={<VerifyCertificate />} />
-                <Route path="/register/:slug" element={<PublicRegistration />} />
-                {/* Forum */}
-                <Route path="/forum" element={<ForumHome />} />
-                <Route path="/forum/new" element={<CreateForumPost />} />
-                <Route path="/forum/:postId" element={<ForumPost />} />
-                {/* Dynamic CMS pages - must be before 404 */}
-                <Route path="/:slug" element={<DynamicPage />} />
-                <Route path="*" element={<NotFound />} />
-              </Routes>
-            </Suspense>
-          </ErrorBoundary>
-        );
-      };
-
-      return (
-        <QueryClientProvider client={queryClient}>
-          <ThemeProvider>
-            <AuthProvider>
-              <TooltipProvider delayDuration={300}>
-                <Toaster />
-                <Sonner />
-                <BrowserRouter future={{ v7_relativeSplatPath: true }}>
-                  <AppRoutes />
-                  <ChatWidget />
-                </BrowserRouter>
-              </TooltipProvider>
-            </AuthProvider>
-          </ThemeProvider>
-        </QueryClientProvider>
-      );
-    };
+            <ChatWidget />
+          </BrowserRouter>
+        </TooltipProvider>
+      </AuthProvider>
+    </ThemeProvider>
+  </QueryClientProvider>
+);
 
 export default App;
