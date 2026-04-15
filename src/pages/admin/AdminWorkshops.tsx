@@ -13,7 +13,7 @@ import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Plus, Edit, Trash2, Users, Calendar, Image, Upload, Search, X, GripVertical, BarChart3, TrendingUp, Clock, CheckCircle } from 'lucide-react';
+import { Plus, Edit, Trash2, Users, Calendar, Image, Upload, Search, X, GripVertical, BarChart3, TrendingUp, Clock, CheckCircle, Bell, Send, Video } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -37,6 +37,9 @@ export default function AdminWorkshops() {
   const [activeTab, setActiveTab] = useState('workshops');
   const [newLearnItem, setNewLearnItem] = useState('');
 
+  // Notification state
+  const [notifyWs, setNotifyWs] = useState<any>(null);
+  const [notifyForm, setNotifyForm] = useState({ title: '', message: '' });
   // Media picker state
   const [mediaPickerOpen, setMediaPickerOpen] = useState(false);
   const [mediaPickerTarget, setMediaPickerTarget] = useState<'thumbnail' | 'material'>('thumbnail');
@@ -315,7 +318,8 @@ export default function AdminWorkshops() {
                   </p>
                 </div>
                 <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={() => setViewRegs(ws.id)}><Users className="h-4 w-4" /></Button>
+                  <Button variant="outline" size="sm" onClick={() => setViewRegs(ws.id)} title="View Registrations"><Users className="h-4 w-4" /></Button>
+                  <Button variant="outline" size="sm" onClick={() => { setNotifyWs(ws); setNotifyForm({ title: '', message: '' }); }} title="Send Notification"><Bell className="h-4 w-4" /></Button>
                   <Button variant="outline" size="sm" onClick={() => openEdit(ws)}><Edit className="h-4 w-4" /></Button>
                   <Button variant="outline" size="sm" className="text-destructive" onClick={() => {
                     if (confirm('Delete this workshop?')) deleteMutation.mutate(ws.id);
@@ -624,6 +628,81 @@ export default function AdminWorkshops() {
               </TableBody>
             </Table>
           </ScrollArea>
+        </DialogContent>
+      </Dialog>
+
+      {/* Send Notification Dialog */}
+      <Dialog open={!!notifyWs} onOpenChange={(open) => { if (!open) setNotifyWs(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Bell className="h-5 w-5 text-primary" />
+              Notify Workshop Registrants
+            </DialogTitle>
+          </DialogHeader>
+          {notifyWs && (
+            <p className="text-sm text-muted-foreground -mt-2">
+              Sending to all registrants of <strong>{notifyWs.title}</strong>
+            </p>
+          )}
+          <div className="space-y-3">
+            <div>
+              <Label>Notification Title *</Label>
+              <Input
+                value={notifyForm.title}
+                onChange={(e) => setNotifyForm(p => ({ ...p, title: e.target.value }))}
+                placeholder="e.g. Workshop starts in 1 hour!"
+              />
+            </div>
+            <div>
+              <Label>Message *</Label>
+              <Textarea
+                value={notifyForm.message}
+                onChange={(e) => setNotifyForm(p => ({ ...p, message: e.target.value }))}
+                placeholder="Write your notification message..."
+                rows={4}
+              />
+            </div>
+            <Button
+              className="w-full gap-2"
+              disabled={!notifyForm.title.trim() || !notifyForm.message.trim()}
+              onClick={async () => {
+                try {
+                  // Get all registered user_ids for this workshop
+                  const { data: regs } = await supabase
+                    .from('workshop_registrations')
+                    .select('user_id, email')
+                    .eq('workshop_id', notifyWs.id)
+                    .eq('status', 'registered');
+
+                  const userIds = (regs || []).filter((r: any) => r.user_id).map((r: any) => r.user_id);
+
+                  if (userIds.length === 0) {
+                    toast.error('No registered users to notify');
+                    return;
+                  }
+
+                  // Import and use broadcastNotification
+                  const { broadcastNotificationWithEmail } = await import('@/lib/notifications');
+                  await broadcastNotificationWithEmail({
+                    userIds,
+                    type: 'workshop_notification',
+                    title: notifyForm.title.trim(),
+                    message: notifyForm.message.trim(),
+                    link: `/workshops/${notifyWs.slug || notifyWs.id}`,
+                    metadata: { workshop_id: notifyWs.id, workshop_title: notifyWs.title },
+                  });
+
+                  toast.success(`Notification sent to ${userIds.length} registrant${userIds.length > 1 ? 's' : ''}`);
+                  setNotifyWs(null);
+                } catch (err: any) {
+                  toast.error(err.message || 'Failed to send notification');
+                }
+              }}
+            >
+              <Send className="h-4 w-4" /> Send Notification
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
 

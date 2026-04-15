@@ -14,9 +14,16 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { CountdownTimer } from '@/components/workshop/CountdownTimer';
-import { Calendar, Clock, Users, Download, ExternalLink, CheckCircle, Video, BookOpen } from 'lucide-react';
+import { Calendar, Clock, Users, Download, ExternalLink, CheckCircle, Video, BookOpen, FileText, FileImage, FileArchive, File } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
+
+const fileIcon = (type: string) => {
+  if (['pdf'].includes(type)) return <FileText className="h-4 w-4 text-red-500" />;
+  if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].includes(type)) return <FileImage className="h-4 w-4 text-blue-500" />;
+  if (['zip', 'rar', '7z', 'tar', 'gz'].includes(type)) return <FileArchive className="h-4 w-4 text-amber-500" />;
+  return <File className="h-4 w-4 text-muted-foreground" />;
+};
 
 export default function WorkshopDetail() {
   const { slug } = useParams<{ slug: string }>();
@@ -30,14 +37,12 @@ export default function WorkshopDetail() {
   const { data: workshop, isLoading } = useQuery({
     queryKey: ['workshop', slug],
     queryFn: async () => {
-      // Try slug first, then fallback to ID lookup
       let { data, error } = await supabase
         .from('workshops')
         .select('*, instructor:user_profiles!workshops_instructor_id_fkey(id, full_name, avatar_url)')
         .eq('slug', slug!)
         .maybeSingle();
       if (!data) {
-        // Fallback: lookup by ID (for workshops with empty slug)
         const res = await supabase
           .from('workshops')
           .select('*, instructor:user_profiles!workshops_instructor_id_fkey(id, full_name, avatar_url)')
@@ -123,7 +128,7 @@ export default function WorkshopDetail() {
         },
       });
     } catch {
-      // Email is non-critical, don't block registration
+      // Email is non-critical
     }
   };
 
@@ -150,7 +155,6 @@ export default function WorkshopDetail() {
       setRegNumber(data.registration_number);
       queryClient.invalidateQueries({ queryKey: ['workshop-reg-count'] });
       toast.success('Registration successful!');
-      // Send confirmation email
       sendConfirmationEmail(data, workshop);
     },
     onError: (e: any) => toast.error(e.message),
@@ -162,6 +166,7 @@ export default function WorkshopDetail() {
   const startDt = new Date(`${workshop.start_date}T${workshop.start_time || '00:00'}`);
   const isOngoing = workshop.status === 'ongoing';
   const isUpcoming = startDt > new Date();
+  const isLive = isOngoing || (!isUpcoming && workshop.status !== 'completed' && workshop.status !== 'cancelled');
   const slotsLeft = workshop.max_participants ? workshop.max_participants - regCount : null;
   const isFull = slotsLeft !== null && slotsLeft <= 0;
   const isRegistered = !!myRegistration || registered;
@@ -186,6 +191,7 @@ export default function WorkshopDetail() {
                   <Badge>{workshop.status}</Badge>
                   <Badge variant="outline">{workshop.workshop_type === 'multi_day' ? 'Multi-Day' : 'One Day'}</Badge>
                   {workshop.is_featured && <Badge className="bg-amber-500">Featured</Badge>}
+                  {isLive && <Badge className="bg-green-500 text-white border-none animate-pulse">● LIVE NOW</Badge>}
                 </div>
                 <h1 className="text-2xl md:text-3xl font-heading font-bold mb-2">{workshop.title}</h1>
                 <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground mb-4">
@@ -195,6 +201,28 @@ export default function WorkshopDetail() {
                   <span className="flex items-center gap-1"><Users className="h-4 w-4" />{regCount} registered</span>
                 </div>
               </div>
+
+              {/* Start Workshop — Big CTA for live workshops */}
+              {isRegistered && isLive && workshop.meet_link && (
+                <Card className="border-green-500/40 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20">
+                  <CardContent className="p-5 flex flex-col sm:flex-row items-center justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                      <div className="h-12 w-12 rounded-full bg-green-500/20 flex items-center justify-center">
+                        <Video className="h-6 w-6 text-green-600" />
+                      </div>
+                      <div>
+                        <p className="font-heading font-semibold text-lg">Workshop is Live!</p>
+                        <p className="text-sm text-muted-foreground">Click to join the Google Meet session</p>
+                      </div>
+                    </div>
+                    <a href={workshop.meet_link} target="_blank" rel="noopener noreferrer">
+                      <Button size="lg" className="gap-2 bg-green-600 hover:bg-green-700 text-white shadow-lg">
+                        <Video className="h-5 w-5" /> Start Workshop
+                      </Button>
+                    </a>
+                  </CardContent>
+                </Card>
+              )}
 
               {isUpcoming && <CountdownTimer targetDate={startDt} />}
 
@@ -254,45 +282,63 @@ export default function WorkshopDetail() {
                     {sessions.map((s: any) => (
                       <div key={s.id} className="flex items-start gap-3 p-3 rounded-lg bg-muted/50">
                         <Calendar className="h-5 w-5 text-primary mt-0.5" />
-                        <div>
+                        <div className="flex-1">
                           <p className="font-medium text-sm">{s.title}</p>
                           <p className="text-xs text-muted-foreground">{format(new Date(s.session_date), 'MMM dd')} · {s.start_time?.slice(0, 5)} - {s.end_time?.slice(0, 5)}</p>
                           {s.description && <p className="text-xs mt-1">{s.description}</p>}
                         </div>
+                        {/* Session meet link */}
+                        {s.meet_link && isRegistered && (
+                          <a href={s.meet_link} target="_blank" rel="noopener noreferrer">
+                            <Button size="sm" variant="outline" className="gap-1 text-xs shrink-0">
+                              <Video className="h-3 w-3" /> Join
+                            </Button>
+                          </a>
+                        )}
                       </div>
                     ))}
                   </CardContent>
                 </Card>
               )}
 
-              {/* Materials (visible after registration) */}
+              {/* Materials — downloadable list for registered users */}
               {isRegistered && materials.length > 0 && (
                 <Card>
-                  <CardHeader><CardTitle className="text-lg">Materials</CardTitle></CardHeader>
+                  <CardHeader>
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <Download className="h-5 w-5" /> Materials ({materials.length})
+                    </CardTitle>
+                  </CardHeader>
                   <CardContent className="space-y-2">
                     {materials.map((m: any, i: number) => (
-                      <a key={i} href={m.url} target="_blank" rel="noopener noreferrer"
-                        className="flex items-center gap-2 p-2 rounded hover:bg-muted text-sm">
-                        <Download className="h-4 w-4 text-primary" />
-                        <span>{m.name}</span>
-                        <Badge variant="outline" className="ml-auto text-[10px]">{m.type || 'file'}</Badge>
+                      <a
+                        key={i}
+                        href={m.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        download
+                        className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted/50 transition-colors group"
+                      >
+                        {fileIcon(m.type || '')}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate group-hover:text-primary transition-colors">{m.name}</p>
+                          <p className="text-[10px] text-muted-foreground uppercase">{m.type || 'file'}</p>
+                        </div>
+                        <Button variant="outline" size="sm" className="gap-1 shrink-0 text-xs" onClick={(e) => e.stopPropagation()}>
+                          <Download className="h-3.5 w-3.5" /> Download
+                        </Button>
                       </a>
                     ))}
                   </CardContent>
                 </Card>
               )}
 
-              {/* Meet Link (only when ongoing + registered) */}
-              {isRegistered && (isOngoing || !isUpcoming) && workshop.meet_link && (
-                <Card className="border-green-500/30 bg-green-50/50 dark:bg-green-900/10">
-                  <CardContent className="p-4 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Video className="h-5 w-5 text-green-600" />
-                      <span className="font-medium">Join Live Session</span>
-                    </div>
-                    <a href={workshop.meet_link} target="_blank" rel="noopener noreferrer">
-                      <Button size="sm" className="gap-1"><ExternalLink className="h-3.5 w-3.5" />Join Now</Button>
-                    </a>
+              {/* Materials notice for non-registered */}
+              {!isRegistered && materials.length > 0 && (
+                <Card className="border-dashed">
+                  <CardContent className="p-4 flex items-center gap-3 text-sm text-muted-foreground">
+                    <Download className="h-5 w-5 shrink-0" />
+                    <span>{materials.length} material{materials.length > 1 ? 's' : ''} available after registration</span>
                   </CardContent>
                 </Card>
               )}
@@ -300,7 +346,7 @@ export default function WorkshopDetail() {
 
             {/* Sidebar */}
             <div className="space-y-6">
-              {/* Instructor from profile */}
+              {/* Instructor */}
               {instructor && (
                 <Card>
                   <CardContent className="p-5">
@@ -332,6 +378,15 @@ export default function WorkshopDetail() {
                   </div>
                 </CardContent>
               </Card>
+
+              {/* Start Workshop sidebar CTA */}
+              {isRegistered && isLive && workshop.meet_link && (
+                <a href={workshop.meet_link} target="_blank" rel="noopener noreferrer" className="block">
+                  <Button className="w-full gap-2 bg-green-600 hover:bg-green-700 text-white" size="lg">
+                    <Video className="h-5 w-5" /> Start Workshop
+                  </Button>
+                </a>
+              )}
 
               {/* Registration Form */}
               {isRegistered ? (
