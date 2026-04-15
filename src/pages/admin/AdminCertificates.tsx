@@ -11,12 +11,15 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Award, Plus, Trash2, Eye, Upload, Save, GripVertical, Italic, AlignLeft, AlignCenter, AlignRight, Download, Type, Image as ImageIcon, Copy, RotateCcw, Move, Maximize2 } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Award, Plus, Trash2, Eye, Upload, Save, GripVertical, Italic, AlignLeft, AlignCenter, AlignRight, Download, Type, Image as ImageIcon, Copy, RotateCcw, Move, Maximize2, MoreHorizontal, UserPlus, XCircle, Users } from 'lucide-react';
 import { useFileUpload } from '@/hooks/useFileUpload';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import type { CertificateField, CertificateData } from '@/lib/certificateRenderer';
 import { renderFieldsSync, preloadImage, getCachedImage, downloadCertificatePDF } from '@/lib/certificateRenderer';
+import { createNotification } from '@/lib/notifications';
 
 // ── Font system with handwritten/calligraphy fonts ──
 const FONT_FAMILIES = [
@@ -101,6 +104,16 @@ const AdminCertificates = () => {
   const [customFieldCounter, setCustomFieldCounter] = useState(1);
   const [fontsLoaded, setFontsLoaded] = useState(false);
 
+  // Manual issue state
+  const [manualIssueOpen, setManualIssueOpen] = useState(false);
+  const [manualStudentSearch, setManualStudentSearch] = useState('');
+  const [manualSelectedStudent, setManualSelectedStudent] = useState<string | null>(null);
+  const [manualSelectedCourse, setManualSelectedCourse] = useState<string | null>(null);
+  // Bulk issue state
+  const [bulkIssueOpen, setBulkIssueOpen] = useState(false);
+  const [bulkCourseId, setBulkCourseId] = useState<string | null>(null);
+  const [bulkIssuing, setBulkIssuing] = useState(false);
+
   // Load Google Fonts
   useEffect(() => {
     if (document.querySelector('link[data-cert-fonts]')) { setFontsLoaded(true); return; }
@@ -143,6 +156,108 @@ const AdminCertificates = () => {
     },
   });
 
+  // Students for manual issue
+  const { data: searchedStudents = [] } = useQuery({
+    queryKey: ['cert-student-search', manualStudentSearch],
+    enabled: manualIssueOpen && manualStudentSearch.length >= 2,
+    queryFn: async () => {
+      const { data } = await supabase.from('user_profiles').select('id, full_name, avatar_url, roll_id').ilike('full_name', `%${manualStudentSearch}%`).limit(20);
+      return data ?? [];
+    },
+  });
+
+  const generateCertNumber = () => `CERT-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+
+  const manualIssueMutation = useMutation({
+    mutationFn: async () => {
+      if (!manualSelectedStudent || !manualSelectedCourse) throw new Error('Select student and course');
+      const { data: existing } = await supabase.from('certificates').select('id').eq('user_id', manualSelectedStudent).eq('course_id', manualSelectedCourse).maybeSingle();
+      if (existing) throw new Error('Certificate already exists for this student/course');
+      const certNumber = generateCertNumber();
+      const { error } = await supabase.from('certificates').insert({
+        user_id: manualSelectedStudent,
+        course_id: manualSelectedCourse,
+        certificate_number: certNumber,
+        issued_at: new Date().toISOString(),
+      });
+      if (error) throw error;
+      await createNotification({
+        userId: manualSelectedStudent,
+        type: 'certificate',
+        title: '🎉 Certificate Issued!',
+        message: 'A certificate has been manually issued to you by an administrator.',
+        link: '/dashboard/certificates',
+      });
+    },
+    onSuccess: () => {
+      toast.success('Certificate issued!');
+      setManualIssueOpen(false);
+      setManualSelectedStudent(null);
+      setManualSelectedCourse(null);
+      setManualStudentSearch('');
+      queryClient.invalidateQueries({ queryKey: ['all-issued-certificates'] });
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const revokeMutation = useMutation({
+    mutationFn: async (cert: any) => {
+      const { error } = await supabase.from('certificates').delete().eq('id', cert.id);
+      if (error) throw error;
+      await createNotification({
+        userId: cert.user_id,
+        type: 'certificate',
+        title: '⚠️ Certificate Revoked',
+        message: `Your certificate #${cert.certificate_number} has been revoked by an administrator.`,
+        link: '/dashboard/certificates',
+      });
+    },
+    onSuccess: () => {
+      toast.success('Certificate revoked');
+      queryClient.invalidateQueries({ queryKey: ['all-issued-certificates'] });
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const handleBulkIssue = async () => {
+    if (!bulkCourseId) return;
+    setBulkIssuing(true);
+    try {
+      const { data: enrollments } = await supabase.from('enrollments').select('user_id, progress_pct').eq('course_id', bulkCourseId);
+      if (!enrollments?.length) { toast.info('No enrollments for this course'); setBulkIssuing(false); return; }
+      const { data: existingCerts } = await supabase.from('certificates').select('user_id').eq('course_id', bulkCourseId);
+      const existingSet = new Set((existingCerts ?? []).map(c => c.user_id));
+      const eligible = enrollments.filter(e => (e.progress_pct ?? 0) >= 100 && !existingSet.has(e.user_id));
+      if (eligible.length === 0) { toast.info('No eligible students without certificates'); setBulkIssuing(false); return; }
+      let issued = 0;
+      for (const e of eligible) {
+        const certNumber = generateCertNumber();
+        const { error } = await supabase.from('certificates').insert({
+          user_id: e.user_id,
+          course_id: bulkCourseId,
+          certificate_number: certNumber,
+          issued_at: new Date().toISOString(),
+        });
+        if (!error) {
+          issued++;
+          await createNotification({
+            userId: e.user_id,
+            type: 'certificate',
+            title: '🎉 Certificate Earned!',
+            message: 'A certificate has been issued for your completed course.',
+            link: '/dashboard/certificates',
+          });
+        }
+      }
+      toast.success(`${issued} certificate(s) issued!`);
+      queryClient.invalidateQueries({ queryKey: ['all-issued-certificates'] });
+      setBulkIssueOpen(false);
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setBulkIssuing(false);
+    }
+  };
   // Preload background image when URL changes
   useEffect(() => {
     if (backgroundUrl) {
@@ -180,12 +295,12 @@ const AdminCertificates = () => {
         setEditingId(data.id);
       }
       if (editingId) {
-        await supabase.from('courses').update({ cert_template_id: null } as any).eq('cert_template_id', editingId);
+        await supabase.from('courses').update({ cert_template_id: null }).eq('cert_template_id', editingId);
       }
       const templateId = editingId || (await supabase.from('certificate_templates').select('id').eq('name', templateName).single()).data?.id;
       if (templateId && assignedCourses.length > 0) {
         for (const cid of assignedCourses) {
-          await supabase.from('courses').update({ cert_template_id: templateId } as any).eq('id', cid);
+          await supabase.from('courses').update({ cert_template_id: templateId }).eq('id', cid);
         }
       }
     },
@@ -199,7 +314,7 @@ const AdminCertificates = () => {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      await supabase.from('courses').update({ cert_template_id: null } as any).eq('cert_template_id', id);
+      await supabase.from('courses').update({ cert_template_id: null }).eq('cert_template_id', id);
       const { error } = await supabase.from('certificate_templates').delete().eq('id', id);
       if (error) throw error;
     },
@@ -800,6 +915,15 @@ const AdminCertificates = () => {
 
         {/* ── Issued Certificates Tab ── */}
         <TabsContent value="issued" className="space-y-4">
+          <div className="flex gap-2 flex-wrap">
+            <Button onClick={() => setManualIssueOpen(true)} className="gap-2">
+              <UserPlus className="h-4 w-4" /> Manual Issue
+            </Button>
+            <Button variant="outline" onClick={() => setBulkIssueOpen(true)} className="gap-2">
+              <Users className="h-4 w-4" /> Bulk Issue
+            </Button>
+          </div>
+
           {certsLoading ? (
             <div className="space-y-3">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}</div>
           ) : issuedCerts.length === 0 ? (
@@ -818,6 +942,7 @@ const AdminCertificates = () => {
                     <TableHead className="text-center">Score</TableHead>
                     <TableHead className="text-center">Downloads</TableHead>
                     <TableHead className="text-right">Issued</TableHead>
+                    <TableHead className="w-10" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -835,12 +960,93 @@ const AdminCertificates = () => {
                       <TableCell className="text-right text-xs text-muted-foreground">
                         {cert.issued_at ? format(new Date(cert.issued_at), 'MMM dd, yyyy') : '—'}
                       </TableCell>
+                      <TableCell>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8"><MoreHorizontal className="h-4 w-4" /></Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem className="text-destructive" onClick={() => { if (confirm('Revoke this certificate? The student will be notified.')) revokeMutation.mutate(cert); }}>
+                              <XCircle className="h-4 w-4 mr-2" /> Revoke Certificate
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
             </div>
           )}
+
+          {/* Manual Issue Dialog */}
+          <Dialog open={manualIssueOpen} onOpenChange={setManualIssueOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Manual Certificate Issuance</DialogTitle>
+                <DialogDescription>Issue a certificate to a student manually.</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div>
+                  <Label className="text-sm">Search Student</Label>
+                  <Input placeholder="Type student name..." value={manualStudentSearch} onChange={e => setManualStudentSearch(e.target.value)} />
+                  {searchedStudents.length > 0 && (
+                    <div className="max-h-40 overflow-y-auto border rounded-lg mt-2 divide-y">
+                      {searchedStudents.map((s: any) => (
+                        <button key={s.id} className={`w-full text-left px-3 py-2 text-sm hover:bg-muted/50 flex items-center gap-2 ${manualSelectedStudent === s.id ? 'bg-primary/10' : ''}`} onClick={() => setManualSelectedStudent(s.id)}>
+                          <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center text-xs font-bold shrink-0 overflow-hidden">
+                            {s.avatar_url ? <img src={s.avatar_url} alt="" className="w-full h-full object-cover" /> : s.full_name?.[0]?.toUpperCase() || '?'}
+                          </div>
+                          <span>{s.full_name}</span>
+                          {s.roll_id && <span className="text-xs text-muted-foreground ml-auto">{s.roll_id}</span>}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <Label className="text-sm">Select Course</Label>
+                  <Select value={manualSelectedCourse || ''} onValueChange={v => setManualSelectedCourse(v)}>
+                    <SelectTrigger><SelectValue placeholder="Choose a course" /></SelectTrigger>
+                    <SelectContent>
+                      {courses.map((c: any) => (
+                        <SelectItem key={c.id} value={c.id}>{c.title}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button onClick={() => manualIssueMutation.mutate()} disabled={!manualSelectedStudent || !manualSelectedCourse || manualIssueMutation.isPending} className="w-full gap-2">
+                  <Award className="h-4 w-4" /> {manualIssueMutation.isPending ? 'Issuing...' : 'Issue Certificate'}
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+
+          {/* Bulk Issue Dialog */}
+          <Dialog open={bulkIssueOpen} onOpenChange={setBulkIssueOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Bulk Certificate Issuance</DialogTitle>
+                <DialogDescription>Issue certificates to all eligible students (100% completion) in a course who don't have one yet.</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div>
+                  <Label className="text-sm">Select Course</Label>
+                  <Select value={bulkCourseId || ''} onValueChange={v => setBulkCourseId(v)}>
+                    <SelectTrigger><SelectValue placeholder="Choose a course" /></SelectTrigger>
+                    <SelectContent>
+                      {courses.map((c: any) => (
+                        <SelectItem key={c.id} value={c.id}>{c.title}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button onClick={handleBulkIssue} disabled={!bulkCourseId || bulkIssuing} className="w-full gap-2">
+                  <Users className="h-4 w-4" /> {bulkIssuing ? 'Issuing...' : 'Issue to All Eligible'}
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
         </TabsContent>
       </Tabs>
     </div>

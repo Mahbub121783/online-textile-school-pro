@@ -237,6 +237,34 @@ async function autoIssueCertificate(userId: string, courseId: string) {
       message: `Congratulations! You earned a certificate for completing "${course.title}".`,
       link: '/dashboard/certificates',
     });
+
+    // Send certificate email
+    try {
+      const { data: userProfile } = await supabase
+        .from('user_profiles')
+        .select('id')
+        .eq('id', userId)
+        .single();
+      if (userProfile) {
+        const { data: authUser } = await supabase.auth.admin?.getUserById?.(userId) || {};
+        const email = (authUser as any)?.user?.email;
+        if (email) {
+          await supabase.functions.invoke('send-smtp-email', {
+            body: {
+              templateKey: 'certificate_issued',
+              recipientEmail: email,
+              placeholders: {
+                student_name: 'Student',
+                course_title: course.title,
+                certificate_number: certNumber,
+              },
+            },
+          });
+        }
+      }
+    } catch (emailErr) {
+      console.warn('Certificate email send failed (non-critical):', emailErr);
+    }
   } catch (err) {
     console.error('Certificate auto-issue error:', err);
   }

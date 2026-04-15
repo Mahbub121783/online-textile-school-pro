@@ -79,7 +79,7 @@ const CourseBuilder = () => {
         certificate_threshold_pct: String(course.certificate_threshold_pct ?? 100),
         revenue_share_pct: String(course.revenue_share_pct ?? 70),
         review_status: course.review_status || 'draft',
-        cert_template_id: (course as any).cert_template_id || '',
+        cert_template_id: course.cert_template_id || '',
       });
     }
   }, [course]);

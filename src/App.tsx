@@ -151,6 +151,7 @@ const WorkshopDetail = lazy(() => import("./pages/static/WorkshopDetail"));
 const MyWorkshopsPage = lazy(() => import("./pages/dashboard/MyWorkshopsPage"));
 const AdminWorkshops = lazy(() => import("./pages/admin/AdminWorkshops"));
 const AdminSponsors = lazy(() => import("./pages/admin/AdminSponsors"));
+const VerifyCertificate = lazy(() => import("./pages/verify/VerifyCertificate"));
 
 // Optimized QueryClient with aggressive caching
 const queryClient = new QueryClient({
@@ -338,6 +339,7 @@ const App = () => (
                 <Route path="/workshops" element={<WorkshopsPage />} />
                 <Route path="/workshops/:slug" element={<WorkshopDetail />} />
                 <Route path="/register" element={<PublicRegistration />} />
+                <Route path="/verify-certificate" element={<VerifyCertificate />} />
                 <Route path="/register/:slug" element={<PublicRegistration />} />
                 {/* Forum */}
                 <Route path="/forum" element={<ForumHome />} />
