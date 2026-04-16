@@ -1,33 +1,40 @@
-import { useEffect, useState, useRef } from 'react'; // v5
-import { useInView } from 'react-intersection-observer';
+import { useEffect, useState, useRef } from 'react';
 import { Users, BookOpen, GraduationCap, Star } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
 const CountUp = ({ end, decimal, suffix }: { end: number; decimal?: boolean; suffix: string }) => {
   const [count, setCount] = useState(0);
-  const { ref, inView } = useInView({ triggerOnce: true, threshold: 0.3 });
+  const ref = useRef<HTMLDivElement>(null);
   const hasAnimated = useRef(false);
 
   useEffect(() => {
-    if (inView && !hasAnimated.current) {
-      hasAnimated.current = true;
-      const duration = 2000;
-      const steps = 60;
-      const stepValue = end / steps;
-      let current = 0;
-      const timer = setInterval(() => {
-        current += stepValue;
-        if (current >= end) {
-          setCount(end);
-          clearInterval(timer);
-        } else {
-          setCount(current);
+    const el = ref.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting && !hasAnimated.current) {
+          hasAnimated.current = true;
+          const duration = 2000;
+          const steps = 60;
+          const stepValue = end / steps;
+          let current = 0;
+          const timer = setInterval(() => {
+            current += stepValue;
+            if (current >= end) {
+              setCount(end);
+              clearInterval(timer);
+            } else {
+              setCount(current);
+            }
+          }, duration / steps);
         }
-      }, duration / steps);
-      return () => clearInterval(timer);
-    }
-  }, [inView, end]);
+      },
+      { threshold: 0.3 }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [end]);
 
   return (
     <div ref={ref}>
