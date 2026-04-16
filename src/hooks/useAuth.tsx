@@ -6,6 +6,7 @@ interface AuthContextType {
   user: User | null;
   session: Session | null;
   loading: boolean;
+  isReady: boolean;
   profile: any | null;
   roles: string[];
   isSuperAdmin: boolean;
@@ -16,6 +17,7 @@ const AuthContext = createContext<AuthContextType>({
   user: null,
   session: null,
   loading: true,
+  isReady: false,
   profile: null,
   roles: [],
   isSuperAdmin: false,
@@ -37,6 +39,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isReady, setIsReady] = useState(false);
   const [profile, setProfile] = useState<any>(null);
   const [roles, setRoles] = useState<string[]>([]);
 
@@ -54,11 +57,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           setProfile(d.profile);
           setRoles(d.roles);
           setLoading(false);
+          setIsReady(true);
         }).catch(() => {
-          if (mounted) setLoading(false);
+          if (mounted) { setLoading(false); setIsReady(true); }
         });
       } else {
         setLoading(false);
+        setIsReady(true);
       }
     });
 
@@ -93,7 +98,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, session, loading, profile, roles, isSuperAdmin: roles.includes('super_admin'), signOut }}>
+    <AuthContext.Provider value={{ user, session, loading, isReady, profile, roles, isSuperAdmin: roles.includes('super_admin'), signOut }}>
       {children}
     </AuthContext.Provider>
   );

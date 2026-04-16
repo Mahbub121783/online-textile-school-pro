@@ -7,11 +7,11 @@ import NotificationBell from '@/components/layout/NotificationBell';
 import ErrorBoundary from '@/components/ErrorBoundary';
 
 const AdminLayout = () => {
-  const { user, roles, loading } = useAuth();
+  const { user, roles, loading, isReady } = useAuth();
   const location = useLocation();
   useAdminRealtime();
 
-  if (loading) {
+  if (loading || !isReady) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-pulse text-muted-foreground">Loading...</div>

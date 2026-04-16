@@ -8,11 +8,11 @@ import NotificationBell from '@/components/layout/NotificationBell';
 import ErrorBoundary from '@/components/ErrorBoundary';
 
 const DashboardLayout = () => {
-  const { user, loading } = useAuth();
+  const { user, loading, isReady } = useAuth();
   const location = useLocation();
   useStudentRealtime();
 
-  if (loading) {
+  if (loading || !isReady) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-pulse text-muted-foreground">Loading...</div>
