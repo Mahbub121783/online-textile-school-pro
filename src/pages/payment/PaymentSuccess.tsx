@@ -41,6 +41,22 @@ const PaymentSuccess = () => {
       if (data?.status === 'COMPLETED') {
         setStatus('success');
         clearCart();
+
+        // Fire Meta Purchase event with real order data
+        try {
+          trackMetaEvent(
+            'Purchase',
+            {
+              value: Number(data.amount ?? 0),
+              currency: data.currency || 'BDT',
+              order_id: invoiceId,
+              content_ids: data.item_ids || [invoiceId],
+              content_type: 'product',
+            },
+            user?.email ? { email: user.email, externalId: user.id } : undefined,
+          );
+        } catch {}
+
         if (user?.id) {
           ensureStudentIdCard(user.id);
           // Send payment confirmation notification + email
