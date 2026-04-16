@@ -10,7 +10,8 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { Save, Search, RefreshCw, Globe, ExternalLink } from 'lucide-react';
+import { Save, Search, RefreshCw, Globe, ExternalLink, Activity } from 'lucide-react';
+import { trackMetaEvent, configureMetaPixel } from '@/lib/metaPixel';
 
 const DEFAULT_KEYS = [
   { key: 'site_name', label: 'Site Name', type: 'text' },
