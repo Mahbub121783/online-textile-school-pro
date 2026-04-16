@@ -2,7 +2,7 @@ name: Deploy Website
 on:
   push:
     branches:
-      - main
+      - main # Tomar branch name jodi onno kichu hoy (e.g. master), seta ekhane likhbe
 
 jobs:
   build-and-deploy:
@@ -28,7 +28,9 @@ jobs:
           server: ${{ secrets.FTP_SERVER }}
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
-          local-dir: ./dist/
+          # Lovable/Vite er build folder holo distk
+          local-dir: ./dist/ 
+          # Tomar specific domain folder path
           server-dir: ./onlinetextileschool.com/
-          # Remove stale hashed assets from previous builds
+          # Optional: Purono file delete kore fresh deploy korte chaile nicher line-ti use koro
           dangerous-clean-slate: true
