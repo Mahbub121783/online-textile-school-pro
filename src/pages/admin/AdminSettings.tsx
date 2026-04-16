@@ -97,18 +97,26 @@ const AdminSettings = () => {
       await upsertSetting('meta_pixel_id', pixelId.trim());
       await upsertSetting('meta_pixel_test_code', pixelTestCode.trim());
       await upsertSetting('meta_pixel_enabled', pixelEnabled ? 'true' : 'false');
+      await upsertSetting('meta_pixel_require_consent', pixelRequireConsent ? 'true' : 'false');
       await supabase.from('admin_activity_log').insert({ admin_id: user!.id, action: 'Updated Meta Pixel config', target_type: 'tracking', target_id: 'meta_pixel' });
     },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['admin-site-settings'] }); toast.success('Meta Pixel settings saved'); },
     onError: () => toast.error('Failed to save Meta Pixel settings'),
   });
 
-  const handlePixelTest = () => {
+  const handlePixelDiagnostic = async () => {
+    setDiagRunning(true);
+    setDiagResults(null);
     try {
-      trackMetaEvent('PageView', { test: true, source: 'admin_test_button' });
-      toast.success('Test event sent — check Meta Events Manager → Test Events tab');
+      const results = await runMetaPixelDiagnostic();
+      setDiagResults(results);
+      const allOk = results.every((r) => r.ok);
+      if (allOk) toast.success('All checks passed — events flowing to Meta');
+      else toast.warning('Some checks failed — review the table below');
     } catch (e: any) {
-      toast.error('Failed: ' + (e?.message || 'unknown error'));
+      toast.error('Diagnostic failed: ' + (e?.message || 'unknown'));
+    } finally {
+      setDiagRunning(false);
     }
   };
 
