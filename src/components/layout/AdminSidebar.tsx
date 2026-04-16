@@ -71,6 +71,7 @@ const engagementSubItems = [
   { title: 'Forum', url: '/admin/forum', icon: MessageSquare },
   { title: 'AI Chatbot', url: '/admin/ai-chatbot', icon: Activity },
   { title: 'Workshops', url: '/admin/workshops', icon: Presentation },
+  { title: 'Popups', url: '/admin/popups', icon: Bell },
 ];
 
 const careerSubItems = [

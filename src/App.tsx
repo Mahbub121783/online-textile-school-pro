@@ -157,6 +157,8 @@ const MyWorkshopsPage = lazy(() => import("./pages/dashboard/MyWorkshopsPage"));
 const AdminWorkshops = lazy(() => import("./pages/admin/AdminWorkshops"));
 const AdminSponsors = lazy(() => import("./pages/admin/AdminSponsors"));
 const VerifyCertificate = lazy(() => import("./pages/verify/VerifyCertificate"));
+const AdminPopups = lazy(() => import("./pages/admin/AdminPopups"));
+const PopupAnalytics = lazy(() => import("./pages/admin/popups/PopupAnalytics"));
 
 // Optimized QueryClient with aggressive caching
 const queryClient = new QueryClient({
@@ -315,6 +317,8 @@ const AppRoutes = () => {
             <Route path="mail" element={<AdminMailPage />} />
             <Route path="workshops" element={<AdminWorkshops />} />
             <Route path="sponsors" element={<AdminSponsors />} />
+            <Route path="popups" element={<AdminPopups />} />
+            <Route path="popups/:id/analytics" element={<PopupAnalytics />} />
           </Route>
           <Route path="/learn/:courseSlug/:lessonId" element={<LessonPlayer />} />
           <Route path="/quiz/:quizId" element={<QuizPlayer />} />
@@ -365,6 +369,7 @@ const App = () => (
             <Sonner />
             <BrowserRouter future={{ v7_relativeSplatPath: true }}>
               <AppRoutes />
+              <PopupRenderer />
               <ChatWidget />
               <UpdatePrompt />
               <CookieConsentBanner />
