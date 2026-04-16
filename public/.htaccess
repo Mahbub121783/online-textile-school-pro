@@ -8,6 +8,16 @@ RewriteEngine On
   Header set Expires "0"
 </FilesMatch>
 
+# ── Social media crawler proxy → og-meta edge function ──
+# When a bot (WhatsApp/Facebook/Twitter/LinkedIn/Telegram/Slack/Discord/Pinterest) requests a page,
+# proxy to the og-meta edge function which returns proper OG tags with correct image, title, description.
+<IfModule mod_rewrite.c>
+  RewriteCond %{HTTP_USER_AGENT} (facebookexternalhit|Facebot|Twitterbot|LinkedInBot|WhatsApp|TelegramBot|Slackbot|Discordbot|Pinterest|redditbot|SkypeUriPreview|vkShare|W3C_Validator|Applebot|bingbot|Googlebot-Image) [NC]
+  RewriteCond %{REQUEST_URI} !^/og-default\.png$
+  RewriteCond %{REQUEST_URI} !\.(png|jpe?g|webp|gif|svg|ico|css|js|woff2?|ttf|json|xml|txt|pdf|mp4)$ [NC]
+  RewriteRule ^(.*)$ https://kaiiyssrwkapromkfidv.supabase.co/functions/v1/og-meta?path=/$1 [P,L]
+</IfModule>
+
 # ── Long-term cache for hashed Vite assets ──
 <IfModule mod_headers.c>
   <FilesMatch "\.[0-9a-f]{8}\.(js|css|woff2?|ttf|eot|svg|png|jpe?g|webp|avif|gif|ico)$">
