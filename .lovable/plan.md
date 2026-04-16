@@ -1,57 +1,47 @@
 
 
-# Core Web Vitals Optimization Plan
+# Fix PWA App Version & Update System
 
-## Problems Identified
-
-### LCP (Largest Contentful Paint)
-1. **Primary fonts (Sora, DM Sans) loaded via `preload as="style"` trick** — the browser doesn't start downloading actual font files until the CSS is parsed. No `font-display: swap` fallback inline.
-2. **Certificate/decorative fonts loaded on every page** (JetBrains Mono, Great Vibes, Dancing Script, etc.) — 14 font families loaded globally even though they're only used in certificate rendering and blog pages.
-3. **No inline critical CSS** — the entire Tailwind stylesheet must download before first paint.
-4. **Hero slider images not preloaded** — the LCP element (hero background image) waits for JS to execute a Supabase query before the browser even knows about the image URL.
-
-### CLS (Cumulative Layout Shift)
-1. **Hero slider has no aspect-ratio or min-height on initial render** — uses `h-[60vh] md:h-[80vh]` which is fine, but the `SectionFallback` spinner shown by `LazySection` wrappers has no fixed height, causing content to shift as each section loads.
-2. **UtilityBar hidden on mobile (`hidden md:block`)** — no reserved space mismatch, but Header itself has no fixed height, so content below can shift when fonts load.
-3. **FeaturedCourses, EbookShowcase, etc.** — skeleton loading states exist but the outer section wrapper doesn't reserve a minimum height, causing a jump from spinner to content.
-4. **Font swap not specified** — when Sora/DM Sans load late, text reflows and shifts layout.
+## Root Cause
+The app has a `manifest.json` with `display: standalone` (making it installable), but:
+1. **No service worker** — the browser has no mechanism to check for updates
+2. **No version tracking** — no way to detect when a new version is deployed
+3. **No update prompt** — users who installed the app get permanently stale content
 
 ## What Will Change
 
-### 1. Font Loading Optimization (index.html)
-- Add `&display=swap` to Google Fonts URLs (forces `font-display: swap`)
-- Move decorative/certificate fonts to a separate lazy-loaded stylesheet that only loads after page is interactive
-- Add `<link rel="preload">` for the actual Sora woff2 font file (the LCP text element) so the browser fetches it immediately
+### 1. Add vite-plugin-pwa with Proper Configuration
+Install `vite-plugin-pwa` and configure it in `vite.config.ts` with:
+- `registerType: "prompt"` — notifies users when a new version is available instead of silently updating
+- `devOptions: { enabled: false }` — prevents issues in the Lovable preview
+- `navigateFallbackDenylist: [/^\/~oauth/]` — protects auth routes
+- Proper icon set (192px + 512px) in the manifest
+- Cache strategy that ensures HTML is always network-first
 
-### 2. Critical CSS Inlining (index.html)
-- Inline a minimal `<style>` block in `<head>` with: body background color, font-family fallback, and the hero section's gradient background color — so the page is not blank white during CSS load
+### 2. Create an Update Prompt Component
+Build `src/components/UpdatePrompt.tsx` — a toast/banner that appears when a new service worker is detected, with a "Update Now" button that reloads the app to the latest version.
 
-### 3. Reserve Space for Lazy Sections (Index.tsx)
-- Give `LazySection` a `min-h-[300px]` (or section-appropriate) to prevent CLS when sections load in
-- Give `SectionFallback` a matching minimum height so the spinner doesn't collapse to zero
+### 3. Add Service Worker Registration Guard in main.tsx
+Prevent service worker registration inside iframes or Lovable preview domains to avoid editor conflicts.
 
-### 4. Hero Slider CLS Prevention (HeroSlider.tsx)
-- The hero already has `h-[60vh] md:h-[80vh]` which is good
-- Add `fetchpriority="high"` and `loading="eager"` to the hero image `<img>` tag so the browser prioritizes the LCP image
-- Add a CSS `aspect-ratio` fallback for the hero container
+### 4. Update manifest.json
+Add a 512px icon (required for full installability on Android), and ensure all fields are correct.
 
-### 5. Font-display and Fallback Stack (index.css)
-- Add explicit `font-display: swap` via `@font-face` override for Sora and DM Sans
-- Ensure the Tailwind `fontFamily` config includes proper system font fallbacks to minimize reflow
-
-### 6. Image Optimization Hints
-- Add `fetchpriority="high"` to the hero slider image (LCP candidate)
-- Add `loading="lazy"` to all below-fold images (FeaturedCourses thumbnails, instructor photos, etc.) — verify these already have it
+### 5. Cache-Control for Service Worker
+Update `.htaccess` to set `Cache-Control: no-cache` on `sw.js` so the browser always checks for a new service worker file on each visit.
 
 ## Files Changed
 
 | File | Change |
 |------|--------|
-| `index.html` | Preload primary font woff2, add `display=swap`, defer decorative fonts, inline critical CSS |
-| `src/index.css` | Add `@font-face` `font-display: swap` overrides for Sora and DM Sans |
-| `src/pages/Index.tsx` | Add `min-h` to `LazySection` and `SectionFallback` to reserve space |
-| `src/components/features/home/HeroSlider.tsx` | Add `fetchpriority="high"` and `loading="eager"` to hero image |
-| `src/components/features/home/FeaturedCourses.tsx` | Add `min-h` to section wrapper |
-| `src/components/features/home/EbookShowcase.tsx` | Add `min-h` to section wrapper |
-| `src/components/features/home/TestimonialsSection.tsx` | Add `min-h` to section wrapper |
+| `vite.config.ts` | Add `VitePWA` plugin with prompt-based update |
+| `src/components/UpdatePrompt.tsx` | **New** — "New version available" banner with reload button |
+| `src/main.tsx` | Add iframe/preview guard for SW registration |
+| `src/App.tsx` | Mount `UpdatePrompt` component |
+| `public/manifest.json` | Add 512px icon, verify fields |
+| `public/.htaccess` | Add no-cache rule for `sw.js` |
+
+## Important Note
+- PWA install and update features will only work on the **published/deployed** version, not in the Lovable editor preview
+- A 512px icon PNG (`logo-512.png`) needs to be added to `/public/` — I'll create a placeholder or you can provide one
 
