@@ -25,6 +25,28 @@ const truncate = (s: string, n = 200) => {
   return clean.length > n ? clean.slice(0, n - 1) + "…" : clean;
 };
 
+// Normalize image URL: ensure absolute https URL, optimize Cloudinary to 1200x630
+const normalizeImageUrl = (url?: string | null): string => {
+  if (!url || typeof url !== "string") return DEFAULT_IMAGE;
+  let clean = url.trim();
+  if (!clean) return DEFAULT_IMAGE;
+
+  // Make absolute
+  if (clean.startsWith("//")) clean = "https:" + clean;
+  else if (clean.startsWith("/")) clean = SITE_URL + clean;
+  else if (!/^https?:\/\//i.test(clean)) clean = SITE_URL + "/" + clean;
+
+  // Cloudinary: inject c_fill,w_1200,h_630 transform for guaranteed 1200x630 output
+  if (clean.includes("res.cloudinary.com") && clean.includes("/upload/")) {
+    // Skip if already has a w_/h_ transform we set
+    if (!/\/upload\/[^/]*[wh]_\d+/.test(clean)) {
+      clean = clean.replace("/upload/", "/upload/c_fill,w_1200,h_630,q_auto,f_auto/");
+    }
+  }
+
+  return clean;
+};
+
 interface MetaPayload {
   title: string;
   description: string;
@@ -54,6 +76,7 @@ const renderHtml = (m: MetaPayload) => {
 <meta property="og:url" content="${url}" />
 <meta property="og:image" content="${image}" />
 <meta property="og:image:secure_url" content="${image}" />
+<meta property="og:image:type" content="image/jpeg" />
 <meta property="og:image:width" content="1200" />
 <meta property="og:image:height" content="630" />
 <meta property="og:image:alt" content="${title}" />
@@ -113,7 +136,7 @@ Deno.serve(async (req) => {
             meta = {
               title: `${data.meta_title || data.title} — ${SITE_NAME}`,
               description: truncate(data.meta_description || data.short_description || data.description || DEFAULT_DESC),
-              image: data.og_image_url || data.thumbnail_url || DEFAULT_IMAGE,
+              image: normalizeImageUrl(data.og_image_url || data.thumbnail_url),
               url: fullUrl,
               type: "article",
             };
@@ -128,7 +151,7 @@ Deno.serve(async (req) => {
             meta = {
               title: `${data.title} — ${SITE_NAME}`,
               description: truncate(data.short_description || data.description || DEFAULT_DESC),
-              image: (data as any).banner_url || data.thumbnail_url || DEFAULT_IMAGE,
+              image: normalizeImageUrl((data as any).banner_url || data.thumbnail_url),
               url: fullUrl,
               type: "article",
             };
@@ -143,7 +166,7 @@ Deno.serve(async (req) => {
             meta = {
               title: `${data.title} — ${SITE_NAME}`,
               description: truncate(data.description || DEFAULT_DESC),
-              image: data.cover_url || DEFAULT_IMAGE,
+              image: normalizeImageUrl(data.cover_url),
               url: fullUrl,
               type: "book",
             };
@@ -151,14 +174,14 @@ Deno.serve(async (req) => {
         } else if (section === "research") {
           const { data } = await supabase
             .from("research_papers")
-            .select("title, abstract")
+            .select("title, abstract, cover_image_url")
             .eq("id", identifier)
             .maybeSingle();
           if (data) {
             meta = {
               title: `${data.title} — ${SITE_NAME}`,
               description: truncate(data.abstract || DEFAULT_DESC),
-              image: DEFAULT_IMAGE,
+              image: normalizeImageUrl((data as any).cover_image_url),
               url: fullUrl,
               type: "article",
             };
@@ -178,6 +201,21 @@ Deno.serve(async (req) => {
               type: "article",
             };
           }
+        } else if (section === "learning-paths") {
+          const { data } = await supabase
+            .from("learning_paths")
+            .select("title, description, thumbnail_url")
+            .or(`slug.eq.${identifier},id.eq.${identifier}`)
+            .maybeSingle();
+          if (data) {
+            meta = {
+              title: `${data.title} — ${SITE_NAME}`,
+              description: truncate(data.description || DEFAULT_DESC),
+              image: normalizeImageUrl((data as any).thumbnail_url),
+              url: fullUrl,
+              type: "article",
+            };
+          }
         } else if (section === "blog" || section === "posts") {
           const { data } = await supabase
             .from("posts")
@@ -188,7 +226,7 @@ Deno.serve(async (req) => {
             meta = {
               title: `${data.title} — ${SITE_NAME}`,
               description: truncate((data as any).excerpt || (data as any).content || DEFAULT_DESC),
-              image: (data as any).featured_image_url || DEFAULT_IMAGE,
+              image: normalizeImageUrl((data as any).featured_image_url),
               url: fullUrl,
               type: "article",
             };

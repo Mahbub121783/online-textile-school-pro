@@ -61,7 +61,11 @@ const LearningPathDetail = () => {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <SEOHead title={`${path.title} | Learning Path`} />
+      <SEOHead
+        title={`${path.title} | Learning Path`}
+        description={path.description || undefined}
+        ogImage={(path as any).thumbnail_url || undefined}
+      />
       <Header />
       <main className="flex-1 pb-14 lg:pb-0">
         <section className="bg-gradient-to-br from-primary/10 to-accent/10 py-12">
