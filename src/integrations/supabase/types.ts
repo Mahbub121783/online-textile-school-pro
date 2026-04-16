@@ -3633,7 +3633,14 @@ export type Database = {
           accent_color: string | null
           animation: string
           background_color: string | null
+          background_video_overlay_opacity: number | null
+          background_video_url: string | null
           body_content: string | null
+          countdown_expired_action: string | null
+          countdown_expired_message: string | null
+          countdown_source: string | null
+          countdown_source_field: string | null
+          countdown_source_id: string | null
           countdown_target_date: string | null
           created_at: string
           created_by: string | null
@@ -3670,7 +3677,14 @@ export type Database = {
           accent_color?: string | null
           animation?: string
           background_color?: string | null
+          background_video_overlay_opacity?: number | null
+          background_video_url?: string | null
           body_content?: string | null
+          countdown_expired_action?: string | null
+          countdown_expired_message?: string | null
+          countdown_source?: string | null
+          countdown_source_field?: string | null
+          countdown_source_id?: string | null
           countdown_target_date?: string | null
           created_at?: string
           created_by?: string | null
@@ -3707,7 +3721,14 @@ export type Database = {
           accent_color?: string | null
           animation?: string
           background_color?: string | null
+          background_video_overlay_opacity?: number | null
+          background_video_url?: string | null
           body_content?: string | null
+          countdown_expired_action?: string | null
+          countdown_expired_message?: string | null
+          countdown_source?: string | null
+          countdown_source_field?: string | null
+          countdown_source_id?: string | null
           countdown_target_date?: string | null
           created_at?: string
           created_by?: string | null

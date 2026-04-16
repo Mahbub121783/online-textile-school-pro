@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { usePopupEngine, PopupRow } from '@/hooks/usePopupEngine';
 import { PopupLayout } from './PopupLayout';
 import { Button } from '@/components/ui/button';
@@ -145,22 +146,78 @@ const StandardVariant = ({ popup, onClose }: VariantProps) => (
   </div>
 );
 
-const CountdownVariant = ({ popup, onClose }: VariantProps) => (
-  <div className="space-y-4 text-center">
-    {popup.title && <h3 className="text-2xl font-heading font-bold">{popup.title}</h3>}
-    {popup.subtitle && <p className="text-base opacity-80">{popup.subtitle}</p>}
-    {popup.countdown_target_date && (
-      <div className="flex justify-center py-2">
-        <CountdownTimer targetDate={new Date(popup.countdown_target_date)} />
+const SOURCE_TABLES: Record<string, string> = {
+  course: 'courses',
+  workshop: 'workshops',
+  event: 'events',
+  registration: 'registrations',
+};
+
+const useResolvedCountdownDate = (popup: PopupRow): string | null => {
+  const source = popup.countdown_source || 'manual';
+  const enabled = source !== 'manual' && !!popup.countdown_source_id && !!popup.countdown_source_field;
+
+  const { data } = useQuery({
+    queryKey: ['popup-countdown', popup.id, source, popup.countdown_source_id, popup.countdown_source_field],
+    enabled,
+    staleTime: 5 * 60 * 1000,
+    queryFn: async () => {
+      const table = SOURCE_TABLES[source];
+      if (!table) return null;
+      const { data } = await supabase
+        .from(table as any)
+        .select(popup.countdown_source_field as string)
+        .eq('id', popup.countdown_source_id as string)
+        .maybeSingle();
+      return (data as any)?.[popup.countdown_source_field as string] ?? null;
+    },
+  });
+
+  if (source === 'manual') return popup.countdown_target_date;
+  return (data as string | null) || popup.countdown_target_date || null;
+};
+
+const CountdownVariant = ({ popup, onClose }: VariantProps) => {
+  const target = useResolvedCountdownDate(popup);
+  const [expired, setExpired] = useState(false);
+
+  useEffect(() => {
+    if (!target) return;
+    const t = new Date(target).getTime();
+    const check = () => setExpired(Date.now() >= t);
+    check();
+    const id = setInterval(check, 1000);
+    return () => clearInterval(id);
+  }, [target]);
+
+  // Auto-hide when expired if configured
+  useEffect(() => {
+    if (expired && (popup.countdown_expired_action || 'hide') === 'hide') {
+      const t = setTimeout(() => onClose('dismiss'), 500);
+      return () => clearTimeout(t);
+    }
+  }, [expired, popup.countdown_expired_action, onClose]);
+
+  return (
+    <div className="space-y-4 text-center">
+      {popup.title && <h3 className="text-2xl font-heading font-bold">{popup.title}</h3>}
+      {popup.subtitle && <p className="text-base opacity-80">{popup.subtitle}</p>}
+      {target && !expired && (
+        <div className="flex justify-center py-2">
+          <CountdownTimer targetDate={new Date(target)} />
+        </div>
+      )}
+      {expired && popup.countdown_expired_message && (
+        <p className="text-lg font-semibold py-2">{popup.countdown_expired_message}</p>
+      )}
+      {popup.body_content && <div className="text-sm opacity-90" dangerouslySetInnerHTML={{ __html: popup.body_content }} />}
+      <div className="flex flex-col sm:flex-row gap-2 justify-center">
+        <PrimaryCta popup={popup} onClose={onClose} />
+        <SecondaryCta popup={popup} onClose={onClose} />
       </div>
-    )}
-    {popup.body_content && <div className="text-sm opacity-90" dangerouslySetInnerHTML={{ __html: popup.body_content }} />}
-    <div className="flex flex-col sm:flex-row gap-2 justify-center">
-      <PrimaryCta popup={popup} onClose={onClose} />
-      <SecondaryCta popup={popup} onClose={onClose} />
     </div>
-  </div>
-);
+  );
+};
 
 const PromoVariant = ({ popup, onClose }: VariantProps) => {
   const code = popup.cta_secondary_label || 'PROMO';
@@ -295,6 +352,8 @@ export function PopupRenderer() {
       animation={activePopup.animation}
       background={activePopup.background_color}
       textColor={activePopup.text_color}
+      backgroundVideoUrl={activePopup.background_video_url}
+      backgroundVideoOverlayOpacity={activePopup.background_video_overlay_opacity}
       onClose={close}
     >
       {inner}
