@@ -27,12 +27,25 @@
     <!-- Google Site Verification -->
     <meta name="google-site-verification" content="NdM-ZPW7mvzjRuGF3Zck5FGbmVwFIQB5XfkWDXC-V2I" />
 
-    <!-- Fonts -->
+    <!-- Critical CSS — prevents blank white flash during stylesheet load -->
+    <style>
+      body{margin:0;background:#fff;font-family:'DM Sans',system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#1e293b;-webkit-font-smoothing:antialiased}
+      .dark body{background:#0f1a24;color:#e2e8f0}
+      h1,h2,h3,h4,h5,h6{font-family:'Sora',system-ui,-apple-system,sans-serif}
+    </style>
+
+    <!-- Preload primary fonts (woff2) for faster LCP text rendering -->
+    <link rel="preload" href="https://fonts.gstatic.com/s/sora/v12/xMQOuFFYT72X5wkB_18qmnndmSdSnk-DKQRDA2dDFg.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="https://fonts.gstatic.com/s/dmsans/v15/rP2tp2ywxg089UriI5-g4vlH9VoD8CmcqZG40F9JadbnoEwAop9hR2a0.woff2" as="font" type="font/woff2" crossorigin />
+
+    <!-- Primary fonts — with display=swap -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&display=swap" onload="this.onload=null;this.rel='stylesheet'" />
-    <noscript><link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet" /></noscript>
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400&family=Great+Vibes&family=Dancing+Script:wght@400;700&family=Pacifico&family=Satisfy&family=Sacramento&family=Allura&family=Tangerine:wght@400;700&family=Pinyon+Script&family=Alex+Brush&family=Cormorant+Garamond:ital,wght@0,400;0,700;1,400&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Cinzel:wght@400;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&display=swap" />
+
+    <!-- Decorative/certificate fonts — deferred, not needed for initial render -->
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400&family=Great+Vibes&family=Dancing+Script:wght@400;700&family=Pacifico&family=Satisfy&family=Sacramento&family=Allura&family=Tangerine:wght@400;700&family=Pinyon+Script&family=Alex+Brush&family=Cormorant+Garamond:ital,wght@0,400;0,700;1,400&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Cinzel:wght@400;700&display=swap" onload="this.onload=null;this.rel='stylesheet'" />
+    <noscript><link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400&family=Great+Vibes&family=Dancing+Script:wght@400;700&family=Pacifico&family=Satisfy&family=Sacramento&family=Allura&family=Tangerine:wght@400;700&family=Pinyon+Script&family=Alex+Brush&family=Cormorant+Garamond:ital,wght@0,400;0,700;1,400&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Cinzel:wght@400;700&display=swap" rel="stylesheet" /></noscript>
   </head>
   <body>
     <div id="root"></div>

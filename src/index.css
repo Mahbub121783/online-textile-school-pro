@@ -2,6 +2,18 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Explicit font-display: swap to prevent invisible text during font load */
+@font-face {
+  font-family: 'Sora';
+  font-display: swap;
+  src: local('Sora');
+}
+@font-face {
+  font-family: 'DM Sans';
+  font-display: swap;
+  src: local('DM Sans');
+}
+
 @layer base {
   :root {
     /* Primary — Dark Teal */
