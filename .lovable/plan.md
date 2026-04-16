@@ -1,47 +1,62 @@
 
 
-# Fix PWA App Version & Update System
+# Fix Link Preview Images (OG Meta Tags)
 
 ## Root Cause
-The app has a `manifest.json` with `display: standalone` (making it installable), but:
-1. **No service worker** — the browser has no mechanism to check for updates
-2. **No version tracking** — no way to detect when a new version is deployed
-3. **No update prompt** — users who installed the app get permanently stale content
 
-## What Will Change
+There are **two problems** preventing link previews from showing images:
 
-### 1. Add vite-plugin-pwa with Proper Configuration
-Install `vite-plugin-pwa` and configure it in `vite.config.ts` with:
-- `registerType: "prompt"` — notifies users when a new version is available instead of silently updating
-- `devOptions: { enabled: false }` — prevents issues in the Lovable preview
-- `navigateFallbackDenylist: [/^\/~oauth/]` — protects auth routes
-- Proper icon set (192px + 512px) in the manifest
-- Cache strategy that ensures HTML is always network-first
+### Problem 1: Missing `og:image` in Static HTML
+The `index.html` has `og:title`, `og:description`, and `og:url` — but **no `og:image` tag at all**. Social media crawlers (WhatsApp, Facebook, Twitter, LinkedIn) only read the raw HTML — they do NOT execute JavaScript. Since `SEOHead.tsx` sets OG tags via `useEffect`, crawlers never see them.
 
-### 2. Create an Update Prompt Component
-Build `src/components/UpdatePrompt.tsx` — a toast/banner that appears when a new service worker is detected, with a "Update Now" button that reloads the app to the latest version.
+### Problem 2: Pages Not Passing `ogImage` to SEOHead
+Even if JS ran, many pages (WorkshopDetail, ResearchPaperDetail, EventsPage, etc.) don't pass `ogImage` to `<SEOHead>` despite having `thumbnail_url` available.
 
-### 3. Add Service Worker Registration Guard in main.tsx
-Prevent service worker registration inside iframes or Lovable preview domains to avoid editor conflicts.
+## Solution (Two Parts)
 
-### 4. Update manifest.json
-Add a 512px icon (required for full installability on Android), and ensure all fields are correct.
+### Part 1: Add Default OG Image to index.html + Fix Missing `og:image` Dimensions
+Add a static `og:image` tag in `index.html` pointing to a proper 1200x630 default OG image. Also add `og:image:width` and `og:image:height` tags (required by many platforms for reliable rendering).
 
-### 5. Cache-Control for Service Worker
-Update `.htaccess` to set `Cache-Control: no-cache` on `sw.js` so the browser always checks for a new service worker file on each visit.
+This ensures every page has at least a branded fallback image in the raw HTML.
+
+### Part 2: Create a Crawler-Friendly Meta Tag Edge Function
+Build a Supabase edge function (`og-meta`) that:
+1. Accepts a path like `/courses/some-slug` or `/workshops/vibe-coding-masterclass`
+2. Queries Supabase for the page-specific title, description, and image
+3. Returns a minimal HTML page with correct `og:title`, `og:description`, `og:image` meta tags
+
+Then add `.htaccess` rewrite rules to detect crawler user agents (facebookexternalhit, WhatsApp, Twitterbot, LinkedInBot, TelegramBot) and proxy those requests to the edge function.
+
+### Part 3: Pass `ogImage` on All Detail Pages
+Add `ogImage` prop to `<SEOHead>` on WorkshopDetail, ResearchPaperDetail, and any other detail pages that have images but don't pass them.
 
 ## Files Changed
 
 | File | Change |
 |------|--------|
-| `vite.config.ts` | Add `VitePWA` plugin with prompt-based update |
-| `src/components/UpdatePrompt.tsx` | **New** — "New version available" banner with reload button |
-| `src/main.tsx` | Add iframe/preview guard for SW registration |
-| `src/App.tsx` | Mount `UpdatePrompt` component |
-| `public/manifest.json` | Add 512px icon, verify fields |
-| `public/.htaccess` | Add no-cache rule for `sw.js` |
+| `index.html` | Add `og:image`, `og:image:width`, `og:image:height` with default branded image |
+| `public/og-default.png` | **New** — 1200x630 branded OG image (generated) |
+| `supabase/functions/og-meta/index.ts` | **New** — edge function returning proper meta tags for crawler requests |
+| `public/.htaccess` | Add `RewriteCond` for crawler user agents → proxy to edge function |
+| `src/pages/static/WorkshopDetail.tsx` | Pass `ogImage={workshop.thumbnail_url}` to SEOHead |
+| `src/pages/static/InternshipDetail.tsx` | Pass `ogImage` to SEOHead |
+| `src/pages/research/ResearchPaperDetail.tsx` | Pass `ogImage` to SEOHead |
+| `src/pages/static/EventsPage.tsx` | Pass `ogImage` to SEOHead if available |
 
-## Important Note
-- PWA install and update features will only work on the **published/deployed** version, not in the Lovable editor preview
-- A 512px icon PNG (`logo-512.png`) needs to be added to `/public/` — I'll create a placeholder or you can provide one
+## How the Crawler Proxy Works
+
+```text
+User shares: https://onlinetextileschool.com/workshops/vibe-coding-masterclass
+
+WhatsApp bot request →
+  .htaccess detects "WhatsApp" user agent →
+  Rewrites to: https://<supabase>/functions/v1/og-meta?path=/workshops/vibe-coding-masterclass →
+  Edge function queries workshops table by slug →
+  Returns HTML with:
+    <meta property="og:title" content="Vibe Coding Masterclass" />
+    <meta property="og:image" content="https://res.cloudinary.com/.../workshop-banner.jpg" />
+    <meta property="og:description" content="Unlock the power of AI coding..." />
+```
+
+This is the industry-standard approach for SPAs that need social media link previews without SSR.
 
