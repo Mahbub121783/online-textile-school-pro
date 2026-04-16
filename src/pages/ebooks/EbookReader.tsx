@@ -15,6 +15,7 @@ import {
   Highlighter, MessageSquare, Trash2
 } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist';
+import SEOHead from '@/components/SEOHead';
 
 // Use local worker bundled by Vite — no CDN dependency
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
