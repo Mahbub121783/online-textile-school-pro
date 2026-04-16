@@ -208,7 +208,11 @@ export default function WorkshopDetail() {
 
   return (
     <>
-      <SEOHead title={workshop.title} description={workshop.short_description || workshop.description?.slice(0, 160)} />
+      <SEOHead
+        title={workshop.title}
+        description={workshop.short_description || workshop.description?.slice(0, 160)}
+        ogImage={(workshop as any).banner_url || workshop.thumbnail_url || undefined}
+      />
       <div className="min-h-screen flex flex-col bg-background">
         <Header />
         <main className="flex-1 container mx-auto px-4 py-8">

@@ -6,6 +6,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
+import SEOHead from '@/components/SEOHead';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -129,6 +130,11 @@ const InternshipDetail = () => {
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
+      <SEOHead
+        title={`${internship.title}${internship.company ? ` at ${internship.company}` : ''}`}
+        description={internship.description?.slice(0, 160) || undefined}
+        ogType="article"
+      />
       <Header />
       <main className="flex-1 container mx-auto px-4 py-8 max-w-5xl">
         <Button variant="ghost" size="sm" asChild className="mb-4">
