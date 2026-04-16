@@ -1,56 +1,56 @@
-<final-text>Problem I pinpointed
 
-- This is not an XML issue.
-- `.htaccess` is only one part of the problem.
-- The strongest root cause is your self-hosted FTP deployment leaving old Vite build files in place. Your workflow uploads `dist/` by FTP but does not clean stale hashed assets, which can create old/new JS chunk mismatches. That exactly matches the symptom: first load is broken or blank, second refresh works.
-- There is also an app-startup weakness: auth/session boot is still fragile, so some protected pages can decide too early that the session is not ready.
-- A few homepage render warnings (`Function components cannot be given refs`) should also be cleaned up because they add first-load instability.
 
-What I will fix
+# Optimize Data Fetching & Add Loading Skeletons
 
-1. Deployment and cache behavior
-- Update `.github/workflows/deploy.yml` so deploys do not leave stale hashed files behind.
-- Strengthen `public/.htaccess` for Apache:
-  - keep SPA rewrite
-  - disable cache for `index.html`
-  - keep long cache only for hashed `/assets/*`
-  - add `Options -MultiViews` and safer rewrite exclusions
-- Keep the `ErrorBoundary` reload only as a fallback, not as the main fix.
+## Current State
+- React Query is already configured with good defaults (5min stale, 30min GC)
+- ~20 pages already use `<Skeleton>` loading states (MyCourses, CourseCatalog, OrdersPage, etc.)
+- **~60+ files** still show plain `"Loading..."` text or `animate-pulse` text during data fetches
+- The `Skeleton` component already exists at `src/components/ui/skeleton.tsx`
 
-2. Make auth initialization deterministic
-- Refactor `src/hooks/useAuth.tsx` to expose a real auth-ready state.
-- Handle the initial session consistently before redirects or user-bound queries run.
-- Update protected layouts/pages to wait for auth readiness before redirecting.
+## What Will Change
 
-3. Remove first-render weak points
-- Fix the ref warnings in `src/pages/Index.tsx` and `src/components/features/home/StatsSection.tsx`.
-- Review public loaders so pages never sit indefinitely on a plain `Loading...`.
-- Keep immediate fallback content on the homepage and apply the same stability pattern where needed on other pages.
+### 1. Create Reusable Skeleton Patterns
+Build a small set of reusable skeleton components to avoid duplication:
+- **`TableSkeleton`** — for admin tables (rows × columns configurable)
+- **`CardGridSkeleton`** — for card grids (course cards, ebook cards, workshop cards)
+- **`DetailPageSkeleton`** — for detail pages (hero image + text blocks)
+- **`FormSkeleton`** — for settings/editor pages
 
-4. Make old UUID links self-heal
-- For workshops, courses, and ebooks, if a page opens by old ID/UUID, redirect to the slug URL after load.
-- This keeps SEO clean and avoids mixed old/new URLs.
+New file: `src/components/ui/loading-skeletons.tsx`
 
-Files likely involved
-- `public/.htaccess`
-- `.github/workflows/deploy.yml`
-- `src/hooks/useAuth.tsx`
-- `src/pages/dashboard/DashboardLayout.tsx`
-- `src/pages/instructor/InstructorLayout.tsx`
-- `src/pages/admin/AdminLayout.tsx`
-- `src/pages/Index.tsx`
-- `src/components/features/home/StatsSection.tsx`
-- `src/pages/static/WorkshopDetail.tsx`
-- `src/pages/courses/CourseDetail.tsx`
-- `src/pages/ebooks/EbookDetail.tsx`
+### 2. Replace "Loading..." Text Across All Pages
+Systematically replace every plain `Loading...` with contextual skeleton UI in these files:
 
-Technical note
-- Your current `.htaccess` only handles SPA rewrite. It does not prevent stale Vite asset caching.
-- Your current FTP deploy does not guarantee removal of outdated `/assets/*.js` files.
-- That combination is the most likely reason you are seeing the double-refresh problem.
+**Admin pages (~25 files):**
+AdminFaculty, AdminProjectGroups, AdminInternships, AdminManagement, AdminBatches, AdminPaymentPlans, AdminSettings, AdminCurrencies, AdminCoupons, AdminActivity, AdminEvents, AdminSuccessStories, AdminLearningPaths, AdminPlagiarism, AdminVirtualLabs, AdminWorkshops, AdminSponsors, AdminReviews, AdminLiveClasses, AdminAttendance, AdminAcademicCalendar, AdminGradeConfig, AdminMailPage, SystemControls, PageEditor, PostEditor + course-management tabs (GradebookTab, etc.) + instructor-management tabs
 
-How I’ll verify after implementation
-- Open `/`, `/about`, `/workshops`, one workshop detail, one course detail, one ebook detail, `/dashboard`, `/instructor`, and `/admin` directly in a fresh tab.
-- Hard refresh each page once only and confirm it loads correctly on the first try.
-- Verify after a fresh frontend deploy that old chunk files no longer break first load.
-- Confirm old UUID links redirect to clean slug URLs.</final-text>
+**Dashboard pages (~10 files):**
+TranscriptPage, MyResearchPage, GroupProjectsPage, AttendancePage, MyInternshipsPage, MyWorkshopsPage, EduMailPage, GpaWidget, BatchWidget, LiveClassesWidget
+
+**Instructor pages (~5 files):**
+InstructorCourses, InstructorDashboard, InstructorAssignments, InstructorDiscussions, InstructorPosts
+
+**Public pages (~5 files):**
+WorkshopDetail, WorkshopsPage, InternshipsPage, ResearchPapersPage, FacultyPage
+
+### 3. Fine-Tune React Query per Query Type
+Add query-specific optimizations where beneficial:
+- **Static content** (site_content, settings, categories): `staleTime: 10min` — rarely changes
+- **User-specific data** (enrollments, wallet, notifications): keep 5min default
+- **Real-time data** (live classes, attendance): `staleTime: 30s`
+- Add `placeholderData` to catalog/list queries so the layout doesn't shift
+
+## Technical Details
+- All skeleton replacements use the existing `Skeleton` primitive from `src/components/ui/skeleton.tsx`
+- Reusable skeletons accept props for row count, column count, and variant
+- No new dependencies needed — everything builds on existing shadcn components
+- Pattern: replace `<p>Loading...</p>` or `<TableCell>Loading...</TableCell>` with appropriate skeleton layout matching the final rendered content shape
+
+## Files Changed
+| File | Change |
+|------|--------|
+| `src/components/ui/loading-skeletons.tsx` | **New** — reusable TableSkeleton, CardGridSkeleton, DetailPageSkeleton |
+| ~45 page files | Replace `Loading...` text with skeleton components |
+| Select query hooks | Add per-query `staleTime` / `placeholderData` where beneficial |
+
