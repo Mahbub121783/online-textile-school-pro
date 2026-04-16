@@ -87,6 +87,26 @@ const AdminSettings = () => {
     onError: () => toast.error('Failed to save IndexNow key'),
   });
 
+  const savePixelMutation = useMutation({
+    mutationFn: async () => {
+      await upsertSetting('meta_pixel_id', pixelId.trim());
+      await upsertSetting('meta_pixel_test_code', pixelTestCode.trim());
+      await upsertSetting('meta_pixel_enabled', pixelEnabled ? 'true' : 'false');
+      await supabase.from('admin_activity_log').insert({ admin_id: user!.id, action: 'Updated Meta Pixel config', target_type: 'tracking', target_id: 'meta_pixel' });
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['admin-site-settings'] }); toast.success('Meta Pixel settings saved'); },
+    onError: () => toast.error('Failed to save Meta Pixel settings'),
+  });
+
+  const handlePixelTest = () => {
+    try {
+      trackMetaEvent('PageView', { test: true, source: 'admin_test_button' });
+      toast.success('Test event sent — check Meta Events Manager → Test Events tab');
+    } catch (e: any) {
+      toast.error('Failed: ' + (e?.message || 'unknown error'));
+    }
+  };
+
   const handleReindex = async () => {
     setReindexing(true);
     try {
