@@ -144,14 +144,14 @@ Deno.serve(async (req) => {
         } else if (section === "workshops") {
           const { data } = await supabase
             .from("workshops")
-            .select("title, short_description, description, thumbnail_url, banner_url")
+            .select("title, short_description, description, thumbnail_url, banner_url, meta_title, meta_description, og_image_url")
             .or(`slug.eq.${identifier},id.eq.${identifier}`)
             .maybeSingle();
           if (data) {
             meta = {
-              title: `${data.title} — ${SITE_NAME}`,
-              description: truncate(data.short_description || data.description || DEFAULT_DESC),
-              image: normalizeImageUrl((data as any).banner_url || data.thumbnail_url),
+              title: `${(data as any).meta_title || data.title} — ${SITE_NAME}`,
+              description: truncate((data as any).meta_description || data.short_description || data.description || DEFAULT_DESC),
+              image: normalizeImageUrl((data as any).og_image_url || (data as any).banner_url || data.thumbnail_url),
               url: fullUrl,
               type: "article",
             };
@@ -159,14 +159,14 @@ Deno.serve(async (req) => {
         } else if (section === "ebooks") {
           const { data } = await supabase
             .from("ebooks")
-            .select("title, description, cover_url")
+            .select("title, description, cover_url, meta_title, meta_description, og_image_url")
             .or(`slug.eq.${identifier},id.eq.${identifier}`)
             .maybeSingle();
           if (data) {
             meta = {
-              title: `${data.title} — ${SITE_NAME}`,
-              description: truncate(data.description || DEFAULT_DESC),
-              image: normalizeImageUrl(data.cover_url),
+              title: `${(data as any).meta_title || data.title} — ${SITE_NAME}`,
+              description: truncate((data as any).meta_description || data.description || DEFAULT_DESC),
+              image: normalizeImageUrl((data as any).og_image_url || data.cover_url),
               url: fullUrl,
               type: "book",
             };
@@ -174,14 +174,14 @@ Deno.serve(async (req) => {
         } else if (section === "research") {
           const { data } = await supabase
             .from("research_papers")
-            .select("title, abstract, cover_image_url")
+            .select("title, abstract, cover_image_url, meta_title, meta_description, og_image_url")
             .eq("id", identifier)
             .maybeSingle();
           if (data) {
             meta = {
-              title: `${data.title} — ${SITE_NAME}`,
-              description: truncate(data.abstract || DEFAULT_DESC),
-              image: normalizeImageUrl((data as any).cover_image_url),
+              title: `${(data as any).meta_title || data.title} — ${SITE_NAME}`,
+              description: truncate((data as any).meta_description || data.abstract || DEFAULT_DESC),
+              image: normalizeImageUrl((data as any).og_image_url || (data as any).cover_image_url),
               url: fullUrl,
               type: "article",
             };
@@ -189,14 +189,14 @@ Deno.serve(async (req) => {
         } else if (section === "internships") {
           const { data } = await supabase
             .from("internships")
-            .select("title, description, company")
+            .select("title, description, company, meta_title, meta_description, og_image_url")
             .eq("id", identifier)
             .maybeSingle();
           if (data) {
             meta = {
-              title: `${data.title}${data.company ? ` at ${data.company}` : ""} — ${SITE_NAME}`,
-              description: truncate(data.description || DEFAULT_DESC),
-              image: DEFAULT_IMAGE,
+              title: `${(data as any).meta_title || data.title}${data.company ? ` at ${data.company}` : ""} — ${SITE_NAME}`,
+              description: truncate((data as any).meta_description || data.description || DEFAULT_DESC),
+              image: normalizeImageUrl((data as any).og_image_url) || DEFAULT_IMAGE,
               url: fullUrl,
               type: "article",
             };
@@ -204,14 +204,14 @@ Deno.serve(async (req) => {
         } else if (section === "learning-paths") {
           const { data } = await supabase
             .from("learning_paths")
-            .select("title, description, thumbnail_url")
+            .select("title, description, thumbnail_url, meta_title, meta_description, og_image_url")
             .or(`slug.eq.${identifier},id.eq.${identifier}`)
             .maybeSingle();
           if (data) {
             meta = {
-              title: `${data.title} — ${SITE_NAME}`,
-              description: truncate(data.description || DEFAULT_DESC),
-              image: normalizeImageUrl((data as any).thumbnail_url),
+              title: `${(data as any).meta_title || data.title} — ${SITE_NAME}`,
+              description: truncate((data as any).meta_description || data.description || DEFAULT_DESC),
+              image: normalizeImageUrl((data as any).og_image_url || (data as any).thumbnail_url),
               url: fullUrl,
               type: "article",
             };
@@ -219,14 +219,14 @@ Deno.serve(async (req) => {
         } else if (section === "blog" || section === "posts") {
           const { data } = await supabase
             .from("posts")
-            .select("title, excerpt, featured_image_url, content")
+            .select("title, excerpt, featured_image_url, content, meta_title, meta_description, og_image_url")
             .or(`slug.eq.${identifier},id.eq.${identifier}`)
             .maybeSingle();
           if (data) {
             meta = {
-              title: `${data.title} — ${SITE_NAME}`,
-              description: truncate((data as any).excerpt || (data as any).content || DEFAULT_DESC),
-              image: normalizeImageUrl((data as any).featured_image_url),
+              title: `${(data as any).meta_title || data.title} — ${SITE_NAME}`,
+              description: truncate((data as any).meta_description || (data as any).excerpt || (data as any).content || DEFAULT_DESC),
+              image: normalizeImageUrl((data as any).og_image_url || (data as any).featured_image_url),
               url: fullUrl,
               type: "article",
             };

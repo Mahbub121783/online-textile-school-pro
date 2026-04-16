@@ -15,6 +15,7 @@ import {
   Highlighter, MessageSquare, Trash2
 } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist';
+import SEOHead from '@/components/SEOHead';
 
 // Use local worker bundled by Vite — no CDN dependency
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
@@ -751,6 +752,7 @@ const EbookReader = () => {
       style={{ filter: `brightness(${brightness}%)` }}
       onContextMenu={(e) => e.preventDefault()}
     >
+      <SEOHead title="Ebook Reader" noindex />
       <style>{`
         @media print { body * { display: none !important; } }
         .text-layer-container {

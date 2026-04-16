@@ -102,6 +102,22 @@ const SEOHead = ({
     }
     link.setAttribute('href', pageUrl);
 
+    // hreflang alternates (en/bn + x-default) — bilingual SEO
+    document.querySelectorAll('link[rel="alternate"][data-seo-hreflang]').forEach((el) => el.remove());
+    const hreflangs: Array<{ lang: string; href: string }> = [
+      { lang: 'en', href: pageUrl },
+      { lang: 'bn', href: pageUrl + (pageUrl.includes('?') ? '&' : '?') + 'lang=bn' },
+      { lang: 'x-default', href: pageUrl },
+    ];
+    hreflangs.forEach(({ lang, href }) => {
+      const altLink = document.createElement('link');
+      altLink.setAttribute('rel', 'alternate');
+      altLink.setAttribute('hreflang', lang);
+      altLink.setAttribute('href', href);
+      altLink.setAttribute('data-seo-hreflang', 'true');
+      document.head.appendChild(altLink);
+    });
+
     // Favicon from settings
     const faviconUrl = settings?.favicon_url || '/logo-192.png';
     let favLink = document.querySelector('link[rel="icon"]') as HTMLLinkElement | null;
@@ -181,6 +197,7 @@ const SEOHead = ({
 
     return () => {
       document.querySelectorAll('script[data-seo-jsonld]').forEach((s) => s.remove());
+      document.querySelectorAll('link[rel="alternate"][data-seo-hreflang]').forEach((el) => el.remove());
     };
   }, [fullTitle, metaDesc, canonical, defaultOgImage, ogType, jsonLd, metaKeywords, twitterHandle, googleVerification, siteName, settings, article, breadcrumbs, noindex, pageUrl, logoUrl]);
 
