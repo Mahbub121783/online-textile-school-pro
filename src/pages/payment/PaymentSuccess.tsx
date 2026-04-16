@@ -11,6 +11,7 @@ import BottomNav from '@/components/layout/BottomNav';
 import { useCartStore } from '@/stores/cartStore';
 import { useAuth } from '@/hooks/useAuth';
 import { ensureStudentIdCard } from '@/lib/ensureStudentIdCard';
+import { trackMetaEvent } from '@/lib/metaPixel';
 
 const PaymentSuccess = () => {
   const [searchParams] = useSearchParams();

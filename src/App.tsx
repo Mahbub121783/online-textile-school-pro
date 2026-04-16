@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import ChatWidget from '@/components/chat/ChatWidget';
 import UpdatePrompt from '@/components/UpdatePrompt';
 import CookieConsentBanner from '@/components/cookies/CookieConsentBanner';
@@ -12,6 +12,8 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/hooks/useAuth";
 import { ThemeProvider } from "@/components/ThemeProvider";
+import { useEngagementTracking } from "@/hooks/useEngagementTracking";
+import { trackMetaEvent } from "@/lib/metaPixel";
 import Index from "./pages/Index";
 
 // Lazy-loaded routes
@@ -181,6 +183,18 @@ const PageLoader = () => (
 
 const AppRoutes = () => {
   const location = useLocation();
+
+  // Mount engagement tracking (TimeOnPage / PageScroll / InternalClick)
+  useEngagementTracking();
+
+  // Fire Meta PageView on every route change
+  useEffect(() => {
+    trackMetaEvent('PageView', {
+      page_path: location.pathname,
+      page_title: document.title,
+    });
+  }, [location.pathname, location.search]);
+
   return (
     <ErrorBoundary key={location.pathname}>
       <Suspense fallback={<PageLoader />}>
