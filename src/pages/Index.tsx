@@ -17,7 +17,7 @@ const LearningPathsPreview = lazy(() => import('@/components/features/home/Learn
 const SponsorsSection = lazy(() => import('@/components/features/home/SponsorsSection'));
 
 const SectionFallback = () => (
-  <div className="py-12 flex items-center justify-center">
+  <div className="py-12 min-h-[320px] flex items-center justify-center">
     <div className="h-8 w-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
   </div>
 );

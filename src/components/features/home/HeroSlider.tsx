@@ -225,6 +225,8 @@ const HeroSlider = () => {
             alt=""
             className="w-full h-full object-cover hero-ken-burns"
             style={{ animationDuration: `${SLIDE_INTERVAL}ms` }}
+            fetchPriority="high"
+            loading="eager"
           />
         </div>
       )}

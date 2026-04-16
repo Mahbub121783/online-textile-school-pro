@@ -42,7 +42,7 @@ const FeaturedCourses = () => {
     : courses.filter((c: any) => (c.categories as any)?.name === activeCategory);
 
   return (
-    <section className="py-12 md:py-16 bg-background">
+    <section className="py-12 md:py-16 bg-background min-h-[400px]">
       <div className="container">
         <div className="text-center mb-8">
           <h2 className="font-heading text-2xl md:text-3xl font-bold text-foreground mb-2">Featured Courses</h2>
