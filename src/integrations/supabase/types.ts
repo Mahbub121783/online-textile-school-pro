@@ -1450,7 +1450,10 @@ export type Database = {
           gallery_urls: string[] | null
           id: string
           is_published: boolean | null
+          meta_description: string | null
           meta_keywords: string | null
+          meta_title: string | null
+          og_image_url: string | null
           page_count: number | null
           price: number | null
           seo_keywords: string | null
@@ -1474,7 +1477,10 @@ export type Database = {
           gallery_urls?: string[] | null
           id?: string
           is_published?: boolean | null
+          meta_description?: string | null
           meta_keywords?: string | null
+          meta_title?: string | null
+          og_image_url?: string | null
           page_count?: number | null
           price?: number | null
           seo_keywords?: string | null
@@ -1498,7 +1504,10 @@ export type Database = {
           gallery_urls?: string[] | null
           id?: string
           is_published?: boolean | null
+          meta_description?: string | null
           meta_keywords?: string | null
+          meta_title?: string | null
+          og_image_url?: string | null
           page_count?: number | null
           price?: number | null
           seo_keywords?: string | null
@@ -2639,10 +2648,14 @@ export type Database = {
           is_featured: boolean
           is_published: boolean
           location: string | null
+          meta_description: string | null
+          meta_title: string | null
+          og_image_url: string | null
           positions_available: number
           positions_filled: number
           posted_by: string | null
           requirements: string | null
+          seo_keywords: string | null
           skills_required: string[] | null
           status: string
           stipend: string | null
@@ -2664,10 +2677,14 @@ export type Database = {
           is_featured?: boolean
           is_published?: boolean
           location?: string | null
+          meta_description?: string | null
+          meta_title?: string | null
+          og_image_url?: string | null
           positions_available?: number
           positions_filled?: number
           posted_by?: string | null
           requirements?: string | null
+          seo_keywords?: string | null
           skills_required?: string[] | null
           status?: string
           stipend?: string | null
@@ -2689,10 +2706,14 @@ export type Database = {
           is_featured?: boolean
           is_published?: boolean
           location?: string | null
+          meta_description?: string | null
+          meta_title?: string | null
+          og_image_url?: string | null
           positions_available?: number
           positions_filled?: number
           posted_by?: string | null
           requirements?: string | null
+          seo_keywords?: string | null
           skills_required?: string[] | null
           status?: string
           stipend?: string | null
@@ -2834,7 +2855,11 @@ export type Database = {
           description: string | null
           id: string
           is_published: boolean | null
+          meta_description: string | null
+          meta_title: string | null
+          og_image_url: string | null
           price: number | null
+          seo_keywords: string | null
           slug: string
           thumbnail_url: string | null
           title: string
@@ -2847,7 +2872,11 @@ export type Database = {
           description?: string | null
           id?: string
           is_published?: boolean | null
+          meta_description?: string | null
+          meta_title?: string | null
+          og_image_url?: string | null
           price?: number | null
+          seo_keywords?: string | null
           slug: string
           thumbnail_url?: string | null
           title: string
@@ -2860,7 +2889,11 @@ export type Database = {
           description?: string | null
           id?: string
           is_published?: boolean | null
+          meta_description?: string | null
+          meta_title?: string | null
+          og_image_url?: string | null
           price?: number | null
+          seo_keywords?: string | null
           slug?: string
           thumbnail_url?: string | null
           title?: string
@@ -3772,7 +3805,11 @@ export type Database = {
           excerpt: string | null
           featured_image_url: string | null
           id: string
+          meta_description: string | null
+          meta_title: string | null
+          og_image_url: string | null
           published_at: string | null
+          seo_keywords: string | null
           slug: string
           status: string
           tags: string[] | null
@@ -3787,7 +3824,11 @@ export type Database = {
           excerpt?: string | null
           featured_image_url?: string | null
           id?: string
+          meta_description?: string | null
+          meta_title?: string | null
+          og_image_url?: string | null
           published_at?: string | null
+          seo_keywords?: string | null
           slug: string
           status?: string
           tags?: string[] | null
@@ -3802,7 +3843,11 @@ export type Database = {
           excerpt?: string | null
           featured_image_url?: string | null
           id?: string
+          meta_description?: string | null
+          meta_title?: string | null
+          og_image_url?: string | null
           published_at?: string | null
+          seo_keywords?: string | null
           slug?: string
           status?: string
           tags?: string[] | null
@@ -4596,12 +4641,16 @@ export type Database = {
           is_approved: boolean
           issue: string | null
           keywords: string | null
+          meta_description: string | null
+          meta_title: string | null
+          og_image_url: string | null
           page_range: string | null
           price: number | null
           published_date: string | null
           reviewer_feedback: string | null
           reviewer_id: string | null
           revision_notes: string | null
+          seo_keywords: string | null
           status: string
           submitted_by: string | null
           title: string
@@ -4625,12 +4674,16 @@ export type Database = {
           is_approved?: boolean
           issue?: string | null
           keywords?: string | null
+          meta_description?: string | null
+          meta_title?: string | null
+          og_image_url?: string | null
           page_range?: string | null
           price?: number | null
           published_date?: string | null
           reviewer_feedback?: string | null
           reviewer_id?: string | null
           revision_notes?: string | null
+          seo_keywords?: string | null
           status?: string
           submitted_by?: string | null
           title: string
@@ -4654,12 +4707,16 @@ export type Database = {
           is_approved?: boolean
           issue?: string | null
           keywords?: string | null
+          meta_description?: string | null
+          meta_title?: string | null
+          og_image_url?: string | null
           page_range?: string | null
           price?: number | null
           published_date?: string | null
           reviewer_feedback?: string | null
           reviewer_id?: string | null
           revision_notes?: string | null
+          seo_keywords?: string | null
           status?: string
           submitted_by?: string | null
           title?: string
@@ -5653,8 +5710,12 @@ export type Database = {
           materials: Json | null
           max_participants: number | null
           meet_link: string | null
+          meta_description: string | null
+          meta_title: string | null
+          og_image_url: string | null
           prerequisites: string | null
           registration_deadline: string | null
+          seo_keywords: string | null
           short_description: string | null
           slug: string
           start_date: string
@@ -5681,8 +5742,12 @@ export type Database = {
           materials?: Json | null
           max_participants?: number | null
           meet_link?: string | null
+          meta_description?: string | null
+          meta_title?: string | null
+          og_image_url?: string | null
           prerequisites?: string | null
           registration_deadline?: string | null
+          seo_keywords?: string | null
           short_description?: string | null
           slug: string
           start_date: string
@@ -5709,8 +5774,12 @@ export type Database = {
           materials?: Json | null
           max_participants?: number | null
           meet_link?: string | null
+          meta_description?: string | null
+          meta_title?: string | null
+          og_image_url?: string | null
           prerequisites?: string | null
           registration_deadline?: string | null
+          seo_keywords?: string | null
           short_description?: string | null
           slug?: string
           start_date?: string
@@ -5813,6 +5882,14 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      seo_clean_text: {
+        Args: { _input: string; _max_len?: number }
+        Returns: string
+      }
+      seo_keywords_from_title: {
+        Args: { _extra?: string; _title: string }
+        Returns: string
       }
     }
     Enums: {
