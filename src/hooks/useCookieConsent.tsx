@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
+import { useAuth } from '@/hooks/useAuth';
 
 export type CookieCategory = 'necessary' | 'functional' | 'analytics' | 'marketing';
 
