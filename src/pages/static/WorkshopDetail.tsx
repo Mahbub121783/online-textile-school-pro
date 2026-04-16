@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -10,11 +10,9 @@ import SEOHead from '@/components/SEOHead';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { CountdownTimer } from '@/components/workshop/CountdownTimer';
-import { Calendar, Clock, Users, Download, ExternalLink, CheckCircle, Video, BookOpen, FileText, FileImage, FileArchive, File } from 'lucide-react';
+import { Calendar, Clock, Users, Download, CheckCircle, Video, BookOpen, FileText, FileImage, FileArchive, File, LogIn, Copy } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 
@@ -27,10 +25,10 @@ const fileIcon = (type: string) => {
 
 export default function WorkshopDetail() {
   const { slug } = useParams<{ slug: string }>();
-  const { user, profile } = useAuth();
+  const { user, profile, loading: authLoading } = useAuth();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
 
-  const [form, setForm] = useState({ full_name: '', email: '', mobile: '', institution: '' });
   const [registered, setRegistered] = useState(false);
   const [regNumber, setRegNumber] = useState('');
 
@@ -84,7 +82,7 @@ export default function WorkshopDetail() {
     enabled: !!workshop?.id,
   });
 
-  const { data: myRegistration } = useQuery({
+  const { data: myRegistration, isLoading: regLoading } = useQuery({
     queryKey: ['my-workshop-reg', workshop?.id, user?.id],
     queryFn: async () => {
       if (!user) return null;
@@ -93,18 +91,6 @@ export default function WorkshopDetail() {
     },
     enabled: !!workshop?.id && !!user,
   });
-
-  // Auto-fill for logged-in users
-  const [autoFilled, setAutoFilled] = useState(false);
-  if (!autoFilled && profile) {
-    setAutoFilled(true);
-    setForm({
-      full_name: profile.full_name || '',
-      email: user?.email || '',
-      mobile: (profile as any).mobile || '',
-      institution: '',
-    });
-  }
 
   const sendConfirmationEmail = async (regData: any, ws: any) => {
     try {
@@ -119,30 +105,23 @@ export default function WorkshopDetail() {
         </table>
         <p>Please join on time. We look forward to seeing you!</p>
       `;
-
       await supabase.functions.invoke('send-smtp-email', {
-        body: {
-          to: regData.email,
-          subject: `Workshop Registration Confirmed: ${ws.title}`,
-          html: emailBody,
-        },
+        body: { to: regData.email, subject: `Workshop Registration Confirmed: ${ws.title}`, html: emailBody },
       });
-    } catch {
-      // Email is non-critical
-    }
+    } catch { /* Email is non-critical */ }
   };
 
   const registerMutation = useMutation({
     mutationFn: async () => {
-      if (!form.full_name.trim() || !form.email.trim()) throw new Error('Name and email are required');
+      if (!user || !profile) throw new Error('You must be signed in');
       const payload: any = {
         workshop_id: workshop!.id,
-        full_name: form.full_name.trim(),
-        email: form.email.trim().toLowerCase(),
-        mobile: form.mobile.trim() || null,
-        institution: form.institution.trim() || null,
+        user_id: user.id,
+        full_name: profile.full_name || 'Unknown',
+        email: user.email || '',
+        mobile: (profile as any).mobile || null,
+        institution: null,
       };
-      if (user) payload.user_id = user.id;
       const { data, error } = await supabase.from('workshop_registrations').insert(payload).select().single();
       if (error) {
         if (error.code === '23505') throw new Error('You are already registered for this workshop');
@@ -154,11 +133,38 @@ export default function WorkshopDetail() {
       setRegistered(true);
       setRegNumber(data.registration_number);
       queryClient.invalidateQueries({ queryKey: ['workshop-reg-count'] });
+      queryClient.invalidateQueries({ queryKey: ['my-workshop-reg'] });
       toast.success('Registration successful!');
       sendConfirmationEmail(data, workshop);
     },
     onError: (e: any) => toast.error(e.message),
   });
+
+  // Auto-register: when user is logged in, workshop loaded, not already registered, auto-register
+  const [autoRegAttempted, setAutoRegAttempted] = useState(false);
+  useEffect(() => {
+    if (
+      !autoRegAttempted &&
+      user &&
+      profile &&
+      workshop &&
+      !authLoading &&
+      !regLoading &&
+      !myRegistration &&
+      !registered &&
+      workshop.status !== 'completed' &&
+      workshop.status !== 'cancelled'
+    ) {
+      // Check if came from login redirect (has ?register=true)
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('register') === 'true') {
+        setAutoRegAttempted(true);
+        registerMutation.mutate();
+        // Clean URL
+        window.history.replaceState({}, '', window.location.pathname);
+      }
+    }
+  }, [user, profile, workshop, authLoading, regLoading, myRegistration, registered, autoRegAttempted]);
 
   if (isLoading) return <div className="min-h-screen flex items-center justify-center"><p>Loading...</p></div>;
   if (!workshop) return <div className="min-h-screen flex items-center justify-center"><p>Workshop not found</p></div>;
@@ -173,6 +179,24 @@ export default function WorkshopDetail() {
   const materials = (workshop.materials as any[]) || [];
   const whatYouLearn = (workshop.what_you_learn as string[]) || [];
   const instructor = (workshop as any).instructor;
+  const displayRegNumber = regNumber || myRegistration?.registration_number;
+
+  const handleRegisterClick = () => {
+    if (!user) {
+      // Redirect to login with return URL
+      const returnUrl = `/workshops/${slug}?register=true`;
+      navigate(`/auth/login?redirect=${encodeURIComponent(returnUrl)}`);
+      return;
+    }
+    registerMutation.mutate();
+  };
+
+  const copyRegNumber = () => {
+    if (displayRegNumber) {
+      navigator.clipboard.writeText(displayRegNumber);
+      toast.success('Registration number copied!');
+    }
+  };
 
   return (
     <>
@@ -287,7 +311,6 @@ export default function WorkshopDetail() {
                           <p className="text-xs text-muted-foreground">{format(new Date(s.session_date), 'MMM dd')} · {s.start_time?.slice(0, 5)} - {s.end_time?.slice(0, 5)}</p>
                           {s.description && <p className="text-xs mt-1">{s.description}</p>}
                         </div>
-                        {/* Session meet link */}
                         {s.meet_link && isRegistered && (
                           <a href={s.meet_link} target="_blank" rel="noopener noreferrer">
                             <Button size="sm" variant="outline" className="gap-1 text-xs shrink-0">
@@ -388,28 +411,55 @@ export default function WorkshopDetail() {
                 </a>
               )}
 
-              {/* Registration Form */}
+              {/* Registration Card */}
               {isRegistered ? (
-                <Card className="border-green-500/30">
-                  <CardContent className="p-5 text-center space-y-2">
+                <Card className="border-green-500/30 bg-gradient-to-b from-green-50/50 to-background dark:from-green-900/10">
+                  <CardContent className="p-5 text-center space-y-3">
                     <CheckCircle className="h-10 w-10 text-green-500 mx-auto" />
-                    <p className="font-semibold">You're Registered!</p>
-                    {(regNumber || myRegistration?.registration_number) && (
-                      <p className="text-sm text-muted-foreground">Registration #: <strong>{regNumber || myRegistration?.registration_number}</strong></p>
+                    <p className="font-heading font-semibold text-lg">You're Registered!</p>
+                    {displayRegNumber && (
+                      <div className="space-y-1">
+                        <p className="text-xs text-muted-foreground uppercase tracking-wider">Your Workshop Roll ID</p>
+                        <div className="flex items-center justify-center gap-2">
+                          <span className="text-lg font-mono font-bold text-primary bg-primary/10 px-4 py-2 rounded-lg">{displayRegNumber}</span>
+                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={copyRegNumber}>
+                            <Copy className="h-4 w-4" />
+                          </Button>
+                        </div>
+                        <p className="text-[10px] text-muted-foreground">Keep this number for your records</p>
+                      </div>
                     )}
                   </CardContent>
                 </Card>
               ) : workshop.status !== 'completed' && workshop.status !== 'cancelled' && !isFull ? (
                 <Card>
                   <CardHeader><CardTitle className="text-lg">Register Now</CardTitle></CardHeader>
-                  <CardContent className="space-y-3">
-                    <div><Label>Full Name *</Label><Input value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} /></div>
-                    <div><Label>Email *</Label><Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
-                    <div><Label>Mobile</Label><Input value={form.mobile} onChange={(e) => setForm({ ...form, mobile: e.target.value })} /></div>
-                    <div><Label>Institution</Label><Input value={form.institution} onChange={(e) => setForm({ ...form, institution: e.target.value })} /></div>
-                    <Button className="w-full" onClick={() => registerMutation.mutate()} disabled={registerMutation.isPending}>
-                      {registerMutation.isPending ? 'Registering...' : 'Register for Free'}
-                    </Button>
+                  <CardContent className="space-y-4">
+                    {user ? (
+                      <>
+                        <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
+                          <Avatar className="h-10 w-10">
+                            <AvatarImage src={profile?.avatar_url || ''} />
+                            <AvatarFallback>{profile?.full_name?.[0] || '?'}</AvatarFallback>
+                          </Avatar>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{profile?.full_name || 'User'}</p>
+                            <p className="text-xs text-muted-foreground truncate">{user.email}</p>
+                          </div>
+                        </div>
+                        <Button className="w-full" onClick={() => registerMutation.mutate()} disabled={registerMutation.isPending}>
+                          {registerMutation.isPending ? 'Registering...' : 'Register for Free'}
+                        </Button>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-sm text-muted-foreground text-center">Sign in to register for this workshop and get your Workshop Roll ID.</p>
+                        <Button className="w-full gap-2" onClick={handleRegisterClick}>
+                          <LogIn className="h-4 w-4" /> Sign In & Register
+                        </Button>
+                        <p className="text-[10px] text-center text-muted-foreground">Don't have an account? You can sign up during the process.</p>
+                      </>
+                    )}
                   </CardContent>
                 </Card>
               ) : null}
