@@ -1,3 +1,4 @@
+import { PageSkeleton } from '@/components/ui/loading-skeletons';
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -173,7 +174,7 @@ export default function WorkshopDetail() {
     }
   }, [user, profile, workshop, authLoading, regLoading, myRegistration, registered, autoRegAttempted]);
 
-  if (isLoading) return <div className="min-h-screen flex items-center justify-center"><p>Loading...</p></div>;
+  if (isLoading) return <div className="min-h-screen flex items-center justify-center"><PageSkeleton /></div>;
   if (!workshop) return <div className="min-h-screen flex items-center justify-center"><p>Workshop not found</p></div>;
 
   const startDt = new Date(`${workshop.start_date}T${workshop.start_time || '00:00'}`);

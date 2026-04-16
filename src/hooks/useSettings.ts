@@ -10,7 +10,7 @@ export function useSettings() {
       data?.forEach((s: any) => { map[s.key] = s.value ?? ''; });
       return map;
     },
-    staleTime: 5 * 60 * 1000,
+    staleTime: 10 * 60 * 1000,
   });
 }
 

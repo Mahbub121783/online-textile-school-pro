@@ -1,3 +1,4 @@
+import { TableSkeleton } from '@/components/ui/loading-skeletons';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -212,7 +213,7 @@ const TranscriptPage = () => {
         </CardHeader>
         <CardContent>
           {isLoading ? (
-            <p className="text-center py-8 text-muted-foreground animate-pulse">Loading...</p>
+            <TableSkeleton rows={5} columns={5} />
           ) : grades.length === 0 ? (
             <div className="text-center py-8">
               <GraduationCap className="h-10 w-10 mx-auto mb-3 text-muted" />

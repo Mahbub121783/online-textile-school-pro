@@ -1,3 +1,4 @@
+import { CardGridSkeleton } from '@/components/ui/loading-skeletons';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -115,7 +116,7 @@ const GroupProjectsPage = () => {
       </div>
 
       {isLoading ? (
-        <p className="text-center py-8 text-muted-foreground animate-pulse">Loading...</p>
+        <CardGridSkeleton count={3} columns={3} />
       ) : myGroups.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center">

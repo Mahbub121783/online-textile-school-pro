@@ -1,3 +1,4 @@
+import { FormSkeleton } from '@/components/ui/loading-skeletons';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -523,7 +524,7 @@ const PostEditor = () => {
     if (t && !tags.includes(t)) { setTags([...tags, t]); setTagInput(''); }
   };
 
-  if (!isNew && isLoading) return <div className="animate-pulse text-center py-12 text-muted-foreground">Loading...</div>;
+  if (!isNew && isLoading) return <FormSkeleton fields={6} />;
 
   return (
     <div className="space-y-4">

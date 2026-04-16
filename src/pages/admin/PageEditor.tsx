@@ -1,3 +1,4 @@
+import { FormSkeleton } from '@/components/ui/loading-skeletons';
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -94,7 +95,7 @@ const PageEditor = () => {
     setBlocks(newBlocks);
   };
 
-  if (isLoading) return <div className="animate-pulse text-center py-12 text-muted-foreground">Loading...</div>;
+  if (isLoading) return <FormSkeleton fields={6} />;
 
   return (
     <div className="space-y-4">

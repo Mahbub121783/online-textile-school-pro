@@ -8,6 +8,7 @@ export function useEnrollments() {
   return useQuery({
     queryKey: ['enrollments', user?.id],
     enabled: !!user,
+    staleTime: 120000,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('enrollments')

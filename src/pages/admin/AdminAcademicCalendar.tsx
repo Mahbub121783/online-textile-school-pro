@@ -1,3 +1,4 @@
+import { TableSkeleton } from '@/components/ui/loading-skeletons';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -192,7 +193,7 @@ const AdminAcademicCalendar = () => {
           </TableHeader>
           <TableBody>
             {isLoading ? (
-              <TableRow><TableCell colSpan={7} className="text-center">Loading...</TableCell></TableRow>
+              <TableSkeleton rows={5} columns={7} />
             ) : events.length === 0 ? (
               <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground">No events yet</TableCell></TableRow>
             ) : events.map((e: any) => (

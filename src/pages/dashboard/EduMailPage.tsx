@@ -1,3 +1,4 @@
+import { TableSkeleton } from '@/components/ui/loading-skeletons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -144,7 +145,7 @@ const EduMailPage = () => {
   };
 
   if (isLoading) {
-    return <div className="flex items-center justify-center min-h-[400px] text-muted-foreground">Loading...</div>;
+    return <div className="flex items-center justify-center min-h-[400px]"><TableSkeleton rows={6} columns={3} /></div>;
   }
 
   const config = emailReq ? statusConfig[emailReq.status] : null;

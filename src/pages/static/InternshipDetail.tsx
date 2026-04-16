@@ -1,3 +1,4 @@
+import { PageSkeleton } from '@/components/ui/loading-skeletons';
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -107,7 +108,7 @@ const InternshipDetail = () => {
   if (isLoading) return (
     <div className="min-h-screen flex flex-col bg-background">
       <Header />
-      <div className="flex-1 flex items-center justify-center"><p className="animate-pulse text-muted-foreground">Loading...</p></div>
+      <div className="flex-1 flex items-center justify-center"><PageSkeleton /></div>
       <Footer />
     </div>
   );
