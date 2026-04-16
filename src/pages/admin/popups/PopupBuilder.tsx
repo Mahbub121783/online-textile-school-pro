@@ -167,12 +167,44 @@ export function PopupBuilder({ open, onClose, popupId, onSaved }: Props) {
   const updatePage = (key: 'target_pages' | 'exclude_pages', i: number, v: string) => set(key, form[key].map((p: string, idx: number) => idx === i ? v : p));
   const removePage = (key: 'target_pages' | 'exclude_pages', i: number) => set(key, form[key].filter((_: string, idx: number) => idx !== i));
 
+  // Detect storage source from URL
+  const getStorageBadge = (url: string) => {
+    if (!url) return null;
+    if (url.includes('res.cloudinary.com') || url.includes('cloudinary.com')) {
+      return { label: 'Cloudinary', className: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20' };
+    }
+    if (url.includes('r2.cloudflarestorage.com') || url.includes('r2.dev') || url.includes('cloudflare')) {
+      return { label: 'Cloudflare R2', className: 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20' };
+    }
+    if (/youtube\.com|youtu\.be/i.test(url)) {
+      return { label: 'YouTube', className: 'bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20' };
+    }
+    if (/vimeo\.com/i.test(url)) {
+      return { label: 'Vimeo', className: 'bg-cyan-500/10 text-cyan-700 dark:text-cyan-400 border-cyan-500/20' };
+    }
+    return { label: 'External URL', className: 'bg-muted text-muted-foreground border-border' };
+  };
+
+  const isDirectVideo = (url: string) => /\.(mp4|webm|ogg|mov)(\?|$)/i.test(url);
+  const isYouTubeOrVimeo = (url: string) => /youtube\.com|youtu\.be|vimeo\.com/i.test(url);
+
   // Media field with picker + URL paste + preview
   const MediaField = ({ label, valueKey, kind, hint }: { label: string; valueKey: string; kind: 'image' | 'video' | 'bg_video'; hint?: string }) => {
     const value = form[valueKey] || '';
+    const badge = getStorageBadge(value);
+    const routingHint = kind === 'image'
+      ? 'Auto-stored on Cloudinary. Paste any URL or pick from library.'
+      : 'Videos/large files go to Cloudflare R2. You can also paste a YouTube/Vimeo link.';
     return (
       <div className="space-y-2">
-        <Label>{label}</Label>
+        <div className="flex items-center justify-between gap-2">
+          <Label>{label}</Label>
+          {badge && (
+            <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full border ${badge.className}`}>
+              {badge.label}
+            </span>
+          )}
+        </div>
         <div className="flex gap-2">
           <Input
             value={value}
@@ -189,11 +221,20 @@ export function PopupBuilder({ open, onClose, popupId, onSaved }: Props) {
             </Button>
           )}
         </div>
-        {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
+        <p className="text-xs text-muted-foreground">{hint || routingHint}</p>
         {value && kind === 'image' && (
           <img src={value} alt="" className="h-24 rounded border object-cover" />
         )}
-        {value && kind !== 'image' && (
+        {value && kind !== 'image' && isDirectVideo(value) && (
+          <video src={value} muted controls className="h-24 rounded border bg-muted" />
+        )}
+        {value && kind !== 'image' && isYouTubeOrVimeo(value) && (
+          <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/40 rounded border p-2">
+            <Film className="h-3.5 w-3.5" />
+            <span>Embed will play in popup</span>
+          </div>
+        )}
+        {value && kind !== 'image' && !isDirectVideo(value) && !isYouTubeOrVimeo(value) && (
           <p className="text-xs text-muted-foreground truncate">🎬 {value}</p>
         )}
       </div>
