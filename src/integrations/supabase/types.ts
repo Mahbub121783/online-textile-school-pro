@@ -5545,6 +5545,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      generate_seo_slug: {
+        Args: { _existing_id?: string; _table_name: string; _title: string }
+        Returns: string
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

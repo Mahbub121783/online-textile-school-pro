@@ -141,6 +141,7 @@ const HeroSlider = () => {
       return data ?? [];
     },
     staleTime: 30000,
+    placeholderData: [],
   });
 
   const slides = useMemo(() => (dbSlides && dbSlides.length > 0 ? dbSlides : FALLBACK_SLIDES), [dbSlides]);
