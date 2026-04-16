@@ -54,13 +54,14 @@ const AdminSettings = () => {
       if (map['meta_pixel_id']) setPixelId(map['meta_pixel_id']);
       if (map['meta_pixel_test_code'] !== undefined) setPixelTestCode(map['meta_pixel_test_code']);
       if (map['meta_pixel_enabled'] !== undefined) setPixelEnabled(map['meta_pixel_enabled'] !== 'false');
+      if (map['meta_pixel_require_consent'] !== undefined) setPixelRequireConsent(map['meta_pixel_require_consent'] === 'true');
     }
   }, [settings]);
 
   // Apply Meta Pixel config to runtime whenever it changes
   useEffect(() => {
-    configureMetaPixel({ pixelId, testCode: pixelTestCode, enabled: pixelEnabled });
-  }, [pixelId, pixelTestCode, pixelEnabled]);
+    configureMetaPixel({ pixelId, testCode: pixelTestCode, enabled: pixelEnabled, requireConsent: pixelRequireConsent });
+  }, [pixelId, pixelTestCode, pixelEnabled, pixelRequireConsent]);
 
   const upsertSetting = async (key: string, value: string) => {
     const existing = settings?.find((s) => s.key === key);
