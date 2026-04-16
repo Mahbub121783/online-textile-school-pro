@@ -21,6 +21,7 @@ export function useNotifications() {
 
   const { data: notifications = [], isLoading } = useQuery<Notification[]>({
     queryKey: ['notifications', user?.id],
+    staleTime: 30000,
     queryFn: async () => {
       if (!user) return [];
       const { data, error } = await supabase
