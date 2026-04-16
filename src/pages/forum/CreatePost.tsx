@@ -67,6 +67,7 @@ const CreatePost = () => {
 
   return (
     <>
+      <SEOHead title="Create Post" noindex />
       <Header />
       <div className="min-h-screen bg-background">
         <div className="container max-w-2xl py-8 space-y-6">
