@@ -1,3 +1,4 @@
+import { PageSkeleton } from '@/components/ui/loading-skeletons';
 import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -31,7 +32,7 @@ const DynamicPage = () => {
       <div className="min-h-screen flex flex-col">
         <UtilityBar /><Header />
         <main className="flex-1 flex items-center justify-center">
-          <div className="animate-pulse text-muted-foreground">Loading...</div>
+          <PageSkeleton />
         </main>
         <Footer /><BottomNav />
       </div>

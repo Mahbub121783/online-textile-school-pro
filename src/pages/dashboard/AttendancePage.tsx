@@ -1,3 +1,4 @@
+import { TableSkeleton } from '@/components/ui/loading-skeletons';
 import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -237,7 +238,7 @@ const AttendancePage = () => {
         </CardHeader>
         <CardContent>
           {isLoading ? (
-            <p className="text-center py-8 text-muted-foreground animate-pulse">Loading...</p>
+            <TableSkeleton rows={5} columns={4} />
           ) : filtered.length === 0 ? (
             <p className="text-center py-8 text-muted-foreground">No attendance records found.</p>
           ) : (

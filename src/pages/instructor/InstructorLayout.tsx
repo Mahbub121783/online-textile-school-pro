@@ -1,3 +1,4 @@
+import { PageSkeleton } from '@/components/ui/loading-skeletons';
 import { Outlet, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
@@ -14,7 +15,7 @@ const InstructorLayout = () => {
   if (loading || !isReady) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-pulse text-muted-foreground">Loading...</div>
+        <PageSkeleton />
       </div>
     );
   }

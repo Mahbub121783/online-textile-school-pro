@@ -1,3 +1,4 @@
+import { CardGridSkeleton } from '@/components/ui/loading-skeletons';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -156,7 +157,7 @@ const AdminLiveClasses = () => {
         </TabsList>
         <TabsContent value={tab} className="mt-4 space-y-3">
           {isLoading ? (
-            <p className="text-sm text-muted-foreground animate-pulse">Loading...</p>
+            <CardGridSkeleton count={3} columns={3} />
           ) : filtered.length === 0 ? (
             <Card><CardContent className="py-12 text-center text-muted-foreground"><Video className="h-12 w-12 mx-auto mb-3 text-muted" /><p>No {tab} classes.</p></CardContent></Card>
           ) : (

@@ -1,3 +1,4 @@
+import { CardGridSkeleton } from '@/components/ui/loading-skeletons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -108,7 +109,7 @@ const MyResearchPage = () => {
 
         <TabsContent value="papers" className="space-y-3 mt-4">
           {isLoading ? (
-            <p className="text-center py-8 text-muted-foreground animate-pulse">Loading...</p>
+            <CardGridSkeleton count={3} columns={3} />
           ) : myPapers.length === 0 ? (
             <Card>
               <CardContent className="py-12 text-center">

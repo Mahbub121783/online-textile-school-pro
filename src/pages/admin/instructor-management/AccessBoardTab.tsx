@@ -1,3 +1,4 @@
+import { TableSkeleton } from '@/components/ui/loading-skeletons';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -184,7 +185,7 @@ const AccessBoardTab = () => {
         </CardHeader>
         <CardContent>
           {isLoading ? (
-            <p className="text-sm text-muted-foreground">Loading...</p>
+            <TableSkeleton rows={5} columns={4} />
           ) : !filteredInstructors.length ? (
             <p className="text-sm text-muted-foreground">No instructors found.</p>
           ) : (

@@ -1,3 +1,4 @@
+import { TableSkeleton } from '@/components/ui/loading-skeletons';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -189,7 +190,7 @@ const ApprovalsTab = () => {
         <CardHeader><CardTitle className="font-heading text-lg">Instructor Applications</CardTitle></CardHeader>
         <CardContent>
           {isLoading ? (
-            <p className="text-muted-foreground text-sm">Loading...</p>
+            <TableSkeleton rows={5} columns={4} />
           ) : filtered.length === 0 ? (
             <p className="text-muted-foreground text-sm">No applications found.</p>
           ) : (

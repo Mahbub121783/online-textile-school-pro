@@ -1,3 +1,4 @@
+import { TableSkeleton } from '@/components/ui/loading-skeletons';
 import { useState, useCallback, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -290,7 +291,7 @@ const MailPage = () => {
           </div>
           <div className="flex-1 overflow-auto">
             {isLoading ? (
-              <div className="flex items-center justify-center py-8 text-muted-foreground text-sm">Loading...</div>
+              <div className="p-4"><TableSkeleton rows={5} columns={3} /></div>
             ) : (
               <MessageList
                 messages={messages}

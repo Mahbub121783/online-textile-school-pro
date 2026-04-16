@@ -1,3 +1,4 @@
+import { TableSkeleton } from '@/components/ui/loading-skeletons';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -149,7 +150,7 @@ export default function AdminIdCardManagement() {
         </CardHeader>
         <CardContent>
           {isLoading ? (
-            <div className="py-12 text-center text-muted-foreground">Loading...</div>
+            <TableSkeleton rows={5} columns={5} />
           ) : (
             <div className="rounded-md border">
               <Table>

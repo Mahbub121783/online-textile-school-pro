@@ -1,3 +1,4 @@
+import { FormSkeleton } from '@/components/ui/loading-skeletons';
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -113,7 +114,7 @@ const AdminCurrencies = () => {
           </Dialog>
         </CardHeader>
         <CardContent>
-          {loading ? <p className="text-muted-foreground">Loading...</p> : (
+          {loading ? <FormSkeleton fields={4} /> : (
             <Table>
               <TableHeader>
                 <TableRow>

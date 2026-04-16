@@ -1,3 +1,4 @@
+import { FormSkeleton } from '@/components/ui/loading-skeletons';
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -66,7 +67,7 @@ const AdminSettings = () => {
         <CardHeader><CardTitle>General Configuration</CardTitle></CardHeader>
         <CardContent className="space-y-5">
           {isLoading ? (
-            <p className="text-muted-foreground">Loading...</p>
+            <FormSkeleton fields={6} />
           ) : (
             <>
               {DEFAULT_KEYS.map((def) => (

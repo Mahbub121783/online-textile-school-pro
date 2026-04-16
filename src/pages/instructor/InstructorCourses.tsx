@@ -1,3 +1,4 @@
+import { TableSkeleton } from '@/components/ui/loading-skeletons';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -24,7 +25,7 @@ const InstructorCourses = () => {
     },
   });
 
-  if (isLoading) return <div className="animate-pulse py-12 text-center text-muted-foreground">Loading courses...</div>;
+  if (isLoading) return <div className="space-y-6"><TableSkeleton rows={5} columns={6} /></div>;
 
   return (
     <div className="space-y-6">
