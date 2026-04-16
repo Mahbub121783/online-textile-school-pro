@@ -1,3 +1,4 @@
+import { TableSkeleton } from '@/components/ui/loading-skeletons';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -315,7 +316,7 @@ const AdminBatches = () => {
           </TableHeader>
           <TableBody>
             {isLoading ? (
-              <TableRow><TableCell colSpan={6} className="text-center">Loading...</TableCell></TableRow>
+              <TableSkeleton rows={5} columns={6} />
             ) : batches.length === 0 ? (
               <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground">No batches yet</TableCell></TableRow>
             ) : batches.map(b => (

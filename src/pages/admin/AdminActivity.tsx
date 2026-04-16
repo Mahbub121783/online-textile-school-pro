@@ -1,3 +1,4 @@
+import { TableSkeleton } from '@/components/ui/loading-skeletons';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -45,7 +46,7 @@ const AdminActivity = () => {
             </TableHeader>
             <TableBody>
               {isLoading ? (
-                <TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground">Loading...</TableCell></TableRow>
+                <TableSkeleton rows={5} columns={4} />
               ) : data?.logs.length === 0 ? (
                 <TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground">No activity recorded yet.</TableCell></TableRow>
               ) : (

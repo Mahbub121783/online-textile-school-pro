@@ -1,3 +1,4 @@
+import { TableSkeleton } from '@/components/ui/loading-skeletons';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -170,7 +171,7 @@ const AdminProjectGroups = () => {
             </TableHeader>
             <TableBody>
               {isLoading ? (
-                <TableRow><TableCell colSpan={5} className="text-center py-8 animate-pulse text-muted-foreground">Loading...</TableCell></TableRow>
+                <TableSkeleton rows={5} columns={5} />
               ) : groups.length === 0 ? (
                 <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
                   <Users className="h-8 w-8 mx-auto mb-2 text-muted" />No project groups yet.

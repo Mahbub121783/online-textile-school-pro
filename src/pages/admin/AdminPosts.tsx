@@ -1,3 +1,4 @@
+import { TableSkeleton } from '@/components/ui/loading-skeletons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -46,7 +47,7 @@ const AdminPosts = () => {
         </TableHeader>
         <TableBody>
           {isLoading ? (
-            <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Loading...</TableCell></TableRow>
+            <TableSkeleton rows={5} columns={5} />
           ) : posts.length === 0 ? (
             <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">No posts yet</TableCell></TableRow>
           ) : posts.map((post: any) => (
