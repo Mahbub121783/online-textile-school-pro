@@ -1,5 +1,6 @@
 import { lazy, Suspense } from 'react';
 import ChatWidget from '@/components/chat/ChatWidget';
+import UpdatePrompt from '@/components/UpdatePrompt';
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes, Navigate, useLocation } from "react-router-dom";
 import ErrorBoundary from "@/components/ErrorBoundary";
@@ -361,6 +362,7 @@ const App = () => (
           <BrowserRouter future={{ v7_relativeSplatPath: true }}>
             <AppRoutes />
             <ChatWidget />
+            <UpdatePrompt />
           </BrowserRouter>
         </TooltipProvider>
       </AuthProvider>
