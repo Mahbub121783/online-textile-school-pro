@@ -11,7 +11,8 @@ import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { Save, Search, RefreshCw, Globe, ExternalLink, Activity } from 'lucide-react';
-import { trackMetaEvent, configureMetaPixel } from '@/lib/metaPixel';
+import { trackMetaEvent, configureMetaPixel, runMetaPixelDiagnostic, type DiagnosticResult } from '@/lib/metaPixel';
+import { CheckCircle2, XCircle, Loader2 } from 'lucide-react';
 
 const DEFAULT_KEYS = [
   { key: 'site_name', label: 'Site Name', type: 'text' },
