@@ -1,6 +1,8 @@
 import { lazy, Suspense } from 'react';
 import ChatWidget from '@/components/chat/ChatWidget';
 import UpdatePrompt from '@/components/UpdatePrompt';
+import CookieConsentBanner from '@/components/cookies/CookieConsentBanner';
+import { CookieConsentProvider } from '@/hooks/useCookieConsent';
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes, Navigate, useLocation } from "react-router-dom";
 import ErrorBoundary from "@/components/ErrorBoundary";
@@ -356,15 +358,18 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <ThemeProvider>
       <AuthProvider>
-        <TooltipProvider delayDuration={300}>
-          <Toaster />
-          <Sonner />
-          <BrowserRouter future={{ v7_relativeSplatPath: true }}>
-            <AppRoutes />
-            <ChatWidget />
-            <UpdatePrompt />
-          </BrowserRouter>
-        </TooltipProvider>
+        <CookieConsentProvider>
+          <TooltipProvider delayDuration={300}>
+            <Toaster />
+            <Sonner />
+            <BrowserRouter future={{ v7_relativeSplatPath: true }}>
+              <AppRoutes />
+              <ChatWidget />
+              <UpdatePrompt />
+              <CookieConsentBanner />
+            </BrowserRouter>
+          </TooltipProvider>
+        </CookieConsentProvider>
       </AuthProvider>
     </ThemeProvider>
   </QueryClientProvider>
