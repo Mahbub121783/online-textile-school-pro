@@ -752,6 +752,7 @@ const EbookReader = () => {
       style={{ filter: `brightness(${brightness}%)` }}
       onContextMenu={(e) => e.preventDefault()}
     >
+      <SEOHead title="Ebook Reader" noindex />
       <style>{`
         @media print { body * { display: none !important; } }
         .text-layer-container {
