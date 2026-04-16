@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Eye, EyeOff, Mail, Lock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,6 +15,8 @@ const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const redirectTo = searchParams.get('redirect');
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -24,13 +26,13 @@ const Login = () => {
       toast({ title: 'Login failed', description: error.message, variant: 'destructive' });
     } else {
       toast({ title: 'Welcome back!' });
-      navigate('/');
+      navigate(redirectTo || '/');
     }
     setLoading(false);
   };
 
   const handleGoogleLogin = async () => {
-    const { error } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin } });
+    const { error } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin + (redirectTo || '/') } });
     if (error) toast({ title: 'Error', description: error.message, variant: 'destructive' });
   };
 
