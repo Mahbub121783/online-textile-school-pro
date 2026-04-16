@@ -75,7 +75,8 @@ const MediaPickerModal = ({ open, onClose, onSelect, accept }: MediaPickerModalP
         file_size: file.size,
         uploaded_by: user?.id || null,
       }, { onConflict: 'file_url' });
-      toast.success('Uploaded!');
+      const destLabel = result.source === 'cloudinary' ? 'Cloudinary' : 'Cloudflare R2';
+      toast.success(`Uploaded to ${destLabel}`);
       onSelect(result.url);
       onClose();
     } catch {
