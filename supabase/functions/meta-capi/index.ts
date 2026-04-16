@@ -1,7 +1,12 @@
 // Meta Conversions API relay.
 // Mirrors browser fbq events server-side with hashed user data.
 // Uses shared event_id for browser/server deduplication.
-import { corsHeaders } from 'jsr:@supabase/functions-js/cors';
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+};
 
 const PIXEL_ID = Deno.env.get('META_PIXEL_ID') || '';
 const ACCESS_TOKEN = Deno.env.get('META_CAPI_ACCESS_TOKEN') || '';
@@ -20,7 +25,7 @@ async function hashIfPresent(v?: string | null): Promise<string | undefined> {
   return await sha256(v);
 }
 
-Deno.serve(async (req) => {
+serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   if (!PIXEL_ID || !ACCESS_TOKEN) {
