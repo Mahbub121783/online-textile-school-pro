@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { usePopupEngine, PopupRow } from '@/hooks/usePopupEngine';
 import { PopupLayout } from './PopupLayout';
 import { Button } from '@/components/ui/button';
@@ -16,17 +17,32 @@ interface VariantProps {
   onClose: (reason?: 'dismiss' | 'cta_primary' | 'cta_secondary' | 'submit') => void;
 }
 
+// Smart navigation: internal paths use react-router, external opens new tab
+const useCtaHandler = () => {
+  const navigate = useNavigate();
+  return (url: string) => {
+    if (!url) return;
+    const isExternal = /^https?:\/\//i.test(url) || url.startsWith('//') || url.startsWith('mailto:') || url.startsWith('tel:');
+    if (isExternal) {
+      window.open(url, '_blank', 'noopener,noreferrer');
+    } else {
+      navigate(url);
+    }
+  };
+};
+
 const PrimaryCta = ({ popup, onClose }: VariantProps) => {
+  const go = useCtaHandler();
   if (!popup.cta_primary_label) return null;
   const handle = () => {
     onClose('cta_primary');
-    if (popup.cta_primary_url) window.open(popup.cta_primary_url, '_blank');
+    if (popup.cta_primary_url) go(popup.cta_primary_url);
   };
   return (
     <Button
       onClick={handle}
       style={{ backgroundColor: popup.accent_color || undefined, color: '#fff' }}
-      className="w-full sm:w-auto"
+      className="w-full sm:w-auto min-h-11"
     >
       {popup.cta_primary_label}
     </Button>
@@ -34,13 +50,14 @@ const PrimaryCta = ({ popup, onClose }: VariantProps) => {
 };
 
 const SecondaryCta = ({ popup, onClose }: VariantProps) => {
+  const go = useCtaHandler();
   if (!popup.cta_secondary_label) return null;
   const handle = () => {
     onClose('cta_secondary');
-    if (popup.cta_secondary_url) window.open(popup.cta_secondary_url, '_blank');
+    if (popup.cta_secondary_url) go(popup.cta_secondary_url);
   };
   return (
-    <Button variant="outline" onClick={handle} className="w-full sm:w-auto">
+    <Button variant="outline" onClick={handle} className="w-full sm:w-auto min-h-11">
       {popup.cta_secondary_label}
     </Button>
   );
@@ -61,6 +78,13 @@ const FormVariant = ({ popup, onClose, fixedFields }: VariantProps & { fixedFiel
         user_id: user?.id || null,
         email: data.email || null,
         form_data: data,
+      });
+      // Track submit analytics event explicitly
+      await supabase.from('popup_analytics').insert({
+        popup_id: popup.id,
+        event_type: 'submit',
+        user_id: user?.id || null,
+        page_path: window.location.pathname,
       });
       toast.success('Submitted! Thank you.');
       onClose('submit');
@@ -175,40 +199,55 @@ const VideoVariant = ({ popup, onClose }: VariantProps) => (
   </div>
 );
 
-const ImageVariant = ({ popup, onClose }: VariantProps) => (
-  <div className="space-y-3">
-    {popup.image_url && (
-      <a
-        href={popup.cta_primary_url || '#'}
-        onClick={() => popup.cta_primary_url && onClose('cta_primary')}
-        className="block"
-      >
-        <img src={popup.image_url} alt={popup.title || ''} className="w-full rounded-lg" />
-      </a>
-    )}
-    {popup.title && <h3 className="text-xl font-heading font-bold text-center">{popup.title}</h3>}
-  </div>
-);
+const ImageVariant = ({ popup, onClose }: VariantProps) => {
+  const go = useCtaHandler();
+  const handleClick = (e: React.MouseEvent) => {
+    if (!popup.cta_primary_url) return;
+    e.preventDefault();
+    onClose('cta_primary');
+    go(popup.cta_primary_url);
+  };
+  return (
+    <div className="space-y-3">
+      {popup.image_url && (
+        <a
+          href={popup.cta_primary_url || '#'}
+          onClick={handleClick}
+          className={popup.cta_primary_url ? 'block cursor-pointer' : 'block pointer-events-none'}
+        >
+          <img src={popup.image_url} alt={popup.title || ''} className="w-full rounded-lg max-h-[70vh] object-contain" />
+        </a>
+      )}
+      {popup.title && <h3 className="text-xl font-heading font-bold text-center">{popup.title}</h3>}
+    </div>
+  );
+};
 
 const HtmlVariant = ({ popup }: VariantProps) => (
-  <div dangerouslySetInnerHTML={{ __html: popup.body_content || '' }} />
+  <div className="prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: popup.body_content || '' }} />
 );
 
-const AnnouncementVariant = ({ popup, onClose }: VariantProps) => (
-  <div className="flex items-center gap-3 flex-wrap">
-    {popup.title && <span className="font-bold">{popup.title}</span>}
-    {popup.subtitle && <span className="opacity-90">{popup.subtitle}</span>}
-    {popup.cta_primary_label && (
-      <Button
-        size="sm"
-        onClick={() => { onClose('cta_primary'); if (popup.cta_primary_url) window.open(popup.cta_primary_url, '_blank'); }}
-        style={{ backgroundColor: popup.accent_color || undefined }}
-      >
-        {popup.cta_primary_label}
-      </Button>
-    )}
-  </div>
-);
+const AnnouncementVariant = ({ popup, onClose }: VariantProps) => {
+  const go = useCtaHandler();
+  return (
+    <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+      <div className="flex-1 min-w-0">
+        {popup.title && <span className="font-bold mr-2">{popup.title}</span>}
+        {popup.subtitle && <span className="opacity-90 text-sm sm:text-base">{popup.subtitle}</span>}
+      </div>
+      {popup.cta_primary_label && (
+        <Button
+          size="sm"
+          className="shrink-0 min-h-10 w-full sm:w-auto"
+          onClick={() => { onClose('cta_primary'); if (popup.cta_primary_url) go(popup.cta_primary_url); }}
+          style={{ backgroundColor: popup.accent_color || undefined }}
+        >
+          {popup.cta_primary_label}
+        </Button>
+      )}
+    </div>
+  );
+};
 
 export function PopupRenderer() {
   const { activePopup, close } = usePopupEngine();

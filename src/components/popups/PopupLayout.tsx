@@ -32,10 +32,11 @@ export function PopupLayout({ layout, size, animation, background, textColor, on
     if (layout.includes('banner')) return;
     const onEsc = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
     document.addEventListener('keydown', onEsc);
+    const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     return () => {
       document.removeEventListener('keydown', onEsc);
-      document.body.style.overflow = '';
+      document.body.style.overflow = prevOverflow;
     };
   }, [layout, onClose]);
 
@@ -44,14 +45,15 @@ export function PopupLayout({ layout, size, animation, background, textColor, on
     color: textColor || undefined,
   };
 
+  // 44x44px tap target for accessibility
   const closeBtn = (
     <button
       onClick={onClose}
-      aria-label="Close"
-      className="absolute top-3 right-3 p-1.5 rounded-full hover:bg-black/10 transition-colors z-10"
+      aria-label="Close popup"
+      className="absolute top-2 right-2 sm:top-3 sm:right-3 inline-flex items-center justify-center w-11 h-11 rounded-full hover:bg-black/10 active:bg-black/20 transition-colors z-10 touch-manipulation"
       style={{ color: textColor || undefined }}
     >
-      <X className="h-4 w-4" />
+      <X className="h-5 w-5" />
     </button>
   );
 
@@ -61,12 +63,14 @@ export function PopupLayout({ layout, size, animation, background, textColor, on
     content = (
       <div
         className={cn(
-          'fixed left-0 right-0 z-[9999] shadow-lg border-b',
-          layout === 'top_banner' ? 'top-0 animate-in slide-in-from-top duration-400' : 'bottom-0 border-t border-b-0 animate-in slide-in-from-bottom duration-400',
+          'fixed left-0 right-0 z-[10000] shadow-lg border-b',
+          layout === 'top_banner'
+            ? 'top-0 animate-in slide-in-from-top duration-400'
+            : 'bottom-0 border-t border-b-0 animate-in slide-in-from-bottom duration-400 pb-[max(0.75rem,env(safe-area-inset-bottom))]',
         )}
         style={style}
       >
-        <div className="container mx-auto px-4 py-3 pr-12 relative">
+        <div className="container mx-auto px-4 py-3 pr-14 relative">
           {children}
           {closeBtn}
         </div>
@@ -74,24 +78,38 @@ export function PopupLayout({ layout, size, animation, background, textColor, on
     );
   } else if (layout === 'fullscreen') {
     content = (
-      <div className="fixed inset-0 z-[9999] flex items-center justify-center" style={style}>
-        <div className={cn('w-full h-full overflow-auto p-8', animClasses[animation] || animClasses.fade)}>
+      <div className="fixed inset-0 z-[10000]" style={style}>
+        <div className={cn('w-full h-full overflow-auto p-6 sm:p-8 pt-16', animClasses[animation] || animClasses.fade)}>
           {children}
         </div>
-        {closeBtn}
+        {/* Fixed close button — always visible regardless of scroll */}
+        <button
+          onClick={onClose}
+          aria-label="Close popup"
+          className="fixed top-3 right-3 inline-flex items-center justify-center w-11 h-11 rounded-full bg-black/10 hover:bg-black/20 active:bg-black/30 backdrop-blur-sm transition-colors z-[10001] touch-manipulation"
+          style={{ color: textColor || undefined }}
+        >
+          <X className="h-5 w-5" />
+        </button>
       </div>
     );
   } else if (layout === 'slide_in_bottom_right' || layout === 'slide_in_bottom_left') {
     content = (
       <div
         className={cn(
-          'fixed z-[9999] bottom-6 rounded-xl shadow-2xl border w-[calc(100vw-2rem)]',
+          'fixed z-[10000] rounded-xl shadow-2xl border max-h-[85vh] overflow-y-auto',
+          'bottom-4 left-4 right-4 sm:left-auto sm:right-auto',
           sizeClasses[size] || sizeClasses.md,
-          layout === 'slide_in_bottom_right' ? 'right-6 animate-in slide-in-from-right duration-400' : 'left-6 animate-in slide-in-from-left duration-400',
+          layout === 'slide_in_bottom_right'
+            ? 'sm:right-6 sm:bottom-6 sm:left-auto animate-in slide-in-from-right duration-400'
+            : 'sm:left-6 sm:bottom-6 sm:right-auto animate-in slide-in-from-left duration-400',
         )}
-        style={style}
+        style={{
+          ...style,
+          paddingBottom: 'max(0px, env(safe-area-inset-bottom))',
+        }}
       >
-        <div className="p-6 pr-10 relative">
+        <div className="p-5 sm:p-6 pr-12 relative">
           {children}
           {closeBtn}
         </div>
@@ -100,13 +118,20 @@ export function PopupLayout({ layout, size, animation, background, textColor, on
   } else {
     // center_modal default
     content = (
-      <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200" onClick={onClose}>
+      <div
+        className="fixed inset-0 z-[10000] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200"
+        onClick={onClose}
+      >
         <div
-          className={cn('relative w-full rounded-xl shadow-2xl border', sizeClasses[size] || sizeClasses.md, animClasses[animation] || animClasses.fade)}
+          className={cn(
+            'relative w-full rounded-xl shadow-2xl border max-h-[90vh] overflow-y-auto',
+            sizeClasses[size] || sizeClasses.md,
+            animClasses[animation] || animClasses.fade,
+          )}
           style={style}
           onClick={e => e.stopPropagation()}
         >
-          <div className="p-6 pr-10">{children}</div>
+          <div className="p-5 sm:p-6 pr-12">{children}</div>
           {closeBtn}
         </div>
       </div>
