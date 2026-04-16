@@ -11,7 +11,8 @@ import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { Save, Search, RefreshCw, Globe, ExternalLink, Activity } from 'lucide-react';
-import { trackMetaEvent, configureMetaPixel } from '@/lib/metaPixel';
+import { trackMetaEvent, configureMetaPixel, runMetaPixelDiagnostic, type DiagnosticResult } from '@/lib/metaPixel';
+import { CheckCircle2, XCircle, Loader2 } from 'lucide-react';
 
 const DEFAULT_KEYS = [
   { key: 'site_name', label: 'Site Name', type: 'text' },
@@ -30,6 +31,9 @@ const AdminSettings = () => {
   const [pixelId, setPixelId] = useState('1005930275539761');
   const [pixelTestCode, setPixelTestCode] = useState('TEST4851');
   const [pixelEnabled, setPixelEnabled] = useState(true);
+  const [pixelRequireConsent, setPixelRequireConsent] = useState(false);
+  const [diagResults, setDiagResults] = useState<DiagnosticResult[] | null>(null);
+  const [diagRunning, setDiagRunning] = useState(false);
   const queryClient = useQueryClient();
   const { user } = useAuth();
 
@@ -50,13 +54,14 @@ const AdminSettings = () => {
       if (map['meta_pixel_id']) setPixelId(map['meta_pixel_id']);
       if (map['meta_pixel_test_code'] !== undefined) setPixelTestCode(map['meta_pixel_test_code']);
       if (map['meta_pixel_enabled'] !== undefined) setPixelEnabled(map['meta_pixel_enabled'] !== 'false');
+      if (map['meta_pixel_require_consent'] !== undefined) setPixelRequireConsent(map['meta_pixel_require_consent'] === 'true');
     }
   }, [settings]);
 
   // Apply Meta Pixel config to runtime whenever it changes
   useEffect(() => {
-    configureMetaPixel({ pixelId, testCode: pixelTestCode, enabled: pixelEnabled });
-  }, [pixelId, pixelTestCode, pixelEnabled]);
+    configureMetaPixel({ pixelId, testCode: pixelTestCode, enabled: pixelEnabled, requireConsent: pixelRequireConsent });
+  }, [pixelId, pixelTestCode, pixelEnabled, pixelRequireConsent]);
 
   const upsertSetting = async (key: string, value: string) => {
     const existing = settings?.find((s) => s.key === key);
@@ -92,18 +97,26 @@ const AdminSettings = () => {
       await upsertSetting('meta_pixel_id', pixelId.trim());
       await upsertSetting('meta_pixel_test_code', pixelTestCode.trim());
       await upsertSetting('meta_pixel_enabled', pixelEnabled ? 'true' : 'false');
+      await upsertSetting('meta_pixel_require_consent', pixelRequireConsent ? 'true' : 'false');
       await supabase.from('admin_activity_log').insert({ admin_id: user!.id, action: 'Updated Meta Pixel config', target_type: 'tracking', target_id: 'meta_pixel' });
     },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['admin-site-settings'] }); toast.success('Meta Pixel settings saved'); },
     onError: () => toast.error('Failed to save Meta Pixel settings'),
   });
 
-  const handlePixelTest = () => {
+  const handlePixelDiagnostic = async () => {
+    setDiagRunning(true);
+    setDiagResults(null);
     try {
-      trackMetaEvent('PageView', { test: true, source: 'admin_test_button' });
-      toast.success('Test event sent — check Meta Events Manager → Test Events tab');
+      const results = await runMetaPixelDiagnostic();
+      setDiagResults(results);
+      const allOk = results.every((r) => r.ok);
+      if (allOk) toast.success('All checks passed — events flowing to Meta');
+      else toast.warning('Some checks failed — review the table below');
     } catch (e: any) {
-      toast.error('Failed: ' + (e?.message || 'unknown error'));
+      toast.error('Diagnostic failed: ' + (e?.message || 'unknown'));
+    } finally {
+      setDiagRunning(false);
     }
   };
 
@@ -267,6 +280,16 @@ const AdminSettings = () => {
                 <Switch checked={pixelEnabled} onCheckedChange={setPixelEnabled} />
                 <Label>Pixel tracking enabled</Label>
               </div>
+              <div className="flex items-center gap-3">
+                <Switch checked={pixelRequireConsent} onCheckedChange={setPixelRequireConsent} />
+                <div>
+                  <Label>Require marketing cookie consent</Label>
+                  <p className="text-xs text-muted-foreground">
+                    When OFF, events fire for all visitors immediately (more data, but check your local privacy law).
+                    When ON, events only fire after a visitor accepts marketing cookies. Admins always bypass this gate.
+                  </p>
+                </div>
+              </div>
               <div>
                 <Label className="mb-1 block">Pixel ID</Label>
                 <Input value={pixelId} onChange={(e) => setPixelId(e.target.value)} placeholder="e.g. 1005930275539761" />
@@ -282,8 +305,9 @@ const AdminSettings = () => {
                 <Button onClick={() => savePixelMutation.mutate()} disabled={savePixelMutation.isPending}>
                   <Save className="h-4 w-4 mr-2" /> Save Pixel Settings
                 </Button>
-                <Button variant="secondary" onClick={handlePixelTest}>
-                  <Activity className="h-4 w-4 mr-2" /> Send Test Event
+                <Button variant="secondary" onClick={handlePixelDiagnostic} disabled={diagRunning}>
+                  {diagRunning ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Activity className="h-4 w-4 mr-2" />}
+                  Run Diagnostic
                 </Button>
                 <a
                   href="https://business.facebook.com/events_manager2"
@@ -294,9 +318,36 @@ const AdminSettings = () => {
                   Open Events Manager <ExternalLink className="h-3 w-3" />
                 </a>
               </div>
+
+              {diagResults && (
+                <div className="rounded-md border overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead className="bg-muted/50">
+                      <tr>
+                        <th className="text-left p-2 w-10">OK</th>
+                        <th className="text-left p-2">Check</th>
+                        <th className="text-left p-2">Detail</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {diagResults.map((r, i) => (
+                        <tr key={i} className="border-t">
+                          <td className="p-2">
+                            {r.ok ? <CheckCircle2 className="h-4 w-4 text-success" /> : <XCircle className="h-4 w-4 text-destructive" />}
+                          </td>
+                          <td className="p-2 font-medium">{r.check}</td>
+                          <td className="p-2 text-xs text-muted-foreground break-all">{r.detail}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
               <div className="rounded-md border bg-muted/40 p-3 text-xs space-y-1">
                 <div><strong>Access Token</strong>: stored as Supabase secret <code className="bg-muted px-1 rounded">META_CAPI_ACCESS_TOKEN</code> ✅</div>
                 <div><strong>Pixel ID secret</strong>: stored as <code className="bg-muted px-1 rounded">META_PIXEL_ID</code> ✅ (used by server CAPI)</div>
+                <div><strong>Debug</strong>: open browser DevTools console and run <code className="bg-muted px-1 rounded">__metaPixelDebug()</code> to inspect runtime state. Every fired event is logged to the console with <code className="bg-muted px-1 rounded">[MetaPixel]</code>.</div>
                 <div><strong>Note</strong>: Test events do not count in your campaign reports — they only appear in the Test Events tab.</div>
               </div>
             </CardContent>

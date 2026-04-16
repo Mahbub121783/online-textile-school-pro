@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
+import { useAuth } from '@/hooks/useAuth';
 
 export type CookieCategory = 'necessary' | 'functional' | 'analytics' | 'marketing';
 
@@ -69,9 +70,27 @@ const saveConsent = (consent: CookieConsent) => {
 export const CookieConsentProvider = ({ children }: { children: ReactNode }) => {
   const [consent, setConsent] = useState<CookieConsent | null>(() => loadConsent());
   const [showPreferences, setShowPreferences] = useState(false);
+  const { roles } = useAuth();
+  const isAdmin = roles?.includes('admin') || roles?.includes('super_admin');
 
   const hasDecided = consent !== null;
-  const showBanner = !hasDecided;
+  // Admins skip the banner — they implicitly consent for internal testing/QA
+  const showBanner = !hasDecided && !isAdmin;
+
+  // Auto-grant full consent for admin users (in-memory only — does not pollute storage)
+  useEffect(() => {
+    if (isAdmin && !consent) {
+      const adminConsent: CookieConsent = {
+        necessary: true,
+        functional: true,
+        analytics: true,
+        marketing: true,
+        timestamp: new Date().toISOString(),
+        version: CONSENT_VERSION,
+      };
+      setConsent(adminConsent);
+    }
+  }, [isAdmin, consent]);
 
   // Sync between tabs
   useEffect(() => {
