@@ -3,13 +3,14 @@ import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { Save } from 'lucide-react';
+import { Save, Search, RefreshCw, Globe, ExternalLink } from 'lucide-react';
 
 const DEFAULT_KEYS = [
   { key: 'site_name', label: 'Site Name', type: 'text' },
@@ -23,6 +24,8 @@ const DEFAULT_KEYS = [
 
 const AdminSettings = () => {
   const [formData, setFormData] = useState<Record<string, string>>({});
+  const [indexNowKey, setIndexNowKey] = useState('');
+  const [reindexing, setReindexing] = useState(false);
   const queryClient = useQueryClient();
   const { user } = useAuth();
 
@@ -39,19 +42,23 @@ const AdminSettings = () => {
       const map: Record<string, string> = {};
       settings.forEach((s) => { map[s.key] = s.value ?? ''; });
       setFormData(map);
+      setIndexNowKey(map['indexnow_key'] || '');
     }
   }, [settings]);
+
+  const upsertSetting = async (key: string, value: string) => {
+    const existing = settings?.find((s) => s.key === key);
+    if (existing) {
+      await supabase.from('site_settings').update({ value, updated_at: new Date().toISOString() }).eq('id', existing.id);
+    } else {
+      await supabase.from('site_settings').insert({ key, value });
+    }
+  };
 
   const saveMutation = useMutation({
     mutationFn: async () => {
       for (const def of DEFAULT_KEYS) {
-        const existing = settings?.find((s) => s.key === def.key);
-        const value = formData[def.key] ?? '';
-        if (existing) {
-          await supabase.from('site_settings').update({ value, updated_at: new Date().toISOString() }).eq('id', existing.id);
-        } else {
-          await supabase.from('site_settings').insert({ key: def.key, value });
-        }
+        await upsertSetting(def.key, formData[def.key] ?? '');
       }
       await supabase.from('admin_activity_log').insert({ admin_id: user!.id, action: 'Updated site settings', target_type: 'settings', target_id: 'global' });
     },
@@ -59,45 +66,159 @@ const AdminSettings = () => {
     onError: () => toast.error('Failed to save settings'),
   });
 
+  const saveSeoMutation = useMutation({
+    mutationFn: async () => {
+      await upsertSetting('indexnow_key', indexNowKey.trim());
+      await supabase.from('admin_activity_log').insert({ admin_id: user!.id, action: 'Updated IndexNow key', target_type: 'seo', target_id: 'indexnow' });
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['admin-site-settings'] }); toast.success('IndexNow key saved'); },
+    onError: () => toast.error('Failed to save IndexNow key'),
+  });
+
+  const handleReindex = async () => {
+    setReindexing(true);
+    try {
+      // 1. Rebuild AI search index
+      await supabase.functions.invoke('ai-index-builder').catch(() => {});
+      // 2. Ping search engines
+      const { error } = await supabase.functions.invoke('indexnow-ping', {
+        body: { paths: ['/', '/courses', '/ebooks', '/blog', '/workshops', '/learning-paths'] },
+      });
+      if (error) throw error;
+      toast.success('Search engines pinged & index rebuilt');
+    } catch (e: any) {
+      toast.error('Re-index failed: ' + (e?.message || 'unknown error'));
+    } finally {
+      setReindexing(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <h2 className="font-heading text-2xl font-bold">Site Settings</h2>
 
-      <Card>
-        <CardHeader><CardTitle>General Configuration</CardTitle></CardHeader>
-        <CardContent className="space-y-5">
-          {isLoading ? (
-            <FormSkeleton fields={6} />
-          ) : (
-            <>
-              {DEFAULT_KEYS.map((def) => (
-                <div key={def.key}>
-                  {def.type === 'toggle' ? (
-                    <div className="flex items-center gap-3">
-                      <Switch
-                        checked={formData[def.key] === 'true'}
-                        onCheckedChange={(v) => setFormData({ ...formData, [def.key]: v ? 'true' : 'false' })}
-                      />
-                      <Label>{def.label}</Label>
+      <Tabs defaultValue="general">
+        <TabsList>
+          <TabsTrigger value="general">General</TabsTrigger>
+          <TabsTrigger value="seo"><Search className="h-4 w-4 mr-1.5" /> SEO</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="general" className="mt-4">
+          <Card>
+            <CardHeader><CardTitle>General Configuration</CardTitle></CardHeader>
+            <CardContent className="space-y-5">
+              {isLoading ? (
+                <FormSkeleton fields={6} />
+              ) : (
+                <>
+                  {DEFAULT_KEYS.map((def) => (
+                    <div key={def.key}>
+                      {def.type === 'toggle' ? (
+                        <div className="flex items-center gap-3">
+                          <Switch
+                            checked={formData[def.key] === 'true'}
+                            onCheckedChange={(v) => setFormData({ ...formData, [def.key]: v ? 'true' : 'false' })}
+                          />
+                          <Label>{def.label}</Label>
+                        </div>
+                      ) : (
+                        <div>
+                          <Label className="mb-1 block">{def.label}</Label>
+                          <Input
+                            value={formData[def.key] ?? ''}
+                            onChange={(e) => setFormData({ ...formData, [def.key]: e.target.value })}
+                          />
+                        </div>
+                      )}
                     </div>
-                  ) : (
-                    <div>
-                      <Label className="mb-1 block">{def.label}</Label>
-                      <Input
-                        value={formData[def.key] ?? ''}
-                        onChange={(e) => setFormData({ ...formData, [def.key]: e.target.value })}
-                      />
-                    </div>
-                  )}
-                </div>
-              ))}
-              <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
-                <Save className="h-4 w-4 mr-2" /> Save Settings
+                  ))}
+                  <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
+                    <Save className="h-4 w-4 mr-2" /> Save Settings
+                  </Button>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="seo" className="mt-4 space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2"><Globe className="h-5 w-5" /> Auto-SEO Status</CardTitle>
+              <CardDescription>
+                Every course, ebook, blog post, workshop, learning path, research paper and internship is automatically SEO-optimized on save —
+                meta titles, descriptions, keywords, and OG images are filled from content if left blank. Search engines are pinged on publish.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm">
+              <div className="flex items-center gap-2">
+                <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
+                Auto-fill triggers active on 7 content tables
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
+                Publish-ping triggers active (Courses, Ebooks, Posts, Workshops, Learning Paths)
+              </div>
+              <div className="flex items-center gap-2">
+                <span className={`inline-block w-2 h-2 rounded-full ${indexNowKey ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                IndexNow: {indexNowKey ? 'Configured' : 'Not configured (Bing/Yandex/Seznam instant indexing disabled)'}
+              </div>
+              <div className="flex flex-wrap gap-3 pt-2">
+                <a href="https://onlinetextileschool.com/sitemap.xml" target="_blank" rel="noreferrer" className="text-primary hover:underline inline-flex items-center gap-1">
+                  View Sitemap <ExternalLink className="h-3 w-3" />
+                </a>
+                <a href="https://search.google.com/search-console" target="_blank" rel="noreferrer" className="text-primary hover:underline inline-flex items-center gap-1">
+                  Google Search Console <ExternalLink className="h-3 w-3" />
+                </a>
+                <a href="https://www.bing.com/webmasters" target="_blank" rel="noreferrer" className="text-primary hover:underline inline-flex items-center gap-1">
+                  Bing Webmaster <ExternalLink className="h-3 w-3" />
+                </a>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>IndexNow API Key</CardTitle>
+              <CardDescription>
+                Get a free key at{' '}
+                <a href="https://www.bing.com/indexnow" target="_blank" rel="noreferrer" className="text-primary hover:underline">bing.com/indexnow</a>.
+                Then upload <code className="bg-muted px-1 rounded">{`<your-key>.txt`}</code> to your site root containing the key.
+                This enables instant indexing on Bing, Yandex, Seznam, and Naver.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label className="mb-1 block">IndexNow Key</Label>
+                <Input
+                  value={indexNowKey}
+                  onChange={(e) => setIndexNowKey(e.target.value)}
+                  placeholder="e.g. a1b2c3d4e5f6789..."
+                />
+              </div>
+              <Button onClick={() => saveSeoMutation.mutate()} disabled={saveSeoMutation.isPending}>
+                <Save className="h-4 w-4 mr-2" /> Save IndexNow Key
               </Button>
-            </>
-          )}
-        </CardContent>
-      </Card>
+              <p className="text-xs text-muted-foreground">
+                Note: also store this same key as a Supabase Edge Function secret named <code className="bg-muted px-1 rounded">INDEXNOW_KEY</code> for the publish-ping trigger to work.
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Manual Re-Index</CardTitle>
+              <CardDescription>Force-rebuild internal search index and notify Google, Bing, Yandex about all top-level pages.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button onClick={handleReindex} disabled={reindexing} variant="secondary">
+                <RefreshCw className={`h-4 w-4 mr-2 ${reindexing ? 'animate-spin' : ''}`} />
+                {reindexing ? 'Re-indexing…' : 'Re-Index All & Ping Search Engines'}
+              </Button>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };
