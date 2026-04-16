@@ -4,8 +4,10 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { COURSE_CATEGORIES, SITE_CONFIG } from '@/lib/constants';
 import OTSLogo from '@/assets/OTS_LOGO.png';
+import { useCookieConsent } from '@/hooks/useCookieConsent';
 
 const Footer = () => {
+  const { openPreferences } = useCookieConsent();
   return (
     <footer className="bg-primary text-primary-foreground">
       <div className="container py-12 md:py-16">
@@ -100,6 +102,10 @@ const Footer = () => {
             <Link to="/privacy" className="hover:text-primary-foreground transition-colors">Privacy Policy</Link>
             <span>|</span>
             <Link to="/terms" className="hover:text-primary-foreground transition-colors">Terms of Service</Link>
+            <span>|</span>
+            <button onClick={openPreferences} className="hover:text-primary-foreground transition-colors cursor-pointer">
+              Cookie Settings
+            </button>
           </div>
         </div>
       </div>
