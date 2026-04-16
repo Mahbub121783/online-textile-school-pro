@@ -165,6 +165,11 @@ const ResearchPaperDetail = () => {
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
+      <SEOHead
+        title={paper.title}
+        description={paper.abstract?.slice(0, 160) || undefined}
+        ogType="article"
+      />
       <Header />
       <main className="flex-1 container mx-auto px-4 py-8 max-w-5xl">
         <Button variant="ghost" size="sm" onClick={() => navigate('/research')} className="mb-4 gap-1">
