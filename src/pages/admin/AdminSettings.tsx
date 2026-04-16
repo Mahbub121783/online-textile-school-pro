@@ -333,7 +333,7 @@ const AdminSettings = () => {
                       {diagResults.map((r, i) => (
                         <tr key={i} className="border-t">
                           <td className="p-2">
-                            {r.ok ? <CheckCircle2 className="h-4 w-4 text-green-600" /> : <XCircle className="h-4 w-4 text-destructive" />}
+                            {r.ok ? <CheckCircle2 className="h-4 w-4 text-success" /> : <XCircle className="h-4 w-4 text-destructive" />}
                           </td>
                           <td className="p-2 font-medium">{r.check}</td>
                           <td className="p-2 text-xs text-muted-foreground break-all">{r.detail}</td>
