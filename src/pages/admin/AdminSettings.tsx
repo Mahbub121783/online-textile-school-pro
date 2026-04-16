@@ -280,6 +280,16 @@ const AdminSettings = () => {
                 <Switch checked={pixelEnabled} onCheckedChange={setPixelEnabled} />
                 <Label>Pixel tracking enabled</Label>
               </div>
+              <div className="flex items-center gap-3">
+                <Switch checked={pixelRequireConsent} onCheckedChange={setPixelRequireConsent} />
+                <div>
+                  <Label>Require marketing cookie consent</Label>
+                  <p className="text-xs text-muted-foreground">
+                    When OFF, events fire for all visitors immediately (more data, but check your local privacy law).
+                    When ON, events only fire after a visitor accepts marketing cookies. Admins always bypass this gate.
+                  </p>
+                </div>
+              </div>
               <div>
                 <Label className="mb-1 block">Pixel ID</Label>
                 <Input value={pixelId} onChange={(e) => setPixelId(e.target.value)} placeholder="e.g. 1005930275539761" />
@@ -295,8 +305,9 @@ const AdminSettings = () => {
                 <Button onClick={() => savePixelMutation.mutate()} disabled={savePixelMutation.isPending}>
                   <Save className="h-4 w-4 mr-2" /> Save Pixel Settings
                 </Button>
-                <Button variant="secondary" onClick={handlePixelTest}>
-                  <Activity className="h-4 w-4 mr-2" /> Send Test Event
+                <Button variant="secondary" onClick={handlePixelDiagnostic} disabled={diagRunning}>
+                  {diagRunning ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Activity className="h-4 w-4 mr-2" />}
+                  Run Diagnostic
                 </Button>
                 <a
                   href="https://business.facebook.com/events_manager2"
@@ -307,9 +318,36 @@ const AdminSettings = () => {
                   Open Events Manager <ExternalLink className="h-3 w-3" />
                 </a>
               </div>
+
+              {diagResults && (
+                <div className="rounded-md border overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead className="bg-muted/50">
+                      <tr>
+                        <th className="text-left p-2 w-10">OK</th>
+                        <th className="text-left p-2">Check</th>
+                        <th className="text-left p-2">Detail</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {diagResults.map((r, i) => (
+                        <tr key={i} className="border-t">
+                          <td className="p-2">
+                            {r.ok ? <CheckCircle2 className="h-4 w-4 text-green-600" /> : <XCircle className="h-4 w-4 text-destructive" />}
+                          </td>
+                          <td className="p-2 font-medium">{r.check}</td>
+                          <td className="p-2 text-xs text-muted-foreground break-all">{r.detail}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
               <div className="rounded-md border bg-muted/40 p-3 text-xs space-y-1">
                 <div><strong>Access Token</strong>: stored as Supabase secret <code className="bg-muted px-1 rounded">META_CAPI_ACCESS_TOKEN</code> ✅</div>
                 <div><strong>Pixel ID secret</strong>: stored as <code className="bg-muted px-1 rounded">META_PIXEL_ID</code> ✅ (used by server CAPI)</div>
+                <div><strong>Debug</strong>: open browser DevTools console and run <code className="bg-muted px-1 rounded">__metaPixelDebug()</code> to inspect runtime state. Every fired event is logged to the console with <code className="bg-muted px-1 rounded">[MetaPixel]</code>.</div>
                 <div><strong>Note</strong>: Test events do not count in your campaign reports — they only appear in the Test Events tab.</div>
               </div>
             </CardContent>
