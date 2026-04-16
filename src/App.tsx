@@ -3,6 +3,7 @@ import ChatWidget from '@/components/chat/ChatWidget';
 import UpdatePrompt from '@/components/UpdatePrompt';
 import CookieConsentBanner from '@/components/cookies/CookieConsentBanner';
 import { CookieConsentProvider } from '@/hooks/useCookieConsent';
+import { PopupRenderer } from '@/components/popups/PopupRenderer';
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes, Navigate, useLocation } from "react-router-dom";
 import ErrorBoundary from "@/components/ErrorBoundary";
