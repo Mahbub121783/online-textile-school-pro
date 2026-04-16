@@ -3552,6 +3552,196 @@ export type Database = {
           },
         ]
       }
+      popup_analytics: {
+        Row: {
+          created_at: string
+          event_type: string
+          id: string
+          page_path: string | null
+          popup_id: string
+          session_id: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          event_type: string
+          id?: string
+          page_path?: string | null
+          popup_id: string
+          session_id?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          event_type?: string
+          id?: string
+          page_path?: string | null
+          popup_id?: string
+          session_id?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "popup_analytics_popup_id_fkey"
+            columns: ["popup_id"]
+            isOneToOne: false
+            referencedRelation: "popups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      popup_submissions: {
+        Row: {
+          email: string | null
+          form_data: Json | null
+          id: string
+          ip_address: string | null
+          popup_id: string
+          submitted_at: string
+          user_id: string | null
+        }
+        Insert: {
+          email?: string | null
+          form_data?: Json | null
+          id?: string
+          ip_address?: string | null
+          popup_id: string
+          submitted_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          email?: string | null
+          form_data?: Json | null
+          id?: string
+          ip_address?: string | null
+          popup_id?: string
+          submitted_at?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "popup_submissions_popup_id_fkey"
+            columns: ["popup_id"]
+            isOneToOne: false
+            referencedRelation: "popups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      popups: {
+        Row: {
+          accent_color: string | null
+          animation: string
+          background_color: string | null
+          body_content: string | null
+          countdown_target_date: string | null
+          created_at: string
+          created_by: string | null
+          cta_primary_label: string | null
+          cta_primary_url: string | null
+          cta_secondary_label: string | null
+          cta_secondary_url: string | null
+          end_date: string | null
+          exclude_pages: string[] | null
+          form_fields: Json | null
+          frequency: string
+          frequency_value: number | null
+          id: string
+          image_url: string | null
+          is_active: boolean
+          layout: string
+          name: string
+          priority: number
+          size: string
+          start_date: string | null
+          subtitle: string | null
+          target_devices: string
+          target_pages: string[] | null
+          target_user_state: string
+          text_color: string | null
+          title: string | null
+          trigger_type: string
+          trigger_value: number
+          type: string
+          updated_at: string
+          video_url: string | null
+        }
+        Insert: {
+          accent_color?: string | null
+          animation?: string
+          background_color?: string | null
+          body_content?: string | null
+          countdown_target_date?: string | null
+          created_at?: string
+          created_by?: string | null
+          cta_primary_label?: string | null
+          cta_primary_url?: string | null
+          cta_secondary_label?: string | null
+          cta_secondary_url?: string | null
+          end_date?: string | null
+          exclude_pages?: string[] | null
+          form_fields?: Json | null
+          frequency?: string
+          frequency_value?: number | null
+          id?: string
+          image_url?: string | null
+          is_active?: boolean
+          layout?: string
+          name: string
+          priority?: number
+          size?: string
+          start_date?: string | null
+          subtitle?: string | null
+          target_devices?: string
+          target_pages?: string[] | null
+          target_user_state?: string
+          text_color?: string | null
+          title?: string | null
+          trigger_type?: string
+          trigger_value?: number
+          type?: string
+          updated_at?: string
+          video_url?: string | null
+        }
+        Update: {
+          accent_color?: string | null
+          animation?: string
+          background_color?: string | null
+          body_content?: string | null
+          countdown_target_date?: string | null
+          created_at?: string
+          created_by?: string | null
+          cta_primary_label?: string | null
+          cta_primary_url?: string | null
+          cta_secondary_label?: string | null
+          cta_secondary_url?: string | null
+          end_date?: string | null
+          exclude_pages?: string[] | null
+          form_fields?: Json | null
+          frequency?: string
+          frequency_value?: number | null
+          id?: string
+          image_url?: string | null
+          is_active?: boolean
+          layout?: string
+          name?: string
+          priority?: number
+          size?: string
+          start_date?: string | null
+          subtitle?: string | null
+          target_devices?: string
+          target_pages?: string[] | null
+          target_user_state?: string
+          text_color?: string | null
+          title?: string | null
+          trigger_type?: string
+          trigger_value?: number
+          type?: string
+          updated_at?: string
+          video_url?: string | null
+        }
+        Relationships: []
+      }
       posts: {
         Row: {
           author_id: string | null
