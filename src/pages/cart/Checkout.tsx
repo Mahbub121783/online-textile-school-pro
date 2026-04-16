@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { trackMetaEvent } from '@/lib/metaPixel';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -81,6 +82,28 @@ const Checkout = () => {
   if (urlCoupon && !couponAutoApplied && user) {
     autoApplyCouponFromUrl();
   }
+
+  // Fire Meta InitiateCheckout once when user lands on checkout with items
+  useEffect(() => {
+    if (!items.length) return;
+    trackMetaEvent(
+      'InitiateCheckout',
+      {
+        num_items: items.length,
+        value: getTotal(),
+        currency: 'BDT',
+        content_ids: items.map((i) => i.id),
+        content_type: 'product',
+        contents: items.map((i) => ({
+          id: i.id,
+          quantity: 1,
+          item_price: i.discount_price ?? i.price,
+        })),
+      },
+      user?.email ? { email: user.email, externalId: user.id } : undefined,
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   if (!user) {
     return (

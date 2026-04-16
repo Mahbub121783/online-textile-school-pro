@@ -10,7 +10,8 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { Save, Search, RefreshCw, Globe, ExternalLink } from 'lucide-react';
+import { Save, Search, RefreshCw, Globe, ExternalLink, Activity } from 'lucide-react';
+import { trackMetaEvent, configureMetaPixel } from '@/lib/metaPixel';
 
 const DEFAULT_KEYS = [
   { key: 'site_name', label: 'Site Name', type: 'text' },
@@ -26,6 +27,9 @@ const AdminSettings = () => {
   const [formData, setFormData] = useState<Record<string, string>>({});
   const [indexNowKey, setIndexNowKey] = useState('');
   const [reindexing, setReindexing] = useState(false);
+  const [pixelId, setPixelId] = useState('1005930275539761');
+  const [pixelTestCode, setPixelTestCode] = useState('TEST4851');
+  const [pixelEnabled, setPixelEnabled] = useState(true);
   const queryClient = useQueryClient();
   const { user } = useAuth();
 
@@ -43,8 +47,16 @@ const AdminSettings = () => {
       settings.forEach((s) => { map[s.key] = s.value ?? ''; });
       setFormData(map);
       setIndexNowKey(map['indexnow_key'] || '');
+      if (map['meta_pixel_id']) setPixelId(map['meta_pixel_id']);
+      if (map['meta_pixel_test_code'] !== undefined) setPixelTestCode(map['meta_pixel_test_code']);
+      if (map['meta_pixel_enabled'] !== undefined) setPixelEnabled(map['meta_pixel_enabled'] !== 'false');
     }
   }, [settings]);
+
+  // Apply Meta Pixel config to runtime whenever it changes
+  useEffect(() => {
+    configureMetaPixel({ pixelId, testCode: pixelTestCode, enabled: pixelEnabled });
+  }, [pixelId, pixelTestCode, pixelEnabled]);
 
   const upsertSetting = async (key: string, value: string) => {
     const existing = settings?.find((s) => s.key === key);
@@ -75,6 +87,26 @@ const AdminSettings = () => {
     onError: () => toast.error('Failed to save IndexNow key'),
   });
 
+  const savePixelMutation = useMutation({
+    mutationFn: async () => {
+      await upsertSetting('meta_pixel_id', pixelId.trim());
+      await upsertSetting('meta_pixel_test_code', pixelTestCode.trim());
+      await upsertSetting('meta_pixel_enabled', pixelEnabled ? 'true' : 'false');
+      await supabase.from('admin_activity_log').insert({ admin_id: user!.id, action: 'Updated Meta Pixel config', target_type: 'tracking', target_id: 'meta_pixel' });
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['admin-site-settings'] }); toast.success('Meta Pixel settings saved'); },
+    onError: () => toast.error('Failed to save Meta Pixel settings'),
+  });
+
+  const handlePixelTest = () => {
+    try {
+      trackMetaEvent('PageView', { test: true, source: 'admin_test_button' });
+      toast.success('Test event sent — check Meta Events Manager → Test Events tab');
+    } catch (e: any) {
+      toast.error('Failed: ' + (e?.message || 'unknown error'));
+    }
+  };
+
   const handleReindex = async () => {
     setReindexing(true);
     try {
@@ -101,6 +133,7 @@ const AdminSettings = () => {
         <TabsList>
           <TabsTrigger value="general">General</TabsTrigger>
           <TabsTrigger value="seo"><Search className="h-4 w-4 mr-1.5" /> SEO</TabsTrigger>
+          <TabsTrigger value="pixel"><Activity className="h-4 w-4 mr-1.5" /> Meta Pixel</TabsTrigger>
         </TabsList>
 
         <TabsContent value="general" className="mt-4">
@@ -215,6 +248,57 @@ const AdminSettings = () => {
                 <RefreshCw className={`h-4 w-4 mr-2 ${reindexing ? 'animate-spin' : ''}`} />
                 {reindexing ? 'Re-indexing…' : 'Re-Index All & Ping Search Engines'}
               </Button>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="pixel" className="mt-4 space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2"><Activity className="h-5 w-5" /> Meta Pixel & Conversions API</CardTitle>
+              <CardDescription>
+                Tracks PageView, AddToCart, InitiateCheckout, Purchase, TimeOnPage, PageScroll, WatchVideo and InternalClick events.
+                Every event fires both browser-side (fbq) and server-side (Conversions API) with a shared event ID for deduplication.
+                Events only fire after a visitor accepts <strong>marketing cookies</strong> in the consent banner.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center gap-3">
+                <Switch checked={pixelEnabled} onCheckedChange={setPixelEnabled} />
+                <Label>Pixel tracking enabled</Label>
+              </div>
+              <div>
+                <Label className="mb-1 block">Pixel ID</Label>
+                <Input value={pixelId} onChange={(e) => setPixelId(e.target.value)} placeholder="e.g. 1005930275539761" />
+              </div>
+              <div>
+                <Label className="mb-1 block">Test Event Code</Label>
+                <Input value={pixelTestCode} onChange={(e) => setPixelTestCode(e.target.value)} placeholder="e.g. TEST4851 (leave empty in production)" />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Tags every event so it appears in Events Manager → Test Events tab in real time. <strong>Clear this field once you have verified events are flowing</strong> so they count toward live campaign data.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-3">
+                <Button onClick={() => savePixelMutation.mutate()} disabled={savePixelMutation.isPending}>
+                  <Save className="h-4 w-4 mr-2" /> Save Pixel Settings
+                </Button>
+                <Button variant="secondary" onClick={handlePixelTest}>
+                  <Activity className="h-4 w-4 mr-2" /> Send Test Event
+                </Button>
+                <a
+                  href="https://business.facebook.com/events_manager2"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-sm text-primary hover:underline inline-flex items-center gap-1 self-center"
+                >
+                  Open Events Manager <ExternalLink className="h-3 w-3" />
+                </a>
+              </div>
+              <div className="rounded-md border bg-muted/40 p-3 text-xs space-y-1">
+                <div><strong>Access Token</strong>: stored as Supabase secret <code className="bg-muted px-1 rounded">META_CAPI_ACCESS_TOKEN</code> ✅</div>
+                <div><strong>Pixel ID secret</strong>: stored as <code className="bg-muted px-1 rounded">META_PIXEL_ID</code> ✅ (used by server CAPI)</div>
+                <div><strong>Note</strong>: Test events do not count in your campaign reports — they only appear in the Test Events tab.</div>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>

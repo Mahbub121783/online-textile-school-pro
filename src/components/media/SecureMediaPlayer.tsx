@@ -9,6 +9,7 @@ import {
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
+import { trackMetaEvent } from '@/lib/metaPixel';
 
 interface SecureMediaPlayerProps {
   videoUrl?: string | null;
@@ -132,6 +133,14 @@ const SecureMediaPlayer = ({
     videoRef.current.currentTime = startPosition;
   }, [startPosition, isDirect]);
 
+  // Quartile milestones already fired for current video (Meta WatchVideo)
+  const watchMilestonesRef = useRef<Set<number>>(new Set());
+
+  // Reset milestones when video URL changes
+  useEffect(() => {
+    watchMilestonesRef.current = new Set();
+  }, [videoUrl]);
+
   useEffect(() => {
     if (!isDirect || !videoRef.current) return;
     const v = videoRef.current;
@@ -144,8 +153,35 @@ const SecureMediaPlayer = ({
     const onTimeUpdate = () => {
       setCurrentTime(v.currentTime);
       onProgress?.(v.currentTime);
+      // Meta WatchVideo quartile tracking
+      if (v.duration > 0) {
+        const pct = Math.round((v.currentTime / v.duration) * 100);
+        [25, 50, 75, 100].forEach((m) => {
+          if (pct >= m && !watchMilestonesRef.current.has(m)) {
+            watchMilestonesRef.current.add(m);
+            trackMetaEvent('WatchVideo', {
+              video_url: videoUrl,
+              video_title: title,
+              milestone: m,
+              duration_seconds: Math.round(v.duration),
+            });
+          }
+        });
+      }
     };
-    const onPlay = () => setPlaying(true);
+    const onPlay = () => {
+      setPlaying(true);
+      // Fire on first play (milestone 0)
+      if (!watchMilestonesRef.current.has(0)) {
+        watchMilestonesRef.current.add(0);
+        trackMetaEvent('WatchVideo', {
+          video_url: videoUrl,
+          video_title: title,
+          milestone: 0,
+          action: 'play',
+        });
+      }
+    };
     const onPause = () => setPlaying(false);
     const onWaiting = () => setLoading(true);
     const onCanPlay = () => setLoading(false);
@@ -165,7 +201,7 @@ const SecureMediaPlayer = ({
       v.removeEventListener('waiting', onWaiting);
       v.removeEventListener('canplay', onCanPlay);
     };
-  }, [isDirect, startPosition, onProgress]);
+  }, [isDirect, startPosition, onProgress, videoUrl, title]);
 
   // For embedded players, track time via interval
   useEffect(() => {

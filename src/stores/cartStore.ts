@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { trackMetaEvent } from '@/lib/metaPixel';
 
 export interface CartItem {
   id: string;
@@ -27,6 +28,16 @@ export const useCartStore = create<CartState>()(
       addItem: (item) =>
         set((state) => {
           if (state.items.find((i) => i.id === item.id)) return state;
+          // Fire AddToCart Meta event
+          try {
+            trackMetaEvent('AddToCart', {
+              content_ids: [item.id],
+              content_type: item.type,
+              content_name: item.title,
+              value: item.discount_price ?? item.price,
+              currency: 'BDT',
+            });
+          } catch {}
           return { items: [...state.items, item] };
         }),
       removeItem: (id) =>
