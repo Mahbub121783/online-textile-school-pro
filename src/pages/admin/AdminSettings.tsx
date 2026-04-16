@@ -343,10 +343,10 @@ const AdminSettings = () => {
                 <Input value={pixelId} onChange={(e) => setPixelId(e.target.value)} placeholder="e.g. 1005930275539761" />
               </div>
               <div>
-                <Label className="mb-1 block">Test Event Code</Label>
-                <Input value={pixelTestCode} onChange={(e) => setPixelTestCode(e.target.value)} placeholder="e.g. TEST4851 (leave empty in production)" />
+                <Label className="mb-1 block">Test Event Code (advanced)</Label>
+                <Input value={pixelTestCode} onChange={(e) => setPixelTestCode(e.target.value)} placeholder="Empty = Production. Custom code = Test Mode." />
                 <p className="text-xs text-muted-foreground mt-1">
-                  Tags every event so it appears in Events Manager → Test Events tab in real time. <strong>Clear this field once you have verified events are flowing</strong> so they count toward live campaign data.
+                  Controlled by the Mode selector above. Leave empty for Production. Custom code (e.g. <code className="bg-muted px-1 rounded">TEST4851</code>) routes events to Events Manager → Test Events tab.
                 </p>
               </div>
               <div className="flex flex-wrap gap-3">
