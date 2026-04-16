@@ -276,6 +276,54 @@ const AdminSettings = () => {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              {/* Mode selector — Test vs Production */}
+              <div className={`rounded-lg border-2 p-4 ${pixelTestCode.trim() ? 'border-warning bg-warning/5' : 'border-success bg-success/5'}`}>
+                <div className="flex items-center justify-between gap-4 flex-wrap">
+                  <div>
+                    <Label className="text-base font-semibold block mb-1">Pixel Mode</Label>
+                    <p className="text-xs text-muted-foreground">
+                      {pixelTestCode.trim()
+                        ? 'Events go to Test Events tab only — they do NOT count toward live campaigns.'
+                        : 'Events flow to Overview tab and count toward live ad campaigns.'}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={pixelTestCode.trim() ? 'default' : 'outline'}
+                      onClick={() => setPixelTestCode('TEST4851')}
+                    >
+                      Test Mode
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={!pixelTestCode.trim() ? 'default' : 'outline'}
+                      onClick={() => setPixelTestCode('')}
+                    >
+                      Production Mode
+                    </Button>
+                  </div>
+                </div>
+                <div className="mt-3">
+                  {pixelTestCode.trim() ? (
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-warning/20 text-warning-foreground px-3 py-1 text-xs font-bold uppercase tracking-wide">
+                      <span className="w-2 h-2 rounded-full bg-warning animate-pulse" />
+                      Test Mode Active
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-success/20 text-success-foreground px-3 py-1 text-xs font-bold uppercase tracking-wide">
+                      <CheckCircle2 className="h-3 w-3" />
+                      Live / Production — Counting toward campaigns
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Don't forget to click <strong>Save Pixel Settings</strong> below to apply the change.
+                </p>
+              </div>
+
               <div className="flex items-center gap-3">
                 <Switch checked={pixelEnabled} onCheckedChange={setPixelEnabled} />
                 <Label>Pixel tracking enabled</Label>
