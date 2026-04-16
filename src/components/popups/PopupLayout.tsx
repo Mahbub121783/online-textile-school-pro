@@ -2,6 +2,7 @@ import { ReactNode, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { detectVideoKind, buildBackgroundEmbedUrl } from '@/lib/popupVideoEmbed';
 
 interface PopupLayoutProps {
   layout: string;
@@ -9,6 +10,8 @@ interface PopupLayoutProps {
   animation: string;
   background?: string | null;
   textColor?: string | null;
+  backgroundVideoUrl?: string | null;
+  backgroundVideoOverlayOpacity?: number | null;
   onClose: () => void;
   children: ReactNode;
 }
@@ -27,7 +30,51 @@ const animClasses: Record<string, string> = {
   bounce: 'animate-in zoom-in-50 fade-in duration-500',
 };
 
-export function PopupLayout({ layout, size, animation, background, textColor, onClose, children }: PopupLayoutProps) {
+function BackgroundVideo({ url, opacity }: { url: string; opacity: number }) {
+  const kind = detectVideoKind(url);
+  const embed = buildBackgroundEmbedUrl(url);
+
+  return (
+    <>
+      <div className="absolute inset-0 overflow-hidden rounded-[inherit] z-0 pointer-events-none">
+        {kind === 'file' ? (
+          <video
+            src={url}
+            autoPlay
+            muted
+            loop
+            playsInline
+            className="absolute inset-0 w-full h-full object-cover"
+          />
+        ) : embed ? (
+          <iframe
+            src={embed}
+            title="Background video"
+            allow="autoplay; encrypted-media; picture-in-picture"
+            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[177.78vh] h-[56.25vw] min-w-full min-h-full pointer-events-none"
+            style={{ border: 0 }}
+          />
+        ) : null}
+      </div>
+      <div
+        className="absolute inset-0 rounded-[inherit] z-[1] pointer-events-none bg-black"
+        style={{ opacity }}
+      />
+    </>
+  );
+}
+
+export function PopupLayout({
+  layout,
+  size,
+  animation,
+  background,
+  textColor,
+  backgroundVideoUrl,
+  backgroundVideoOverlayOpacity,
+  onClose,
+  children,
+}: PopupLayoutProps) {
   useEffect(() => {
     if (layout.includes('banner')) return;
     const onEsc = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
@@ -40,21 +87,29 @@ export function PopupLayout({ layout, size, animation, background, textColor, on
     };
   }, [layout, onClose]);
 
+  const hasBgVideo = !!backgroundVideoUrl;
+  const overlayOpacity = backgroundVideoOverlayOpacity ?? 0.5;
+
+  // When background video is active, force readable text color (white) and skip solid background
   const style: React.CSSProperties = {
-    backgroundColor: background || undefined,
-    color: textColor || undefined,
+    backgroundColor: hasBgVideo ? '#000' : background || undefined,
+    color: hasBgVideo ? '#ffffff' : textColor || undefined,
   };
 
-  // 44x44px tap target for accessibility
   const closeBtn = (
     <button
       onClick={onClose}
       aria-label="Close popup"
-      className="absolute top-2 right-2 sm:top-3 sm:right-3 inline-flex items-center justify-center w-11 h-11 rounded-full hover:bg-black/10 active:bg-black/20 transition-colors z-10 touch-manipulation"
-      style={{ color: textColor || undefined }}
+      className="absolute top-2 right-2 sm:top-3 sm:right-3 inline-flex items-center justify-center w-11 h-11 rounded-full hover:bg-black/10 active:bg-black/20 transition-colors z-20 touch-manipulation"
+      style={{ color: hasBgVideo ? '#fff' : textColor || undefined }}
     >
       <X className="h-5 w-5" />
     </button>
+  );
+
+  // Wrap inner children with relative positioning so they sit above bg video
+  const inner = (
+    <div className="relative z-[2]">{children}</div>
   );
 
   let content: ReactNode;
@@ -63,31 +118,32 @@ export function PopupLayout({ layout, size, animation, background, textColor, on
     content = (
       <div
         className={cn(
-          'fixed left-0 right-0 z-[10000] shadow-lg border-b',
+          'fixed left-0 right-0 z-[10000] shadow-lg border-b overflow-hidden',
           layout === 'top_banner'
             ? 'top-0 animate-in slide-in-from-top duration-400'
             : 'bottom-0 border-t border-b-0 animate-in slide-in-from-bottom duration-400 pb-[max(0.75rem,env(safe-area-inset-bottom))]',
         )}
         style={style}
       >
-        <div className="container mx-auto px-4 py-3 pr-14 relative">
+        {hasBgVideo && <BackgroundVideo url={backgroundVideoUrl!} opacity={overlayOpacity} />}
+        <div className="container mx-auto px-4 py-3 pr-14 relative z-[2]">
           {children}
-          {closeBtn}
         </div>
+        {closeBtn}
       </div>
     );
   } else if (layout === 'fullscreen') {
     content = (
-      <div className="fixed inset-0 z-[10000]" style={style}>
-        <div className={cn('w-full h-full overflow-auto p-6 sm:p-8 pt-16', animClasses[animation] || animClasses.fade)}>
+      <div className="fixed inset-0 z-[10000] overflow-hidden" style={style}>
+        {hasBgVideo && <BackgroundVideo url={backgroundVideoUrl!} opacity={overlayOpacity} />}
+        <div className={cn('relative z-[2] w-full h-full overflow-auto p-6 sm:p-8 pt-16', animClasses[animation] || animClasses.fade)}>
           {children}
         </div>
-        {/* Fixed close button — always visible regardless of scroll */}
         <button
           onClick={onClose}
           aria-label="Close popup"
           className="fixed top-3 right-3 inline-flex items-center justify-center w-11 h-11 rounded-full bg-black/10 hover:bg-black/20 active:bg-black/30 backdrop-blur-sm transition-colors z-[10001] touch-manipulation"
-          style={{ color: textColor || undefined }}
+          style={{ color: hasBgVideo ? '#fff' : textColor || undefined }}
         >
           <X className="h-5 w-5" />
         </button>
@@ -97,7 +153,7 @@ export function PopupLayout({ layout, size, animation, background, textColor, on
     content = (
       <div
         className={cn(
-          'fixed z-[10000] rounded-xl shadow-2xl border max-h-[85vh] overflow-y-auto',
+          'fixed z-[10000] rounded-xl shadow-2xl border max-h-[85vh] overflow-hidden',
           'bottom-4 left-4 right-4 sm:left-auto sm:right-auto',
           sizeClasses[size] || sizeClasses.md,
           layout === 'slide_in_bottom_right'
@@ -109,10 +165,11 @@ export function PopupLayout({ layout, size, animation, background, textColor, on
           paddingBottom: 'max(0px, env(safe-area-inset-bottom))',
         }}
       >
-        <div className="p-5 sm:p-6 pr-12 relative">
+        {hasBgVideo && <BackgroundVideo url={backgroundVideoUrl!} opacity={overlayOpacity} />}
+        <div className="relative z-[2] p-5 sm:p-6 pr-12 max-h-[85vh] overflow-y-auto">
           {children}
-          {closeBtn}
         </div>
+        {closeBtn}
       </div>
     );
   } else {
@@ -124,14 +181,17 @@ export function PopupLayout({ layout, size, animation, background, textColor, on
       >
         <div
           className={cn(
-            'relative w-full rounded-xl shadow-2xl border max-h-[90vh] overflow-y-auto',
+            'relative w-full rounded-xl shadow-2xl border max-h-[90vh] overflow-hidden',
             sizeClasses[size] || sizeClasses.md,
             animClasses[animation] || animClasses.fade,
           )}
           style={style}
           onClick={e => e.stopPropagation()}
         >
-          <div className="p-5 sm:p-6 pr-12">{children}</div>
+          {hasBgVideo && <BackgroundVideo url={backgroundVideoUrl!} opacity={overlayOpacity} />}
+          <div className="relative z-[2] p-5 sm:p-6 pr-12 max-h-[90vh] overflow-y-auto">
+            {children}
+          </div>
           {closeBtn}
         </div>
       </div>

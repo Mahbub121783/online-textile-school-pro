@@ -36,6 +36,13 @@ export interface PopupRow {
   countdown_target_date: string | null;
   form_fields: any;
   priority: number;
+  background_video_url?: string | null;
+  background_video_overlay_opacity?: number | null;
+  countdown_source?: string | null;
+  countdown_source_id?: string | null;
+  countdown_source_field?: string | null;
+  countdown_expired_action?: string | null;
+  countdown_expired_message?: string | null;
 }
 
 const SESSION_KEY = 'popup_session_id';
