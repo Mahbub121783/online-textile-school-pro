@@ -31,6 +31,9 @@ const AdminSettings = () => {
   const [pixelId, setPixelId] = useState('1005930275539761');
   const [pixelTestCode, setPixelTestCode] = useState('TEST4851');
   const [pixelEnabled, setPixelEnabled] = useState(true);
+  const [pixelRequireConsent, setPixelRequireConsent] = useState(false);
+  const [diagResults, setDiagResults] = useState<DiagnosticResult[] | null>(null);
+  const [diagRunning, setDiagRunning] = useState(false);
   const queryClient = useQueryClient();
   const { user } = useAuth();
 
