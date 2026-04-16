@@ -1,47 +1,68 @@
 
-The user is asking whether the popup system is fully responsive across devices, has all features properly implemented, and whether the close (X) button and all CTAs work correctly.
 
-Let me audit the existing implementation for issues.
+# Popup System Upgrades — Media Picker, Video Background, Smart Countdowns
 
-Looking at `PopupLayout.tsx`:
-- Center modal: `max-w-sm/md/lg/xl` with `p-4` outer padding — OK on mobile, but no `max-h` constraint → **content can overflow viewport on small screens, no scroll**
-- Slide-in: `w-[calc(100vw-2rem)]` + `bottom-6 right-6/left-6` — on mobile this works, but no max-height → **can overflow vertically**
-- Fullscreen: close button is positioned `absolute top-3 right-3` but parent is `fixed inset-0` — **close button positioning relative to scroll container, may be hidden when scrolling**
-- Top/bottom banner: `pr-12` for close button room — OK, but on mobile with long text, content cramped
-- No `max-h-[90vh] overflow-y-auto` on modal content (violates project memory rule for admin modals, applies here too)
+## What you're asking
 
-Looking at `PopupRenderer.tsx`:
-- `ImageVariant`: `onClick={() => popup.cta_primary_url && onClose('cta_primary')}` — calls onClose but **doesn't actually navigate to the URL** (missing `window.open`)
-- `AnnouncementVariant`: no close handling for banner layout — relies on layout's close button ✓
-- `HtmlVariant`: doesn't receive onClose, no CTA buttons → **no way to close custom HTML except X button** (OK, but no CTA tracking)
-- `PromoVariant`: code source is `popup.cta_secondary_label` which is semantically wrong; should be a dedicated promo_code field (but using existing schema)
-- CTA buttons use `window.open(url, '_blank')` — for internal routes this opens new tab which is jarring; should use react-router for relative URLs
-- Form submission doesn't track analytics `submit` event server-side
-- Close `reason` parameter passed to `onClose` but `usePopupEngine.close()` likely doesn't use it for analytics differentiation
+1. **Image/Video URL inputs are bare text fields** — should use the project's unified Media Picker (and accept YouTube/Vimeo links naturally)
+2. **Background video** — let YouTube/Vimeo links play as a muted, looping background behind the popup content
+3. **Advanced countdown** — instead of typing a date manually, link the countdown to a real **Course launch date**, **Workshop start date**, or **Event registration deadline** so it stays in sync automatically
 
-Looking at responsiveness:
-- Center modal `p-4` outer + `p-6` inner — on 320px screens with `max-w-sm` (384px) the modal might exceed viewport — OK due to `w-full` + `max-w-sm`
-- Title `text-2xl`/`text-3xl` — fine
-- CTA row uses `flex-col sm:flex-row` ✓
-- Banner layouts: container `mx-auto px-4` — OK
-- Slide-in uses `bottom-6` + `right-6` — on mobile (small height) might cover important content; should be `bottom-4 right-4` or similar with safe-area
-- Video iframe `aspect-video` ✓
-- Image variant `max-h-64` for hero image ✓ but no max for full image variant
-- No safe-area-inset support for bottom banners on iOS notched devices
+## 1. Replace URL text fields with Media Picker
 
-Bugs to fix:
-1. **Modal overflow**: add `max-h-[90vh] overflow-y-auto` to modal content
-2. **Fullscreen close button**: move outside scroll container so always visible
-3. **ImageVariant CTA**: actually open the URL
-4. **Internal URL handling**: use react-router navigate for relative paths instead of `window.open`
-5. **Slide-in mobile spacing**: `bottom-4 right-4 left-4` on mobile for cleaner look
-6. **Bottom banner safe area**: add `pb-[env(safe-area-inset-bottom)]`
-7. **Banner close button on mobile**: ensure 44x44 tap target (currently `p-1.5` with `h-4 w-4` icon = ~28px, **below accessibility minimum**)
-8. **HTML variant**: pass onClose to allow custom close buttons inside HTML (optional)
-9. **Form submit**: log `submit` analytics event (currently only fired via close('submit'))
-10. **Body scroll lock**: only applied for non-banner layouts ✓ but doesn't restore properly if multiple popups stack
-11. **Backdrop click**: only on center_modal — slide-ins don't have backdrop (correct behavior actually)
-12. **z-index conflicts**: z-[9999] same as chat widget — popup may be hidden behind chat
-13. **Live preview in PopupBuilder**: need to verify it reflects all settings
+**`src/pages/admin/popups/PopupBuilder.tsx`** — replace the two raw `<Input>` fields for `image_url` and `video_url` with the existing `MediaPickerModal` (used by Sponsors, Workshops, Posts, etc.). Adds a thumbnail preview + "Choose / Replace / Remove" buttons. Still allows pasting an external URL (YouTube, Vimeo, Cloudinary) for video.
 
-Plan response below.
+## 2. Background video support
+
+**Schema migration** — add to `popups` table:
+- `background_video_url TEXT` — YouTube/Vimeo/MP4
+- `background_video_overlay_opacity NUMERIC DEFAULT 0.5` — dark overlay so text stays readable
+
+**`src/components/popups/PopupLayout.tsx`** — when `background_video_url` is set:
+- Render a `<video autoplay muted loop playsinline>` for direct MP4
+- Render a YouTube/Vimeo iframe with `autoplay=1&mute=1&loop=1&controls=0` for embeds
+- Position absolute, `object-cover`, behind content (`z-0`)
+- Apply dark overlay with configured opacity
+- Force text color to white when active for legibility
+
+**Builder Design tab** — new "Background Video" section with media picker + opacity slider + live preview.
+
+## 3. Smart countdown linked to real entities
+
+**Schema migration** — add to `popups` table:
+- `countdown_source TEXT DEFAULT 'manual'` — `manual` | `course` | `workshop` | `event` | `registration`
+- `countdown_source_id UUID` — id of the linked entity
+- `countdown_source_field TEXT` — which date field to read (`start_date`, `registration_deadline`, `application_deadline`, etc.)
+
+**Builder Behavior tab** — when type = `countdown`, show:
+
+```text
+Countdown source: [Manual date ▼ | Course | Workshop | Event | Registration]
+  ├─ Manual    → existing datetime input
+  ├─ Course    → searchable Select (all courses) → field: start_date / enrollment_end
+  ├─ Workshop  → searchable Select (all workshops) → field: start_date / registration_deadline
+  ├─ Event     → searchable Select → field: event_date
+  └─ Registration → searchable Select (registration pages) → field: deadline
+```
+
+**`src/components/popups/PopupRenderer.tsx`** — `CountdownVariant` resolves the target date at render:
+- If `countdown_source = 'manual'` → use `countdown_target_date` (current behavior)
+- Otherwise → fetch the linked record once and read the configured field
+- Cache via React Query for 5 min; if entity has no date, fallback to `countdown_target_date`
+
+**Bonus**: when countdown reaches zero, optionally hide popup or show an "expired" message (new `countdown_expired_action` field: `hide | show_message`).
+
+## Files Changed
+
+| File | Change |
+|------|--------|
+| `supabase/migrations/...sql` (new) | Add `background_video_url`, `background_video_overlay_opacity`, `countdown_source`, `countdown_source_id`, `countdown_source_field`, `countdown_expired_action` to `popups` |
+| `src/pages/admin/popups/PopupBuilder.tsx` | Media Picker for image/video, background video section, smart countdown selector |
+| `src/components/popups/PopupLayout.tsx` | Render background video layer + overlay |
+| `src/components/popups/PopupRenderer.tsx` | Resolve countdown target from linked entity, expired-action handling |
+
+## Notes
+- All existing popups continue to work (new columns are nullable with safe defaults)
+- Background video respects mobile data: only plays after popup is visible, pauses on close
+- Media Picker already supports image + video filtering via the `accept` prop
+
