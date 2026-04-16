@@ -90,7 +90,7 @@ export default function MyWorkshopsPage() {
                       <div className="flex items-center gap-2 flex-wrap">
                         <h3 className="font-heading font-semibold text-base">{ws.title}</h3>
                         <Badge variant="outline" className="text-[10px]">{ws.status}</Badge>
-                        <Badge variant="secondary" className="text-[10px]">#{reg.registration_number}</Badge>
+                        <Badge variant="secondary" className="text-[10px] font-mono">Roll: {reg.registration_number}</Badge>
                       </div>
 
                       <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
