@@ -52,8 +52,27 @@
     <!-- Decorative/certificate fonts — deferred, not needed for initial render -->
     <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400&family=Great+Vibes&family=Dancing+Script:wght@400;700&family=Pacifico&family=Satisfy&family=Sacramento&family=Allura&family=Tangerine:wght@400;700&family=Pinyon+Script&family=Alex+Brush&family=Cormorant+Garamond:ital,wght@0,400;0,700;1,400&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Cinzel:wght@400;700&display=swap" onload="this.onload=null;this.rel='stylesheet'" />
     <noscript><link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400&family=Great+Vibes&family=Dancing+Script:wght@400;700&family=Pacifico&family=Satisfy&family=Sacramento&family=Allura&family=Tangerine:wght@400;700&family=Pinyon+Script&family=Alex+Brush&family=Cormorant+Garamond:ital,wght@0,400;0,700;1,400&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Cinzel:wght@400;700&display=swap" rel="stylesheet" /></noscript>
+
+    <!-- Meta Pixel — base code. PageView is fired manually from React on route change (not auto) to avoid double-counting in SPA. -->
+    <script>
+      !function(f,b,e,v,n,t,s)
+      {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+      n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+      if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+      n.queue=[];t=b.createElement(e);t.async=!0;
+      t.src=v;s=b.getElementsByTagName(e)[0];
+      s.parentNode.insertBefore(t,s)}(window, document,'script',
+      'https://connect.facebook.net/en_US/fbevents.js');
+      fbq('init', '1005930275539761');
+      window.__META_PIXEL_ID__ = '1005930275539761';
+      window.__META_PIXEL_TEST_CODE__ = 'TEST4851';
+      window.__META_PIXEL_ENABLED__ = true;
+    </script>
   </head>
   <body>
+    <!-- Meta Pixel noscript fallback (must be in <body>, not <head>) -->
+    <noscript><img height="1" width="1" style="display:none" alt="" src="https://www.facebook.com/tr?id=1005930275539761&ev=PageView&noscript=1" /></noscript>
+
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
