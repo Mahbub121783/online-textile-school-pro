@@ -1,93 +1,90 @@
 
 
-## SEO Audit — Current State
+The user wants to install Meta Pixel (Facebook Pixel) on their site with comprehensive event tracking. They need:
+1. Instructions on where to find Pixel ID, Access Token (for Conversions API), and Test Event Code
+2. Then implementation of browser-side Pixel + server-side CAPI with 8 specific events
 
-**Strong foundations already in place:**
-- `SEOHead` (title, description, canonical, OG/Twitter, JSON-LD, breadcrumbs) used on 30 public pages including CourseDetail, EbookDetail, Blog, Faculty, Departments, Workshops, Research, Internships, DynamicPage
-- `og-meta` edge function serves perfect crawler HTML for courses/ebooks/workshops/research/internships/learning-paths/blog (proxied via `.htaccess` for FB/WhatsApp/Twitter/LinkedIn/Google bots)
-- Dynamic XML sitemap edge function with all entity slugs + priorities + lastmod
-- `robots.txt` with sitemap reference, blocks admin/dashboard/instructor
-- `EducationalOrganization` + `WebSite SearchAction` + `Course` + `Book` + `BreadcrumbList` JSON-LD
-- Auto slug generation triggers on courses/ebooks/workshops via `generate_seo_slug`
-- AI index builder for internal search
+Let me check current setup briefly. The project is React/Vite with React Router. Index.html exists, useAuth, cart store, lesson player exists for video tracking. From `.htaccess` I noticed an HTML5 constraint warning about `<noscript><img>` — must go in body, not head.
 
-**Gaps that block "100% auto high-SEO on upload":**
+# Meta Pixel + Conversions API — Setup Guide & Implementation Plan
 
-| # | Gap | Fix |
+## Part 1 — How to find the 3 things you need
+
+### A. Pixel ID (15–16 digit number)
+1. Go to **business.facebook.com** → **Events Manager** (left sidebar)
+2. Click **Data Sources** → select your Pixel (or create one: "Connect Data Sources" → Web → Meta Pixel)
+3. Pixel ID shows at the top under the pixel name (e.g. `589923442958258` — visible in your screenshot)
+
+### B. Access Token (for Conversions API — server-side tracking)
+1. Events Manager → your Pixel → **Settings** tab
+2. Scroll to **Conversions API** section → click **Generate access token**
+3. Copy the long token immediately (shown only once). Looks like: `EAAxxxxxxx...`
+4. This goes into Lovable Cloud as a secret — never commit to code
+
+### C. Test Event Code
+1. Events Manager → your Pixel → **Test Events** tab
+2. A code like `TEST12345` is auto-generated at the top
+3. Copy it. While testing, every event will be tagged with this code so it shows up in the Test Events stream in real time. Remove from production.
+
+Send these three values via the chat once you have them — Pixel ID + Test Event Code go directly in code; Access Token will be requested as a secure secret.
+
+## Part 2 — What I'll build
+
+### Browser-side Pixel (`fbq`)
+- Inject Pixel base code in `index.html` (head) + `<noscript><img>` fallback in `<body>` (per HTML5 rules)
+- Create `src/lib/metaPixel.ts` helper exposing `trackEvent(name, params, options)` with safe fallback if `fbq` not loaded
+- Respects existing **CookieConsentBanner** — Pixel only fires after user accepts marketing cookies
+
+### Server-side Conversions API (CAPI) — for accuracy & iOS/ad-blocker bypass
+- New edge function `meta-capi` that mirrors every browser event server-side
+- Hashes user data (email, phone) with SHA-256 before sending
+- Uses `event_id` to deduplicate browser + server events
+- `ACCESS_TOKEN` and `PIXEL_ID` stored as Supabase secrets
+
+### Events implemented
+
+| Event | Trigger | File touched |
 |---|---|---|
-| 1 | `og-meta` ebook query missing `meta_title`/`meta_description`/`og_image_url`/`seo_keywords` | Use SEO fields when present, fallback to defaults |
-| 2 | Workshops/Learning paths/Posts in `og-meta` ignore meta_title/meta_description fields | Read them from DB, fallback to title/description |
-| 3 | Course/Ebook creators may leave SEO fields empty → weak titles/descriptions | DB trigger auto-fills `meta_title`, `meta_description`, `seo_keywords` from title + short_description on insert/update if blank |
-| 4 | No image alt text guidance + no `<h1>` audit on listing pages | Already OK — `h1` exists in detail pages |
-| 5 | Sitemap not pinged to Google/Bing on publish | Add `pg_net` trigger: when course/ebook/post is_published=true → POST sitemap URL to Google + Bing ping endpoints |
-| 6 | Sitemap missing: workshops, research_papers, internships, faculty | Add these sections to sitemap function |
-| 7 | No `hreflang` for English/Bengali bilingual content | Add `<link rel="alternate" hreflang="en|bn">` in `SEOHead` |
-| 8 | AdminCourses page is a 46-line stub — no edit form (instructor CourseBuilder has SEO fields, but admins can't edit course SEO directly) | Out of scope for SEO; instructor builder already covers it |
-| 9 | EbookReader & forum CreatePost lack SEOHead (low priority — auth-gated/transient) | Add lightweight SEOHead with `noindex` |
-| 10 | No `Article` JSON-LD on blog posts (only basic OG) | Add `Article`/`BlogPosting` JSON-LD in `BlogPost.tsx` |
-| 11 | No FAQ schema on Course detail | Optional — add `FAQPage` JSON-LD when course has Q&A |
-| 12 | After publish, sitemap edge function isn't auto-pinged → Google waits days to recrawl | See #5 |
+| **PageView** | Every route change | `src/App.tsx` (router listener) |
+| **AddToCart** | Add to cart button | `src/stores/cartStore.ts` or detail pages |
+| **InitiateCheckout** | Checkout page mount | `src/pages/cart/Checkout.tsx` |
+| **Purchase** (standard name for "Checkout") | Payment success page | `src/pages/payment/PaymentSuccess.tsx` — uses real order value + currency |
+| **TimeOnPage** | 30s + 60s + 120s timers | new `src/hooks/useEngagementTracking.ts` mounted in `App.tsx` |
+| **PageScroll** | 25 / 50 / 75 / 100% depth | same hook |
+| **WatchVideo** | Play / 25/50/75/100% / complete | `src/components/media/SecureMediaPlayer.tsx` |
+| **InternalClick** | Click on internal `<a>` / `<Link>` | global delegated listener in `App.tsx` |
 
-## Plan: Make Every New Course/Ebook Auto-SEO
+All events also fire to CAPI with hashed user data when logged in.
 
-### 1. Database trigger — auto-fill SEO fields on insert/update
-For `courses`, `ebooks`, `workshops`, `posts`, `learning_paths`, `research_papers`:
-- If `meta_title` blank → `title` (truncated 60 chars)
-- If `meta_description` blank → `short_description` / `excerpt` / first 155 chars of `description`
-- If `seo_keywords` blank (where column exists) → derive from title words + category + type ("textile", "online", "course"/"ebook")
-- If `og_image_url` blank → use `thumbnail_url` / `cover_url` / `featured_image_url`
-
-### 2. Auto-ping search engines on publish
-New trigger via `pg_net`: when `is_published` flips to true (or `status='published'`), HTTP GET to:
-- `https://www.google.com/ping?sitemap=<sitemap-url>`
-- `https://www.bing.com/ping?sitemap=<sitemap-url>`
-Plus `IndexNow` POST (free instant indexing for Bing/Yandex) — admin sets API key once in settings.
-
-### 3. Expand `og-meta` edge function
-- Read `meta_title`/`meta_description`/`og_image_url` for ebooks, workshops, learning_paths, posts (already done for courses)
-- Fall back gracefully
-
-### 4. Expand sitemap edge function
-- Add `workshops`, `research_papers`, `internships`, `faculty` sections
-- Add `<image:image>` namespace with thumbnails for richer image-search results
-- Add news/article tags for blog posts
-
-### 5. Bilingual hreflang in `SEOHead`
-- Add `<link rel="alternate" hreflang="en" href="...">` and `<link rel="alternate" hreflang="bn" href="...?lang=bn">` + `x-default`
-
-### 6. `BlogPost` JSON-LD
-- Add `Article`/`BlogPosting` schema with author, datePublished, dateModified, image, publisher
-
-### 7. New IndexNow edge function
-- `indexnow-ping` accepts URL list, posts to `api.indexnow.org` — called by trigger #2
-
-### 8. Admin SEO Dashboard (small new tab in Admin Settings)
-- Read-only widget showing: total indexed pages, last sitemap ping, IndexNow key status, schema-validation tips
-- "Re-index all" button (calls existing `ai-index-builder` + sitemap ping)
+### Admin control panel
+Add a **Meta Pixel** card to **Admin → Settings** with:
+- Pixel ID input (saved to settings table — currently hardcoded works too if you prefer)
+- Test Event Code input (toggle on/off for production)
+- Enable/disable switch
+- Live status badge ("Last event sent: 3s ago")
 
 ## Files Changed
 
 | File | Change |
 |---|---|
-| `supabase/migrations/...sql` (new) | Auto-SEO fill triggers on 6 tables; IndexNow API key column on `settings`; pg_net publish-ping trigger |
-| `supabase/functions/og-meta/index.ts` | Use meta_title/meta_description/og_image_url for all entity types |
-| `supabase/functions/sitemap/index.ts` | Add workshops/research/internships/faculty + image:image namespace |
-| `supabase/functions/indexnow-ping/index.ts` (new) | Push URLs to IndexNow on publish |
-| `src/components/SEOHead.tsx` | Add hreflang en/bn/x-default tags |
-| `src/pages/cms/BlogPost.tsx` | Add Article/BlogPosting JSON-LD |
-| `src/pages/admin/AdminSettings.tsx` | New "SEO" tab — IndexNow key, re-index button, ping status |
-| `src/pages/ebooks/EbookReader.tsx`, `src/pages/forum/CreatePost.tsx` | Add `SEOHead` with `noindex` |
+| `index.html` | Pixel base script in `<head>`, noscript pixel in `<body>` |
+| `src/lib/metaPixel.ts` (new) | `trackEvent()` helper, consent-aware, dual browser+CAPI dispatch |
+| `src/hooks/useEngagementTracking.ts` (new) | Time-on-page + scroll-depth + internal-click listeners |
+| `src/App.tsx` | Mount engagement hook, route-change PageView |
+| `src/stores/cartStore.ts` | Fire AddToCart |
+| `src/pages/cart/Checkout.tsx` | Fire InitiateCheckout |
+| `src/pages/payment/PaymentSuccess.tsx` | Fire Purchase with value+currency+order_id |
+| `src/components/media/SecureMediaPlayer.tsx` | Fire WatchVideo at quartile milestones |
+| `src/pages/admin/AdminSettings.tsx` | Meta Pixel config card |
+| `supabase/functions/meta-capi/index.ts` (new) | Server-side CAPI relay with SHA-256 hashing |
+| `supabase/migrations/...sql` | `meta_pixel_id`, `meta_pixel_test_code`, `meta_pixel_enabled` columns on settings |
 
-## Result After Implementation
-- **Every new course/ebook/post is auto-SEO'd** the moment it's saved — no manual meta fields needed
-- **Google/Bing notified within seconds** of publish via sitemap ping + IndexNow
-- **Crawlers see perfect OG tags** for every entity type (already working for courses; extends to all)
-- **Image search coverage** via `<image:image>` in sitemap
-- **Bilingual SEO** via hreflang for English/Bengali audiences
-- **Rich results eligibility**: Course, Book, Article, FAQPage, BreadcrumbList, EducationalOrganization, AggregateRating already in place
+## What I need from you to start
 
-## What stays the same
-- Existing manual SEO inputs in InstructorCourseBuilder, AdminEbooks, AdminPages still work (and override auto-fill)
-- All current `SEOHead` usage continues unchanged
-- No breaking changes to URLs, slugs, or routing
+Reply with:
+1. **Pixel ID** (e.g. `589923442958258`)
+2. **Test Event Code** (e.g. `TEST12345`)
+3. Confirm you want server-side CAPI too (recommended) — if yes, I'll request the **Access Token** as a secure secret in the next step
+
+Once approved, implementation takes one pass.
 
