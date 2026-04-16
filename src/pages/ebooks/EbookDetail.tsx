@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -21,15 +22,31 @@ const EbookDetail = () => {
   const { data: ebook, isLoading } = useQuery({
     queryKey: ['ebook', slug],
     queryFn: async () => {
-      const { data } = await supabase
+      // Try slug first, then fallback to UUID
+      let { data } = await supabase
         .from('ebooks')
         .select('id, title, slug, description, author, cover_url, price, discount_price, page_count, is_published, category_id, tags, sub_writers, age_restriction, gallery_urls, categories(name)')
         .eq('slug', slug!)
-        .single();
+        .maybeSingle();
+      if (!data) {
+        const res = await supabase
+          .from('ebooks')
+          .select('id, title, slug, description, author, cover_url, price, discount_price, page_count, is_published, category_id, tags, sub_writers, age_restriction, gallery_urls, categories(name)')
+          .eq('id', slug!)
+          .maybeSingle();
+        data = res.data;
+      }
       return data;
     },
     enabled: !!slug,
   });
+
+  // Redirect UUID URLs to slug URLs
+  useEffect(() => {
+    if (ebook?.slug && slug !== ebook.slug) {
+      navigate(`/ebooks/${ebook.slug}`, { replace: true });
+    }
+  }, [ebook?.slug, slug, navigate]);
 
   const { data: isPurchased } = useQuery({
     queryKey: ['ebook-purchased', ebook?.id, user?.id],

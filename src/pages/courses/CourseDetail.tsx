@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -36,16 +36,33 @@ const CourseDetail = () => {
   const { data: course, isLoading } = useQuery({
     queryKey: ['course-detail', slug],
     queryFn: async () => {
-      const { data, error } = await supabase
+      // Try slug first, then fallback to UUID
+      let { data, error } = await supabase
         .from('courses')
         .select('*, categories(name), user_profiles!courses_instructor_id_fkey(id, full_name, avatar_url)')
         .eq('slug', slug!)
-        .single();
+        .maybeSingle();
+      if (!data) {
+        const res = await supabase
+          .from('courses')
+          .select('*, categories(name), user_profiles!courses_instructor_id_fkey(id, full_name, avatar_url)')
+          .eq('id', slug!)
+          .maybeSingle();
+        data = res.data;
+        error = res.error;
+      }
       if (error) throw error;
       return data;
     },
     enabled: !!slug,
   });
+
+  // Redirect UUID URLs to slug URLs
+  useEffect(() => {
+    if (course?.slug && slug !== course.slug) {
+      navigate(`/courses/${course.slug}`, { replace: true });
+    }
+  }, [course?.slug, slug, navigate]);
 
   const { data: sections = [] } = useQuery({
     queryKey: ['course-sections', course?.id],

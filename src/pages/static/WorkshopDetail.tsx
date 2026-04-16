@@ -55,6 +55,13 @@ export default function WorkshopDetail() {
     enabled: !!slug,
   });
 
+  // Redirect UUID URLs to slug URLs
+  useEffect(() => {
+    if (workshop?.slug && slug !== workshop.slug) {
+      navigate(`/workshops/${workshop.slug}`, { replace: true });
+    }
+  }, [workshop?.slug, slug, navigate]);
+
   const { data: sessions = [] } = useQuery({
     queryKey: ['workshop-sessions', workshop?.id],
     queryFn: async () => {
