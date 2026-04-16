@@ -152,15 +152,15 @@ const AdminSettings = () => {
             </CardHeader>
             <CardContent className="space-y-3 text-sm">
               <div className="flex items-center gap-2">
-                <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
+                <span className="inline-block w-2 h-2 rounded-full bg-primary" />
                 Auto-fill triggers active on 7 content tables
               </div>
               <div className="flex items-center gap-2">
-                <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
+                <span className="inline-block w-2 h-2 rounded-full bg-primary" />
                 Publish-ping triggers active (Courses, Ebooks, Posts, Workshops, Learning Paths)
               </div>
               <div className="flex items-center gap-2">
-                <span className={`inline-block w-2 h-2 rounded-full ${indexNowKey ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                <span className={`inline-block w-2 h-2 rounded-full ${indexNowKey ? 'bg-primary' : 'bg-destructive'}`} />
                 IndexNow: {indexNowKey ? 'Configured' : 'Not configured (Bing/Yandex/Seznam instant indexing disabled)'}
               </div>
               <div className="flex flex-wrap gap-3 pt-2">
