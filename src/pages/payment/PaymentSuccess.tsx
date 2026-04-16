@@ -27,6 +27,11 @@ const PaymentSuccess = () => {
     } else {
       setStatus('success');
       clearCart();
+      // Fire Meta Purchase (no amount available — best-effort)
+      try {
+        trackMetaEvent('Purchase', { value: 0, currency: 'BDT' },
+          user?.email ? { email: user.email, externalId: user.id } : undefined);
+      } catch {}
       if (user?.id) ensureStudentIdCard(user.id);
     }
   }, []);
