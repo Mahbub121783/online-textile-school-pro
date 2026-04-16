@@ -27,6 +27,9 @@ const AdminSettings = () => {
   const [formData, setFormData] = useState<Record<string, string>>({});
   const [indexNowKey, setIndexNowKey] = useState('');
   const [reindexing, setReindexing] = useState(false);
+  const [pixelId, setPixelId] = useState('1005930275539761');
+  const [pixelTestCode, setPixelTestCode] = useState('TEST4851');
+  const [pixelEnabled, setPixelEnabled] = useState(true);
   const queryClient = useQueryClient();
   const { user } = useAuth();
 
@@ -44,8 +47,16 @@ const AdminSettings = () => {
       settings.forEach((s) => { map[s.key] = s.value ?? ''; });
       setFormData(map);
       setIndexNowKey(map['indexnow_key'] || '');
+      if (map['meta_pixel_id']) setPixelId(map['meta_pixel_id']);
+      if (map['meta_pixel_test_code'] !== undefined) setPixelTestCode(map['meta_pixel_test_code']);
+      if (map['meta_pixel_enabled'] !== undefined) setPixelEnabled(map['meta_pixel_enabled'] !== 'false');
     }
   }, [settings]);
+
+  // Apply Meta Pixel config to runtime whenever it changes
+  useEffect(() => {
+    configureMetaPixel({ pixelId, testCode: pixelTestCode, enabled: pixelEnabled });
+  }, [pixelId, pixelTestCode, pixelEnabled]);
 
   const upsertSetting = async (key: string, value: string) => {
     const existing = settings?.find((s) => s.key === key);
