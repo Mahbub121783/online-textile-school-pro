@@ -26,6 +26,7 @@ const emptyWs = {
   meet_link: '', max_participants: '' as any, status: 'draft' as const, is_featured: false,
   registration_deadline: '', instructor_id: null as string | null,
   prerequisites: '', what_you_learn: [] as string[], materials: [] as any[],
+  fake_registration_count: 0 as any,
 };
 
 export default function AdminWorkshops() {
@@ -147,6 +148,7 @@ export default function AdminWorkshops() {
     mutationFn: async (ws: any) => {
       const payload = {
         ...ws,
+        fake_registration_count: ws.fake_registration_count ? Number(ws.fake_registration_count) : 0,
         max_participants: ws.max_participants ? Number(ws.max_participants) : null,
         registration_deadline: ws.registration_deadline || null,
         end_date: ws.end_date || null,
@@ -375,6 +377,11 @@ export default function AdminWorkshops() {
                     <div><Label>Google Meet Link</Label><Input value={editWs.meet_link || ''} onChange={(e) => setEditWs({ ...editWs, meet_link: e.target.value })} /></div>
                     <div><Label>Max Participants</Label><Input type="number" value={editWs.max_participants || ''} onChange={(e) => setEditWs({ ...editWs, max_participants: e.target.value })} placeholder="Unlimited" /></div>
                     <div><Label>Registration Deadline</Label><Input type="datetime-local" value={editWs.registration_deadline || ''} onChange={(e) => setEditWs({ ...editWs, registration_deadline: e.target.value })} /></div>
+                    <div className="col-span-2">
+                      <Label>Boost Registration Count</Label>
+                      <Input type="number" min="0" value={editWs.fake_registration_count || ''} onChange={(e) => setEditWs({ ...editWs, fake_registration_count: e.target.value })} placeholder="0" />
+                      <p className="text-xs text-muted-foreground mt-1">Added to real registrations on public pages (cards & detail). Use to make a workshop look more popular.</p>
+                    </div>
 
                     {/* Thumbnail via MediaPicker */}
                     <div className="col-span-2">

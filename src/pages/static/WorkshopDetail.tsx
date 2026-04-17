@@ -87,7 +87,7 @@ export default function WorkshopDetail() {
     queryKey: ['workshop-reg-count', workshop?.id],
     queryFn: async () => {
       const { count } = await supabase.from('workshop_registrations').select('*', { count: 'exact', head: true }).eq('workshop_id', workshop!.id).eq('status', 'registered');
-      return count || 0;
+      return (count || 0) + ((workshop as any)?.fake_registration_count || 0);
     },
     enabled: !!workshop?.id,
   });
