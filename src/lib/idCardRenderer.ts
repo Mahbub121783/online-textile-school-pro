@@ -71,9 +71,14 @@ export async function renderIdCard(
   data: IdCardData,
   settings: IdCardSettings
 ): Promise<void> {
-  canvas.width = CARD_W;
-  canvas.height = CARD_H;
+  // ── 2× DPR rendering for crisp PDF/PNG export ──
+  const SCALE = 2;
+  canvas.width = CARD_W * SCALE;
+  canvas.height = CARD_H * SCALE;
   const ctx = canvas.getContext('2d')!;
+  ctx.scale(SCALE, SCALE);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
   const primary = settings.card_bg_color || '#0f2557';
 
   // ── Card background with rounded corners ──
