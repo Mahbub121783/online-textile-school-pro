@@ -17,6 +17,7 @@ import { Plus, Search, BarChart3, Edit, Trash2, BookOpen, Upload, X, Eye, EyeOff
 import ContributorPickerModal, { type PickedContributor } from '@/components/shared/ContributorPickerModal';
 import { useContributors, useAddContributor, useRemoveContributor } from '@/hooks/useContributors';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { useCmsScope } from '@/components/cms/CmsScopeContext';
 
 interface EbookForm {
   id?: string;
@@ -66,6 +67,8 @@ function getStorageSource(url: string): 'r2' | 'cloudinary' | 'unknown' {
 const AdminEbooks = () => {
   const qc = useQueryClient();
   const { upload, uploading, progress } = useFileUpload();
+  const { scope, userId } = useCmsScope();
+  const isInstructor = scope === 'instructor';
   const [search, setSearch] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<EbookForm>(emptyForm);
@@ -80,9 +83,11 @@ const AdminEbooks = () => {
   const removeContributor = useRemoveContributor();
 
   const { data: ebooks = [], isLoading } = useQuery({
-    queryKey: ['admin-ebooks'],
+    queryKey: ['admin-ebooks', scope, userId],
     queryFn: async () => {
-      const { data } = await supabase.from('ebooks').select('*, categories(name)').order('created_at', { ascending: false });
+      let q = supabase.from('ebooks').select('*, categories(name)').order('created_at', { ascending: false });
+      if (isInstructor && userId) q = q.eq('created_by', userId);
+      const { data } = await q;
       return data || [];
     },
   });
@@ -102,16 +107,26 @@ const AdminEbooks = () => {
         throw new Error('Ebook files must be stored on Cloudflare R2, not Cloudinary. Please re-upload the ebook file.');
       }
       const { id, ...rest } = data;
-      const payload = {
+      const payload: any = {
         ...rest,
         slug: rest.slug || rest.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''),
       };
       if (id) {
         const { error } = await supabase.from('ebooks').update(payload).eq('id', id);
         if (error) throw error;
+        return id;
       } else {
-        const { error } = await supabase.from('ebooks').insert(payload);
+        // Instructor mode: stamp ownership; admin mode: optional
+        if (isInstructor && userId) payload.created_by = userId;
+        const { data: inserted, error } = await supabase.from('ebooks').insert(payload).select('id').single();
         if (error) throw error;
+        // Auto-link instructor as lead author contributor
+        if (isInstructor && userId && inserted?.id) {
+          await supabase.from('content_contributors').insert({
+            content_type: 'ebook', content_id: inserted.id, user_id: userId, role: 'author', sort_order: 0,
+          });
+        }
+        return inserted?.id;
       }
     },
     onSuccess: () => {
