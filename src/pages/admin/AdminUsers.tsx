@@ -73,44 +73,7 @@ const AdminUsers = () => {
     onError: () => toast.error('Failed to update user status'),
   });
 
-  const assignRole = useMutation({
-    mutationFn: async ({ userId, role }: { userId: string; role: string }) => {
-      const { error } = await supabase.from('user_roles').insert({ user_id: userId, role: role as any });
-      if (error) throw error;
-      await supabase.from('admin_activity_log').insert({
-        admin_id: currentUser!.id,
-        action: `Assigned role: ${role}`,
-        target_type: 'user',
-        target_id: userId,
-      });
-    },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['admin-users'] }); toast.success('Role assigned'); },
-    onError: (e: any) => toast.error(e.message?.includes('duplicate') ? 'Role already assigned' : 'Failed to assign role'),
-  });
-
-  const removeRole = useMutation({
-    mutationFn: async ({ userId, role }: { userId: string; role: string }) => {
-      const { error } = await supabase.from('user_roles').delete().eq('user_id', userId).eq('role', role as any);
-      if (error) throw error;
-      await supabase.from('admin_activity_log').insert({
-        admin_id: currentUser!.id,
-        action: `Removed role: ${role}`,
-        target_type: 'user',
-        target_id: userId,
-      });
-    },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['admin-users'] }); toast.success('Role removed'); },
-    onError: () => toast.error('Failed to remove role'),
-  });
-
-  const roleBadgeColor = (role: string) => {
-    switch (role) {
-      case 'super_admin': return 'destructive';
-      case 'admin': return 'default';
-      case 'instructor': return 'secondary';
-      default: return 'outline';
-    }
-  };
+  const roleBadgeColor = (role: string) => getRoleDef(role)?.badgeVariant ?? 'outline';
 
   return (
     <div className="space-y-6">
@@ -216,37 +179,14 @@ const AdminUsers = () => {
                             <PublicProfileEditor userId={u.id} mode="admin" />
                           </DialogContent>
                         </Dialog>
-                        <Dialog>
-                          <DialogTrigger asChild>
-                            <Button variant="ghost" size="icon" title="Manage roles"><Shield className="h-4 w-4" /></Button>
-                          </DialogTrigger>
-                          <DialogContent>
-                            <DialogHeader><DialogTitle>Manage Roles — {u.full_name}</DialogTitle></DialogHeader>
-                            <div className="space-y-4">
-                              <div>
-                                <p className="text-sm font-medium mb-2">Current Roles</p>
-                                <div className="flex flex-wrap gap-2">
-                                  {u.roles.length === 0 && <p className="text-sm text-muted-foreground">No roles</p>}
-                                  {u.roles.map((r: string) => (
-                                    <Badge key={r} variant={roleBadgeColor(r) as any} className="cursor-pointer" onClick={() => removeRole.mutate({ userId: u.id, role: r })}>
-                                      {r} <ShieldOff className="h-3 w-3 ml-1" />
-                                    </Badge>
-                                  ))}
-                                </div>
-                              </div>
-                              <div>
-                                <p className="text-sm font-medium mb-2">Add Role</p>
-                                <div className="flex flex-wrap gap-2">
-                                  {ALL_ROLES.filter((r) => !u.roles.includes(r)).map((r) => (
-                                    <Button key={r} size="sm" variant="outline" onClick={() => assignRole.mutate({ userId: u.id, role: r })}>
-                                      + {r}
-                                    </Button>
-                                  ))}
-                                </div>
-                              </div>
-                            </div>
-                          </DialogContent>
-                        </Dialog>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          title="Manage roles"
+                          onClick={() => setRoleDialog({ userId: u.id, name: u.full_name || 'User', roles: u.roles })}
+                        >
+                          <Shield className="h-4 w-4" />
+                        </Button>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -256,6 +196,16 @@ const AdminUsers = () => {
           </Table>
         </CardContent>
       </Card>
+
+      {roleDialog && (
+        <RoleManagerDialog
+          open={!!roleDialog}
+          onOpenChange={(o) => !o && setRoleDialog(null)}
+          userId={roleDialog.userId}
+          userName={roleDialog.name}
+          currentRoles={roleDialog.roles}
+        />
+      )}
     </div>
   );
 };
