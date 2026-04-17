@@ -15,11 +15,16 @@ import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 import { Search, Plus, Pencil, Trash2, CheckCircle2, Clock, FileText } from 'lucide-react';
 import { format } from 'date-fns';
+import { useCmsScope } from '@/components/cms/CmsScopeContext';
+import { useAuth } from '@/hooks/useAuth';
 
 const AssignmentTab = () => {
+  const { scope, courseId: lockedCourseId } = useCmsScope();
+  const { user } = useAuth();
+  const isInstructor = scope === 'instructor';
   const [subTab, setSubTab] = useState('assignments');
   const [search, setSearch] = useState('');
-  const [courseFilter, setCourseFilter] = useState('all');
+  const [courseFilter, setCourseFilter] = useState(lockedCourseId || 'all');
   const [editDialog, setEditDialog] = useState<{ open: boolean; assignment?: any }>({ open: false });
   const [gradeDialog, setGradeDialog] = useState<{ open: boolean; submission?: any }>({ open: false });
   const [form, setForm] = useState({ title: '', course_id: '', description: '', instructions: '', max_score: '100', due_days: '7', is_published: false });
@@ -27,9 +32,11 @@ const AssignmentTab = () => {
   const qc = useQueryClient();
 
   const { data: courses = [] } = useQuery({
-    queryKey: ['assignment-mgmt-courses'],
+    queryKey: ['assignment-mgmt-courses', scope, user?.id],
     queryFn: async () => {
-      const { data } = await supabase.from('courses').select('id, title').order('title');
+      let q = supabase.from('courses').select('id, title').order('title');
+      if (isInstructor && user?.id) q = q.eq('instructor_id', user.id);
+      const { data } = await q;
       return data ?? [];
     },
   });
