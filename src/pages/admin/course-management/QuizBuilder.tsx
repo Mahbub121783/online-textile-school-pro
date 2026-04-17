@@ -114,8 +114,10 @@ const QuizBuilder = ({ quizId, onBack }: Props) => {
         lock_ip: (existingQuiz as any).lock_ip ?? false,
         auto_submit_on_blur: (existingQuiz as any).auto_submit_on_blur ?? false,
       });
+    } else if (isNew && lockedCourseId && !quiz.course_id) {
+      setQuiz(q => ({ ...q, course_id: lockedCourseId }));
     }
-  }, [existingQuiz]);
+  }, [existingQuiz, isNew, lockedCourseId]);
 
   useEffect(() => {
     if (existingQuestions.length > 0) {
