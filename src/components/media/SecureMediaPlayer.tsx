@@ -4,24 +4,21 @@ import { Slider } from '@/components/ui/slider';
 import { Badge } from '@/components/ui/badge';
 import {
   Play, Pause, Volume2, VolumeX, Maximize, Minimize,
-  SkipBack, SkipForward, Settings, Monitor, Loader2
+  SkipBack, SkipForward, Monitor, Loader2, MoreVertical
 } from 'lucide-react';
 import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator
 } from '@/components/ui/dropdown-menu';
 import { trackMetaEvent } from '@/lib/metaPixel';
+import PlayerShell from './PlayerShell';
 
 interface SecureMediaPlayerProps {
   videoUrl?: string | null;
   videoPlatform?: string | null;
   title?: string;
-  /** Called periodically with current playback seconds */
   onProgress?: (seconds: number) => void;
-  /** Resume from this position */
   startPosition?: number;
-  /** Watermark text (e.g. user email) */
   watermark?: string;
-  /** Show controls */
   showControls?: boolean;
   className?: string;
 }
@@ -46,7 +43,6 @@ function extractDriveId(url: string): string | null {
 function parseVideoSource(url: string, platform?: string | null) {
   if (!url) return { type: 'none' as const, embedUrl: '' };
 
-  // YouTube
   if (platform === 'youtube' || url.includes('youtube') || url.includes('youtu.be')) {
     const match = url.match(/(?:v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
     if (match) {
@@ -58,7 +54,6 @@ function parseVideoSource(url: string, platform?: string | null) {
     }
   }
 
-  // Vimeo
   if (platform === 'vimeo' || url.includes('vimeo')) {
     const match = url.match(/vimeo\.com\/(\d+)/);
     if (match) {
@@ -70,7 +65,6 @@ function parseVideoSource(url: string, platform?: string | null) {
     }
   }
 
-  // Google Drive — supports /file/d/{ID}/, ?id={ID}, /uc?id={ID}, /open?id={ID}, /preview
   if (platform === 'drive' || url.includes('drive.google.com')) {
     const id = extractDriveId(url);
     if (id) {
@@ -82,12 +76,10 @@ function parseVideoSource(url: string, platform?: string | null) {
     }
   }
 
-  // Direct video (mp4, webm, etc.)
   if (/\.(mp4|webm|ogg|mov|m3u8)(\?|$)/i.test(url) || platform === 'upload') {
     return { type: 'direct' as const, embedUrl: url };
   }
 
-  // Fallback: treat as embeddable iframe
   return { type: 'iframe' as const, embedUrl: url };
 }
 
@@ -97,6 +89,14 @@ function formatTime(s: number) {
   const sec = Math.floor(s % 60);
   return `${m}:${sec.toString().padStart(2, '0')}`;
 }
+
+const SOURCE_LABEL: Record<string, string> = {
+  youtube: 'YouTube',
+  vimeo: 'Vimeo',
+  drive: 'Drive',
+  direct: 'Video',
+  iframe: 'Embed',
+};
 
 // ─── Component ──────────────────────────────────────────────────────────────
 
@@ -133,8 +133,6 @@ const SecureMediaPlayer = ({
 
   const isDirect = source.type === 'direct';
 
-  // ─── Direct video handlers ────────────────────────────────────────────
-
   useEffect(() => {
     if (!isDirect || !videoRef.current) return;
     const v = videoRef.current;
@@ -148,10 +146,8 @@ const SecureMediaPlayer = ({
     videoRef.current.currentTime = startPosition;
   }, [startPosition, isDirect]);
 
-  // Quartile milestones already fired for current video (Meta WatchVideo)
   const watchMilestonesRef = useRef<Set<number>>(new Set());
 
-  // Reset milestones when video URL changes
   useEffect(() => {
     watchMilestonesRef.current = new Set();
   }, [videoUrl]);
@@ -168,7 +164,6 @@ const SecureMediaPlayer = ({
     const onTimeUpdate = () => {
       setCurrentTime(v.currentTime);
       onProgress?.(v.currentTime);
-      // Meta WatchVideo quartile tracking
       if (v.duration > 0) {
         const pct = Math.round((v.currentTime / v.duration) * 100);
         [25, 50, 75, 100].forEach((m) => {
@@ -186,7 +181,6 @@ const SecureMediaPlayer = ({
     };
     const onPlay = () => {
       setPlaying(true);
-      // Fire on first play (milestone 0)
       if (!watchMilestonesRef.current.has(0)) {
         watchMilestonesRef.current.add(0);
         trackMetaEvent('WatchVideo', {
@@ -218,7 +212,6 @@ const SecureMediaPlayer = ({
     };
   }, [isDirect, startPosition, onProgress, videoUrl, title]);
 
-  // For embedded players, track time via interval
   useEffect(() => {
     if (isDirect || !playing) return;
     progressInterval.current = setInterval(() => {
@@ -231,20 +224,18 @@ const SecureMediaPlayer = ({
     return () => clearInterval(progressInterval.current);
   }, [isDirect, playing, onProgress]);
 
-  // Auto-hide controls
   const resetHideTimer = useCallback(() => {
     setControlsVisible(true);
     clearTimeout(hideTimer.current);
-    if (playing) {
+    if (playing && isFullscreen) {
       hideTimer.current = setTimeout(() => setControlsVisible(false), 3000);
     }
-  }, [playing]);
+  }, [playing, isFullscreen]);
 
   useEffect(() => {
-    if (!playing) setControlsVisible(true);
-  }, [playing]);
+    if (!playing || !isFullscreen) setControlsVisible(true);
+  }, [playing, isFullscreen]);
 
-  // Fullscreen
   const toggleFullscreen = useCallback(() => {
     if (!containerRef.current) return;
     if (document.fullscreenElement) {
@@ -260,11 +251,10 @@ const SecureMediaPlayer = ({
     return () => document.removeEventListener('fullscreenchange', handler);
   }, []);
 
-  // Keyboard shortcuts
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (!containerRef.current?.contains(document.activeElement) && document.activeElement !== document.body) return;
-      
+
       if (isDirect && videoRef.current) {
         const v = videoRef.current;
         switch (e.key) {
@@ -330,223 +320,225 @@ const SecureMediaPlayer = ({
     videoRef.current.currentTime = Math.max(0, Math.min(videoRef.current.duration, videoRef.current.currentTime + delta));
   };
 
-  // ─── No video ─────────────────────────────────────────────────────────
-
   if (!videoUrl || source.type === 'none') {
     return (
-      <div className={`aspect-video bg-black flex items-center justify-center ${className}`}>
-        <div className="text-center text-muted-foreground">
-          <Monitor className="h-16 w-16 mx-auto mb-3 opacity-30" />
-          <p className="text-sm">No video available for this lesson</p>
+      <PlayerShell>
+        <div className="w-full h-full flex items-center justify-center">
+          <div className="text-center text-white/50">
+            <Monitor className="h-16 w-16 mx-auto mb-3 opacity-30" />
+            <p className="text-sm">No video available for this lesson</p>
+          </div>
         </div>
-      </div>
+      </PlayerShell>
     );
   }
 
-  // ─── Render ───────────────────────────────────────────────────────────
+  const sourceLabel = SOURCE_LABEL[source.type] ?? 'Video';
 
+  // ─── Header ───────────────────────────────────────────────────────────
+  const header = (
+    <>
+      <Badge
+        variant="outline"
+        className="bg-white/5 text-white border-white/15 text-[10px] uppercase tracking-wider px-2 py-0.5 shrink-0"
+      >
+        <Play className="h-2.5 w-2.5 mr-1 fill-white" />
+        <span className="hidden xs:inline">{sourceLabel}</span>
+      </Badge>
+      <p className="flex-1 text-white/90 text-xs sm:text-sm font-medium truncate min-w-0">
+        {title || 'Lesson video'}
+      </p>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="icon" className="h-7 w-7 text-white/70 hover:text-white hover:bg-white/10 shrink-0">
+            <MoreVertical className="h-4 w-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="min-w-[160px]">
+          <DropdownMenuLabel className="text-xs">Playback Speed</DropdownMenuLabel>
+          {[0.5, 0.75, 1, 1.25, 1.5, 1.75, 2].map(rate => (
+            <DropdownMenuItem
+              key={rate}
+              onClick={() => setPlaybackRate(rate)}
+              className={`text-xs ${playbackRate === rate ? 'bg-accent' : ''}`}
+              disabled={!isDirect}
+            >
+              {rate}x {playbackRate === rate ? '✓' : ''}
+            </DropdownMenuItem>
+          ))}
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={toggleFullscreen} className="text-xs">
+            {isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </>
+  );
+
+  // ─── Footer ───────────────────────────────────────────────────────────
+  const footer = isDirect ? (
+    <div className="w-full py-2">
+      <div className="mb-1.5">
+        <Slider
+          value={[currentTime]}
+          min={0}
+          max={duration || 100}
+          step={0.1}
+          onValueChange={seek}
+          className="cursor-pointer [&_[role=slider]]:h-3 [&_[role=slider]]:w-3 [&_[role=slider]]:bg-white"
+        />
+      </div>
+      <div className="flex items-center gap-1">
+        <Button variant="ghost" size="icon" className="h-7 w-7 text-white/80 hover:text-white hover:bg-white/10" onClick={() => skip(-10)}>
+          <SkipBack className="h-3.5 w-3.5" />
+        </Button>
+        <Button variant="ghost" size="icon" className="h-8 w-8 text-white hover:bg-white/10" onClick={togglePlay}>
+          {playing ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4 ml-0.5" />}
+        </Button>
+        <Button variant="ghost" size="icon" className="h-7 w-7 text-white/80 hover:text-white hover:bg-white/10" onClick={() => skip(10)}>
+          <SkipForward className="h-3.5 w-3.5" />
+        </Button>
+        <span className="text-white/80 text-[11px] tabular-nums px-2 whitespace-nowrap">
+          {formatTime(currentTime)} <span className="text-white/40">/ {formatTime(duration)}</span>
+        </span>
+        <div className="flex-1" />
+        <div className="hidden sm:flex items-center gap-1">
+          <Button variant="ghost" size="icon" className="h-7 w-7 text-white/80 hover:text-white hover:bg-white/10" onClick={() => setMuted(!muted)}>
+            {muted || volume === 0 ? <VolumeX className="h-3.5 w-3.5" /> : <Volume2 className="h-3.5 w-3.5" />}
+          </Button>
+          <div className="w-16 md:w-20">
+            <Slider
+              value={[muted ? 0 : volume]}
+              min={0}
+              max={100}
+              step={1}
+              onValueChange={v => { setVolume(v[0]); setMuted(v[0] === 0); }}
+              className="[&_[role=slider]]:h-2.5 [&_[role=slider]]:w-2.5 [&_[role=slider]]:bg-white"
+            />
+          </div>
+        </div>
+        <span className="hidden md:inline text-white/60 text-[10px] tabular-nums px-1">{playbackRate}x</span>
+        <Button variant="ghost" size="icon" className="h-7 w-7 text-white/80 hover:text-white hover:bg-white/10" onClick={toggleFullscreen}>
+          {isFullscreen ? <Minimize className="h-3.5 w-3.5" /> : <Maximize className="h-3.5 w-3.5" />}
+        </Button>
+      </div>
+    </div>
+  ) : (
+    <div className="w-full flex items-center gap-2 py-2">
+      <span className="text-white/60 text-[11px] truncate flex-1">
+        Playback controls available inside the {sourceLabel} player
+      </span>
+      <Button variant="ghost" size="icon" className="h-7 w-7 text-white/80 hover:text-white hover:bg-white/10 shrink-0" onClick={toggleFullscreen}>
+        {isFullscreen ? <Minimize className="h-3.5 w-3.5" /> : <Maximize className="h-3.5 w-3.5" />}
+      </Button>
+    </div>
+  );
+
+  // ─── Render ───────────────────────────────────────────────────────────
   return (
     <div
       ref={containerRef}
-      className={`relative aspect-video bg-black group select-none ${className}`}
+      className={`select-none ${className}`}
       onMouseMove={resetHideTimer}
       onContextMenu={e => e.preventDefault()}
       onDragStart={e => e.preventDefault()}
       tabIndex={0}
     >
-      {/* Video content */}
-      {isDirect ? (
-        <video
-          ref={videoRef}
-          src={source.embedUrl}
-          className="w-full h-full object-contain"
-          playsInline
-          preload="metadata"
-          controlsList="nodownload noremoteplayback"
-          disablePictureInPicture
-          onClick={togglePlay}
-          onDoubleClick={toggleFullscreen}
-        />
-      ) : (
-        <iframe
-          src={source.embedUrl}
-          className="w-full h-full"
-          allowFullScreen
-          allow="autoplay; encrypted-media; fullscreen"
-          sandbox={
-            source.type === 'drive'
-              ? 'allow-scripts allow-same-origin allow-presentation'
-              : 'allow-scripts allow-same-origin allow-presentation allow-popups'
-          }
-          referrerPolicy="no-referrer"
-          loading="eager"
-          onLoad={() => setLoading(false)}
-        />
-      )}
-
-      {/* Drive-specific shield: blocks Drive's chrome (3-dot menu, pop-out, download)
-          via two transparent click-traps in the top-right and bottom-right corners. */}
-      {source.type === 'drive' && (
-        <>
-          <div
-            className="absolute top-0 right-0 h-14 w-32 z-[5] cursor-not-allowed"
-            aria-hidden="true"
-            onClick={(e) => e.preventDefault()}
-            onContextMenu={(e) => e.preventDefault()}
+      <PlayerShell
+        isFullscreen={isFullscreen}
+        header={showControls ? header : undefined}
+        footer={showControls ? footer : undefined}
+      >
+        {/* Video content */}
+        {isDirect ? (
+          <video
+            ref={videoRef}
+            src={source.embedUrl}
+            className="w-full h-full object-contain"
+            playsInline
+            preload="metadata"
+            controlsList="nodownload noremoteplayback"
+            disablePictureInPicture
+            onClick={togglePlay}
+            onDoubleClick={toggleFullscreen}
           />
-          <div
-            className="absolute bottom-0 right-0 h-12 w-24 z-[5] cursor-not-allowed"
-            aria-hidden="true"
-            onClick={(e) => e.preventDefault()}
-            onContextMenu={(e) => e.preventDefault()}
+        ) : (
+          <iframe
+            src={source.embedUrl}
+            className="w-full h-full"
+            allowFullScreen
+            allow="autoplay; encrypted-media; fullscreen"
+            sandbox={
+              source.type === 'drive'
+                ? 'allow-scripts allow-same-origin allow-presentation'
+                : 'allow-scripts allow-same-origin allow-presentation allow-popups'
+            }
+            referrerPolicy="no-referrer"
+            loading="eager"
+            onLoad={() => setLoading(false)}
           />
-        </>
-      )}
+        )}
 
-      {/* Loading spinner */}
-      {loading && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-10">
-          <Loader2 className="h-10 w-10 text-white animate-spin" />
-        </div>
-      )}
-
-      {/* Watermark overlay */}
-      {watermark && (
-        <div className="absolute inset-0 pointer-events-none z-20 overflow-hidden">
-          <div className="absolute inset-0 flex items-center justify-center" style={{ transform: 'rotate(-30deg)' }}>
-            <p className="text-white/[0.04] text-4xl font-bold whitespace-nowrap select-none">
-              {watermark}
-            </p>
-          </div>
-        </div>
-      )}
-
-      {/* Play overlay for initial state */}
-      {showOverlay && !playing && !isDirect && (
-        <div
-          className="absolute inset-0 flex items-center justify-center bg-black/30 z-20 cursor-pointer"
-          onClick={togglePlay}
-        >
-          <div className="w-16 h-16 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center hover:bg-white/30 transition-colors">
-            <Play className="h-8 w-8 text-white fill-white ml-1" />
-          </div>
-        </div>
-      )}
-
-      {/* Source badge */}
-      <div className="absolute top-3 left-3 z-20">
-        <Badge
-          variant="outline"
-          className="bg-black/60 text-white border-white/20 text-[10px] uppercase tracking-wider backdrop-blur-sm"
-        >
-          {source.type === 'youtube' ? '▶ YouTube' :
-           source.type === 'vimeo' ? '▶ Vimeo' :
-           source.type === 'drive' ? '▶ Google Drive' :
-           source.type === 'direct' ? '▶ Video' : '▶ Embedded'}
-        </Badge>
-      </div>
-
-      {/* Title */}
-      {title && controlsVisible && (
-        <div className="absolute top-3 right-3 z-20 max-w-[60%]">
-          <p className="text-white text-xs font-medium truncate bg-black/40 px-2 py-1 rounded backdrop-blur-sm">
-            {title}
-          </p>
-        </div>
-      )}
-
-      {/* Custom controls for direct video */}
-      {isDirect && showControls && controlsVisible && (
-        <div className="absolute bottom-0 left-0 right-0 z-30 bg-gradient-to-t from-black/80 via-black/40 to-transparent pt-12 pb-3 px-4 transition-opacity">
-          {/* Progress bar */}
-          <div className="mb-2">
-            <Slider
-              value={[currentTime]}
-              min={0}
-              max={duration || 100}
-              step={0.1}
-              onValueChange={seek}
-              className="cursor-pointer [&_[role=slider]]:h-3 [&_[role=slider]]:w-3 [&_[role=slider]]:bg-white"
+        {/* Drive click-shields */}
+        {source.type === 'drive' && (
+          <>
+            <div
+              className="absolute top-0 right-0 h-14 w-32 z-[5] cursor-not-allowed"
+              aria-hidden="true"
+              onClick={(e) => e.preventDefault()}
+              onContextMenu={(e) => e.preventDefault()}
             />
+            <div
+              className="absolute bottom-0 right-0 h-12 w-24 z-[5] cursor-not-allowed"
+              aria-hidden="true"
+              onClick={(e) => e.preventDefault()}
+              onContextMenu={(e) => e.preventDefault()}
+            />
+          </>
+        )}
+
+        {/* Loading spinner */}
+        {loading && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-10">
+            <Loader2 className="h-10 w-10 text-white animate-spin" />
           </div>
+        )}
 
-          {/* Controls row */}
-          <div className="flex items-center gap-1 sm:gap-2">
-            <Button variant="ghost" size="icon" className="h-8 w-8 text-white hover:bg-white/20" onClick={() => skip(-10)}>
-              <SkipBack className="h-4 w-4" />
-            </Button>
-            <Button variant="ghost" size="icon" className="h-9 w-9 text-white hover:bg-white/20" onClick={togglePlay}>
-              {playing ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5 ml-0.5" />}
-            </Button>
-            <Button variant="ghost" size="icon" className="h-8 w-8 text-white hover:bg-white/20" onClick={() => skip(10)}>
-              <SkipForward className="h-4 w-4" />
-            </Button>
-
-            {/* Time */}
-            <span className="text-white text-[11px] tabular-nums min-w-[80px] text-center">
-              {formatTime(currentTime)} / {formatTime(duration)}
-            </span>
-
-            <div className="flex-1" />
-
-            {/* Volume */}
-            <div className="hidden sm:flex items-center gap-1">
-              <Button variant="ghost" size="icon" className="h-8 w-8 text-white hover:bg-white/20" onClick={() => setMuted(!muted)}>
-                {muted || volume === 0 ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
-              </Button>
-              <div className="w-20">
-                <Slider
-                  value={[muted ? 0 : volume]}
-                  min={0}
-                  max={100}
-                  step={1}
-                  onValueChange={v => { setVolume(v[0]); setMuted(v[0] === 0); }}
-                  className="[&_[role=slider]]:h-2.5 [&_[role=slider]]:w-2.5 [&_[role=slider]]:bg-white"
-                />
-              </div>
+        {/* Watermark overlay */}
+        {watermark && (
+          <div className="absolute inset-0 pointer-events-none z-20 overflow-hidden">
+            <div className="absolute inset-0 flex items-center justify-center" style={{ transform: 'rotate(-30deg)' }}>
+              <p className="text-white/[0.04] text-4xl font-bold whitespace-nowrap select-none">
+                {watermark}
+              </p>
             </div>
-
-            {/* Speed */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm" className="h-8 text-white hover:bg-white/20 text-xs px-2">
-                  {playbackRate}x
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="min-w-[80px]">
-                {[0.5, 0.75, 1, 1.25, 1.5, 1.75, 2].map(rate => (
-                  <DropdownMenuItem
-                    key={rate}
-                    onClick={() => setPlaybackRate(rate)}
-                    className={playbackRate === rate ? 'bg-accent' : ''}
-                  >
-                    {rate}x
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-
-            {/* Fullscreen */}
-            <Button variant="ghost" size="icon" className="h-8 w-8 text-white hover:bg-white/20" onClick={toggleFullscreen}>
-              {isFullscreen ? <Minimize className="h-4 w-4" /> : <Maximize className="h-4 w-4" />}
-            </Button>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Minimal controls for embedded videos */}
-      {!isDirect && showControls && (
-        <div className="absolute bottom-3 right-3 z-30">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 text-white bg-black/50 hover:bg-black/70 backdrop-blur-sm"
-            onClick={toggleFullscreen}
+        {/* Initial play overlay for embedded */}
+        {showOverlay && !playing && !isDirect && (
+          <div
+            className="absolute inset-0 flex items-center justify-center bg-black/30 z-20 cursor-pointer"
+            onClick={togglePlay}
           >
-            {isFullscreen ? <Minimize className="h-4 w-4" /> : <Maximize className="h-4 w-4" />}
-          </Button>
-        </div>
-      )}
+            <div className="w-16 h-16 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center hover:bg-white/30 transition-colors">
+              <Play className="h-8 w-8 text-white fill-white ml-1" />
+            </div>
+          </div>
+        )}
+
+        {/* Fullscreen-only floating header/footer (auto-hide) */}
+        {isFullscreen && showControls && controlsVisible && (
+          <>
+            <div className="absolute top-0 left-0 right-0 z-30 flex items-center gap-2 px-4 h-12 bg-gradient-to-b from-black/80 to-transparent">
+              {header}
+            </div>
+            <div className="absolute bottom-0 left-0 right-0 z-30 px-4 pb-2 pt-10 bg-gradient-to-t from-black/80 to-transparent">
+              {footer}
+            </div>
+          </>
+        )}
+      </PlayerShell>
 
       {/* CSS to prevent downloading */}
       <style>{`
