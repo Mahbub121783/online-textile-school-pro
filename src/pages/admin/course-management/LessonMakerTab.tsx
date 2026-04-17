@@ -22,6 +22,8 @@ import {
 import RichTextEditor from '@/components/instructor/RichTextEditor';
 import MediaUploader from '@/components/instructor/MediaUploader';
 import LessonPreviewModal from '@/components/admin/LessonPreviewModal';
+import { useCmsScope } from '@/components/cms/CmsScopeContext';
+import { useAuth } from '@/hooks/useAuth';
 
 interface LessonForm {
   title: string;
@@ -53,8 +55,11 @@ const statusColors: Record<string, string> = {
 };
 
 const LessonMakerTab = () => {
+  const { scope, courseId: lockedCourseId } = useCmsScope();
+  const { user } = useAuth();
+  const isInstructor = scope === 'instructor';
   const [search, setSearch] = useState('');
-  const [courseFilter, setCourseFilter] = useState('all');
+  const [courseFilter, setCourseFilter] = useState(lockedCourseId || 'all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [editDialog, setEditDialog] = useState<{ open: boolean; lesson?: any }>({ open: false });
   const [previewLesson, setPreviewLesson] = useState<any>(null);
@@ -65,9 +70,11 @@ const LessonMakerTab = () => {
   const qc = useQueryClient();
 
   const { data: courses = [] } = useQuery({
-    queryKey: ['admin-all-courses-for-lessons'],
+    queryKey: ['admin-all-courses-for-lessons', scope, user?.id],
     queryFn: async () => {
-      const { data } = await supabase.from('courses').select('id, title').order('title');
+      let q = supabase.from('courses').select('id, title').order('title');
+      if (isInstructor && user?.id) q = q.eq('instructor_id', user.id);
+      const { data } = await q;
       return data ?? [];
     },
   });
