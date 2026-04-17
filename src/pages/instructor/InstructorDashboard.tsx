@@ -277,6 +277,13 @@ const InstructorDashboard = () => {
           )}
         </div>
       </div>
+
+      {/* Public Profile Editor */}
+      {user && (
+        <div id="instructor-profile-editor" className="scroll-mt-24">
+          <PublicProfileEditor userId={user.id} mode="self" />
+        </div>
+      )}
     </div>
   );
 };

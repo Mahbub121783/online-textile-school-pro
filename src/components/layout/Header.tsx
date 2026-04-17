@@ -232,6 +232,9 @@ const Header = () => {
                   <DropdownMenuItem onClick={() => navigate('/dashboard')}>
                     <User className="mr-2 h-4 w-4" /> Dashboard
                   </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => navigate(`/contributor/${user.id}`)}>
+                    <GraduationCap className="mr-2 h-4 w-4" /> View public profile
+                  </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => navigate('/dashboard/courses')}>
                     <BookOpen className="mr-2 h-4 w-4" /> My Courses
                   </DropdownMenuItem>

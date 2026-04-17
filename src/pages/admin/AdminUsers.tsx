@@ -10,8 +10,9 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Search, Shield, ShieldOff, UserCheck, UserX, UserCog, CreditCard } from 'lucide-react';
+import { Search, Shield, ShieldOff, UserCheck, UserX, UserCog, CreditCard, UserCircle2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import PublicProfileEditor from '@/components/shared/PublicProfileEditor';
 import { Constants } from '@/integrations/supabase/types';
 import { Progress } from '@/components/ui/progress';
 
@@ -192,6 +193,15 @@ const AdminUsers = () => {
                         >
                           {u.is_active ? <UserX className="h-4 w-4" /> : <UserCheck className="h-4 w-4" />}
                         </Button>
+                        <Dialog>
+                          <DialogTrigger asChild>
+                            <Button variant="ghost" size="icon" title="Edit public profile"><UserCircle2 className="h-4 w-4" /></Button>
+                          </DialogTrigger>
+                          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                            <DialogHeader><DialogTitle>Public Profile — {u.full_name}</DialogTitle></DialogHeader>
+                            <PublicProfileEditor userId={u.id} mode="admin" />
+                          </DialogContent>
+                        </Dialog>
                         <Dialog>
                           <DialogTrigger asChild>
                             <Button variant="ghost" size="icon" title="Manage roles"><Shield className="h-4 w-4" /></Button>
