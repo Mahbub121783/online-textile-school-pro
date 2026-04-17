@@ -11,7 +11,7 @@ const FeaturedCourses = lazy(() => import('@/components/features/home/FeaturedCo
 const EbookShowcase = lazy(() => import('@/components/features/home/EbookShowcase'));
 const InstructorSpotlight = lazy(() => import('@/components/features/home/InstructorSpotlight'));
 const TestimonialsSection = lazy(() => import('@/components/features/home/TestimonialsSection'));
-const DemoClassCTA = lazy(() => import('@/components/features/home/DemoClassCTA'));
+const FeaturedWorkshops = lazy(() => import('@/components/features/home/FeaturedWorkshops'));
 const UpcomingEvents = lazy(() => import('@/components/features/home/UpcomingEvents'));
 const LearningPathsPreview = lazy(() => import('@/components/features/home/LearningPathsPreview'));
 const SponsorsSection = lazy(() => import('@/components/features/home/SponsorsSection'));
@@ -75,7 +75,7 @@ const Index = () => {
         <LazySection><UpcomingEvents /></LazySection>
         <LazySection><InstructorSpotlight /></LazySection>
         <LazySection><TestimonialsSection /></LazySection>
-        <LazySection><DemoClassCTA /></LazySection>
+        <LazySection><FeaturedWorkshops /></LazySection>
         <LazySection><SponsorsSection /></LazySection>
       </main>
       <MemoFooter />
