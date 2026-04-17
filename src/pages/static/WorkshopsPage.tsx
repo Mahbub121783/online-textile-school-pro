@@ -87,7 +87,7 @@ export default function WorkshopsPage() {
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {workshops.map((ws: any) => {
                 const startDt = new Date(`${ws.start_date}T${ws.start_time || '00:00'}`);
-                const count = regCounts[ws.id] || 0;
+                const count = (regCounts[ws.id] || 0) + (ws.fake_registration_count || 0);
                 const slotsLeft = ws.max_participants ? ws.max_participants - count : null;
                 const isFull = slotsLeft !== null && slotsLeft <= 0;
                 const instructor = ws.instructor;

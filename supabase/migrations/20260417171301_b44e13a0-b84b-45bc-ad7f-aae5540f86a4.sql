@@ -1,0 +1,1 @@
+ALTER TABLE public.workshops ADD COLUMN IF NOT EXISTS fake_registration_count integer NOT NULL DEFAULT 0;

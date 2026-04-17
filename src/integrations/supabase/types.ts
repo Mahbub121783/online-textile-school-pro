@@ -5806,6 +5806,7 @@ export type Database = {
           description: string | null
           end_date: string | null
           end_time: string | null
+          fake_registration_count: number
           id: string
           instructor_avatar: string | null
           instructor_bio: string | null
@@ -5838,6 +5839,7 @@ export type Database = {
           description?: string | null
           end_date?: string | null
           end_time?: string | null
+          fake_registration_count?: number
           id?: string
           instructor_avatar?: string | null
           instructor_bio?: string | null
@@ -5870,6 +5872,7 @@ export type Database = {
           description?: string | null
           end_date?: string | null
           end_time?: string | null
+          fake_registration_count?: number
           id?: string
           instructor_avatar?: string | null
           instructor_bio?: string | null
