@@ -14,6 +14,8 @@ import {
   ArrowLeft, Save, GripVertical, Plus, Trash2, Image, CheckSquare, ToggleLeft,
   Type, FileText, ListOrdered, Send, Settings, Clock, ShieldAlert
 } from 'lucide-react';
+import { useCmsScope } from '@/components/cms/CmsScopeContext';
+import { useAuth } from '@/hooks/useAuth';
 
 interface QuestionItem {
   id?: string;
@@ -57,18 +59,24 @@ const QuizBuilder = ({ quizId, onBack }: Props) => {
   const [activeQ, setActiveQ] = useState(0);
   const [questions, setQuestions] = useState<QuestionItem[]>([{ ...EMPTY_QUESTION }]);
   const [showSettings, setShowSettings] = useState(false);
-  const [quiz, setQuiz] = useState({
+  const [quiz, setQuiz] = useState(() => ({
     title: '', course_id: '', description: '', pass_percentage: 60, max_attempts: 3,
     time_limit_minutes: null as number | null, is_published: false, status: 'draft',
     timer_mode: 'global', anti_cheat_enabled: false, randomize_questions: false,
     randomize_options: false, lock_ip: false, auto_submit_on_blur: false,
-  });
+  }));
   const [dragIdx, setDragIdx] = useState<number | null>(null);
 
+  const { scope, courseId: lockedCourseId } = useCmsScope();
+  const { user } = useAuth();
+  const isInstructor = scope === 'instructor';
+
   const { data: courses = [] } = useQuery({
-    queryKey: ['quiz-mgmt-courses'],
+    queryKey: ['quiz-mgmt-courses', scope, user?.id],
     queryFn: async () => {
-      const { data } = await supabase.from('courses').select('id, title').order('title');
+      let q = supabase.from('courses').select('id, title').order('title');
+      if (isInstructor && user?.id) q = q.eq('instructor_id', user.id);
+      const { data } = await q;
       return data ?? [];
     },
   });
@@ -106,8 +114,10 @@ const QuizBuilder = ({ quizId, onBack }: Props) => {
         lock_ip: (existingQuiz as any).lock_ip ?? false,
         auto_submit_on_blur: (existingQuiz as any).auto_submit_on_blur ?? false,
       });
+    } else if (isNew && lockedCourseId && !quiz.course_id) {
+      setQuiz(q => ({ ...q, course_id: lockedCourseId }));
     }
-  }, [existingQuiz]);
+  }, [existingQuiz, isNew, lockedCourseId]);
 
   useEffect(() => {
     if (existingQuestions.length > 0) {

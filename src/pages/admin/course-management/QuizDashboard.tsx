@@ -7,6 +7,8 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Search, Plus, Pencil, BarChart3, Clock, Users, HelpCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useState } from 'react';
+import { useCmsScope } from '@/components/cms/CmsScopeContext';
+import { useAuth } from '@/hooks/useAuth';
 
 const PAGE_SIZE = 24;
 
@@ -17,21 +19,26 @@ interface Props {
 }
 
 const QuizDashboard = ({ onCreateNew, onEdit, onResults }: Props) => {
+  const { scope, courseId: lockedCourseId } = useCmsScope();
+  const { user } = useAuth();
+  const isInstructor = scope === 'instructor';
   const [search, setSearch] = useState('');
-  const [courseFilter, setCourseFilter] = useState('all');
+  const [courseFilter, setCourseFilter] = useState(lockedCourseId || 'all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [page, setPage] = useState(0);
 
   const { data: courses = [] } = useQuery({
-    queryKey: ['quiz-mgmt-courses'],
+    queryKey: ['quiz-mgmt-courses', scope, user?.id],
     queryFn: async () => {
-      const { data } = await supabase.from('courses').select('id, title').order('title');
+      let q = supabase.from('courses').select('id, title').order('title');
+      if (isInstructor && user?.id) q = q.eq('instructor_id', user.id);
+      const { data } = await q;
       return data ?? [];
     },
   });
 
   const { data: quizResult, isLoading } = useQuery({
-    queryKey: ['admin-quizzes', courseFilter, search, statusFilter, page],
+    queryKey: ['admin-quizzes', courseFilter, search, statusFilter, page, scope, user?.id],
     queryFn: async () => {
       const from = page * PAGE_SIZE;
       const to = from + PAGE_SIZE - 1;
