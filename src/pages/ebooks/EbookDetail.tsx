@@ -50,6 +50,8 @@ const EbookDetail = () => {
     }
   }, [ebook?.slug, slug, navigate]);
 
+  const { data: ebookContributors = [] } = useContributors('ebook', ebook?.id);
+
   const { data: isPurchased } = useQuery({
     queryKey: ['ebook-purchased', ebook?.id, user?.id],
     enabled: !!ebook?.id && !!user,

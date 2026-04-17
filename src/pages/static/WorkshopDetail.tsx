@@ -102,6 +102,8 @@ export default function WorkshopDetail() {
     enabled: !!workshop?.id && !!user,
   });
 
+  const { data: workshopContributors = [] } = useContributors('workshop', workshop?.id);
+
   const sendConfirmationEmail = async (regData: any, ws: any) => {
     try {
       const emailBody = `
