@@ -28,6 +28,21 @@ interface SecureMediaPlayerProps {
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
+function extractDriveId(url: string): string | null {
+  if (!url) return null;
+  const patterns = [
+    /\/file\/d\/([a-zA-Z0-9_-]{20,})/,
+    /[?&]id=([a-zA-Z0-9_-]{20,})/,
+    /\/d\/([a-zA-Z0-9_-]{20,})/,
+  ];
+  for (const p of patterns) {
+    const m = url.match(p);
+    if (m) return m[1];
+  }
+  const fallback = url.match(/[-\w]{25,}/);
+  return fallback ? fallback[0] : null;
+}
+
 function parseVideoSource(url: string, platform?: string | null) {
   if (!url) return { type: 'none' as const, embedUrl: '' };
 
