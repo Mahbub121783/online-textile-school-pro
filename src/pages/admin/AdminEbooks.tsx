@@ -561,8 +561,24 @@ const AdminEbooks = () => {
           </div>
         </DialogContent>
       </Dialog>
-    </div>
-  );
-};
+
+      <ContributorPickerModal
+        open={pickerOpen}
+        onOpenChange={setPickerOpen}
+        title="Link Writer Profiles"
+        allowedRoles={['author', 'co_author', 'reviewer']}
+        excludeUserIds={linkedContributors.map(c => c.user_id)}
+        onConfirm={async (picks: PickedContributor[]) => {
+          if (!form.id) return;
+          for (const p of picks) {
+            await addContributor.mutateAsync({
+              contentType: 'ebook',
+              contentId: form.id,
+              userId: p.user_id,
+              role: p.role,
+            });
+          }
+        }}
+      />
 
 export default AdminEbooks;
