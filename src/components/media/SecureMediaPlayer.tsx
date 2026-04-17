@@ -366,49 +366,66 @@ const SecureMediaPlayer = ({
 
   const sourceLabel = SOURCE_LABEL[source.type] ?? 'Video';
 
-  // ─── Header ───────────────────────────────────────────────────────────
+  // ─── Branded Header (logo + site name + help phone) ───────────────────
   const header = (
     <>
-      <Badge
-        variant="outline"
-        className="bg-white/5 text-white border-white/15 text-[10px] uppercase tracking-wider px-2 py-0.5 shrink-0"
+      <div className="flex items-center gap-2 min-w-0 flex-1">
+        <img
+          src={otsLogo}
+          alt="OTS"
+          className="h-6 w-6 rounded bg-white/95 p-0.5 object-contain shrink-0"
+          draggable={false}
+        />
+        <span className="text-white font-semibold text-xs sm:text-sm truncate">
+          {SITE_CONFIG.name}
+        </span>
+      </div>
+      <a
+        href={`tel:${SITE_CONFIG.phone}`}
+        className="flex items-center gap-1.5 text-white/85 hover:text-white text-[11px] sm:text-xs shrink-0 px-2 py-1 rounded-md hover:bg-white/10 transition-colors"
       >
-        <Play className="h-2.5 w-2.5 mr-1 fill-white" />
-        <span className="hidden xs:inline">{sourceLabel}</span>
-      </Badge>
-      <p className="flex-1 text-white/90 text-xs sm:text-sm font-medium truncate min-w-0">
-        {title || 'Lesson video'}
-      </p>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="icon" className="h-7 w-7 text-white/70 hover:text-white hover:bg-white/10 shrink-0">
-            <MoreVertical className="h-4 w-4" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="min-w-[160px]">
-          <DropdownMenuLabel className="text-xs">Playback Speed</DropdownMenuLabel>
-          {[0.5, 0.75, 1, 1.25, 1.5, 1.75, 2].map(rate => (
-            <DropdownMenuItem
-              key={rate}
-              onClick={() => setPlaybackRate(rate)}
-              className={`text-xs ${playbackRate === rate ? 'bg-accent' : ''}`}
-              disabled={!isDirect}
-            >
-              {rate}x {playbackRate === rate ? '✓' : ''}
-            </DropdownMenuItem>
-          ))}
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={toggleFullscreen} className="text-xs">
-            {isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+        <Phone className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+        <span className="hidden xs:inline tabular-nums">{SITE_CONFIG.phone}</span>
+        <span className="hidden sm:inline text-white/50">· Help</span>
+      </a>
     </>
   );
 
-  // ─── Footer ───────────────────────────────────────────────────────────
-  const footer = isDirect ? (
-    <div className="w-full py-2">
+  // ─── Identity Footer (name · phone · email — visible deterrent) ───────
+  const userName = profile?.full_name || profile?.name || user?.email?.split('@')[0] || 'Guest';
+  const userPhone = profile?.phone || profile?.mobile_number || '';
+  const userEmail = user?.email || profile?.email || '';
+
+  const footer = (
+    <div className="w-full flex flex-wrap items-center justify-center gap-x-3 gap-y-1 py-2 px-1 text-white/70 text-[11px] sm:text-xs">
+      <span className="flex items-center gap-1.5">
+        <UserIcon className="h-3 w-3 text-white/50" />
+        <span className="font-medium text-white/90 truncate max-w-[160px] sm:max-w-none">{userName}</span>
+      </span>
+      {userPhone && (
+        <>
+          <span className="text-white/20">·</span>
+          <span className="flex items-center gap-1.5 tabular-nums">
+            <Phone className="h-3 w-3 text-white/50" />
+            {userPhone}
+          </span>
+        </>
+      )}
+      {userEmail && (
+        <>
+          <span className="text-white/20 hidden sm:inline">·</span>
+          <span className="flex items-center gap-1.5 truncate max-w-[200px] sm:max-w-none">
+            <Mail className="h-3 w-3 text-white/50" />
+            {userEmail}
+          </span>
+        </>
+      )}
+    </div>
+  );
+
+  // ─── Floating in-video controls (direct uploads only) ─────────────────
+  const inVideoControls = isDirect && (
+    <div className={`absolute left-0 right-0 bottom-0 z-30 px-3 pb-2 pt-8 bg-gradient-to-t from-black/80 to-transparent transition-opacity duration-300 ${controlsVisible || !playing ? 'opacity-100' : 'opacity-0'}`}>
       <div className="mb-1.5">
         <Slider
           value={[currentTime]}
@@ -448,21 +465,43 @@ const SecureMediaPlayer = ({
             />
           </div>
         </div>
-        <span className="hidden md:inline text-white/60 text-[10px] tabular-nums px-1">{playbackRate}x</span>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" className="h-7 w-7 text-white/80 hover:text-white hover:bg-white/10">
+              <MoreVertical className="h-3.5 w-3.5" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="min-w-[160px]">
+            <DropdownMenuLabel className="text-xs">Playback Speed</DropdownMenuLabel>
+            {[0.5, 0.75, 1, 1.25, 1.5, 1.75, 2].map(rate => (
+              <DropdownMenuItem
+                key={rate}
+                onClick={() => setPlaybackRate(rate)}
+                className={`text-xs ${playbackRate === rate ? 'bg-accent' : ''}`}
+              >
+                {rate}x {playbackRate === rate ? '✓' : ''}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
         <Button variant="ghost" size="icon" className="h-7 w-7 text-white/80 hover:text-white hover:bg-white/10" onClick={toggleFullscreen}>
           {isFullscreen ? <Minimize className="h-3.5 w-3.5" /> : <Maximize className="h-3.5 w-3.5" />}
         </Button>
       </div>
     </div>
-  ) : (
-    <div className="w-full flex items-center gap-2 py-2">
-      <span className="text-white/60 text-[11px] truncate flex-1">
-        Playback controls available inside the {sourceLabel} player
-      </span>
-      <Button variant="ghost" size="icon" className="h-7 w-7 text-white/80 hover:text-white hover:bg-white/10 shrink-0" onClick={toggleFullscreen}>
-        {isFullscreen ? <Minimize className="h-3.5 w-3.5" /> : <Maximize className="h-3.5 w-3.5" />}
-      </Button>
-    </div>
+  );
+
+  // Floating fullscreen button for embedded sources
+  const inVideoFullscreenBtn = !isDirect && (
+    <Button
+      variant="ghost"
+      size="icon"
+      className="absolute top-2 right-2 z-30 h-8 w-8 text-white/90 bg-black/40 hover:bg-black/60 backdrop-blur-sm"
+      onClick={toggleFullscreen}
+      title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+    >
+      {isFullscreen ? <Minimize className="h-4 w-4" /> : <Maximize className="h-4 w-4" />}
+    </Button>
   );
 
   // ─── Render ───────────────────────────────────────────────────────────
