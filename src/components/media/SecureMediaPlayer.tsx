@@ -597,17 +597,9 @@ const SecureMediaPlayer = ({
           </div>
         )}
 
-        {/* Fullscreen-only floating header/footer (auto-hide) */}
-        {isFullscreen && showControls && controlsVisible && (
-          <>
-            <div className="absolute top-0 left-0 right-0 z-30 flex items-center gap-2 px-4 h-12 bg-gradient-to-b from-black/80 to-transparent">
-              {header}
-            </div>
-            <div className="absolute bottom-0 left-0 right-0 z-30 px-4 pb-2 pt-10 bg-gradient-to-t from-black/80 to-transparent">
-              {footer}
-            </div>
-          </>
-        )}
+        {/* In-video controls (direct uploads) and fullscreen button (embeds) */}
+        {inVideoControls}
+        {inVideoFullscreenBtn}
       </PlayerShell>
 
       {/* CSS to prevent downloading */}
