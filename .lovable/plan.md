@@ -1,77 +1,49 @@
 
 
-User wants me to look at the **ID card signature** (not certificate — they said certificate but the image shows the Student ID card, and the recent context is about ID card settings). The signature on the ID card looks compressed/distorted.
+## Two Changes
 
-Let me check the ID card renderer.
-<lov-tool-use id="toolu_vrtx_01FV8kWRVEGiJYf89sr1vpFs" name="code--view" integration-id="code" data="{\"file_path\": \"src/lib/idCardRenderer.ts\"}">
-</lov-tool-use>
+### 1. Remove the intrusive "New version available" prompt
+The bottom banner ("নতুন ভার্সন পাওয়া গেছে! / A new version is available") comes from `src/components/UpdatePrompt.tsx`, mounted globally in `src/App.tsx`. PWA service worker will still auto-update silently in the background — users just won't see the popup.
 
-<lov-tool-use id="toolu_vrtx_01Rcsm2JkcUWTCUeEzdynSLZ" name="code--view" integration-id="code" data="{\"file_path\": \"src/lib/idCardRenderer.ts\"}">
-</lov-tool-use>
-<lov-plan>
+- Delete the `<UpdatePrompt />` mount in `src/App.tsx`
+- Delete the file `src/components/UpdatePrompt.tsx`
+- Keep `useRegisterSW` auto-update behavior (silent reload on next navigation)
 
-## The Problem
+### 2. Add "Install App" option on Profile page
+Use the standard PWA `beforeinstallprompt` event so mobile users can install the site as a native-like app from their Profile page.
 
-Looking at the screenshot + the code in `idCardRenderer.ts` (line 246):
+**New component**: `src/components/InstallAppCard.tsx`
+- Listens for `beforeinstallprompt` event, stashes the deferred prompt
+- Detects if already installed (`display-mode: standalone` or iOS `navigator.standalone`) → hides card
+- Detects iOS Safari (no native prompt API) → shows manual instructions: "Tap Share → Add to Home Screen"
+- Android/Chrome → shows "Install App" button that fires the deferred prompt
+- Bilingual label (Bengali + English) matching site style
+- Uses existing card styling (matches "Profile Picture", "Personal Information" cards in screenshot)
 
-```js
-ctx.drawImage(sig, sigCenterX - 70, sigBaseY - 2, 140, 34);
-```
+**Mount location**: `src/pages/dashboard/SettingsPage.tsx` (the Profile Settings page shown in screenshot) — inserted at the top, just under the Profile Completeness bar, so it's the first thing mobile users see.
 
-The signature is **force-stretched into a fixed 140×34 box** regardless of its real dimensions. The uploaded signature `jiku_sir_sign_1.png` is roughly square (~512×512), so squashing it into a 140×34 (4.1:1) container makes the strokes look:
-- horizontally stretched / squashed
-- thin and broken
-- offset awkwardly above the line
-
-Additional issues:
-1. No aspect-ratio preservation
-2. Fixed pixel size — doesn't scale with content
-3. No image smoothing hint, so downscaling from 512px → 34px destroys strokes
-4. Signature sits *on* the line instead of *above* it
-5. Render canvas is only 1012×638 (1x DPI), so PDF/PNG export is blurry — exporting to a 3.375" × 2.125" PDF at 300 DPI requires 1012×638×~2 to look crisp
-
-## The Fix — Advanced Signature Renderer
-
-Make signature rendering professional and crisp:
-
-### 1. Aspect-ratio aware fitting (`object-fit: contain`)
+Card layout:
 ```text
-maxBoxW = 180, maxBoxH = 56
-ratio = sig.naturalWidth / sig.naturalHeight
-if ratio > boxRatio → fit by width
-else                → fit by height
-center horizontally on sigCenterX, sit just above the signature line
+┌─────────────────────────────────────────┐
+│  📱  Install App                        │
+│      অ্যাপ ইনস্টল করুন                  │
+│      Get one-tap access from your home  │
+│      screen. Works offline.             │
+│                          [ Install ]    │
+└─────────────────────────────────────────┘
 ```
 
-### 2. High-quality downsampling
-- Set `ctx.imageSmoothingEnabled = true` and `ctx.imageSmoothingQuality = 'high'` before drawing the signature
-- This eliminates broken / pixelated strokes when shrinking a 512px source to ~50px
-
-### 3. 2× resolution canvas for crisp export
-- Render at `CARD_W*2 × CARD_H*2` (2024×1276) internally
-- Scale all coordinates uniformly via `ctx.scale(2,2)`
-- Result: exported PNG/PDF is twice as sharp, signature edges stay smooth
-
-### 4. Proper vertical placement
-- Signature **above** the line, baseline touching the line (with 4px padding), not overlapping
-- Authority name + position positioned relative to the line, not the signature
-
-### 5. Larger signature box
-- Increase max box from 140×34 to **180×56** so signatures with tall ascenders/descenders (like the uploaded one with the loop & tail) aren't clipped or shrunk to invisibility
-
-### 6. Optional contrast boost
-- Apply a subtle `filter: contrast(1.15)` while drawing the signature so faint strokes from photographed signatures stay bold
-
-## Files to Change
+## Files
 
 | File | Change |
 |---|---|
-| `src/lib/idCardRenderer.ts` | Rewrite signature drawing block (lines ~239–270) with aspect-fit + high-quality smoothing. Add 2× DPR rendering wrapper. Adjust signature line + authority text positions to align with the new fitted signature. |
+| `src/App.tsx` | Remove `<UpdatePrompt />` import + mount |
+| `src/components/UpdatePrompt.tsx` | Delete file |
+| `src/components/InstallAppCard.tsx` | **NEW** — beforeinstallprompt handler + iOS fallback |
+| `src/pages/dashboard/SettingsPage.tsx` | Mount `<InstallAppCard />` near top |
 
 ## Result
-
-- Signature renders at its true aspect ratio — no more horizontal squash
-- Crisp strokes at any export size (PNG, PDF, on-card preview)
-- Signatures of any shape (square, wide, tall) all fit cleanly above the line
-- 2× resolution = print-quality output
+- No more nagging update banner
+- Mobile users see a clean "Install App" card on their profile that one-tap installs the PWA (Android) or shows iOS Add-to-Home-Screen instructions
+- Card auto-hides once app is already installed
 
