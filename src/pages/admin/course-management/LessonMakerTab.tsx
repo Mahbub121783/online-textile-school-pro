@@ -423,8 +423,8 @@ const LessonMakerTab = () => {
                   <SelectContent>
                     <SelectItem value="youtube">YouTube</SelectItem>
                     <SelectItem value="vimeo">Vimeo</SelectItem>
-                    <SelectItem value="google_drive">Google Drive</SelectItem>
-                    <SelectItem value="custom">Custom / Upload</SelectItem>
+                    <SelectItem value="drive">Google Drive</SelectItem>
+                    <SelectItem value="upload">Custom / Upload</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

@@ -61,10 +61,19 @@ function extractYouTubeId(url: string): string | null {
   return null;
 }
 
-function parseVideoSource(url: string, platform?: string | null) {
-  if (!url) return { type: 'none' as const, embedUrl: '' };
+function normalizePlatform(p?: string | null): string | null {
+  if (!p) return null;
+  const v = p.toLowerCase().trim();
+  if (v === 'google_drive' || v === 'googledrive' || v === 'gdrive') return 'drive';
+  if (v === 'custom' || v === 'direct' || v === 'upload' || v === 'r2' || v === 'cloudinary') return 'upload';
+  return v;
+}
 
-  if (platform === 'youtube' || /youtube\.com|youtu\.be/i.test(url)) {
+function parseVideoSource(url: string, platformRaw?: string | null) {
+  if (!url) return { type: 'none' as const, embedUrl: '' };
+  const platform = normalizePlatform(platformRaw);
+
+  if (platform === 'youtube' || /youtube\.com|youtu\.be|youtube-nocookie\.com/i.test(url)) {
     const id = extractYouTubeId(url);
     if (id) {
       const origin = typeof window !== 'undefined' ? window.location.origin : '';
@@ -537,13 +546,17 @@ const SecureMediaPlayer = ({
             src={source.embedUrl}
             className="w-full h-full"
             allowFullScreen
-            allow="autoplay; encrypted-media; fullscreen"
+            allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
             sandbox={
               source.type === 'drive'
                 ? 'allow-scripts allow-same-origin allow-presentation'
-                : 'allow-scripts allow-same-origin allow-presentation allow-popups'
+                : 'allow-scripts allow-same-origin allow-presentation allow-popups allow-popups-to-escape-sandbox'
             }
-            referrerPolicy="no-referrer"
+            referrerPolicy={
+              source.type === 'drive'
+                ? 'no-referrer'
+                : 'strict-origin-when-cross-origin'
+            }
             loading="eager"
             onLoad={() => setLoading(false)}
           />
