@@ -2,17 +2,28 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { BookOpen, Users, DollarSign, TrendingUp, Star, FileQuestion, PlusCircle, BarChart3, Wallet } from 'lucide-react';
+import { BookOpen, Users, DollarSign, TrendingUp, Star, FileQuestion, PlusCircle, BarChart3, Wallet, UserCircle2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { format, subDays, isAfter } from 'date-fns';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import PublicProfileEditor from '@/components/shared/PublicProfileEditor';
 
 const InstructorDashboard = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [range, setRange] = useState('30');
+
+  const { data: myProfile } = useQuery({
+    queryKey: ['instructor-public-profile-status', user?.id],
+    enabled: !!user,
+    queryFn: async () => {
+      const { data } = await supabase.from('user_profiles').select('headline, bio').eq('id', user!.id).maybeSingle();
+      return data;
+    },
+  });
+  const profileIncomplete = !myProfile?.headline || !myProfile?.bio;
 
   const { data: courses = [] } = useQuery({
     queryKey: ['instructor-courses', user?.id],
@@ -158,6 +169,22 @@ const InstructorDashboard = () => {
         </Button>
       </div>
 
+      {/* Public Profile Completion Nudge */}
+      {profileIncomplete && (
+        <div className="rounded-xl border border-accent/40 bg-accent/5 p-4 flex items-start gap-3">
+          <UserCircle2 className="h-5 w-5 text-accent shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="font-heading font-bold text-sm">Complete your public profile</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Add a headline and bio so students see a strong profile next to your courses and endorsements.
+            </p>
+          </div>
+          <Button size="sm" variant="outline" onClick={() => document.getElementById('instructor-profile-editor')?.scrollIntoView({ behavior: 'smooth' })}>
+            Complete now
+          </Button>
+        </div>
+      )}
+
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
         {stats.map((s) => (
           <div key={s.label} className="bg-card border rounded-xl p-4 md:p-5">
@@ -250,6 +277,13 @@ const InstructorDashboard = () => {
           )}
         </div>
       </div>
+
+      {/* Public Profile Editor */}
+      {user && (
+        <div id="instructor-profile-editor" className="scroll-mt-24">
+          <PublicProfileEditor userId={user.id} mode="self" />
+        </div>
+      )}
     </div>
   );
 };

@@ -8,6 +8,7 @@ import StudentIdCard from '@/components/student/StudentIdCard';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import BottomNav from '@/components/layout/BottomNav';
+import PublicProfileEditor from '@/components/shared/PublicProfileEditor';
 import { useNavigate } from 'react-router-dom';
 
 const Profile = () => {
@@ -87,6 +88,11 @@ const Profile = () => {
                 </div>
               </div>
             ))}
+          </div>
+
+          {/* Public Profile Editor */}
+          <div className="mt-6">
+            <PublicProfileEditor userId={user.id} mode="self" />
           </div>
 
           {/* Student ID Card */}

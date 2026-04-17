@@ -20,8 +20,10 @@ export const useProfileCompleteness = (profile: any) => {
       { key: 'district', label: 'District', weight: 5, completed: !!profile.district },
       { key: 'professional_role', label: 'Current Role', weight: 8, completed: !!profile.professional_role },
       { key: 'date_of_birth', label: 'Date of Birth', weight: 5, completed: !!profile.date_of_birth },
-      { key: 'preferred_language', label: 'Language Preference', weight: 5, completed: !!profile.preferred_language },
-      { key: 'conditional', label: 'Role Details', weight: 5, completed: profile.professional_role === 'student' || (profile.professional_role === 'employee' && !!profile.company_name && !!profile.occupation) || (profile.professional_role === 'businessman' && !!profile.business_type) || !profile.professional_role },
+      { key: 'preferred_language', label: 'Language Preference', weight: 4, completed: !!profile.preferred_language },
+      { key: 'headline', label: 'Public Headline', weight: 5, completed: !!profile.headline },
+      { key: 'bio', label: 'Bio', weight: 5, completed: !!profile.bio && profile.bio.length > 20 },
+      { key: 'conditional', label: 'Role Details', weight: 3, completed: profile.professional_role === 'student' || (profile.professional_role === 'employee' && !!profile.company_name && !!profile.occupation) || (profile.professional_role === 'businessman' && !!profile.business_type) || !profile.professional_role },
     ];
   }, [profile]);
 
