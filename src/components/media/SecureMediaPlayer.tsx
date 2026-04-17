@@ -55,14 +55,14 @@ function parseVideoSource(url: string, platform?: string | null) {
     }
   }
 
-  // Google Drive
-  if (url.includes('drive.google.com')) {
-    const match = url.match(/[-\w]{25,}/);
-    if (match) {
+  // Google Drive — supports /file/d/{ID}/, ?id={ID}, /uc?id={ID}, /open?id={ID}, /preview
+  if (platform === 'drive' || url.includes('drive.google.com')) {
+    const id = extractDriveId(url);
+    if (id) {
       return {
         type: 'drive' as const,
-        embedUrl: `https://drive.google.com/file/d/${match[0]}/preview`,
-        videoId: match[0],
+        embedUrl: `https://drive.google.com/file/d/${id}/preview?rm=minimal&usp=drive_web`,
+        videoId: id,
       };
     }
   }
