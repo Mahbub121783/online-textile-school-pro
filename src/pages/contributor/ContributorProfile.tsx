@@ -245,7 +245,7 @@ const ContributorProfile = () => {
                         <CardContent className="p-4 space-y-2">
                           <h3 className="font-medium line-clamp-2 group-hover:text-primary">{c.title}</h3>
                           <div className="flex items-center justify-between text-xs text-muted-foreground">
-                            <span className="flex items-center gap-1"><Star className="h-3 w-3 fill-yellow-500 text-yellow-500" /> {c.avg_rating?.toFixed(1) || 'New'}</span>
+                            <span className="flex items-center gap-1"><Star className="h-3 w-3 fill-amber-500 text-amber-500" /> {c.avg_rating?.toFixed(1) || 'New'}</span>
                             <span>{c.enrollment_count || 0} students</span>
                           </div>
                         </CardContent>
