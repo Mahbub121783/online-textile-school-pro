@@ -59,12 +59,12 @@ const QuizBuilder = ({ quizId, onBack }: Props) => {
   const [activeQ, setActiveQ] = useState(0);
   const [questions, setQuestions] = useState<QuestionItem[]>([{ ...EMPTY_QUESTION }]);
   const [showSettings, setShowSettings] = useState(false);
-  const [quiz, setQuiz] = useState({
+  const [quiz, setQuiz] = useState(() => ({
     title: '', course_id: '', description: '', pass_percentage: 60, max_attempts: 3,
     time_limit_minutes: null as number | null, is_published: false, status: 'draft',
     timer_mode: 'global', anti_cheat_enabled: false, randomize_questions: false,
     randomize_options: false, lock_ip: false, auto_submit_on_blur: false,
-  });
+  }));
   const [dragIdx, setDragIdx] = useState<number | null>(null);
 
   const { scope, courseId: lockedCourseId } = useCmsScope();
