@@ -193,7 +193,7 @@ export const RoleManagerDialog = ({ open, onOpenChange, userId, userName, curren
                   <p className="text-sm font-medium">Pending changes</p>
                   <div className="flex flex-wrap gap-1.5">
                     {diff.toAdd.map(r => (
-                      <Badge key={`a-${r}`} className="gap-1 bg-emerald-500/15 text-emerald-700 hover:bg-emerald-500/20 border-emerald-500/30">
+                      <Badge key={`a-${r}`} variant="default" className="gap-1">
                         <Plus className="h-3 w-3" /> {r}
                       </Badge>
                     ))}
