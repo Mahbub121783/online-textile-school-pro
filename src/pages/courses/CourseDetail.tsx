@@ -167,7 +167,7 @@ const CourseDetail = () => {
             templateKey: 'enrollment_confirmation',
             recipientEmail: user.email!,
             placeholders: {
-              user_name: (profile as any)?.full_name || 'Student',
+              user_name: user.email?.split('@')[0] || 'Student',
               course_name: course.title,
               course_url: `${window.location.origin}/courses/${course.slug}`,
             },

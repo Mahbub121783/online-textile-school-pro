@@ -181,9 +181,59 @@ const AdminLiveClasses = () => {
                     </div>
                     <div className="flex items-center gap-1 shrink-0">
                       {cls.meeting_url && (
-                        <a href={cls.meeting_url} target="_blank" rel="noreferrer">
-                          <Button variant="outline" size="sm" className="text-xs gap-1"><ExternalLink className="h-3 w-3" /> Join</Button>
-                        </a>
+                        <>
+                          <a href={cls.meeting_url} target="_blank" rel="noreferrer">
+                            <Button variant="outline" size="sm" className="text-xs gap-1"><ExternalLink className="h-3 w-3" /> Join</Button>
+                          </a>
+                          <Button
+                            variant="outline" size="sm" className="text-xs gap-1"
+                            title="Email meet link to enrolled students"
+                            onClick={async () => {
+                              if (!confirm('Email this meet link to all enrolled students?')) return;
+                              try {
+                                // Get attendee emails based on course/batch
+                                let userIds: string[] = [];
+                                if (cls.course_id) {
+                                  const { data } = await supabase.from('enrollments').select('user_id').eq('course_id', cls.course_id);
+                                  userIds = (data || []).map((r: any) => r.user_id);
+                                } else if (cls.batch_id) {
+                                  const { data } = await supabase.from('batch_students').select('user_id').eq('batch_id', cls.batch_id).eq('status', 'active');
+                                  userIds = (data || []).map((r: any) => r.user_id);
+                                }
+                                if (!userIds.length) { toast.error('No enrolled students found'); return; }
+                                // Get emails
+                                const emails: { id: string; email: string; name: string }[] = [];
+                                for (const uid of userIds) {
+                                  const { data: au } = await supabase.auth.admin?.getUserById?.(uid) || {} as any;
+                                  const email = (au as any)?.user?.email;
+                                  const { data: prof } = await supabase.from('user_profiles').select('full_name').eq('id', uid).single();
+                                  if (email) emails.push({ id: uid, email, name: prof?.full_name || 'Student' });
+                                }
+                                let sent = 0;
+                                await Promise.all(emails.map(async (e) => {
+                                  try {
+                                    await supabase.functions.invoke('send-smtp-email', {
+                                      body: {
+                                        templateKey: 'workshop_live_link',
+                                        recipientEmail: e.email,
+                                        placeholders: {
+                                          user_name: e.name,
+                                          workshop_title: cls.title,
+                                          start_time: format(new Date(cls.start_time), 'PPP p'),
+                                          meet_link: cls.meeting_url,
+                                        },
+                                      },
+                                    });
+                                    sent++;
+                                  } catch { /* count fails */ }
+                                }));
+                                toast.success(`Sent meet link to ${sent}/${emails.length} students`);
+                              } catch (err: any) {
+                                toast.error(err.message || 'Failed to send');
+                              }
+                            }}
+                          ><Send className="h-3 w-3" /> Email Link</Button>
+                        </>
                       )}
                       <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(cls)}><Edit2 className="h-3.5 w-3.5" /></Button>
                       <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => deleteMutation.mutate(cls.id)}><Trash2 className="h-3.5 w-3.5" /></Button>
