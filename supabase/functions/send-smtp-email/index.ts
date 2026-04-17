@@ -117,6 +117,14 @@ const DEFAULT_TEMPLATES: Record<string, { subject: string; body: string }> = {
     subject: "Your Student ID Card is Ready",
     body: `<h2 style="margin:0 0 16px">Student ID Card Issued 🎫</h2><p>Hi {{user_name}}, your student ID card has been generated.</p><p>Roll ID: <strong>{{user_roll_id}}</strong></p><p><a href="{{login_url}}" style="display:inline-block;padding:12px 24px;background:#1a365d;color:#fff;border-radius:6px;text-decoration:none;font-weight:bold">View ID Card</a></p>`,
   },
+  workshop_registration: {
+    subject: "Workshop Registration Confirmed — {{workshop_title}}",
+    body: `<h2 style="margin:0 0 16px">Registration Confirmed!</h2><p>Hi {{user_name}}, you are registered for <strong>{{workshop_title}}</strong>.</p><table style="margin:16px 0;border-collapse:collapse"><tr><td style="padding:6px 14px 6px 0;font-weight:bold">Registration #</td><td style="padding:6px 0">{{registration_number}}</td></tr><tr><td style="padding:6px 14px 6px 0;font-weight:bold">Date</td><td style="padding:6px 0">{{workshop_date}}</td></tr><tr><td style="padding:6px 14px 6px 0;font-weight:bold">Time</td><td style="padding:6px 0">{{workshop_time}}</td></tr></table><p>We'll send the live link before the session.</p>`,
+  },
+  workshop_live_link: {
+    subject: "Live Session Link — {{workshop_title}}",
+    body: `<h2 style="margin:0 0 16px">Your Live Session Link 🎥</h2><p>Hi {{user_name}}, your live session for <strong>{{workshop_title}}</strong> is starting at <strong>{{start_time}}</strong>.</p><p style="margin:24px 0"><a href="{{meet_link}}" style="display:inline-block;padding:12px 24px;background:#1a365d;color:#fff;border-radius:6px;text-decoration:none;font-weight:bold">Join Live Session</a></p><p style="color:#888;font-size:13px">Link: <a href="{{meet_link}}">{{meet_link}}</a></p>`,
+  },
 };
 
 /* ─── Helpers ─── */

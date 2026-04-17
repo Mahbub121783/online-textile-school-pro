@@ -45,6 +45,21 @@ const Register = () => {
     if (error) {
       toast({ title: 'Registration failed', description: error.message, variant: 'destructive' });
     } else {
+      // Send welcome email (non-blocking)
+      try {
+        await supabase.functions.invoke('send-smtp-email', {
+          body: {
+            templateKey: 'user_registration',
+            recipientEmail: formData.email,
+            placeholders: {
+              user_name: formData.fullName || 'Student',
+              site_name: 'Online Textile School',
+              login_url: `${window.location.origin}/auth/login`,
+              user_roll_id: '(pending)',
+            },
+          },
+        });
+      } catch { /* non-critical */ }
       toast({ title: 'Registration successful!', description: 'Please check your email to verify your account.' });
       navigate('/auth/login');
     }
