@@ -1,72 +1,89 @@
 
 
-## Answer to your question
+## Gap Analysis (instructor portal vs admin CMS)
 
-**Yes** — the columns (`bio`, `headline`, `expertise`, `social_links`, `is_public_contributor`, `vote_count`) were added to `user_profiles`, which is the **single profile table for ALL users** (students, instructors, admins, super_admins). Every account already has a row here (auto-created by `handle_new_user` trigger on signup), so every user already has these fields available — they're just empty/default until filled.
+| Module | Admin CMS has | Instructor portal has | Gap |
+|---|---|---|---|
+| **Lessons** | Full builder (628 LOC): video/text/quiz/assignment types, multi-platform video (YouTube/Vimeo/Drive/R2), preview toggle, scheduled unlock, status workflow, resources, attached quizzes/assignments via picker, rich text editor, MediaUploader | 95-LOC read-only list — instructor cannot create/edit lessons standalone, only via CourseBuilder | **Massive** |
+| **Quizzes** | `QuizDashboard` + full `QuizBuilder` (447 LOC): multi-question types, drag reorder, results board, analytics, time limits, shuffle, retake rules | 268-LOC basic CRUD, no question reordering, no results dashboard, no preview | Large |
+| **Assignments** | `AssignmentTab` (332 LOC): rubric, file types allowed, plagiarism integration, bulk grade, return-revision flow, attachments | 262-LOC basic CRUD + grade dialog | Medium |
+| **Course CMS** | `CoursesListTab`: review workflow, approve/reject, bulk actions, publish toggle, duplicate, soft-delete | Simple list, links to `CourseBuilder` only | Medium |
+| **eBooks** | `AdminEbooks` (587 LOC): full upload, R2/Cloudinary, contributor picker, pricing, DRM settings, stats | **None — instructors cannot create or manage ebooks at all** | **Critical** |
 
-However, the **UI to edit these fields is NOT yet wired up anywhere**. Right now:
-- ✅ DB columns exist for everyone
-- ✅ Public profile page `/contributor/:id` reads them
-- ✅ Voting works
-- ❌ No form anywhere lets users (students/instructors/admins) actually fill in bio/headline/expertise/social links
-- ❌ Admin dashboard has no UI to edit these for any user
-- ❌ Student `Profile.tsx` / `SettingsPage.tsx` doesn't expose them
-- ❌ Instructor portal has no profile editor
-- ❌ `is_public_contributor` toggle isn't surfaced anywhere
+## Plan — Bring instructor CMS to admin parity
 
-So the system is **half-built**: the backend is universal, but the editing surfaces are missing. Let me complete it.
+### 1. Reuse, don't duplicate (DRY)
+Extract admin CMS tabs into **role-aware shared components** that filter data by `instructor_id` when `mode='instructor'` and skip admin-only actions (approve/reject, force-publish, cross-instructor bulk).
 
-## Plan — Wire profile editing across every role
+| New shared component | Replaces |
+|---|---|
+| `src/components/cms/LessonMaker.tsx` | Wraps logic from `admin/course-management/LessonMakerTab.tsx`, adds `scope: 'admin' \| 'instructor'` prop. Instructor mode auto-filters courses to `instructor_id = user.id` and removes "all courses" view. |
+| `src/components/cms/QuizManagement.tsx` | Wraps `QuizDashboard` + `QuizBuilder` + `QuizResultsBoard` flow with same `scope` prop. |
+| `src/components/cms/AssignmentManagement.tsx` | Wraps `AssignmentTab`. |
+| `src/components/cms/EbookManagement.tsx` | Wraps `AdminEbooks` core (form, upload, contributor picker). Instructor mode: only see/edit own ebooks (filter `created_by = user.id`); admin sees all. |
+| `src/components/cms/CourseListing.tsx` | Wraps `CoursesListTab`. Instructor mode: own courses only, no approve/reject buttons (those stay admin-only), keeps create/edit/duplicate/preview/delete. |
 
-### 1. Student self-edit — `src/pages/Profile.tsx`
-Add a new **"Public Profile"** card section with:
-- Headline (single-line input, e.g. "Textile Engineering Student at BUTEX")
-- Bio (textarea, 500 char limit, char counter)
-- Expertise (tag input — type + Enter to add chips, stored as `text[]`)
-- Social links (4 inputs: website, linkedin, github, twitter — stored as JSONB)
-- "Show my profile publicly" toggle (`is_public_contributor`)
-- Live preview link → opens `/contributor/:id` in new tab
-- Save button with optimistic update + toast
+### 2. Wire upgraded shared components into instructor pages
 
-### 2. Instructor self-edit — `src/pages/instructor/InstructorDashboard.tsx` (or new `InstructorProfile.tsx`)
-Same component reused — instructors get the SAME profile editor (since they share `user_profiles`). Add a prominent "Complete your public profile" card on instructor dashboard if `headline` or `bio` is empty (drives adoption — important so endorsements/profile pages look populated).
+| Instructor file | Change |
+|---|---|
+| `InstructorLessons.tsx` | Replace 95-LOC list → `<LessonMaker scope="instructor" />` (full CRUD, video/text/assignment/quiz lessons, preview, schedule, resources) |
+| `InstructorQuizzes.tsx` | Replace dialog form → `<QuizManagement scope="instructor" />` (dashboard + builder + results board) |
+| `InstructorAssignments.tsx` | Replace → `<AssignmentManagement scope="instructor" />` (rubric, file types, return-for-revision, bulk grade) |
+| `InstructorCourses.tsx` | Replace plain table → `<CourseListing scope="instructor" />` (search/filter, duplicate, soft-delete, status tabs Draft/Pending/Published) |
 
-### 3. Admin universal editor — `src/pages/admin/AdminUsers.tsx` (or `StudentDetail.tsx`)
-Add an **"Edit Public Profile"** section in the existing user manage dialog so admins can:
-- Edit any user's bio/headline/expertise/social links
-- Force-toggle `is_public_contributor` (e.g. hide spammy profiles)
-- Reset `vote_count` (moderation)
-- View vote history (last 10 endorsers)
+### 3. Add eBook authoring for instructors (NEW)
 
-### 4. Reusable component — `src/components/shared/PublicProfileEditor.tsx` (NEW)
-Single form component used by all 3 surfaces above (student/instructor/admin). Props: `userId`, `mode: 'self' | 'admin'`. DRY — one source of truth for validation and UI.
+DB migration:
+- Add `ebooks.created_by uuid REFERENCES user_profiles(id)` (nullable for back-compat) + RLS policy: instructors can SELECT/INSERT/UPDATE/DELETE only ebooks where `created_by = auth.uid()`; admins keep full access.
+- Backfill: `UPDATE ebooks SET created_by = (first matching contributor with role='author' from content_contributors)` where possible.
 
-### 5. Profile completeness widget update — `src/components/ProfileCompletenessWidget.tsx`
-Add `bio` + `headline` to the completeness scoring so users are nudged to fill them in.
+New pages/routes:
+- `src/pages/instructor/InstructorEbooks.tsx` — uses `<EbookManagement scope="instructor" />`
+- Route `/instructor/ebooks` in `App.tsx`
+- Sidebar item "eBooks" under Teaching group in `InstructorSidebar.tsx`
 
-### 6. Header/avatar dropdown link — `src/components/layout/Header.tsx`
-Add "View public profile" item in the user avatar dropdown for quick access (any role).
+Instructor-mode constraints in `EbookManagement`:
+- Auto-set `created_by = user.id` on insert
+- Hide global-only fields (admin moderation toggles)
+- Pre-fill self as `lead author` in contributor picker
 
-### 7. Endorsers list on contributor profile
-Small enhancement to `ContributorProfile.tsx`: show last 8 endorser avatars under the vote count (social proof, like LinkedIn).
+### 4. CourseBuilder enhancement
+Currently `CourseBuilder.tsx` (437 LOC) is OK but missing feature parity with admin. Add:
+- "Lessons" tab inside builder using same `<LessonMaker scope="instructor" courseId={id} />` (so instructors can manage lessons either inside a course context or globally)
+- "Quizzes" tab → `<QuizManagement scope="instructor" courseId={id} />`
+- "Assignments" tab → `<AssignmentManagement scope="instructor" courseId={id} />`
+
+### 5. RLS audit (one migration)
+Verify and add as needed:
+- `lessons`, `course_sections`, `quizzes`, `quiz_questions`, `assignments` — instructors can manage rows where parent course `instructor_id = auth.uid()` OR they are listed in `content_contributors` with role `lead_instructor`/`co_instructor`.
+- `ebooks` — new `created_by` policy as above.
 
 ## Result
-- Every user (student, instructor, admin) can edit their own public profile from their dashboard
-- Admins can edit any user's public profile from admin panel
-- Profile completeness widget nudges users to fill in bio/headline
-- Header dropdown gives one-click access to your own public profile
-- Single shared component = consistent UX everywhere
+
+- Instructors get the **exact same powerful CMS** as admin: full lesson maker, quiz builder with results board, assignment management with rubric/grading, ebook authoring.
+- Single source of truth — admin and instructor share components via `scope` prop, so future improvements ship to both at once.
+- Admin retains exclusive abilities (approve/reject courses, edit any user's content, moderate ebooks).
+- Co-instructors and contributors (from previous feature) get same permissions via RLS.
 
 ## Files Touched
-| File | Change |
-|---|---|
-| `src/components/shared/PublicProfileEditor.tsx` | NEW — reusable form |
-| `src/pages/Profile.tsx` | Add Public Profile card |
-| `src/pages/instructor/InstructorDashboard.tsx` | Add profile completion card + editor link |
-| `src/pages/admin/AdminUsers.tsx` | Add admin edit dialog section |
-| `src/components/ProfileCompletenessWidget.tsx` | Score bio + headline |
-| `src/components/layout/Header.tsx` | "View public profile" dropdown item |
-| `src/pages/contributor/ContributorProfile.tsx` | Add endorser avatars row |
 
-No DB changes needed — schema is already in place from the previous migration.
+**New** (7):
+- `src/components/cms/LessonMaker.tsx`
+- `src/components/cms/QuizManagement.tsx`
+- `src/components/cms/AssignmentManagement.tsx`
+- `src/components/cms/EbookManagement.tsx`
+- `src/components/cms/CourseListing.tsx`
+- `src/pages/instructor/InstructorEbooks.tsx`
+- One migration (ebooks.created_by + RLS)
+
+**Edited** (8):
+- `src/pages/instructor/InstructorLessons.tsx`
+- `src/pages/instructor/InstructorQuizzes.tsx`
+- `src/pages/instructor/InstructorAssignments.tsx`
+- `src/pages/instructor/InstructorCourses.tsx`
+- `src/pages/instructor/CourseBuilder.tsx`
+- `src/components/layout/InstructorSidebar.tsx` (add eBooks link)
+- `src/App.tsx` (add `/instructor/ebooks` route)
+- `src/pages/admin/course-management/LessonMakerTab.tsx`, `QuizManagementTab.tsx`, `AssignmentTab.tsx`, `CoursesListTab.tsx`, `src/pages/admin/AdminEbooks.tsx` — refactored to import shared CMS components with `scope="admin"` (zero behavior change)
 
