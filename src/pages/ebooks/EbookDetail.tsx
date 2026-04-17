@@ -12,6 +12,8 @@ import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import BottomNav from '@/components/layout/BottomNav';
 import { toast } from '@/hooks/use-toast';
+import ContributorBadge from '@/components/shared/ContributorBadge';
+import { useContributors } from '@/hooks/useContributors';
 
 const EbookDetail = () => {
   const { slug } = useParams();
