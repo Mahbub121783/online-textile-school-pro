@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,19 +10,33 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Search, Shield, ShieldOff, UserCheck, UserX, UserCog, CreditCard, UserCircle2 } from 'lucide-react';
+import { Search, Shield, UserCheck, UserX, UserCog, CreditCard, UserCircle2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import PublicProfileEditor from '@/components/shared/PublicProfileEditor';
 import { Constants } from '@/integrations/supabase/types';
 import { Progress } from '@/components/ui/progress';
+import RoleManagerDialog from '@/components/admin/RoleManagerDialog';
+import { getRoleDef } from '@/lib/roleDefinitions';
 
 const ALL_ROLES = Constants.public.Enums.app_role;
 
 const AdminUsers = () => {
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState<string>('all');
+  const [roleDialog, setRoleDialog] = useState<{ userId: string; name: string; roles: string[] } | null>(null);
   const queryClient = useQueryClient();
   const { user: currentUser } = useAuth();
+
+  // Realtime: any role change in the system refreshes the user list
+  useEffect(() => {
+    const ch = supabase
+      .channel(`admin-users-roles-${Date.now()}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'user_roles' }, () => {
+        queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [queryClient]);
 
   const { data: users, isLoading } = useQuery({
     queryKey: ['admin-users', search, roleFilter],
