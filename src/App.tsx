@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect } from 'react';
 import ChatWidget from '@/components/chat/ChatWidget';
-import UpdatePrompt from '@/components/UpdatePrompt';
+
 import CookieConsentBanner from '@/components/cookies/CookieConsentBanner';
 import { CookieConsentProvider } from '@/hooks/useCookieConsent';
 import { PopupRenderer } from '@/components/popups/PopupRenderer';
@@ -385,7 +385,6 @@ const App = () => (
               <AppRoutes />
               <PopupRenderer />
               <ChatWidget />
-              <UpdatePrompt />
               <CookieConsentBanner />
             </BrowserRouter>
           </TooltipProvider>
