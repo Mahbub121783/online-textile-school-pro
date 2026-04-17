@@ -161,6 +161,7 @@ const AdminSponsors = lazy(() => import("./pages/admin/AdminSponsors"));
 const VerifyCertificate = lazy(() => import("./pages/verify/VerifyCertificate"));
 const AdminPopups = lazy(() => import("./pages/admin/AdminPopups"));
 const PopupAnalytics = lazy(() => import("./pages/admin/popups/PopupAnalytics"));
+const ContributorProfile = lazy(() => import("./pages/contributor/ContributorProfile"));
 
 // Optimized QueryClient with aggressive caching
 const queryClient = new QueryClient({
@@ -215,6 +216,7 @@ const AppRoutes = () => {
           <Route path="/auth/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/profile" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/contributor/:id" element={<ContributorProfile />} />
           <Route path="/blog" element={<BlogList />} />
           <Route path="/blog/:slug" element={<BlogPost />} />
           {/* Student Dashboard */}

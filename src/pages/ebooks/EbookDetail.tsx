@@ -12,6 +12,8 @@ import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import BottomNav from '@/components/layout/BottomNav';
 import { toast } from '@/hooks/use-toast';
+import ContributorBadge from '@/components/shared/ContributorBadge';
+import { useContributors } from '@/hooks/useContributors';
 
 const EbookDetail = () => {
   const { slug } = useParams();
@@ -47,6 +49,8 @@ const EbookDetail = () => {
       navigate(`/ebooks/${ebook.slug}`, { replace: true });
     }
   }, [ebook?.slug, slug, navigate]);
+
+  const { data: ebookContributors = [] } = useContributors('ebook', ebook?.id);
 
   const { data: isPurchased } = useQuery({
     queryKey: ['ebook-purchased', ebook?.id, user?.id],
@@ -206,6 +210,21 @@ const EbookDetail = () => {
               {ebook.author && <p className="text-muted-foreground">by <span className="font-medium text-foreground">{ebook.author}</span></p>}
               {ebook.sub_writers && ebook.sub_writers.length > 0 && (
                 <p className="text-sm text-muted-foreground">Co-authors: {ebook.sub_writers.join(', ')}</p>
+              )}
+              {ebookContributors.length > 0 && (
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {ebookContributors.map(c => (
+                    <ContributorBadge
+                      key={c.id}
+                      id={c.user_id}
+                      name={c.user_profiles?.full_name}
+                      avatarUrl={c.user_profiles?.avatar_url}
+                      role={c.role}
+                      size="sm"
+                      showRole
+                    />
+                  ))}
+                </div>
               )}
 
               <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">

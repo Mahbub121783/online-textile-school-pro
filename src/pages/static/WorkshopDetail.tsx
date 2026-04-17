@@ -1,6 +1,6 @@
 import { PageSkeleton } from '@/components/ui/loading-skeletons';
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -16,6 +16,8 @@ import { CountdownTimer } from '@/components/workshop/CountdownTimer';
 import { Calendar, Clock, Users, Download, CheckCircle, Video, BookOpen, FileText, FileImage, FileArchive, File, LogIn, Copy } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
+import ContributorBadge from '@/components/shared/ContributorBadge';
+import { useContributors } from '@/hooks/useContributors';
 
 const fileIcon = (type: string) => {
   if (['pdf'].includes(type)) return <FileText className="h-4 w-4 text-red-500" />;
@@ -99,6 +101,8 @@ export default function WorkshopDetail() {
     },
     enabled: !!workshop?.id && !!user,
   });
+
+  const { data: workshopContributors = [] } = useContributors('workshop', workshop?.id);
 
   const sendConfirmationEmail = async (regData: any, ws: any) => {
     try {
@@ -384,17 +388,33 @@ export default function WorkshopDetail() {
               {/* Instructor */}
               {instructor && (
                 <Card>
-                  <CardContent className="p-5">
-                    <div className="flex items-center gap-3 mb-3">
+                  <CardContent className="p-5 space-y-3">
+                    <Link to={`/contributor/${instructor.id}`} className="flex items-center gap-3 hover:opacity-80 transition">
                       <Avatar className="h-12 w-12">
                         <AvatarImage src={instructor.avatar_url || ''} />
                         <AvatarFallback>{instructor.full_name?.[0] || '?'}</AvatarFallback>
                       </Avatar>
                       <div>
-                        <p className="font-semibold text-sm">{instructor.full_name}</p>
-                        <p className="text-xs text-muted-foreground">Instructor</p>
+                        <p className="font-semibold text-sm hover:text-primary transition">{instructor.full_name}</p>
+                        <p className="text-xs text-muted-foreground">Lead Instructor</p>
                       </div>
-                    </div>
+                    </Link>
+                    {workshopContributors.length > 0 && (
+                      <div className="pt-3 border-t space-y-2">
+                        <p className="text-xs font-medium text-muted-foreground">Co-Instructors</p>
+                        <div className="flex flex-wrap gap-1">
+                          {workshopContributors.map(c => (
+                            <ContributorBadge
+                              key={c.id}
+                              id={c.user_id}
+                              name={c.user_profiles?.full_name}
+                              avatarUrl={c.user_profiles?.avatar_url}
+                              size="sm"
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               )}

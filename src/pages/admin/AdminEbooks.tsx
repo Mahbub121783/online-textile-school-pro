@@ -13,7 +13,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { Plus, Search, BarChart3, Edit, Trash2, BookOpen, Upload, X, Eye, EyeOff, AlertTriangle, CloudOff, Cloud } from 'lucide-react';
+import { Plus, Search, BarChart3, Edit, Trash2, BookOpen, Upload, X, Eye, EyeOff, AlertTriangle, CloudOff, Cloud, UserPlus, Users } from 'lucide-react';
+import ContributorPickerModal, { type PickedContributor } from '@/components/shared/ContributorPickerModal';
+import { useContributors, useAddContributor, useRemoveContributor } from '@/hooks/useContributors';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 interface EbookForm {
   id?: string;
@@ -71,6 +74,10 @@ const AdminEbooks = () => {
   const [subWriterInput, setSubWriterInput] = useState('');
   const [fileUploadStatus, setFileUploadStatus] = useState<'idle' | 'uploading' | 'success' | 'error'>('idle');
   const [fileUploadError, setFileUploadError] = useState('');
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const { data: linkedContributors = [] } = useContributors('ebook', form.id);
+  const addContributor = useAddContributor();
+  const removeContributor = useRemoveContributor();
 
   const { data: ebooks = [], isLoading } = useQuery({
     queryKey: ['admin-ebooks'],
@@ -354,20 +361,19 @@ const AdminEbooks = () => {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Primary Writer</Label>
-                  <Input value={form.author} onChange={e => setForm(p => ({ ...p, author: e.target.value }))} />
+                  <Label>Primary Writer (display name)</Label>
+                  <Input value={form.author} onChange={e => setForm(p => ({ ...p, author: e.target.value }))} placeholder="e.g. John Smith" />
+                  <p className="text-[11px] text-muted-foreground">Shown publicly. Use linked contributors below for clickable profiles.</p>
                 </div>
                 <div className="space-y-2">
-                  <Label>Sub-Writers</Label>
-                  <div className="flex gap-2">
-                    <Input value={subWriterInput} onChange={e => setSubWriterInput(e.target.value)} placeholder="Add sub-writer" onKeyDown={e => {
-                      if (e.key === 'Enter' && subWriterInput.trim()) {
-                        e.preventDefault();
-                        setForm(p => ({ ...p, sub_writers: [...p.sub_writers, subWriterInput.trim()] }));
-                        setSubWriterInput('');
-                      }
-                    }} />
-                  </div>
+                  <Label>Sub-Writers (free text fallback)</Label>
+                  <Input value={subWriterInput} onChange={e => setSubWriterInput(e.target.value)} placeholder="Press Enter to add" onKeyDown={e => {
+                    if (e.key === 'Enter' && subWriterInput.trim()) {
+                      e.preventDefault();
+                      setForm(p => ({ ...p, sub_writers: [...p.sub_writers, subWriterInput.trim()] }));
+                      setSubWriterInput('');
+                    }
+                  }} />
                   <div className="flex flex-wrap gap-1">
                     {form.sub_writers.map((w, i) => (
                       <Badge key={i} variant="secondary" className="gap-1">
@@ -377,6 +383,37 @@ const AdminEbooks = () => {
                   </div>
                 </div>
               </div>
+
+              {/* Linked contributor profiles */}
+              {form.id ? (
+                <div className="space-y-2 border rounded-lg p-3 bg-muted/20">
+                  <div className="flex items-center justify-between">
+                    <Label className="flex items-center gap-2"><Users className="h-4 w-4" /> Linked Writer Profiles</Label>
+                    <Button type="button" size="sm" variant="outline" onClick={() => setPickerOpen(true)} className="gap-1">
+                      <UserPlus className="h-3 w-3" /> Add Writer
+                    </Button>
+                  </div>
+                  {linkedContributors.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">No linked profiles. Click "Add Writer" to search and link real user accounts.</p>
+                  ) : (
+                    <div className="flex flex-wrap gap-2">
+                      {linkedContributors.map(c => (
+                        <div key={c.id} className="flex items-center gap-2 bg-background rounded-full pl-1 pr-2 py-1 border">
+                          <Avatar className="h-6 w-6"><AvatarImage src={c.user_profiles?.avatar_url || ''} /><AvatarFallback className="text-xs">{c.user_profiles?.full_name?.[0] || '?'}</AvatarFallback></Avatar>
+                          <span className="text-xs font-medium">{c.user_profiles?.full_name}</span>
+                          <Badge variant="secondary" className="text-[10px] capitalize">{c.role.replace('_', ' ')}</Badge>
+                          <button type="button" onClick={() => removeContributor.mutate({ id: c.id, contentType: 'ebook', contentId: form.id! })} className="text-muted-foreground hover:text-destructive">
+                            <X className="h-3 w-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground border rounded-lg p-3 bg-muted/20">💡 Save the e-book first to link writer profiles.</p>
+              )}
+
               <div className="grid grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <Label>Age Restriction</Label>
@@ -524,6 +561,25 @@ const AdminEbooks = () => {
           </div>
         </DialogContent>
       </Dialog>
+
+      <ContributorPickerModal
+        open={pickerOpen}
+        onOpenChange={setPickerOpen}
+        title="Link Writer Profiles"
+        allowedRoles={['author', 'co_author', 'reviewer']}
+        excludeUserIds={linkedContributors.map(c => c.user_id)}
+        onConfirm={async (picks: PickedContributor[]) => {
+          if (!form.id) return;
+          for (const p of picks) {
+            await addContributor.mutateAsync({
+              contentType: 'ebook',
+              contentId: form.id,
+              userId: p.user_id,
+              role: p.role,
+            });
+          }
+        }}
+      />
     </div>
   );
 };

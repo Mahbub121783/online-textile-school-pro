@@ -19,6 +19,8 @@ import UtilityBar from '@/components/layout/UtilityBar';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import BottomNav from '@/components/layout/BottomNav';
+import ContributorBadge from '@/components/shared/ContributorBadge';
+import { useContributors } from '@/hooks/useContributors';
 
 const CourseDetail = () => {
   const { slug } = useParams();
@@ -188,6 +190,7 @@ const CourseDetail = () => {
   const instructor = course?.user_profiles as any;
   const category = (course?.categories as any)?.name;
   const isWished = course ? wishlistIds instanceof Set && wishlistIds.has(course.id) : false;
+  const { data: coContributors = [] } = useContributors('course', course?.id);
 
   if (isLoading) {
     return (
@@ -409,23 +412,40 @@ const CourseDetail = () => {
                   </div>
                 </TabsContent>
 
-                <TabsContent value="instructor" className="pt-6">
+                <TabsContent value="instructor" className="pt-6 space-y-6">
                   <div className="flex items-start gap-4">
-                    <div className="w-16 h-16 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center text-primary-foreground font-heading font-bold text-xl shrink-0 overflow-hidden">
+                    <Link to={`/contributor/${instructor?.id}`} className="w-16 h-16 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center text-primary-foreground font-heading font-bold text-xl shrink-0 overflow-hidden hover:ring-2 hover:ring-primary transition">
                       {instructor?.avatar_url ? (
                         <img src={instructor.avatar_url} alt={instructor.full_name} className="w-full h-full object-cover" />
                       ) : (
                         instructor?.full_name?.[0]?.toUpperCase() || 'I'
                       )}
-                    </div>
+                    </Link>
                     <div>
-                      <h3 className="font-heading font-semibold text-lg">{instructor?.full_name || 'Instructor'}</h3>
+                      <Link to={`/contributor/${instructor?.id}`} className="font-heading font-semibold text-lg hover:text-primary transition">{instructor?.full_name || 'Instructor'}</Link>
                       <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
                         <span><Users className="h-3 w-3 inline mr-1" />{course.enrollment_count || 0} Students</span>
                         {(course.avg_rating ?? 0) > 0 && <span><Star className="h-3 w-3 inline mr-1" />{Number(course.avg_rating).toFixed(1)} Rating</span>}
                       </div>
                     </div>
                   </div>
+                  {coContributors.length > 0 && (
+                    <div className="pt-4 border-t">
+                      <h4 className="font-medium text-sm mb-3">Co-Instructors & Contributors</h4>
+                      <div className="flex flex-wrap gap-2">
+                        {coContributors.map(c => (
+                          <ContributorBadge
+                            key={c.id}
+                            id={c.user_id}
+                            name={c.user_profiles?.full_name}
+                            avatarUrl={c.user_profiles?.avatar_url}
+                            role={c.role}
+                            showRole
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </TabsContent>
 
                 <TabsContent value="reviews" className="pt-6 space-y-6">
