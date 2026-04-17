@@ -2,12 +2,13 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { BookOpen, Users, DollarSign, TrendingUp, Star, FileQuestion, PlusCircle, BarChart3, Wallet } from 'lucide-react';
+import { BookOpen, Users, DollarSign, TrendingUp, Star, FileQuestion, PlusCircle, BarChart3, Wallet, UserCircle2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { format, subDays, isAfter } from 'date-fns';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import PublicProfileEditor from '@/components/shared/PublicProfileEditor';
 
 const InstructorDashboard = () => {
   const { user } = useAuth();
