@@ -319,9 +319,49 @@ export default function AdminWorkshops() {
                     {ws.instructor?.full_name && ` · by ${ws.instructor.full_name}`}
                   </p>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap">
                   <Button variant="outline" size="sm" onClick={() => setViewRegs(ws.id)} title="View Registrations"><Users className="h-4 w-4" /></Button>
-                  <Button variant="outline" size="sm" onClick={() => { setNotifyWs(ws); setNotifyForm({ title: '', message: '' }); }} title="Send Notification"><Bell className="h-4 w-4" /></Button>
+                  <Button variant="outline" size="sm" onClick={() => { setNotifyWs(ws); setNotifyForm({ title: '', message: '' }); }} title="Send In-App Notification"><Bell className="h-4 w-4" /></Button>
+                  {ws.meet_link && (
+                    <Button
+                      variant="outline" size="sm" title="Email meet link to all registrants"
+                      onClick={async () => {
+                        if (!confirm(`Email the meet link to all registrants of "${ws.title}"?`)) return;
+                        try {
+                          const { data: regs } = await supabase
+                            .from('workshop_registrations')
+                            .select('email, full_name')
+                            .eq('workshop_id', ws.id)
+                            .eq('status', 'registered');
+                          if (!regs?.length) { toast.error('No registrants found'); return; }
+                          const startTime = ws.start_time
+                            ? `${format(new Date(ws.start_date), 'PPP')} at ${ws.start_time.slice(0, 5)}`
+                            : format(new Date(ws.start_date), 'PPP');
+                          let sent = 0;
+                          await Promise.all(regs.map(async (r: any) => {
+                            try {
+                              await supabase.functions.invoke('send-smtp-email', {
+                                body: {
+                                  templateKey: 'workshop_live_link',
+                                  recipientEmail: r.email,
+                                  placeholders: {
+                                    user_name: r.full_name || 'Student',
+                                    workshop_title: ws.title,
+                                    start_time: startTime,
+                                    meet_link: ws.meet_link,
+                                  },
+                                },
+                              });
+                              sent++;
+                            } catch { /* skip */ }
+                          }));
+                          toast.success(`Meet link sent to ${sent}/${regs.length} registrants`);
+                        } catch (err: any) {
+                          toast.error(err.message || 'Failed to send');
+                        }
+                      }}
+                    ><Video className="h-4 w-4" /></Button>
+                  )}
                   <Button variant="outline" size="sm" onClick={() => openEdit(ws)}><Edit className="h-4 w-4" /></Button>
                   <Button variant="outline" size="sm" className="text-destructive" onClick={() => {
                     if (confirm('Delete this workshop?')) deleteMutation.mutate(ws.id);

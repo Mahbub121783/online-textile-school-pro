@@ -106,19 +106,21 @@ export default function WorkshopDetail() {
 
   const sendConfirmationEmail = async (regData: any, ws: any) => {
     try {
-      const emailBody = `
-        <h2>Workshop Registration Confirmed!</h2>
-        <p>You have been successfully registered for <strong>${ws.title}</strong>.</p>
-        <table style="margin:16px 0;border-collapse:collapse;">
-          <tr><td style="padding:4px 12px 4px 0;font-weight:bold;">Registration #</td><td>${regData.registration_number}</td></tr>
-          <tr><td style="padding:4px 12px 4px 0;font-weight:bold;">Date</td><td>${format(new Date(ws.start_date), 'MMMM dd, yyyy')}</td></tr>
-          ${ws.start_time ? `<tr><td style="padding:4px 12px 4px 0;font-weight:bold;">Time</td><td>${ws.start_time.slice(0, 5)}${ws.end_time ? ' - ' + ws.end_time.slice(0, 5) : ''}</td></tr>` : ''}
-          ${ws.meet_link ? `<tr><td style="padding:4px 12px 4px 0;font-weight:bold;">Meet Link</td><td><a href="${ws.meet_link}">${ws.meet_link}</a></td></tr>` : ''}
-        </table>
-        <p>Please join on time. We look forward to seeing you!</p>
-      `;
+      const timeStr = ws.start_time
+        ? `${ws.start_time.slice(0, 5)}${ws.end_time ? ' - ' + ws.end_time.slice(0, 5) : ''}`
+        : 'TBA';
       await supabase.functions.invoke('send-smtp-email', {
-        body: { to: regData.email, subject: `Workshop Registration Confirmed: ${ws.title}`, html: emailBody },
+        body: {
+          templateKey: 'workshop_registration',
+          recipientEmail: regData.email,
+          placeholders: {
+            user_name: regData.full_name || 'Student',
+            workshop_title: ws.title,
+            registration_number: regData.registration_number,
+            workshop_date: format(new Date(ws.start_date), 'MMMM dd, yyyy'),
+            workshop_time: timeStr,
+          },
+        },
       });
     } catch { /* Email is non-critical */ }
   };
