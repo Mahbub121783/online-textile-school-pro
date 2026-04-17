@@ -54,6 +54,7 @@ const LessonModal = ({ open, onClose, onSave, lesson }: LessonModalProps) => {
                 <SelectContent>
                   <SelectItem value="youtube">YouTube</SelectItem>
                   <SelectItem value="vimeo">Vimeo</SelectItem>
+                  <SelectItem value="drive">Google Drive</SelectItem>
                   <SelectItem value="upload">Upload</SelectItem>
                 </SelectContent>
               </Select>
@@ -72,7 +73,31 @@ const LessonModal = ({ open, onClose, onSave, lesson }: LessonModalProps) => {
           ) : (
             <div className="space-y-2">
               <Label>Video URL</Label>
-              <Input value={form.video_url} onChange={(e) => update('video_url', e.target.value)} placeholder={`Paste ${form.video_platform} URL`} />
+              <Input
+                value={form.video_url}
+                onChange={(e) => update('video_url', e.target.value)}
+                placeholder={
+                  form.video_platform === 'drive'
+                    ? 'Paste Google Drive share link (any format)'
+                    : `Paste ${form.video_platform} URL`
+                }
+              />
+            </div>
+          )}
+
+          {form.video_platform === 'drive' && (
+            <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-xs space-y-2">
+              <p className="font-semibold text-amber-700 dark:text-amber-400">
+                🔒 Secure your Drive video (required for full DRM)
+              </p>
+              <ol className="list-decimal pl-4 space-y-1 text-muted-foreground">
+                <li>In Google Drive, right-click the file → <strong>Share</strong>.</li>
+                <li>Set access to <strong>"Anyone with the link → Viewer"</strong>.</li>
+                <li>Click <strong>⚙ Settings</strong> and <strong>uncheck</strong> "Viewers and commenters can see the option to download, print, and copy".</li>
+              </ol>
+              <p className="text-[11px] text-muted-foreground">
+                Without this, Drive's native download button stays enabled regardless of player protections. Resume position is not tracked for Drive videos — use Upload or Vimeo for full progress tracking.
+              </p>
             </div>
           )}
 

@@ -28,6 +28,21 @@ interface SecureMediaPlayerProps {
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
+function extractDriveId(url: string): string | null {
+  if (!url) return null;
+  const patterns = [
+    /\/file\/d\/([a-zA-Z0-9_-]{20,})/,
+    /[?&]id=([a-zA-Z0-9_-]{20,})/,
+    /\/d\/([a-zA-Z0-9_-]{20,})/,
+  ];
+  for (const p of patterns) {
+    const m = url.match(p);
+    if (m) return m[1];
+  }
+  const fallback = url.match(/[-\w]{25,}/);
+  return fallback ? fallback[0] : null;
+}
+
 function parseVideoSource(url: string, platform?: string | null) {
   if (!url) return { type: 'none' as const, embedUrl: '' };
 
@@ -55,14 +70,14 @@ function parseVideoSource(url: string, platform?: string | null) {
     }
   }
 
-  // Google Drive
-  if (url.includes('drive.google.com')) {
-    const match = url.match(/[-\w]{25,}/);
-    if (match) {
+  // Google Drive — supports /file/d/{ID}/, ?id={ID}, /uc?id={ID}, /open?id={ID}, /preview
+  if (platform === 'drive' || url.includes('drive.google.com')) {
+    const id = extractDriveId(url);
+    if (id) {
       return {
         type: 'drive' as const,
-        embedUrl: `https://drive.google.com/file/d/${match[0]}/preview`,
-        videoId: match[0],
+        embedUrl: `https://drive.google.com/file/d/${id}/preview?rm=minimal&usp=drive_web`,
+        videoId: id,
       };
     }
   }
@@ -358,19 +373,34 @@ const SecureMediaPlayer = ({
           className="w-full h-full"
           allowFullScreen
           allow="autoplay; encrypted-media; fullscreen"
-          sandbox="allow-scripts allow-same-origin allow-presentation allow-popups"
+          sandbox={
+            source.type === 'drive'
+              ? 'allow-scripts allow-same-origin allow-presentation'
+              : 'allow-scripts allow-same-origin allow-presentation allow-popups'
+          }
           referrerPolicy="no-referrer"
           loading="eager"
           onLoad={() => setLoading(false)}
         />
       )}
 
-      {/* Anti-download transparent overlay for embedded players */}
-      {!isDirect && (
-        <div 
-          className="absolute inset-0 z-[1]" 
-          style={{ pointerEvents: 'none' }}
-        />
+      {/* Drive-specific shield: blocks Drive's chrome (3-dot menu, pop-out, download)
+          via two transparent click-traps in the top-right and bottom-right corners. */}
+      {source.type === 'drive' && (
+        <>
+          <div
+            className="absolute top-0 right-0 h-14 w-32 z-[5] cursor-not-allowed"
+            aria-hidden="true"
+            onClick={(e) => e.preventDefault()}
+            onContextMenu={(e) => e.preventDefault()}
+          />
+          <div
+            className="absolute bottom-0 right-0 h-12 w-24 z-[5] cursor-not-allowed"
+            aria-hidden="true"
+            onClick={(e) => e.preventDefault()}
+            onContextMenu={(e) => e.preventDefault()}
+          />
+        </>
       )}
 
       {/* Loading spinner */}
