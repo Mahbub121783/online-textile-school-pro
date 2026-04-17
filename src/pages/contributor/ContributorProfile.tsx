@@ -87,10 +87,14 @@ const ContributorProfile = () => {
   });
 
   const { data: papers = [] } = useQuery({
-    queryKey: ['contributor-papers', id],
-    enabled: !!id,
+    queryKey: ['contributor-papers', id, profile?.full_name],
+    enabled: !!id && !!profile?.full_name,
     queryFn: async () => {
-      const { data } = await supabase.from('research_papers').select('id, title, abstract, view_count, download_count').eq('author_id', id!).limit(20);
+      const { data } = await supabase
+        .from('research_papers')
+        .select('id, title, abstract, view_count, download_count, authors')
+        .contains('authors', [profile!.full_name])
+        .limit(20);
       return data || [];
     },
   });
@@ -140,7 +144,7 @@ const ContributorProfile = () => {
       <SEOHead
         title={`${profile.full_name || 'Contributor'} — Profile`}
         description={profile.headline || profile.bio || `View ${profile.full_name}'s courses, ebooks, and workshops`}
-        image={profile.avatar_url || undefined}
+        ogImage={profile.avatar_url || undefined}
       />
       <Header />
       <main className="min-h-screen bg-gradient-to-b from-background to-muted/20">
