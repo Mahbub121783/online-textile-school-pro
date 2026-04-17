@@ -1,85 +1,59 @@
 
 
 ## Goal
-Add fully functional **Google Drive video integration** to the Secure Media Player, with strong anti-download protection matching the existing DRM behavior used for YouTube/Vimeo/direct uploads.
 
-## Current State (verified from codebase)
-- `src/components/media/SecureMediaPlayer.tsx` — unified DRM player. Per memory `secure-learning-player`, it already supports YouTube, Vimeo, Google Drive, and direct URLs with watermarks, no-download, encrypted last-position tracking.
-- However: Drive support is currently the **basic `/preview` iframe**, which:
-  - Shows Google's native 3-dot menu with **Download** and **Open in new tab**
-  - Allows right-click → save in some browsers
-  - Shows "Pop out" button on hover
-  - Leaks the raw file URL via DevTools Network tab
-- This is what the user means by "lacks functional Drive link with high-level encryption / no-download."
+Wrap the `SecureMediaPlayer` in a sleek, modern **theatre-style frame** (like the screenshot): rounded dark container, padded gutters, a top header bar showing video title + source badge, the video itself centered with side breathing room, and a refined bottom footer with playback controls + meta info. Works identically on mobile and desktop.
 
-## The Problem with Drive
-Google Drive's `/preview` embed is **not** designed for DRM. The file ID is exposed, the download button is part of Google's UI (cannot be removed via CSS due to cross-origin iframe), and `?usp=drivesdk` / `&rm=minimal` params only hide *some* chrome.
-
-## Solution — Multi-Layer Drive DRM
-
-### Layer 1: URL normalization & hardening
-Auto-detect any Drive URL format the instructor pastes:
-- `drive.google.com/file/d/{ID}/view`
-- `drive.google.com/open?id={ID}`
-- `drive.google.com/uc?id={ID}`
-- Already-embed `/preview` URLs
-
-Convert all to the **most locked-down embed**:
-```text
-https://drive.google.com/file/d/{ID}/preview?rm=minimal&usp=drive_web
-```
-with iframe attributes:
-- `sandbox="allow-scripts allow-same-origin allow-presentation"` (blocks `allow-downloads`, `allow-popups`)
-- `allow="autoplay; encrypted-media; fullscreen"` (no `clipboard-write`, no `picture-in-picture`)
-- `referrerpolicy="no-referrer"`
-
-### Layer 2: Visual overlay shield (the key trick)
-A **transparent overlay div** sits on top of the Drive iframe covering only the top-right area where Drive's 3-dot menu / Pop-out / Download buttons appear (~48px tall strip on the right, ~120px wide). This:
-- Blocks user clicks from reaching Drive's chrome
-- Lets the video itself remain interactive (center play/pause area is uncovered)
-- Combined with `pointer-events` masking, gives a play-only experience
+## Design Reference (from the screenshot)
 
 ```text
-┌──────────────────────────[shield]──┐
-│                              [X][⋮]│ ← overlay covers this
-│                                    │
-│         ▶ video area               │
-│         (clickable)                │
-│                                    │
-└────────────────────────────────────┘
+┌─ rounded dark frame ────────────────────────────────┐
+│  [▶ Drive]   Lesson Title Here          [⋮ menu]    │ ← Header
+├─────────────────────────────────────────────────────┤
+│                                                     │
+│              ▶ video (16:9, padded)                 │
+│                                                     │
+├─────────────────────────────────────────────────────┤
+│  ◀◀  ▶  ▶▶   01:23 / 12:45   ━━●━━━━   🔊 ⚙ ⛶     │ ← Footer
+└─────────────────────────────────────────────────────┘
 ```
 
-### Layer 3: Existing DRM protections (already implemented, just verify they apply to Drive too)
-- Right-click disabled on player container
-- DevTools detection (already in place — pause + warning)
-- Dynamic watermark with `{user.email} · {timestamp}` overlay
-- Keyboard shortcuts blocked: Ctrl+S, Ctrl+P, Ctrl+Shift+I, F12, PrintScreen
-- `user-select: none`, `-webkit-touch-callout: none`
-- No `download` attribute anywhere in DOM
+## Implementation
 
-### Layer 4: Instructor-side guidance
-In `LessonModal.tsx`, when `video_platform === 'drive'` (new option):
-- Show inline help: *"Set the Drive file's sharing to **'Anyone with the link → Viewer'**. In Drive, click the file → ⋮ → Share → toggle off 'Viewers and commenters can see the option to download'.*"*
-- This is critical — without disabling Drive's *file-level* download permission, no client-side trick is bulletproof. We must educate instructors.
+### New wrapper: `src/components/media/PlayerShell.tsx`
+A presentation-only wrapper with three slots: `header`, `children` (video), `footer`.
 
-### Layer 5: Position tracking parity
-Drive iframes don't expose `currentTime` (cross-origin). Existing player already handles this gracefully (skips DB save for unsupported sources). We add a clear note in the player: "Resume position not supported for Drive videos — use Direct Upload or Vimeo for full progress tracking."
+- Outer: `rounded-2xl bg-gradient-to-b from-zinc-900 to-black p-2 sm:p-3 md:p-4 shadow-2xl ring-1 ring-white/10`
+- Header strip: 44px tall, flex row (left: source badge + title, right: optional menu/info), `border-b border-white/5`
+- Video slot: `rounded-xl overflow-hidden bg-black aspect-video` — keeps the 16:9 ratio with side breathing room from the frame padding
+- Footer strip: 56px tall, hosts the existing controls (progress bar + play/skip/volume/fullscreen) — pulled OUT from the video overlay into a permanent footer
 
-## Files to Change
+### Refactor `SecureMediaPlayer.tsx`
+
+1. **Extract controls** out of the absolute-positioned overlay into a `<PlayerFooter>` block (always visible, not auto-hiding) — gives that "real player" feel like the screenshot.
+2. **Header bar**: source badge (left) + title (center, truncated) + 3-dot menu (right) for playback speed / quality / etc.
+3. **Mobile**: shell padding shrinks to `p-2`, header/footer stay; controls reflow (volume hidden, time compact). At `<400px`, badge moves to icon-only.
+4. **Fullscreen mode**: shell auto-removes padding & rounded corners → goes edge-to-edge; header/footer overlay on top of video with auto-hide (current behavior).
+5. **Direct videos**: keep custom HTML5 controls in the footer.
+6. **Embedded (YouTube/Vimeo/Drive)**: footer shows source name + "Controls inside player" hint + fullscreen button only (since we can't seek across origins).
+
+### Visual polish
+- Header & footer use `bg-zinc-950/80 backdrop-blur` for that premium glass look
+- Smooth `transition-all` on shell padding when entering/exiting fullscreen
+- Subtle gradient ring around the video slot
+- Consistent `text-xs` for metadata, `tabular-nums` for time
+
+## Files
 
 | File | Change |
 |---|---|
-| `src/components/media/SecureMediaPlayer.tsx` | Add `extractDriveId()` helper, hardened iframe attrs, top-right overlay shield, source-type detection for any Drive URL pattern |
-| `src/components/instructor/LessonModal.tsx` | Add `'drive'` to `video_platform` Select; show instructor guidance card with Drive sharing settings when chosen |
-| `src/locales/en.json` & `bn.json` | Add Drive helper text strings (bilingual) |
+| `src/components/media/PlayerShell.tsx` | **NEW** — presentation wrapper (header / video slot / footer) |
+| `src/components/media/SecureMediaPlayer.tsx` | Wrap output in `<PlayerShell>`, move controls to permanent footer, add header bar with title + source badge + menu, handle fullscreen padding collapse |
 
-## What This Achieves
-- Drive videos play inside the lesson with **no visible download button, no pop-out, no 3-dot menu**
-- Right-click, Ctrl+S, F12, PrintScreen all blocked (parity with YouTube/Vimeo)
-- File ID still technically inspectable in DOM (unavoidable for Drive embeds), but combined with file-level Drive sharing setting (no-download permission), users cannot save the video through normal means
-- Instructors get clear guidance to enforce server-side restriction too
-
-## What This Doesn't Achieve (honest disclaimer)
-- A determined user with screen recording software can always capture playing video — true for Netflix, YouTube, every platform. No web DRM stops screen capture without Widevine L1 hardware DRM (not available to Drive embeds).
-- For **maximum** protection on truly sensitive content, recommend instructors upload to **Cloudflare R2 + signed URLs** (already supported via Direct Upload path) rather than Drive — R2 path supports server-side token expiry.
+## Result
+- All lessons (Direct upload, YouTube, Vimeo, Drive) get the same elegant framed look
+- Side gutters give the video breathing room (no more edge-to-edge harshness)
+- Header always shows what's playing; footer always shows controls
+- Identical experience mobile ↔ desktop, just scales padding & hides non-essential controls on small screens
+- Fullscreen still goes edge-to-edge for immersive viewing
 
