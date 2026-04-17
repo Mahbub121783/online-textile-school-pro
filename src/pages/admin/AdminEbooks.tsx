@@ -580,5 +580,8 @@ const AdminEbooks = () => {
           }
         }}
       />
+    </div>
+  );
+};
 
 export default AdminEbooks;
