@@ -9,8 +9,12 @@ import {
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator
 } from '@/components/ui/dropdown-menu';
+import { Phone, Mail, User as UserIcon } from 'lucide-react';
 import { trackMetaEvent } from '@/lib/metaPixel';
 import PlayerShell from './PlayerShell';
+import { useAuth } from '@/hooks/useAuth';
+import { SITE_CONFIG } from '@/lib/constants';
+import otsLogo from '@/assets/OTS_LOGO.png';
 
 interface SecureMediaPlayerProps {
   videoUrl?: string | null;
@@ -40,16 +44,34 @@ function extractDriveId(url: string): string | null {
   return fallback ? fallback[0] : null;
 }
 
+function extractYouTubeId(url: string): string | null {
+  if (!url) return null;
+  const patterns = [
+    /[?&]v=([a-zA-Z0-9_-]{11})/,
+    /youtu\.be\/([a-zA-Z0-9_-]{11})/,
+    /youtube\.com\/embed\/([a-zA-Z0-9_-]{11})/,
+    /youtube\.com\/shorts\/([a-zA-Z0-9_-]{11})/,
+    /youtube\.com\/live\/([a-zA-Z0-9_-]{11})/,
+    /youtube\.com\/v\/([a-zA-Z0-9_-]{11})/,
+  ];
+  for (const p of patterns) {
+    const m = url.match(p);
+    if (m) return m[1];
+  }
+  return null;
+}
+
 function parseVideoSource(url: string, platform?: string | null) {
   if (!url) return { type: 'none' as const, embedUrl: '' };
 
-  if (platform === 'youtube' || url.includes('youtube') || url.includes('youtu.be')) {
-    const match = url.match(/(?:v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
-    if (match) {
+  if (platform === 'youtube' || /youtube\.com|youtu\.be/i.test(url)) {
+    const id = extractYouTubeId(url);
+    if (id) {
+      const origin = typeof window !== 'undefined' ? window.location.origin : '';
       return {
         type: 'youtube' as const,
-        embedUrl: `https://www.youtube.com/embed/${match[1]}?rel=0&modestbranding=1&disablekb=0&iv_load_policy=3&cc_load_policy=0&fs=1&playsinline=1&enablejsapi=1&origin=${window.location.origin}`,
-        videoId: match[1],
+        embedUrl: `https://www.youtube.com/embed/${id}?rel=0&modestbranding=1&iv_load_policy=3&cc_load_policy=0&fs=1&playsinline=1&enablejsapi=1${origin ? `&origin=${origin}` : ''}`,
+        videoId: id,
       };
     }
   }
@@ -76,11 +98,19 @@ function parseVideoSource(url: string, platform?: string | null) {
     }
   }
 
-  if (/\.(mp4|webm|ogg|mov|m3u8)(\?|$)/i.test(url) || platform === 'upload') {
+  if (/\.(mp4|webm|ogg|mov|m3u8)(\?|$)/i.test(url) || platform === 'upload' || platform === 'direct') {
     return { type: 'direct' as const, embedUrl: url };
   }
 
-  return { type: 'iframe' as const, embedUrl: url };
+  // Generic embeddable URL fallback (https iframe)
+  if (/^https?:\/\//i.test(url)) {
+    return { type: 'iframe' as const, embedUrl: url };
+  }
+
+  if (import.meta.env.DEV) {
+    console.warn('[SecureMediaPlayer] Unrecognised video URL:', url, 'platform:', platform);
+  }
+  return { type: 'none' as const, embedUrl: '' };
 }
 
 function formatTime(s: number) {
