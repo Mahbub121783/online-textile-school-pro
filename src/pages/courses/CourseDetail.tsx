@@ -19,6 +19,8 @@ import UtilityBar from '@/components/layout/UtilityBar';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import BottomNav from '@/components/layout/BottomNav';
+import ContributorBadge from '@/components/shared/ContributorBadge';
+import { useContributors } from '@/hooks/useContributors';
 
 const CourseDetail = () => {
   const { slug } = useParams();
@@ -188,6 +190,7 @@ const CourseDetail = () => {
   const instructor = course?.user_profiles as any;
   const category = (course?.categories as any)?.name;
   const isWished = course ? wishlistIds instanceof Set && wishlistIds.has(course.id) : false;
+  const { data: coContributors = [] } = useContributors('course', course?.id);
 
   if (isLoading) {
     return (

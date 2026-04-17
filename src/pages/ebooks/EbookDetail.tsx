@@ -207,6 +207,21 @@ const EbookDetail = () => {
               {ebook.sub_writers && ebook.sub_writers.length > 0 && (
                 <p className="text-sm text-muted-foreground">Co-authors: {ebook.sub_writers.join(', ')}</p>
               )}
+              {ebookContributors.length > 0 && (
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {ebookContributors.map(c => (
+                    <ContributorBadge
+                      key={c.id}
+                      id={c.user_id}
+                      name={c.user_profiles?.full_name}
+                      avatarUrl={c.user_profiles?.avatar_url}
+                      role={c.role}
+                      size="sm"
+                      showRole
+                    />
+                  ))}
+                </div>
+              )}
 
               <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
                 {ebook.page_count && <span>{ebook.page_count} pages</span>}
