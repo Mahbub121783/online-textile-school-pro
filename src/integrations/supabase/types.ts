@@ -876,6 +876,83 @@ export type Database = {
         }
         Relationships: []
       }
+      content_contributors: {
+        Row: {
+          content_id: string
+          content_type: string
+          created_at: string
+          id: string
+          role: string
+          sort_order: number
+          user_id: string
+        }
+        Insert: {
+          content_id: string
+          content_type: string
+          created_at?: string
+          id?: string
+          role?: string
+          sort_order?: number
+          user_id: string
+        }
+        Update: {
+          content_id?: string
+          content_type?: string
+          created_at?: string
+          id?: string
+          role?: string
+          sort_order?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_contributors_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      contributor_votes: {
+        Row: {
+          contributor_id: string
+          created_at: string
+          id: string
+          vote_type: string
+          voter_id: string
+        }
+        Insert: {
+          contributor_id: string
+          created_at?: string
+          id?: string
+          vote_type?: string
+          voter_id: string
+        }
+        Update: {
+          contributor_id?: string
+          created_at?: string
+          id?: string
+          vote_type?: string
+          voter_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contributor_votes_contributor_id_fkey"
+            columns: ["contributor_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contributor_votes_voter_id_fkey"
+            columns: ["voter_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       coupon_usage: {
         Row: {
           coupon_id: string
@@ -5105,6 +5182,7 @@ export type Database = {
         Row: {
           avatar_url: string | null
           batch: string | null
+          bio: string | null
           blood_group: string | null
           business_type: string | null
           company_name: string | null
@@ -5114,10 +5192,13 @@ export type Database = {
           date_of_birth: string | null
           district: string | null
           division: string | null
+          expertise: string[] | null
           full_name: string | null
           graduation_year: number | null
+          headline: string | null
           id: string
           is_active: boolean | null
+          is_public_contributor: boolean
           language_preference: string | null
           latitude: number | null
           longitude: number | null
@@ -5128,14 +5209,17 @@ export type Database = {
           referral_code: string | null
           referred_by: string | null
           roll_id: string | null
+          social_links: Json | null
           theme_preference: string | null
           university: string | null
           updated_at: string | null
           username: string | null
+          vote_count: number
         }
         Insert: {
           avatar_url?: string | null
           batch?: string | null
+          bio?: string | null
           blood_group?: string | null
           business_type?: string | null
           company_name?: string | null
@@ -5145,10 +5229,13 @@ export type Database = {
           date_of_birth?: string | null
           district?: string | null
           division?: string | null
+          expertise?: string[] | null
           full_name?: string | null
           graduation_year?: number | null
+          headline?: string | null
           id: string
           is_active?: boolean | null
+          is_public_contributor?: boolean
           language_preference?: string | null
           latitude?: number | null
           longitude?: number | null
@@ -5159,14 +5246,17 @@ export type Database = {
           referral_code?: string | null
           referred_by?: string | null
           roll_id?: string | null
+          social_links?: Json | null
           theme_preference?: string | null
           university?: string | null
           updated_at?: string | null
           username?: string | null
+          vote_count?: number
         }
         Update: {
           avatar_url?: string | null
           batch?: string | null
+          bio?: string | null
           blood_group?: string | null
           business_type?: string | null
           company_name?: string | null
@@ -5176,10 +5266,13 @@ export type Database = {
           date_of_birth?: string | null
           district?: string | null
           division?: string | null
+          expertise?: string[] | null
           full_name?: string | null
           graduation_year?: number | null
+          headline?: string | null
           id?: string
           is_active?: boolean | null
+          is_public_contributor?: boolean
           language_preference?: string | null
           latitude?: number | null
           longitude?: number | null
@@ -5190,10 +5283,12 @@ export type Database = {
           referral_code?: string | null
           referred_by?: string | null
           roll_id?: string | null
+          social_links?: Json | null
           theme_preference?: string | null
           university?: string | null
           updated_at?: string | null
           username?: string | null
+          vote_count?: number
         }
         Relationships: [
           {
@@ -5806,6 +5901,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      can_manage_content_contributors: {
+        Args: { _content_id: string; _content_type: string }
+        Returns: boolean
+      }
       cleanup_old_ai_chats: { Args: never; Returns: undefined }
       credit_wallet: {
         Args: {
