@@ -140,6 +140,7 @@ const SecureMediaPlayer = ({
   showControls = true,
   className = '',
 }: SecureMediaPlayerProps) => {
+  const { user, profile } = useAuth();
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const progressInterval = useRef<ReturnType<typeof setInterval>>();
