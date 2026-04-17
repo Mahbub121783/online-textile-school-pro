@@ -241,23 +241,46 @@ export async function renderIdCard(
   ctx.textAlign = 'left';
   ctx.fillText(`Valid Until: ${data.validUntil}`, photoX, validY + 22);
 
-  // Signature — right-aligned, vertically aligned with validity area
+  // Signature — aspect-ratio aware fit, sits ABOVE the line
   const sigCenterX = CARD_W - 170;
   const sigBaseY = validY;
+  const sigLineY = sigBaseY + 50;
+  const SIG_MAX_W = 180;
+  const SIG_MAX_H = 56;
 
   if (settings.signature_url) {
     try {
       const sig = await loadImage(settings.signature_url);
-      ctx.drawImage(sig, sigCenterX - 70, sigBaseY - 2, 140, 34);
+      const natW = sig.naturalWidth || sig.width;
+      const natH = sig.naturalHeight || sig.height;
+      const srcRatio = natW / natH;
+      const boxRatio = SIG_MAX_W / SIG_MAX_H;
+      let drawW: number, drawH: number;
+      if (srcRatio > boxRatio) {
+        drawW = SIG_MAX_W;
+        drawH = SIG_MAX_W / srcRatio;
+      } else {
+        drawH = SIG_MAX_H;
+        drawW = SIG_MAX_H * srcRatio;
+      }
+      const drawX = sigCenterX - drawW / 2;
+      const drawY = sigLineY - drawH - 4;
+
+      ctx.save();
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      (ctx as any).filter = 'contrast(1.15)';
+      ctx.drawImage(sig, drawX, drawY, drawW, drawH);
+      ctx.restore();
     } catch { /* skip */ }
   }
 
-  // Signature line — 160px wide
+  // Signature line — below the signature
   ctx.strokeStyle = '#94a3b8';
   ctx.lineWidth = 1;
   ctx.beginPath();
-  ctx.moveTo(sigCenterX - 80, sigBaseY + 36);
-  ctx.lineTo(sigCenterX + 80, sigBaseY + 36);
+  ctx.moveTo(sigCenterX - 80, sigLineY);
+  ctx.lineTo(sigCenterX + 80, sigLineY);
   ctx.stroke();
 
   // Authority name — 16px bold
@@ -265,13 +288,12 @@ export async function renderIdCard(
   if (settings.authority_name) {
     ctx.font = 'bold 16px "Segoe UI", Arial, sans-serif';
     ctx.fillStyle = '#1e293b';
-    ctx.fillText(settings.authority_name, sigCenterX, sigBaseY + 52);
+    ctx.fillText(settings.authority_name, sigCenterX, sigLineY + 18);
   }
-  // Authority position — 14px
   if (settings.authority_position) {
     ctx.font = '14px "Segoe UI", Arial, sans-serif';
     ctx.fillStyle = '#64748b';
-    ctx.fillText(settings.authority_position, sigCenterX, sigBaseY + 68);
+    ctx.fillText(settings.authority_position, sigCenterX, sigLineY + 34);
   }
 
   // ══════════════════════════════════════════
