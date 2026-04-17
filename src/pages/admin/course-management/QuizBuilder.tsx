@@ -14,6 +14,8 @@ import {
   ArrowLeft, Save, GripVertical, Plus, Trash2, Image, CheckSquare, ToggleLeft,
   Type, FileText, ListOrdered, Send, Settings, Clock, ShieldAlert
 } from 'lucide-react';
+import { useCmsScope } from '@/components/cms/CmsScopeContext';
+import { useAuth } from '@/hooks/useAuth';
 
 interface QuestionItem {
   id?: string;
@@ -65,10 +67,16 @@ const QuizBuilder = ({ quizId, onBack }: Props) => {
   });
   const [dragIdx, setDragIdx] = useState<number | null>(null);
 
+  const { scope, courseId: lockedCourseId } = useCmsScope();
+  const { user } = useAuth();
+  const isInstructor = scope === 'instructor';
+
   const { data: courses = [] } = useQuery({
-    queryKey: ['quiz-mgmt-courses'],
+    queryKey: ['quiz-mgmt-courses', scope, user?.id],
     queryFn: async () => {
-      const { data } = await supabase.from('courses').select('id, title').order('title');
+      let q = supabase.from('courses').select('id, title').order('title');
+      if (isInstructor && user?.id) q = q.eq('instructor_id', user.id);
+      const { data } = await q;
       return data ?? [];
     },
   });
