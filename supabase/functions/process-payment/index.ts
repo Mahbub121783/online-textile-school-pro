@@ -118,6 +118,36 @@ Deno.serve(async (req) => {
             .select("item_id, item_type, price")
             .eq("order_id", order.id);
 
+          // Get user info for emails
+          const { data: userAuth } = await supabaseAdmin.auth.admin.getUserById(order.user_id);
+          const userEmail = userAuth?.user?.email;
+          const { data: userProf } = await supabaseAdmin
+            .from("user_profiles")
+            .select("full_name")
+            .eq("id", order.user_id)
+            .single();
+          const userName = userProf?.full_name || "Student";
+          const siteUrl = Deno.env.get("SITE_URL") || "https://learn-textile-hub.lovable.app";
+
+          // Send payment receipt email
+          if (userEmail) {
+            try {
+              await supabaseAdmin.functions.invoke("send-smtp-email", {
+                body: {
+                  templateKey: "payment_received",
+                  recipientEmail: userEmail,
+                  placeholders: {
+                    user_name: userName,
+                    amount: String(order.total ?? ""),
+                    payment_method: "UddoktaPay",
+                    invoice_number: invoice_id,
+                    invoice_url: `${siteUrl}/dashboard/invoices`,
+                  },
+                },
+              });
+            } catch (e) { console.warn("payment_received email failed:", e); }
+          }
+
           if (orderItems) {
             for (const item of orderItems) {
               if (item.item_type === "course") {
@@ -130,12 +160,29 @@ Deno.serve(async (req) => {
                   { onConflict: "user_id,course_id" }
                 );
 
-                // Credit instructor revenue
+                // Get course info for email + revenue share
                 const { data: course } = await supabaseAdmin
                   .from("courses")
-                  .select("instructor_id, revenue_share_pct")
+                  .select("instructor_id, revenue_share_pct, title, slug")
                   .eq("id", item.item_id)
                   .single();
+
+                // Send enrollment confirmation
+                if (userEmail && course) {
+                  try {
+                    await supabaseAdmin.functions.invoke("send-smtp-email", {
+                      body: {
+                        templateKey: "enrollment_confirmation",
+                        recipientEmail: userEmail,
+                        placeholders: {
+                          user_name: userName,
+                          course_name: course.title,
+                          course_url: `${siteUrl}/courses/${course.slug}`,
+                        },
+                      },
+                    });
+                  } catch (e) { console.warn("enrollment email failed:", e); }
+                }
 
                 if (course?.instructor_id) {
                   const sharePct = Number(course.revenue_share_pct ?? 70);
@@ -148,6 +195,29 @@ Deno.serve(async (req) => {
                       _reference_id: order.id,
                     });
                   }
+                }
+              } else if (item.item_type === "ebook") {
+                // Send ebook purchase email
+                const { data: ebook } = await supabaseAdmin
+                  .from("ebooks")
+                  .select("title, author, slug")
+                  .eq("id", item.item_id)
+                  .single();
+                if (userEmail && ebook) {
+                  try {
+                    await supabaseAdmin.functions.invoke("send-smtp-email", {
+                      body: {
+                        templateKey: "ebook_purchase",
+                        recipientEmail: userEmail,
+                        placeholders: {
+                          user_name: userName,
+                          ebook_title: ebook.title,
+                          ebook_author: ebook.author || "Author",
+                          ebook_download_url: `${siteUrl}/ebooks/${ebook.slug}`,
+                        },
+                      },
+                    });
+                  } catch (e) { console.warn("ebook_purchase email failed:", e); }
                 }
               }
             }

@@ -12,9 +12,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Video, Plus, Edit2, Trash2, ExternalLink, Calendar, Clock, Users } from 'lucide-react';
-import { toast } from 'sonner';
+import { Video, Plus, Edit2, Trash2, ExternalLink, Calendar, Clock, Users, Send } from 'lucide-react';
 import { format } from 'date-fns';
+import { toast } from 'sonner';
 
 const statusColors: Record<string, string> = {
   scheduled: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',

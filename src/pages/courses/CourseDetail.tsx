@@ -160,6 +160,20 @@ const CourseDetail = () => {
       // Enroll
       const { error } = await supabase.from('enrollments').insert({ user_id: user.id, course_id: course.id, payment_id: orderId });
       if (error && !error.message.includes('duplicate')) throw error;
+      // Send enrollment email (non-blocking)
+      try {
+        await supabase.functions.invoke('send-smtp-email', {
+          body: {
+            templateKey: 'enrollment_confirmation',
+            recipientEmail: user.email!,
+            placeholders: {
+              user_name: (profile as any)?.full_name || 'Student',
+              course_name: course.title,
+              course_url: `${window.location.origin}/courses/${course.slug}`,
+            },
+          },
+        });
+      } catch { /* non-critical */ }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['enrollment'] });
