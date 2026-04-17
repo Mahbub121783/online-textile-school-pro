@@ -373,19 +373,34 @@ const SecureMediaPlayer = ({
           className="w-full h-full"
           allowFullScreen
           allow="autoplay; encrypted-media; fullscreen"
-          sandbox="allow-scripts allow-same-origin allow-presentation allow-popups"
+          sandbox={
+            source.type === 'drive'
+              ? 'allow-scripts allow-same-origin allow-presentation'
+              : 'allow-scripts allow-same-origin allow-presentation allow-popups'
+          }
           referrerPolicy="no-referrer"
           loading="eager"
           onLoad={() => setLoading(false)}
         />
       )}
 
-      {/* Anti-download transparent overlay for embedded players */}
-      {!isDirect && (
-        <div 
-          className="absolute inset-0 z-[1]" 
-          style={{ pointerEvents: 'none' }}
-        />
+      {/* Drive-specific shield: blocks Drive's chrome (3-dot menu, pop-out, download)
+          via two transparent click-traps in the top-right and bottom-right corners. */}
+      {source.type === 'drive' && (
+        <>
+          <div
+            className="absolute top-0 right-0 h-14 w-32 z-[5] cursor-not-allowed"
+            aria-hidden="true"
+            onClick={(e) => e.preventDefault()}
+            onContextMenu={(e) => e.preventDefault()}
+          />
+          <div
+            className="absolute bottom-0 right-0 h-12 w-24 z-[5] cursor-not-allowed"
+            aria-hidden="true"
+            onClick={(e) => e.preventDefault()}
+            onContextMenu={(e) => e.preventDefault()}
+          />
+        </>
       )}
 
       {/* Loading spinner */}
