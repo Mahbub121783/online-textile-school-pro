@@ -15,6 +15,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
 import { Check, X, Eye, Pencil, PlusCircle, MoreHorizontal, Trash2, Search } from 'lucide-react';
+import { useCmsScope } from '@/components/cms/CmsScopeContext';
 
 const CoursesListTab = () => {
   const [tab, setTab] = useState('all');
@@ -25,11 +26,15 @@ const CoursesListTab = () => {
   const qc = useQueryClient();
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { scope } = useCmsScope();
+  const isInstructor = scope === 'instructor';
+  const editBase = isInstructor ? '/instructor/courses' : '/admin/cms/courses';
 
   const { data: courses, isLoading } = useQuery({
-    queryKey: ['admin-courses-list', tab, search],
+    queryKey: ['admin-courses-list', tab, search, scope, user?.id],
     queryFn: async () => {
       let q = supabase.from('courses').select('*, user_profiles!courses_instructor_id_fkey(full_name, avatar_url)').order('created_at', { ascending: false });
+      if (isInstructor && user?.id) q = q.eq('instructor_id', user.id);
       if (tab !== 'all') q = q.eq('review_status', tab);
       if (search) q = q.ilike('title', `%${search}%`);
       const { data } = await q.limit(5000);
@@ -117,14 +122,14 @@ const CoursesListTab = () => {
           <Input placeholder="Search courses..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9 h-9" />
         </div>
         <div className="flex items-center gap-2">
-          {selected.length > 0 && (
+          {!isInstructor && selected.length > 0 && (
             <>
               <span className="text-sm text-muted-foreground">{selected.length} selected</span>
               <Button size="sm" variant="outline" className="text-primary gap-1" onClick={bulkApprove}><Check className="h-3.5 w-3.5" /> Approve</Button>
               <Button size="sm" variant="outline" className="text-destructive gap-1" onClick={bulkReject}><X className="h-3.5 w-3.5" /> Reject</Button>
             </>
           )}
-          <Button size="sm" className="bg-accent hover:bg-accent-hover text-accent-foreground gap-1.5" onClick={() => navigate('/admin/cms/courses/new')}>
+          <Button size="sm" className="bg-accent hover:bg-accent-hover text-accent-foreground gap-1.5" onClick={() => navigate(`${editBase}/new`)}>
             <PlusCircle className="h-4 w-4" /> Create Course
           </Button>
         </div>
@@ -145,9 +150,9 @@ const CoursesListTab = () => {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-10"><Checkbox checked={courses?.length ? selected.length === courses.length : false} onCheckedChange={toggleAll} /></TableHead>
+                {!isInstructor && <TableHead className="w-10"><Checkbox checked={courses?.length ? selected.length === courses.length : false} onCheckedChange={toggleAll} /></TableHead>}
                 <TableHead>Course</TableHead>
-                <TableHead>Instructor</TableHead>
+                {!isInstructor && <TableHead>Instructor</TableHead>}
                 <TableHead>Price</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
@@ -160,7 +165,7 @@ const CoursesListTab = () => {
                 <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">No courses found.</TableCell></TableRow>
               ) : courses?.map((c: any) => (
                 <TableRow key={c.id}>
-                  <TableCell><Checkbox checked={selected.includes(c.id)} onCheckedChange={() => toggleSelect(c.id)} /></TableCell>
+                  {!isInstructor && <TableCell><Checkbox checked={selected.includes(c.id)} onCheckedChange={() => toggleSelect(c.id)} /></TableCell>}
                   <TableCell>
                     <div className="flex items-center gap-3">
                       {c.thumbnail_url ? <img src={c.thumbnail_url} alt="" className="w-14 h-10 rounded object-cover shrink-0" /> : <div className="w-14 h-10 rounded bg-muted shrink-0" />}
@@ -170,7 +175,7 @@ const CoursesListTab = () => {
                       </div>
                     </div>
                   </TableCell>
-                  <TableCell className="text-sm">{c.user_profiles?.full_name || <span className="text-muted-foreground italic">None</span>}</TableCell>
+                  {!isInstructor && <TableCell className="text-sm">{c.user_profiles?.full_name || <span className="text-muted-foreground italic">None</span>}</TableCell>}
                   <TableCell className="text-sm">৳{c.price ?? 0}</TableCell>
                   <TableCell>{statusBadge(c.review_status ?? 'draft')}</TableCell>
                   <TableCell className="text-right">
@@ -178,9 +183,9 @@ const CoursesListTab = () => {
                       <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem onClick={() => window.open(`/courses/${c.slug}`, '_blank')}><Eye className="h-4 w-4 mr-2" /> View</DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => navigate(`/admin/cms/courses/${c.id}`)}><Pencil className="h-4 w-4 mr-2" /> Edit</DropdownMenuItem>
-                        {c.review_status !== 'approved' && <DropdownMenuItem onClick={() => approveCourse.mutate(c.id)}><Check className="h-4 w-4 mr-2 text-primary" /> Approve</DropdownMenuItem>}
-                        {c.review_status !== 'rejected' && <DropdownMenuItem onClick={() => setRejectDialog({ open: true, courseId: c.id })}><X className="h-4 w-4 mr-2 text-destructive" /> Reject</DropdownMenuItem>}
+                        <DropdownMenuItem onClick={() => navigate(`${editBase}/${c.id}`)}><Pencil className="h-4 w-4 mr-2" /> Edit</DropdownMenuItem>
+                        {!isInstructor && c.review_status !== 'approved' && <DropdownMenuItem onClick={() => approveCourse.mutate(c.id)}><Check className="h-4 w-4 mr-2 text-primary" /> Approve</DropdownMenuItem>}
+                        {!isInstructor && c.review_status !== 'rejected' && <DropdownMenuItem onClick={() => setRejectDialog({ open: true, courseId: c.id })}><X className="h-4 w-4 mr-2 text-destructive" /> Reject</DropdownMenuItem>}
                         <DropdownMenuItem className="text-destructive" onClick={() => deleteCourse.mutate(c.id)}><Trash2 className="h-4 w-4 mr-2" /> Archive</DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
