@@ -1,65 +1,59 @@
 
-Do I know what the issue is? Yes.
 
-## Exact problem
-I checked the current player code and your screenshot. The YouTube iframe is rendering, but `src/components/media/SecureMediaPlayer.tsx` sets `referrerPolicy="no-referrer"` on every embedded iframe. That strips the Referer/client identity header, which is why YouTube is returning **Error 153: Video player configuration error**.
+## Goal
+Remove the **DemoClassCTA** ("Try a Free Demo Class") section from the homepage and replace it with an advanced, dynamic **Featured Workshops** section that pulls live data from the `workshops` table.
 
-There is also a second issue making embeds fragile:
-- `SecureMediaPlayer` expects platform values like `drive`, `upload`, `direct`
-- `LessonMakerTab` currently saves values like `google_drive` and `custom`
+## Why
+- DemoClassCTA is static, fake (hardcoded "Dr. Rahman", non-functional email capture, no real video).
+- The platform already has a full Workshops system (`/workshops` page, `workshops` table, `CountdownTimer`, registration counts) — homepage should surface it.
 
-So even when the UI looks right, the saved video source config is inconsistent across the app.
+## Plan
 
-## Fix plan
+### File 1: `src/components/features/home/FeaturedWorkshops.tsx` (NEW)
+Advanced homepage workshops carousel/grid with the same visual language as `WorkshopsPage` but tuned for homepage:
 
-### 1) Fix the real YouTube failure in `src/components/media/SecureMediaPlayer.tsx`
-- Remove the global `no-referrer` behavior for YouTube embeds
-- Use a provider-specific iframe policy:
-  - **YouTube:** allow origin/referrer (`strict-origin-when-cross-origin` or no forced `no-referrer`)
-  - **Drive:** keep the stricter setup
-  - **Others:** keep safe defaults
-- Keep the branded header/footer exactly as they are now
+**Data**:
+- React Query → `workshops` table, filter `status IN ('published','ongoing')`, `start_date >= today`, `order by start_date asc`, `limit 6`
+- Parallel query → `workshop_registrations` for live registration counts
+- Skeleton state while loading; section hides itself if zero results
 
-### 2) Make source detection robust in the same file
-- Normalize old and new platform aliases before parsing:
-  - `google_drive` → `drive`
-  - `custom` → handled safely as direct/embed depending on URL
-- Expand YouTube URL parsing so all common formats work reliably:
-  - `youtube.com/watch?v=...`
-  - `youtu.be/...`
-  - `youtube.com/embed/...`
-  - `youtube.com/shorts/...`
-  - `youtube-nocookie.com/embed/...`
+**Layout**:
+- Section header: "Upcoming Workshops" + subtitle + "View all →" link to `/workshops`
+- Desktop: 3-column grid (lg), 2-column (md), 1-column (sm)
+- Each card (matches `WorkshopsPage` styling for consistency):
+  - Square aspect thumbnail with gradient overlay
+  - Status badge (Live/Upcoming) + type badge (One-Day/Multi-Day)
+  - **CountdownTimer** overlay on image bottom (cinematic urgency)
+  - Title, instructor (avatar + name)
+  - Date + time row, slots-left indicator (red if full, green if available)
+  - "View & Register" CTA button → navigates to `/workshops/{slug|id}`
+- Hover: card lifts, image scales 105%, border highlights to primary
+- Empty state: section returns `null` (no awkward "no workshops" on homepage)
 
-### 3) Align the admin lesson form values
-Update `src/pages/admin/course-management/LessonMakerTab.tsx` so newly saved lessons use the same canonical values the player expects:
-- `youtube`
-- `vimeo`
-- `drive`
-- `upload` / `direct`
+**Mobile optimization**:
+- Single column, full-width cards
+- Reduced padding, smaller fonts
+- Touch-friendly CTA buttons (h-10 min)
 
-### 4) Verify the secondary lesson form
-Check `src/components/instructor/LessonModal.tsx` so it stays consistent with the same platform values and does not reintroduce mismatched config.
+### File 2: `src/pages/Index.tsx`
+- Remove `DemoClassCTA` lazy import (line 14)
+- Remove `<LazySection><DemoClassCTA /></LazySection>` (line 78)
+- Add `const FeaturedWorkshops = lazy(() => import('@/components/features/home/FeaturedWorkshops'));`
+- Insert `<LazySection><FeaturedWorkshops /></LazySection>` in the same slot (between Testimonials and Sponsors) — keeps social-proof → engagement → partners flow
 
-## Files to update
-- `src/components/media/SecureMediaPlayer.tsx`
-- `src/pages/admin/course-management/LessonMakerTab.tsx`
-- `src/components/instructor/LessonModal.tsx`
+### File 3: `src/components/features/home/DemoClassCTA.tsx`
+- Leave file in place (not imported anymore = tree-shaken). No deletion needed — keeps git diff clean and allows easy revert.
 
-## Expected result
-- YouTube videos play again without Error 153
-- The fix works in both:
-  - Admin “Student Preview” modal
-  - Actual lesson player page
-- Existing lessons saved with old platform values still keep working
-- Your branded player shell, header, footer, watermark, and Drive protections stay intact
+## Result
+- Homepage no longer shows fake demo class
+- Real, live workshops appear with countdown timers, registration counts, and direct links
+- Reuses existing design system from `WorkshopsPage` for visual consistency
+- Section auto-hides when no workshops are scheduled (no empty state on landing page)
+- Mobile + desktop responsive
 
-## QA after implementation
-Test these cases on desktop and mobile:
-- `youtube.com/watch?v=...`
-- `youtu.be/...`
-- `youtube.com/shorts/...`
-- Google Drive share link
-- Direct uploaded MP4 / R2 video
+## Files Touched
+| File | Change |
+|---|---|
+| `src/components/features/home/FeaturedWorkshops.tsx` | NEW — live workshops grid with countdown, badges, registration counts |
+| `src/pages/Index.tsx` | Swap `DemoClassCTA` → `FeaturedWorkshops` |
 
-Success = no YouTube configuration error, no broken branding, and no regression for Drive/direct playback.
