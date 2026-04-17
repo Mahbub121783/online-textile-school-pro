@@ -1519,6 +1519,7 @@ export type Database = {
           category_id: number | null
           cover_url: string | null
           created_at: string | null
+          created_by: string | null
           description: string | null
           discount_price: number | null
           download_count: number | null
@@ -1546,6 +1547,7 @@ export type Database = {
           category_id?: number | null
           cover_url?: string | null
           created_at?: string | null
+          created_by?: string | null
           description?: string | null
           discount_price?: number | null
           download_count?: number | null
@@ -1573,6 +1575,7 @@ export type Database = {
           category_id?: number | null
           cover_url?: string | null
           created_at?: string | null
+          created_by?: string | null
           description?: string | null
           discount_price?: number | null
           download_count?: number | null
@@ -1600,6 +1603,13 @@ export type Database = {
             columns: ["category_id"]
             isOneToOne: false
             referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ebooks_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -5905,6 +5915,7 @@ export type Database = {
         Args: { _content_id: string; _content_type: string }
         Returns: boolean
       }
+      can_manage_course: { Args: { _course_id: string }; Returns: boolean }
       cleanup_old_ai_chats: { Args: never; Returns: undefined }
       credit_wallet: {
         Args: {
