@@ -99,6 +99,20 @@ const ContributorProfile = () => {
     },
   });
 
+  const { data: endorsers = [] } = useQuery({
+    queryKey: ['contributor-endorsers', id],
+    enabled: !!id,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('contributor_votes')
+        .select('voter_id, created_at, user_profiles:voter_id(id, full_name, avatar_url)')
+        .eq('contributor_id', id!)
+        .order('created_at', { ascending: false })
+        .limit(8);
+      return (data || []).map((r: any) => r.user_profiles).filter(Boolean);
+    },
+  });
+
   const handleVote = () => {
     if (!user) {
       window.location.href = '/auth/login';
@@ -188,6 +202,22 @@ const ContributorProfile = () => {
                     </a>
                   ))}
                 </div>
+
+                {endorsers.length > 0 && (
+                  <div className="flex items-center gap-2 pt-2">
+                    <div className="flex -space-x-2">
+                      {endorsers.map((e: any) => (
+                        <Link key={e.id} to={`/contributor/${e.id}`} title={e.full_name || ''}>
+                          <Avatar className="h-7 w-7 border-2 border-background hover:scale-110 transition">
+                            <AvatarImage src={e.avatar_url || ''} alt={e.full_name || ''} />
+                            <AvatarFallback className="text-[10px]">{(e.full_name || '?')[0]}</AvatarFallback>
+                          </Avatar>
+                        </Link>
+                      ))}
+                    </div>
+                    <span className="text-xs text-muted-foreground">Recently endorsed by</span>
+                  </div>
+                )}
               </div>
             </div>
 
