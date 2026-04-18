@@ -41,7 +41,9 @@ const AdminMedia = () => {
       });
       if (error) throw error;
       setMigrationResult(data);
-      toast.success(`Migrated ${data.migrated}/${data.total} files (${data.failed} failed, ${data.deleted} deleted)`);
+      const imgCount = data.imagesToCloudinary ?? 0;
+      const fileCount = data.filesToR2 ?? 0;
+      toast.success(`${imgCount} images → Cloudinary, ${fileCount} files → Cloudflare R2 (${data.failed} failed, ${data.deleted} removed from Supabase)`);
       queryClient.invalidateQueries({ queryKey: ['admin-media'] });
     } catch (err: any) {
       toast.error('Migration failed: ' + (err.message || 'Unknown error'));
