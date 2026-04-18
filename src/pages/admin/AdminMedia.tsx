@@ -126,13 +126,28 @@ const AdminMedia = () => {
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h2 className="font-heading text-2xl font-bold">Media Library</h2>
-        <label>
-          <input type="file" multiple accept="image/*,video/*,.pdf,.doc,.docx" className="hidden" onChange={handleUpload} />
-          <Button asChild disabled={uploading}>
-            <span><UploadIcon className="h-4 w-4 mr-2" />{uploading ? 'Uploading...' : 'Upload Files'}</span>
+        <div className="flex gap-2 flex-wrap">
+          <Button variant="outline" onClick={runMigration} disabled={migrating}>
+            {migrating ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <CloudUpload className="h-4 w-4 mr-2" />}
+            {migrating ? 'Migrating...' : 'Migrate Supabase → Cloud'}
           </Button>
-        </label>
+          <label>
+            <input type="file" multiple accept="image/*,video/*,.pdf,.doc,.docx" className="hidden" onChange={handleUpload} />
+            <Button asChild disabled={uploading}>
+              <span><UploadIcon className="h-4 w-4 mr-2" />{uploading ? 'Uploading...' : 'Upload Files'}</span>
+            </Button>
+          </label>
+        </div>
       </div>
+
+      {migrationResult && (
+        <Alert>
+          <Info className="h-4 w-4" />
+          <AlertDescription>
+            <strong>Migration complete:</strong> {migrationResult.migrated}/{migrationResult.total} migrated, {migrationResult.failed} failed, {migrationResult.deleted} deleted from Supabase.
+          </AlertDescription>
+        </Alert>
+      )}
 
       <div className="flex gap-3 items-center">
         <div className="relative flex-1 max-w-sm">
@@ -170,7 +185,12 @@ const AdminMedia = () => {
               </div>
               <div className="p-2">
                 <p className="text-xs truncate">{item.file_name}</p>
-                <p className="text-xs text-muted-foreground">{formatSize(item.file_size)}</p>
+                <div className="flex items-center justify-between gap-1 mt-1">
+                  <p className="text-xs text-muted-foreground">{formatSize(item.file_size)}</p>
+                  <Badge variant={getSourceBadge(item.file_url).variant} className="text-[9px] px-1 py-0 h-4">
+                    {getSourceBadge(item.file_url).label}
+                  </Badge>
+                </div>
               </div>
             </Card>
           ))}
