@@ -193,6 +193,8 @@ Deno.serve(async (req) => {
         }
 
         results.migrated++;
+        if (source === 'cloudinary') results.imagesToCloudinary++;
+        else if (source === 'r2') results.filesToR2++;
         results.details.push({ file: file.name, newUrl, source, tablesUpdated });
       } catch (err: any) {
         results.failed++;
