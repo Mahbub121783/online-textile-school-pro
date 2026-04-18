@@ -10,16 +10,45 @@ import { Card } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { toast } from 'sonner';
-import { Upload as UploadIcon, Search, Trash2, Copy, Grid, List, Image as ImageIcon, File, ExternalLink, Download, Info } from 'lucide-react';
+import { Upload as UploadIcon, Search, Trash2, Copy, Grid, List, Image as ImageIcon, File, ExternalLink, Download, Info, CloudUpload, Loader2 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+
+function getSourceBadge(url: string): { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' } {
+  if (!url) return { label: 'unknown', variant: 'outline' };
+  if (url.includes('cloudinary.com') || url.includes('res.cloudinary')) return { label: 'Cloudinary', variant: 'default' };
+  if (url.includes('/storage/v1/object/public/media/') || url.includes('supabase.co/storage')) return { label: 'Supabase (legacy)', variant: 'destructive' };
+  return { label: 'R2', variant: 'secondary' };
+}
 
 const AdminMedia = () => {
   const [search, setSearch] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [selectedMedia, setSelectedMedia] = useState<any>(null);
   const [uploading, setUploading] = useState(false);
+  const [migrating, setMigrating] = useState(false);
+  const [migrationResult, setMigrationResult] = useState<any>(null);
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const { upload: fileUpload } = useFileUpload();
+
+  const runMigration = async () => {
+    if (!confirm('Migrate ALL Supabase Storage files to Cloudinary/R2 and DELETE originals from Supabase? This cannot be undone.')) return;
+    setMigrating(true);
+    setMigrationResult(null);
+    try {
+      const { data, error } = await supabase.functions.invoke('migrate-storage-to-cloud', {
+        body: { action: 'migrate', deleteOriginals: true },
+      });
+      if (error) throw error;
+      setMigrationResult(data);
+      toast.success(`Migrated ${data.migrated}/${data.total} files (${data.failed} failed, ${data.deleted} deleted)`);
+      queryClient.invalidateQueries({ queryKey: ['admin-media'] });
+    } catch (err: any) {
+      toast.error('Migration failed: ' + (err.message || 'Unknown error'));
+    } finally {
+      setMigrating(false);
+    }
+  };
 
   const { data: media = [], isLoading } = useQuery({
     queryKey: ['admin-media'],
@@ -97,13 +126,28 @@ const AdminMedia = () => {
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h2 className="font-heading text-2xl font-bold">Media Library</h2>
-        <label>
-          <input type="file" multiple accept="image/*,video/*,.pdf,.doc,.docx" className="hidden" onChange={handleUpload} />
-          <Button asChild disabled={uploading}>
-            <span><UploadIcon className="h-4 w-4 mr-2" />{uploading ? 'Uploading...' : 'Upload Files'}</span>
+        <div className="flex gap-2 flex-wrap">
+          <Button variant="outline" onClick={runMigration} disabled={migrating}>
+            {migrating ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <CloudUpload className="h-4 w-4 mr-2" />}
+            {migrating ? 'Migrating...' : 'Migrate Supabase → Cloud'}
           </Button>
-        </label>
+          <label>
+            <input type="file" multiple accept="image/*,video/*,.pdf,.doc,.docx" className="hidden" onChange={handleUpload} />
+            <Button asChild disabled={uploading}>
+              <span><UploadIcon className="h-4 w-4 mr-2" />{uploading ? 'Uploading...' : 'Upload Files'}</span>
+            </Button>
+          </label>
+        </div>
       </div>
+
+      {migrationResult && (
+        <Alert>
+          <Info className="h-4 w-4" />
+          <AlertDescription>
+            <strong>Migration complete:</strong> {migrationResult.migrated}/{migrationResult.total} migrated, {migrationResult.failed} failed, {migrationResult.deleted} deleted from Supabase.
+          </AlertDescription>
+        </Alert>
+      )}
 
       <div className="flex gap-3 items-center">
         <div className="relative flex-1 max-w-sm">
@@ -141,7 +185,12 @@ const AdminMedia = () => {
               </div>
               <div className="p-2">
                 <p className="text-xs truncate">{item.file_name}</p>
-                <p className="text-xs text-muted-foreground">{formatSize(item.file_size)}</p>
+                <div className="flex items-center justify-between gap-1 mt-1">
+                  <p className="text-xs text-muted-foreground">{formatSize(item.file_size)}</p>
+                  <Badge variant={getSourceBadge(item.file_url).variant} className="text-[9px] px-1 py-0 h-4">
+                    {getSourceBadge(item.file_url).label}
+                  </Badge>
+                </div>
               </div>
             </Card>
           ))}

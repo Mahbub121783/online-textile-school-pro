@@ -5010,6 +5010,51 @@ export type Database = {
         }
         Relationships: []
       }
+      storage_migration_log: {
+        Row: {
+          bucket_path: string | null
+          created_at: string
+          error_message: string | null
+          file_size: number | null
+          id: string
+          migrated_at: string | null
+          mime_type: string | null
+          new_url: string | null
+          old_url: string
+          source: string | null
+          status: string
+          tables_updated: Json | null
+        }
+        Insert: {
+          bucket_path?: string | null
+          created_at?: string
+          error_message?: string | null
+          file_size?: number | null
+          id?: string
+          migrated_at?: string | null
+          mime_type?: string | null
+          new_url?: string | null
+          old_url: string
+          source?: string | null
+          status?: string
+          tables_updated?: Json | null
+        }
+        Update: {
+          bucket_path?: string | null
+          created_at?: string
+          error_message?: string | null
+          file_size?: number | null
+          id?: string
+          migrated_at?: string | null
+          mime_type?: string | null
+          new_url?: string | null
+          old_url?: string
+          source?: string | null
+          status?: string
+          tables_updated?: Json | null
+        }
+        Relationships: []
+      }
       student_grades: {
         Row: {
           batch_id: string | null
