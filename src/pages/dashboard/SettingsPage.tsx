@@ -27,6 +27,7 @@ const SettingsPage = () => {
   const { user, profile } = useAuth();
   const queryClient = useQueryClient();
   const [saving, setSaving] = useState(false);
+  const { upload: uploadFile } = useFileUpload();
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [form, setForm] = useState({
     full_name: '',
