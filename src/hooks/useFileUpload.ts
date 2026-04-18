@@ -68,12 +68,13 @@ export function useFileUpload() {
     setProgress(0);
 
     try {
-      // forceR2 bypasses ALL image detection — always goes to R2
+      // HARD RULE: Supabase Storage is NEVER used. Images→Cloudinary, all else→R2.
+      // forceR2 bypasses image detection — always goes to R2
       if (options?.forceR2) {
         return await uploadToR2Reliable(file);
       }
 
-      // Route: images → Cloudinary, heavy files → R2
+      // Route: images → Cloudinary (any size, for f_auto/q_auto optimization)
       if (isImageFile(file) && !isHeavyFile(file)) {
         const result = await cloudinary.upload(file);
         setProgress(100);
@@ -86,7 +87,7 @@ export function useFileUpload() {
         };
       }
 
-      // Heavy file → R2
+      // Everything else → R2
       return await uploadToR2Reliable(file);
     } catch (err: any) {
       throw err;
