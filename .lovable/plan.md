@@ -1,95 +1,41 @@
 
 
-## Root Cause Analysis
+## Answer + Plan
 
-The email system itself works (SMTP function is solid, templates exist, branded HTML wrapper, unsub handling). The **real problem is missing trigger calls** — emails are simply never invoked at the critical lifecycle events.
+### Where files actually go (current state)
 
-### Audit of email triggers (what's wired vs broken)
+| Upload type | Goes to | Verified in |
+|---|---|---|
+| **User profile avatar** | ❌ Supabase Storage `media` bucket (`avatars/{user_id}.ext`) | `SettingsPage.tsx` line 107–117 |
+| Course thumbnails, lesson images, blog covers, etc. | ✅ Cloudinary (via `useFileUpload` → `useCloudinaryUpload` → `cloudinary-proxy` edge fn) | `useFileUpload.ts` |
+| eBooks (PDF), videos, large docs, archives | ✅ Cloudflare R2 (via `useFileUpload` → `r2-presign` chunked) | `useFileUpload.ts` |
 
-| Event | Expected template | Currently fires? | Issue |
-|---|---|---|---|
-| **Sign up / registration** | `user_registration` / `welcome_email` | ❌ NO | `Register.tsx` calls `supabase.auth.signUp` only — no email invoke |
-| **Course enrollment (paid)** | `enrollment_confirmation` | ❌ NO | `process-payment` edge function creates enrollment, never sends email |
-| **Course enrollment (free)** | `enrollment_confirmation` | ❌ NO | `useEnrollments` enroll mutation has no email send |
-| **Workshop registration** | (custom) | ⚠️ BROKEN | `WorkshopDetail.tsx` line 120-122 sends `{ to, subject, html }` — but the edge function expects `{ recipientEmail, subject, body }`. Field names mismatch → silently fails |
-| **Workshop live class link** | new template needed | ❌ NO | `AdminLiveClasses.tsx` saves meeting URL, never notifies registered attendees |
-| **eBook purchase** | `ebook_purchase` | ❌ NO | Not wired in payment flow |
-| **Order/payment** | `payment_received`, `order_confirmation` | ❌ NO | `process-payment` doesn't send emails |
-| **Certificate** | `certificate_issued` | ✅ Works (`useEnrollments.ts:253`) | Only one wired correctly |
+So your finding is correct — **profile photos never reach Cloudinary**, they sit in Supabase Storage. That's why you see nothing in the Cloudinary dashboard for users. R2 is only for heavy files (PDFs, videos, archives), so unless someone uploaded an eBook, R2 will also be empty.
 
-### Why nothing reaches user mail
-1. **Wrong field names** in `WorkshopDetail` — `to`/`html` are silently ignored by the edge function (which reads `recipientEmail`/`body`), so workshop emails fail without throwing.
-2. **No trigger calls anywhere else** — signup, enrollment, payment, live-class link delivery never invoke `send-smtp-email`.
-3. There's no DB trigger or central orchestrator either, so even though the function and templates are perfect, nothing ever calls them.
+### Why this is a problem
+- Inconsistent storage routing — bypasses the unified pipeline
+- Avatars not registered in `media_library` (so they don't appear in the Media Picker)
+- No Cloudinary optimization (`f_auto,q_auto`) on profile photos → bigger payload, slower
+- Two storage systems to manage instead of one
 
----
+### Fix Plan
 
-## Fix Plan
-
-### 1. Centralize via DB trigger + helper edge function (most reliable)
-Rather than scattering invokes across 30 components, create a single **`notify-event` edge function** + DB triggers so emails fire automatically when rows are inserted — survives client-side failures, retries, and offline submissions.
-
-But — to ship a working system fast and minimally invasive, I'll do a **hybrid** approach: client-side invokes for paths users initiate, plus DB trigger for backend events (payment, admin approval).
-
-### 2. Concrete edits
-
-**A. Fix WorkshopDetail.tsx (broken payload)**
-Replace lines 107–124 to use proper `templateKey` + `placeholders` shape, OR use `recipientEmail`/`subject`/`body` — match the edge function contract.
-
-**B. Add signup welcome email — `Register.tsx`**
-After `supabase.auth.signUp` success, invoke `send-smtp-email` with template `user_registration`, placeholders `{ user_name, site_name, login_url, user_roll_id: '(pending)' }`.
-
-**C. Add enrollment email — `useEnrollments.ts`** (free enrollment path) and **`process-payment/index.ts`** (paid path)
-On successful enrollment row insert, invoke `send-smtp-email` template `enrollment_confirmation` with `{ user_name, course_name, course_url }`. Inside the edge function this is a server-to-server invoke.
-
-**D. Add payment receipt — `process-payment/index.ts`**
-After successful payment + enrollment, fire `payment_received` template.
-
-**E. Add workshop live link broadcast — `AdminLiveClasses.tsx` / `AdminWorkshops.tsx`**
-Add a new template `workshop_live_link` (with `{{workshop_title}}`, `{{meet_link}}`, `{{start_time}}`) plus an admin button **"Send Meet Link to Registered Attendees"** that:
-- Fetches all `workshop_registrations` for the workshop
-- Loops through and invokes `send-smtp-email` per attendee
-- Logs results to admin toast
-
-**F. Add ebook purchase email — `process-payment/index.ts`**
-On ebook purchase success, fire `ebook_purchase` template.
-
-**G. Optional safety net: DB trigger**
-Add a Postgres trigger on `enrollments` insert → calls `pg_net.http_post` to `send-smtp-email` so that even if the client crashes mid-flow, the email still goes out. (This is the most defensive layer.)
-
-### 3. New template to add
-`workshop_live_link`:
-```
-Subject: Live Session Link — {{workshop_title}}
-Body: Hi {{user_name}}, your live session for {{workshop_title}} starts at {{start_time}}.
-Join here: {{meet_link}}
-```
-Added to `DEFAULT_TEMPLATES` in `send-smtp-email/index.ts`.
-
-### 4. Verify after deploy
-- Test each flow in preview, then check `Admin → Email Logs` for `sent` status.
-- For any `failed` rows, the `error_message` column shows SMTP errors directly.
-
----
-
-## Files to Edit
+**Single change**: Replace the Supabase Storage avatar upload in `SettingsPage.tsx` with the unified `useFileUpload` hook so avatars route to Cloudinary like every other image.
 
 | File | Change |
 |---|---|
-| `src/pages/auth/Register.tsx` | Invoke `send-smtp-email` with `user_registration` after signup success |
-| `src/pages/static/WorkshopDetail.tsx` | Fix payload field names (`to`→`recipientEmail`, `html`→`body`) |
-| `src/hooks/useEnrollments.ts` | Add `enrollment_confirmation` invoke on free-enrollment success |
-| `supabase/functions/process-payment/index.ts` | Add 3 invokes: `payment_received`, `enrollment_confirmation` (course) or `ebook_purchase` (ebook) |
-| `supabase/functions/send-smtp-email/index.ts` | Add `workshop_live_link` to DEFAULT_TEMPLATES |
-| `src/pages/admin/AdminLiveClasses.tsx` | New "Send link to attendees" button + handler |
-| `src/pages/admin/AdminWorkshops.tsx` | Same "Broadcast meet link" button per workshop |
-| (optional) `supabase/migrations/...sql` | Trigger on enrollments insert as safety net (skip for now unless requested) |
+| `src/pages/dashboard/SettingsPage.tsx` | Replace `handleAvatarUpload` to call `useFileUpload().upload(file)` → save returned URL to `user_profiles.avatar_url` → upsert into `media_library` |
 
-## Result
-- Welcome email on signup → ✓
-- Enrollment email (free + paid) → ✓
-- Payment receipt → ✓
-- Workshop registration confirmation → ✓ (was silently broken)
-- Admin can broadcast live class link to registered attendees → ✓ new feature
-- All sends visible in Admin → Email Logs with sent/failed status
+After fix: every new profile photo will appear in your Cloudinary dashboard under the `uploads/` folder, and also show up in Admin → Media Library.
+
+### What about existing avatars?
+Old avatars stay where they are (Supabase Storage URLs in `avatar_url` column) and continue to work — they just won't migrate retroactively. If you want, I can also add a one-time migration script that re-uploads existing Supabase-hosted avatars to Cloudinary, but that's optional.
+
+### About R2 being empty
+That's expected unless users have uploaded:
+- eBook PDFs
+- Course videos / lesson video files
+- ZIP / archive materials
+
+R2 only receives files matching `HEAVY_EXTENSIONS` (pdf, mp4, zip, docx, pptx, etc.). Light images always go to Cloudinary.
 
