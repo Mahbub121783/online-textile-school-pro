@@ -10,16 +10,45 @@ import { Card } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { toast } from 'sonner';
-import { Upload as UploadIcon, Search, Trash2, Copy, Grid, List, Image as ImageIcon, File, ExternalLink, Download, Info } from 'lucide-react';
+import { Upload as UploadIcon, Search, Trash2, Copy, Grid, List, Image as ImageIcon, File, ExternalLink, Download, Info, CloudUpload, Loader2 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+
+function getSourceBadge(url: string): { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' } {
+  if (!url) return { label: 'unknown', variant: 'outline' };
+  if (url.includes('cloudinary.com') || url.includes('res.cloudinary')) return { label: 'Cloudinary', variant: 'default' };
+  if (url.includes('/storage/v1/object/public/media/') || url.includes('supabase.co/storage')) return { label: 'Supabase (legacy)', variant: 'destructive' };
+  return { label: 'R2', variant: 'secondary' };
+}
 
 const AdminMedia = () => {
   const [search, setSearch] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [selectedMedia, setSelectedMedia] = useState<any>(null);
   const [uploading, setUploading] = useState(false);
+  const [migrating, setMigrating] = useState(false);
+  const [migrationResult, setMigrationResult] = useState<any>(null);
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const { upload: fileUpload } = useFileUpload();
+
+  const runMigration = async () => {
+    if (!confirm('Migrate ALL Supabase Storage files to Cloudinary/R2 and DELETE originals from Supabase? This cannot be undone.')) return;
+    setMigrating(true);
+    setMigrationResult(null);
+    try {
+      const { data, error } = await supabase.functions.invoke('migrate-storage-to-cloud', {
+        body: { action: 'migrate', deleteOriginals: true },
+      });
+      if (error) throw error;
+      setMigrationResult(data);
+      toast.success(`Migrated ${data.migrated}/${data.total} files (${data.failed} failed, ${data.deleted} deleted)`);
+      queryClient.invalidateQueries({ queryKey: ['admin-media'] });
+    } catch (err: any) {
+      toast.error('Migration failed: ' + (err.message || 'Unknown error'));
+    } finally {
+      setMigrating(false);
+    }
+  };
 
   const { data: media = [], isLoading } = useQuery({
     queryKey: ['admin-media'],
