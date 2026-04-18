@@ -56,6 +56,7 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const action = body.action || 'migrate';
     const deleteOriginals = body.deleteOriginals !== false; // default true per user request
+    const batchSize = Math.max(1, Math.min(Number(body.batchSize) || 3, 10));
 
     if (action === 'status') {
       const { count: total } = await supabase.from('storage_migration_log').select('*', { count: 'exact', head: true });
