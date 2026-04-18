@@ -96,7 +96,7 @@ Deno.serve(async (req) => {
 
     const results = { total: allFiles.length, pending: pending.length, batchProcessed: batch.length, hasMore, migrated: 0, imagesToCloudinary: 0, filesToR2: 0, skipped: 0, failed: 0, deleted: 0, details: [] as any[] };
 
-    for (const file of allFiles) {
+    for (const file of batch) {
       const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/media/${file.name}`;
 
       try {
