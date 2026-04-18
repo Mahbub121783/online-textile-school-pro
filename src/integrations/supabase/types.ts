@@ -5012,44 +5012,53 @@ export type Database = {
       }
       storage_migration_log: {
         Row: {
+          attempt_count: number
           bucket_path: string | null
           created_at: string
           error_message: string | null
           file_size: number | null
           id: string
+          last_error_at: string | null
           migrated_at: string | null
           mime_type: string | null
           new_url: string | null
           old_url: string
           source: string | null
+          started_at: string | null
           status: string
           tables_updated: Json | null
         }
         Insert: {
+          attempt_count?: number
           bucket_path?: string | null
           created_at?: string
           error_message?: string | null
           file_size?: number | null
           id?: string
+          last_error_at?: string | null
           migrated_at?: string | null
           mime_type?: string | null
           new_url?: string | null
           old_url: string
           source?: string | null
+          started_at?: string | null
           status?: string
           tables_updated?: Json | null
         }
         Update: {
+          attempt_count?: number
           bucket_path?: string | null
           created_at?: string
           error_message?: string | null
           file_size?: number | null
           id?: string
+          last_error_at?: string | null
           migrated_at?: string | null
           mime_type?: string | null
           new_url?: string | null
           old_url?: string
           source?: string | null
+          started_at?: string | null
           status?: string
           tables_updated?: Json | null
         }

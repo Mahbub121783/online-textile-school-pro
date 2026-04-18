@@ -25,43 +25,89 @@ const AdminMedia = () => {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [selectedMedia, setSelectedMedia] = useState<any>(null);
   const [uploading, setUploading] = useState(false);
+  const [scanning, setScanning] = useState(false);
   const [migrating, setMigrating] = useState(false);
-  const [migrationResult, setMigrationResult] = useState<any>(null);
+  const [stopRequested, setStopRequested] = useState(false);
+  const [queueStatus, setQueueStatus] = useState<{ pending: number; processing: number; success: number; failed: number; total: number } | null>(null);
+  const [currentFile, setCurrentFile] = useState<string>('');
+  const [liveCounts, setLiveCounts] = useState({ cloudinary: 0, r2: 0, failed: 0 });
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const { upload: fileUpload } = useFileUpload();
 
-  const runMigration = async () => {
-    if (!confirm('Migrate ALL Supabase Storage files to Cloudinary/R2 and DELETE originals from Supabase? This cannot be undone.')) return;
-    setMigrating(true);
-    setMigrationResult(null);
-    const totals = { imagesToCloudinary: 0, filesToR2: 0, failed: 0, deleted: 0, migrated: 0 };
+  const refreshStatus = async () => {
+    const { data } = await supabase.functions.invoke('migrate-storage-to-cloud', { body: { action: 'status' } });
+    if (data) setQueueStatus(data);
+    return data;
+  };
+
+  const runScan = async () => {
+    setScanning(true);
     try {
-      let hasMore = true;
-      let round = 0;
-      while (hasMore) {
-        round++;
+      const folderQueue: string[] = [''];
+      let totalInserted = 0;
+      while (folderQueue.length > 0) {
+        const prefix = folderQueue.shift()!;
+        let offset = 0;
+        while (true) {
+          const { data, error } = await supabase.functions.invoke('migrate-storage-to-cloud', {
+            body: { action: 'scan', prefix, offset },
+          });
+          if (error) throw error;
+          totalInserted += data.inserted || 0;
+          if (Array.isArray(data.folders)) folderQueue.push(...data.folders);
+          if (!data.hasMore) break;
+          offset = data.nextOffset;
+        }
+      }
+      toast.success(`Scan complete: ${totalInserted} files queued`);
+      await refreshStatus();
+    } catch (err: any) {
+      toast.error('Scan failed: ' + (err.message || 'Unknown'));
+    } finally {
+      setScanning(false);
+    }
+  };
+
+  const runMigration = async () => {
+    if (!confirm('Migrate queued legacy files? Images go to Cloudinary, others to Cloudflare R2. Originals will be DELETED from Supabase.')) return;
+    setMigrating(true);
+    setStopRequested(false);
+    setLiveCounts({ cloudinary: 0, r2: 0, failed: 0 });
+    try {
+      while (true) {
+        if (stopRequested) break;
         const { data, error } = await supabase.functions.invoke('migrate-storage-to-cloud', {
-          body: { action: 'migrate', deleteOriginals: true, batchSize: 3 },
+          body: { action: 'migrate-next', deleteOriginals: true },
         });
         if (error) throw error;
-        totals.imagesToCloudinary += data.imagesToCloudinary ?? 0;
-        totals.filesToR2 += data.filesToR2 ?? 0;
-        totals.failed += data.failed ?? 0;
-        totals.deleted += data.deleted ?? 0;
-        totals.migrated += data.migrated ?? 0;
-        setMigrationResult({ ...totals, pending: data.pending });
-        toast.message(`Batch ${round}: ${data.batchProcessed} processed, ${data.pending - data.batchProcessed} remaining`);
-        hasMore = !!data.hasMore;
-        if (data.batchProcessed === 0) break; // safety
+        if (data?.done) break;
+        const p = data?.processed;
+        if (p) {
+          setCurrentFile(p.file || '');
+          setLiveCounts((c) => ({
+            cloudinary: c.cloudinary + (p.source === 'cloudinary' ? 1 : 0),
+            r2: c.r2 + (p.source === 'r2' ? 1 : 0),
+            failed: c.failed + (p.error ? 1 : 0),
+          }));
+        }
+        if (Math.random() < 0.2) await refreshStatus();
       }
-      toast.success(`Done: ${totals.imagesToCloudinary} → Cloudinary, ${totals.filesToR2} → R2 (${totals.failed} failed, ${totals.deleted} removed)`);
+      await refreshStatus();
+      toast.success('Migration finished');
       queryClient.invalidateQueries({ queryKey: ['admin-media'] });
     } catch (err: any) {
-      toast.error('Migration failed: ' + (err.message || 'Unknown error'));
+      toast.error('Migration error: ' + (err.message || 'Unknown'));
     } finally {
       setMigrating(false);
+      setCurrentFile('');
     }
+  };
+
+  const retryFailed = async () => {
+    await supabase.functions.invoke('migrate-storage-to-cloud', { body: { action: 'retry-failed' } });
+    toast.success('Failed items moved back to pending');
+    await refreshStatus();
   };
 
   const { data: media = [], isLoading } = useQuery({
@@ -141,11 +187,6 @@ const AdminMedia = () => {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h2 className="font-heading text-2xl font-bold">Media Library</h2>
         <div className="flex gap-2 flex-wrap">
-          <Button variant="outline" onClick={runMigration} disabled={migrating}>
-            {migrating ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <CloudUpload className="h-4 w-4 mr-2" />}
-            <span className="hidden sm:inline">{migrating ? 'Migrating legacy files...' : 'Migrate legacy: Images → Cloudinary, Others → R2'}</span>
-            <span className="sm:hidden">{migrating ? 'Migrating...' : 'Migrate legacy'}</span>
-          </Button>
           <label>
             <input type="file" multiple accept="image/*,video/*,.pdf,.doc,.docx" className="hidden" onChange={handleUpload} />
             <Button asChild disabled={uploading}>
@@ -158,18 +199,57 @@ const AdminMedia = () => {
       <Alert>
         <Info className="h-4 w-4" />
         <AlertDescription>
-          <strong>Routing rule:</strong> Images always go to <strong>Cloudinary</strong>. All other files always go to <strong>Cloudflare R2</strong>. Supabase Storage is never used for new uploads — the migrate button only moves leftover legacy files.
+          <strong>Routing rule:</strong> Images always go to <strong>Cloudinary</strong>. All other files always go to <strong>Cloudflare R2</strong>. Supabase Storage is never used for new uploads.
         </AlertDescription>
       </Alert>
 
-      {migrationResult && (
-        <Alert>
-          <Info className="h-4 w-4" />
-          <AlertDescription>
-            <strong>Migration complete:</strong> {migrationResult.imagesToCloudinary ?? 0} images → Cloudinary, {migrationResult.filesToR2 ?? 0} files → Cloudflare R2, {migrationResult.failed} failed, {migrationResult.deleted} removed from Supabase.
-          </AlertDescription>
-        </Alert>
-      )}
+      <Card className="p-4 space-y-3">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div>
+            <h3 className="font-semibold">Legacy Supabase Migration</h3>
+            <p className="text-xs text-muted-foreground">Step 1: scan to queue files. Step 2: process the queue one by one.</p>
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            <Button variant="outline" size="sm" onClick={runScan} disabled={scanning || migrating}>
+              {scanning ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Search className="h-4 w-4 mr-2" />}
+              {scanning ? 'Scanning...' : '1. Scan legacy'}
+            </Button>
+            <Button variant="outline" size="sm" onClick={refreshStatus} disabled={scanning || migrating}>
+              Refresh status
+            </Button>
+            {!migrating ? (
+              <Button size="sm" onClick={runMigration} disabled={scanning || !queueStatus?.pending}>
+                <CloudUpload className="h-4 w-4 mr-2" />
+                2. Migrate ({queueStatus?.pending ?? 0} pending)
+              </Button>
+            ) : (
+              <Button size="sm" variant="destructive" onClick={() => setStopRequested(true)}>
+                Stop
+              </Button>
+            )}
+            {!!queueStatus?.failed && (
+              <Button size="sm" variant="ghost" onClick={retryFailed} disabled={migrating}>
+                Retry {queueStatus.failed} failed
+              </Button>
+            )}
+          </div>
+        </div>
+        {queueStatus && (
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs">
+            <div className="bg-muted rounded p-2"><div className="text-muted-foreground">Total</div><div className="font-bold">{queueStatus.total}</div></div>
+            <div className="bg-muted rounded p-2"><div className="text-muted-foreground">Pending</div><div className="font-bold">{queueStatus.pending}</div></div>
+            <div className="bg-muted rounded p-2"><div className="text-muted-foreground">Processing</div><div className="font-bold">{queueStatus.processing}</div></div>
+            <div className="bg-muted rounded p-2"><div className="text-muted-foreground">Success</div><div className="font-bold text-primary">{queueStatus.success}</div></div>
+            <div className="bg-muted rounded p-2"><div className="text-muted-foreground">Failed</div><div className="font-bold text-destructive">{queueStatus.failed}</div></div>
+          </div>
+        )}
+        {migrating && (
+          <div className="text-xs space-y-1">
+            <div className="flex items-center gap-2"><Loader2 className="h-3 w-3 animate-spin" /> <span className="truncate">{currentFile || 'starting...'}</span></div>
+            <div>This session: <strong>{liveCounts.cloudinary}</strong> → Cloudinary, <strong>{liveCounts.r2}</strong> → R2, <strong className="text-destructive">{liveCounts.failed}</strong> failed</div>
+          </div>
+        )}
+      </Card>
 
       <div className="flex gap-3 items-center">
         <div className="relative flex-1 max-w-sm">
