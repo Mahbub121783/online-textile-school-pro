@@ -14,6 +14,7 @@ import { useTheme } from '@/components/ThemeProvider';
 import { Progress } from '@/components/ui/progress';
 import { useProfileCompleteness } from '@/hooks/useProfileCompleteness';
 import { useQueryClient } from '@tanstack/react-query';
+import { useFileUpload } from '@/hooks/useFileUpload';
 
 const ROLE_OPTIONS = [
   { value: 'student', label: 'Student' },
