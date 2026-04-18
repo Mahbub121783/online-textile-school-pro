@@ -84,7 +84,17 @@ Deno.serve(async (req) => {
     }
     await listFolder('');
 
-    const results = { total: allFiles.length, migrated: 0, imagesToCloudinary: 0, filesToR2: 0, skipped: 0, failed: 0, deleted: 0, details: [] as any[] };
+    // Filter out files already successfully migrated, then take only `batchSize`
+    const { data: doneRows } = await supabase
+      .from('storage_migration_log')
+      .select('old_url')
+      .eq('status', 'success');
+    const doneSet = new Set((doneRows || []).map((r: any) => r.old_url));
+    const pending = allFiles.filter(f => !doneSet.has(`${SUPABASE_URL}/storage/v1/object/public/media/${f.name}`));
+    const batch = pending.slice(0, batchSize);
+    const hasMore = pending.length > batch.length;
+
+    const results = { total: allFiles.length, pending: pending.length, batchProcessed: batch.length, hasMore, migrated: 0, imagesToCloudinary: 0, filesToR2: 0, skipped: 0, failed: 0, deleted: 0, details: [] as any[] };
 
     for (const file of allFiles) {
       const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/media/${file.name}`;
