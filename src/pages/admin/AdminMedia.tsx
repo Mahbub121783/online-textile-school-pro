@@ -41,7 +41,9 @@ const AdminMedia = () => {
       });
       if (error) throw error;
       setMigrationResult(data);
-      toast.success(`Migrated ${data.migrated}/${data.total} files (${data.failed} failed, ${data.deleted} deleted)`);
+      const imgCount = data.imagesToCloudinary ?? 0;
+      const fileCount = data.filesToR2 ?? 0;
+      toast.success(`${imgCount} images → Cloudinary, ${fileCount} files → Cloudflare R2 (${data.failed} failed, ${data.deleted} removed from Supabase)`);
       queryClient.invalidateQueries({ queryKey: ['admin-media'] });
     } catch (err: any) {
       toast.error('Migration failed: ' + (err.message || 'Unknown error'));
@@ -129,7 +131,8 @@ const AdminMedia = () => {
         <div className="flex gap-2 flex-wrap">
           <Button variant="outline" onClick={runMigration} disabled={migrating}>
             {migrating ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <CloudUpload className="h-4 w-4 mr-2" />}
-            {migrating ? 'Migrating...' : 'Migrate Supabase → Cloud'}
+            <span className="hidden sm:inline">{migrating ? 'Migrating legacy files...' : 'Migrate legacy: Images → Cloudinary, Others → R2'}</span>
+            <span className="sm:hidden">{migrating ? 'Migrating...' : 'Migrate legacy'}</span>
           </Button>
           <label>
             <input type="file" multiple accept="image/*,video/*,.pdf,.doc,.docx" className="hidden" onChange={handleUpload} />
@@ -140,11 +143,18 @@ const AdminMedia = () => {
         </div>
       </div>
 
+      <Alert>
+        <Info className="h-4 w-4" />
+        <AlertDescription>
+          <strong>Routing rule:</strong> Images always go to <strong>Cloudinary</strong>. All other files always go to <strong>Cloudflare R2</strong>. Supabase Storage is never used for new uploads — the migrate button only moves leftover legacy files.
+        </AlertDescription>
+      </Alert>
+
       {migrationResult && (
         <Alert>
           <Info className="h-4 w-4" />
           <AlertDescription>
-            <strong>Migration complete:</strong> {migrationResult.migrated}/{migrationResult.total} migrated, {migrationResult.failed} failed, {migrationResult.deleted} deleted from Supabase.
+            <strong>Migration complete:</strong> {migrationResult.imagesToCloudinary ?? 0} images → Cloudinary, {migrationResult.filesToR2 ?? 0} files → Cloudflare R2, {migrationResult.failed} failed, {migrationResult.deleted} removed from Supabase.
           </AlertDescription>
         </Alert>
       )}

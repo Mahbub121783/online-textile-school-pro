@@ -83,7 +83,7 @@ Deno.serve(async (req) => {
     }
     await listFolder('');
 
-    const results = { total: allFiles.length, migrated: 0, skipped: 0, failed: 0, deleted: 0, details: [] as any[] };
+    const results = { total: allFiles.length, migrated: 0, imagesToCloudinary: 0, filesToR2: 0, skipped: 0, failed: 0, deleted: 0, details: [] as any[] };
 
     for (const file of allFiles) {
       const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/media/${file.name}`;
@@ -193,6 +193,8 @@ Deno.serve(async (req) => {
         }
 
         results.migrated++;
+        if (source === 'cloudinary') results.imagesToCloudinary++;
+        else if (source === 'r2') results.filesToR2++;
         results.details.push({ file: file.name, newUrl, source, tablesUpdated });
       } catch (err: any) {
         results.failed++;
