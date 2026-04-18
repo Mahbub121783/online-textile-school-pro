@@ -35,15 +35,27 @@ const AdminMedia = () => {
     if (!confirm('Migrate ALL Supabase Storage files to Cloudinary/R2 and DELETE originals from Supabase? This cannot be undone.')) return;
     setMigrating(true);
     setMigrationResult(null);
+    const totals = { imagesToCloudinary: 0, filesToR2: 0, failed: 0, deleted: 0, migrated: 0 };
     try {
-      const { data, error } = await supabase.functions.invoke('migrate-storage-to-cloud', {
-        body: { action: 'migrate', deleteOriginals: true },
-      });
-      if (error) throw error;
-      setMigrationResult(data);
-      const imgCount = data.imagesToCloudinary ?? 0;
-      const fileCount = data.filesToR2 ?? 0;
-      toast.success(`${imgCount} images → Cloudinary, ${fileCount} files → Cloudflare R2 (${data.failed} failed, ${data.deleted} removed from Supabase)`);
+      let hasMore = true;
+      let round = 0;
+      while (hasMore) {
+        round++;
+        const { data, error } = await supabase.functions.invoke('migrate-storage-to-cloud', {
+          body: { action: 'migrate', deleteOriginals: true, batchSize: 3 },
+        });
+        if (error) throw error;
+        totals.imagesToCloudinary += data.imagesToCloudinary ?? 0;
+        totals.filesToR2 += data.filesToR2 ?? 0;
+        totals.failed += data.failed ?? 0;
+        totals.deleted += data.deleted ?? 0;
+        totals.migrated += data.migrated ?? 0;
+        setMigrationResult({ ...totals, pending: data.pending });
+        toast.message(`Batch ${round}: ${data.batchProcessed} processed, ${data.pending - data.batchProcessed} remaining`);
+        hasMore = !!data.hasMore;
+        if (data.batchProcessed === 0) break; // safety
+      }
+      toast.success(`Done: ${totals.imagesToCloudinary} → Cloudinary, ${totals.filesToR2} → R2 (${totals.failed} failed, ${totals.deleted} removed)`);
       queryClient.invalidateQueries({ queryKey: ['admin-media'] });
     } catch (err: any) {
       toast.error('Migration failed: ' + (err.message || 'Unknown error'));
