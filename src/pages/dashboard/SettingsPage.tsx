@@ -98,34 +98,43 @@ const SettingsPage = () => {
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !user) return;
-    
+
     if (file.size > 2 * 1024 * 1024) {
       toast({ title: 'Error', description: 'Image must be under 2MB', variant: 'destructive' });
       return;
     }
 
     setAvatarUploading(true);
-    const ext = file.name.split('.').pop();
-    const path = `avatars/${user.id}.${ext}`;
-    
-    const { error: uploadError } = await supabase.storage.from('media').upload(path, file, { upsert: true });
-    if (uploadError) {
-      toast({ title: 'Upload failed', description: uploadError.message, variant: 'destructive' });
-      setAvatarUploading(false);
-      return;
-    }
+    try {
+      const result = await uploadFile(file);
+      const avatarUrl = result.url;
 
-    const { data: urlData } = supabase.storage.from('media').getPublicUrl(path);
-    const avatarUrl = urlData.publicUrl + '?t=' + Date.now();
+      const { error } = await supabase
+        .from('user_profiles')
+        .update({ avatar_url: avatarUrl })
+        .eq('id', user.id);
 
-    const { error } = await supabase.from('user_profiles').update({ avatar_url: avatarUrl }).eq('id', user.id);
-    if (error) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
-    } else {
+      if (error) throw error;
+
+      // Register in media_library so it appears in Media Picker
+      await supabase.from('media_library').upsert(
+        {
+          file_url: avatarUrl,
+          file_name: file.name,
+          file_type: file.type || 'image/jpeg',
+          file_size: file.size,
+          uploaded_by: user.id,
+        },
+        { onConflict: 'file_url' }
+      );
+
       toast({ title: 'Avatar updated!' });
       window.location.reload();
+    } catch (err: any) {
+      toast({ title: 'Upload failed', description: err?.message || 'Unknown error', variant: 'destructive' });
+    } finally {
+      setAvatarUploading(false);
     }
-    setAvatarUploading(false);
   };
 
   const handleSave = async () => {
