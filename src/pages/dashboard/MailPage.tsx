@@ -103,7 +103,9 @@ const MailPage = () => {
 
       if (showToast) {
         toast.success(
-          data?.new_messages > 0
+          reset
+            ? `Inbox repaired. ${data?.new_messages || 0} message(s) re-imported.`
+            : data?.new_messages > 0
             ? `${data.new_messages} new message(s) received.`
             : 'Inbox is up to date.'
         );
