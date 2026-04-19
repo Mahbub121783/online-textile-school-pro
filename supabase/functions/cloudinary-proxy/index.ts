@@ -55,6 +55,10 @@ serve(async (req) => {
       return await handleUpload(supabase, body);
     }
 
+    if (action === "fetch-url") {
+      return await handleFetchUrl(supabase, body);
+    }
+
     return jsonResponse({ error: "Invalid action" }, 400);
   } catch (err: any) {
     console.error("cloudinary-proxy error:", err);
@@ -212,5 +216,73 @@ async function handleUpload(supabase: any, body: any) {
   } catch (err: any) {
     console.error("Cloudinary upload error:", err);
     return jsonResponse({ error: err.message || "Upload failed" }, 500);
+  }
+}
+
+async function handleFetchUrl(supabase: any, body: any) {
+  const { remote_url, file_name, file_type } = body;
+  if (!remote_url) return jsonResponse({ error: "remote_url required" }, 400);
+
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(remote_url);
+  } catch {
+    return jsonResponse({ error: "Invalid remote_url" }, 400);
+  }
+
+  if (!["http:", "https:"].includes(parsedUrl.protocol)) {
+    return jsonResponse({ error: "remote_url must use http or https" }, 400);
+  }
+
+  const account = await getAccount(supabase, "images");
+  if (!account) return jsonResponse({ error: "No active Cloudinary accounts configured" }, 400);
+
+  try {
+    const timestamp = Math.floor(Date.now() / 1000).toString();
+    const folder = "uploads/avatars";
+    const publicIdBase = (file_name || parsedUrl.pathname.split("/").pop() || "avatar")
+      .replace(/\.[a-zA-Z0-9]+$/, "")
+      .replace(/[^a-zA-Z0-9/_-]/g, "_")
+      .slice(0, 100) || "avatar";
+    const paramsToSign = `folder=${folder}&public_id=${publicIdBase}&timestamp=${timestamp}${account.api_secret}`;
+    const signature = await sha1Hex(paramsToSign);
+
+    const formData = new URLSearchParams({
+      file: parsedUrl.toString(),
+      api_key: account.api_key,
+      timestamp,
+      signature,
+      folder,
+      public_id: publicIdBase,
+    });
+
+    if (file_type) formData.append("resource_type", file_type.startsWith("video/") ? "video" : "image");
+
+    const res = await fetch(
+      `https://api.cloudinary.com/v1_1/${account.cloud_name}/image/upload`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: formData,
+      }
+    );
+
+    const result = await res.json();
+
+    if (result.error) {
+      console.error("Cloudinary fetch-url error:", result.error);
+      return jsonResponse({ error: result.error.message || "Remote import failed" }, 500);
+    }
+
+    return jsonResponse({
+      url: result.secure_url,
+      publicId: result.public_id,
+      source: "cloudinary",
+      fallbackUrl: result.secure_url,
+      accountId: account.id,
+    });
+  } catch (err: any) {
+    console.error("Cloudinary fetch-url error:", err);
+    return jsonResponse({ error: err.message || "Remote import failed" }, 500);
   }
 }
