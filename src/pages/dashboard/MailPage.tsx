@@ -77,12 +77,12 @@ const MailPage = () => {
     },
   });
 
-  const syncInbox = useCallback(async (showToast = false) => {
+  const syncInbox = useCallback(async (showToast = false, reset = false) => {
     if (!user || emailReq?.status !== 'approved') return;
 
     setIsSyncing(true);
     try {
-      const { data, error } = await supabase.functions.invoke('edumail-imap-sync');
+      const { data, error } = await supabase.functions.invoke('edumail-imap-sync', reset ? { body: { reset: true } } : undefined);
 
       if (error) {
         let message = 'Inbox sync failed';
