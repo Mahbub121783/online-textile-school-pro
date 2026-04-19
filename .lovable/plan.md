@@ -1,100 +1,38 @@
 
 
-## Deep diagnosis
+## Problem
+Inbox messages render raw MIME (boundary markers like `--000000000000f4fc29064fb253d0`, `Content-Type:` headers, and the IMAP trailer `A0004 OK Fetch completed`) instead of clean message body. Root cause is in `supabase/functions/edumail-imap-sync/index.ts` — the parser does no real MIME parsing.
 
-The migration is failing because the current `migrate-storage-to-cloud` function is still too heavy even after batching.
+## Fix (two parts)
 
-What I found from the code and logs:
-- The function still **recursively scans the entire `media` bucket on every request** before processing only 3 files.
-- It then **downloads files into memory and base64-encodes them inside the function**.
-- It also calls **other auth-protected edge functions** (`cloudinary-proxy`, `r2-presign`) from inside the migration function, which is fragile because the request auth context is not being forwarded explicitly.
-- The Supabase logs for this function show mostly **boot/shutdown with no useful app error**, which strongly suggests a **hard runtime crash / resource kill** before normal error handling completes.
-- There are still real legacy files to migrate (`media_library` and `user_profiles.avatar_url` still contain Supabase URLs), so this is not a “nothing to do” case.
+### 1. Rewrite MIME parsing in `edumail-imap-sync`
+Replace `parseEmailFromFetch` + the IMAP read loop with proper handling:
 
-## Root cause
+- **Strip IMAP envelope**: remove the leading `* N FETCH (BODY[] {SIZE}\r\n` literal header and the trailing `)\r\nA#### OK Fetch completed...` so only the raw RFC822 message remains.
+- **Parse headers vs body** correctly (split on first `\r\n\r\n` of the RFC822 message only).
+- **Decode MIME-encoded headers** (`=?utf-8?Q?...?=` / `=?utf-8?B?...?=`) for Subject/From/To.
+- **Walk multipart bodies**:
+  - Read `Content-Type: multipart/...; boundary="..."`.
+  - Split parts on `--boundary`, recursively pick `text/html` (preferred) else `text/plain`.
+  - Honor `Content-Transfer-Encoding`: decode `quoted-printable` and `base64`.
+  - Honor `charset` (decode UTF-8 / latin1 via `TextDecoder`).
+- **Detect attachments**: parts with `Content-Disposition: attachment` → record name/size in `attachments` JSON, set `has_attachments`.
+- **Fallback**: if no usable text part, store empty body (do NOT dump raw MIME).
 
-This is not just a small bug. The current design is wrong for edge runtime limits:
-1. Full bucket traversal per batch
-2. Large in-memory base64 conversion
-3. Nested edge-function calls during migration
-4. UI loop repeatedly triggering that expensive work
+### 2. Sanitize on the client (defense in depth)
+In `src/components/mail/MessageView.tsx`:
+- If `body_html` is empty, render `body_text` inside `<pre className="whitespace-pre-wrap">` — not raw HTML.
+- Strip any leftover lines that look like IMAP trailers (`A\d{4} OK ...`) or bare MIME boundary lines (`^--[0-9a-f]{20,}`) before render — safety net for already-synced bad rows.
 
-## Fix strategy
+### 3. Re-sync existing bad rows (optional, safe)
+Add a tiny one-shot button on the mail page (or just rely on next sync) — existing rows in `edumail_messages` already contain the garbled body. Easiest: a "Re-parse inbox" action that deletes inbox rows and resets `last_synced_uid = 0` so the next sync re-pulls them with the fixed parser. Keep this off by default; just document it.
 
-### 1. Redesign the migration function as a queue worker
-Refactor `supabase/functions/migrate-storage-to-cloud/index.ts` so it does **not** scan + migrate in one expensive pass.
-
-New actions:
-- `scan` — seed `storage_migration_log` with legacy files in small pages
-- `migrate-next` — migrate only the next pending item (or very tiny batch)
-- `status` — return counts
-- `retry-failed` — optionally retry failed rows
-
-### 2. Stop scanning the whole bucket every time
-Replace recursive `storage.from('media').list()` traversal with a lightweight queued approach:
-- Read legacy objects in small chunks
-- Upsert them into `storage_migration_log`
-- After that, each migration request works only from the log table
-
-This avoids repeated bucket-wide work on every click/loop.
-
-### 3. Remove base64-heavy migration logic
-Keep the upload rule:
-- Images → Cloudinary
-- Other files → Cloudflare R2
-
-But change how migration uploads happen:
-- **Images:** upload directly to Cloudinary from the public Supabase URL or direct binary upload inside the function
-- **Other files:** upload directly to R2 with the AWS S3 client already used in `r2-presign`
-
-Do **not** call `cloudinary-proxy` or `r2-presign` from inside the migration worker.
-
-### 4. Add robust failure tracking
-Extend the queue behavior so each row records:
-- `status`
-- `error_message`
-- `attempt_count`
-- timestamps for started/completed
-
-This prevents infinite retry loops and makes failures inspectable.
-
-### 5. Update Admin Media UI to use the queue
-Refactor `src/pages/admin/AdminMedia.tsx`:
-- Step 1: scan legacy files
-- Step 2: run repeated `migrate-next` calls
-- Show:
-  - current progress
-  - current file being processed
-  - images moved to Cloudinary
-  - files moved to R2
-  - failed count
-- Add a separate **Retry failed** action
-- Stop cleanly when no pending rows remain
-
-## Files to change
-
+## Files
 | File | Change |
 |---|---|
-| `supabase/functions/migrate-storage-to-cloud/index.ts` | Rewrite into scan/status/migrate-next queue worker; remove recursive full scan per batch and remove nested edge-function calls |
-| `src/pages/admin/AdminMedia.tsx` | Switch from current `while(hasMore)` batch loop to queue-based scan + migrate flow with better progress and retry UI |
-| `supabase/migrations/...sql` | Add retry/progress columns to `storage_migration_log` if needed (`attempt_count`, `started_at`, `last_error_at`) |
+| `supabase/functions/edumail-imap-sync/index.ts` | Real MIME parser: strip IMAP envelope, decode encoded-words, walk multipart boundaries, decode QP/base64, extract attachments |
+| `src/components/mail/MessageView.tsx` | Render plain text in `<pre>` when no HTML; strip stray IMAP trailers/boundary lines as safety net |
 
-## Expected result
-
-After this refactor:
-- migration will stop crashing from edge resource exhaustion
-- images will migrate only to Cloudinary
-- all non-image files will migrate only to Cloudflare R2
-- Supabase legacy files will be processed safely one-by-one / tiny-batch
-- failures will be visible instead of silently dying
-- admin will be able to resume and retry without restarting the whole migration
-
-## Implementation note
-
-I do **not** plan to touch the normal upload rule. That rule is already correct:
-- new images → Cloudinary
-- new other files → R2
-- new uploads → never Supabase
-
-The work is specifically to make the **legacy migration path** reliable.
+## Result
+Inbox shows clean message body (e.g. just "Test mail") with no boundary markers, no `Content-Type` lines, and no `A0004 OK Fetch completed` trailer. HTML emails render properly; plain-text emails render as readable text; attachments appear in the attachments strip.
 
