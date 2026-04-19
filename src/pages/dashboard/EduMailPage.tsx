@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Input } from '@/components/ui/input';
-import { Mail, CheckCircle, Clock, XCircle, AlertTriangle, Copy, Shield, HardDrive, Key, Calendar, Server, Eye, EyeOff, RefreshCw, Lock } from 'lucide-react';
+import { Mail, CheckCircle, Clock, XCircle, AlertTriangle, Copy, Shield, HardDrive, Key, Calendar, Server, Eye, EyeOff, RefreshCw, Lock, Wrench } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { ensureEmailValidity } from '@/lib/ensureEmailValidity';
 
@@ -50,7 +50,7 @@ const EduMailPage = () => {
   // Auto-sync inbox on load
   useEffect(() => {
     if (emailReq?.status === 'approved' && user) {
-      handleSyncInbox();
+      handleSyncInbox(false);
     }
   }, [emailReq?.status, user?.id]);
 
@@ -179,10 +179,26 @@ const EduMailPage = () => {
           <p className="text-sm text-muted-foreground mt-1">Your professional academic email account</p>
         </div>
         {emailReq?.status === 'approved' && (
-          <Button variant="outline" size="sm" onClick={handleSyncInbox} disabled={isSyncing}>
-            <RefreshCw className={`h-4 w-4 mr-2 ${isSyncing ? 'animate-spin' : ''}`} />
-            {isSyncing ? 'Syncing...' : 'Sync Inbox'}
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={() => handleSyncInbox(false)} disabled={isSyncing}>
+              <RefreshCw className={`h-4 w-4 mr-2 ${isSyncing ? 'animate-spin' : ''}`} />
+              {isSyncing ? 'Syncing...' : 'Sync Inbox'}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                if (confirm('This will wipe your inbox and re-import all messages with the latest parser. Continue?')) {
+                  handleSyncInbox(true);
+                }
+              }}
+              disabled={isSyncing}
+              title="Reset & re-sync inbox to fix garbled messages"
+            >
+              <Wrench className="h-4 w-4 mr-2" />
+              Repair Inbox
+            </Button>
+          </div>
         )}
       </div>
 
