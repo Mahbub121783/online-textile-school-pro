@@ -11,7 +11,7 @@ import SignatureManager from '@/components/mail/SignatureManager';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Search, Trash2, MailOpen, RefreshCw } from 'lucide-react';
+import { Search, Trash2, MailOpen, RefreshCw, Wrench } from 'lucide-react';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 
