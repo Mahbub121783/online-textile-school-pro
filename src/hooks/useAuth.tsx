@@ -2,6 +2,45 @@ import { useState, useEffect, createContext, useContext, ReactNode } from 'react
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 
+const avatarNormalizationInFlight = new Set<string>();
+
+const isCloudinaryUrl = (url?: string | null) =>
+  !!url && (url.includes('res.cloudinary.com') || url.includes('cloudinary.com'));
+
+const shouldNormalizeAvatarUrl = (url?: string | null) =>
+  !!url && /^https?:\/\//i.test(url) && !isCloudinaryUrl(url);
+
+const normalizeAvatarToCloudinary = async (userId: string, avatarUrl?: string | null) => {
+  if (!shouldNormalizeAvatarUrl(avatarUrl) || avatarNormalizationInFlight.has(userId)) return null;
+
+  avatarNormalizationInFlight.add(userId);
+  try {
+    const fileName = `avatar-${userId}`;
+    const { data, error } = await supabase.functions.invoke('cloudinary-proxy', {
+      body: {
+        action: 'fetch-url',
+        remote_url: avatarUrl,
+        file_name: fileName,
+        file_type: 'image/jpeg',
+      },
+    });
+
+    if (error || data?.error || !data?.url) return null;
+
+    const { error: updateError } = await supabase
+      .from('user_profiles')
+      .update({ avatar_url: data.url })
+      .eq('id', userId);
+
+    if (updateError) return null;
+    return data.url as string;
+  } catch {
+    return null;
+  } finally {
+    avatarNormalizationInFlight.delete(userId);
+  }
+};
+
 interface AuthContextType {
   user: User | null;
   session: Session | null;
@@ -56,6 +95,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           if (!mounted) return;
           setProfile(d.profile);
           setRoles(d.roles);
+          normalizeAvatarToCloudinary(session.user.id, d.profile?.avatar_url).then((normalizedUrl) => {
+            if (!mounted || !normalizedUrl) return;
+            setProfile((prev: any) => prev ? { ...prev, avatar_url: normalizedUrl } : prev);
+          });
           setLoading(false);
           setIsReady(true);
         }).catch(() => {
@@ -78,6 +121,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             if (!mounted) return;
             setProfile(d.profile);
             setRoles(d.roles);
+            normalizeAvatarToCloudinary(session.user.id, d.profile?.avatar_url).then((normalizedUrl) => {
+              if (!mounted || !normalizedUrl) return;
+              setProfile((prev: any) => prev ? { ...prev, avatar_url: normalizedUrl } : prev);
+            });
           });
         } else {
           setProfile(null);
