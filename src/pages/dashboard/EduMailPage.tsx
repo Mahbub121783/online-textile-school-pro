@@ -123,17 +123,20 @@ const EduMailPage = () => {
     },
   });
 
-  const handleSyncInbox = async () => {
+  const handleSyncInbox = async (reset = false) => {
     if (isSyncing) return;
     setIsSyncing(true);
     try {
-      const { data, error } = await supabase.functions.invoke('edumail-imap-sync');
+      const { data, error } = await supabase.functions.invoke('edumail-imap-sync', reset ? { body: { reset: true } } : undefined);
       if (error) throw error;
-      if (data?.new_messages > 0) {
+      if (reset) {
+        toast({ title: '🔧 Inbox Repaired', description: `${data?.new_messages || 0} message(s) re-imported with the latest parser.` });
+      } else if (data?.new_messages > 0) {
         toast({ title: '📬 Inbox Synced', description: `${data.new_messages} new message(s) received.` });
       }
     } catch (err: any) {
       console.error('Inbox sync error:', err);
+      if (reset) toast({ title: 'Error', description: err.message || 'Repair failed', variant: 'destructive' });
     } finally {
       setIsSyncing(false);
     }
