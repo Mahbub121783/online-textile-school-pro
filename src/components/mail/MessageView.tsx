@@ -55,7 +55,24 @@ export default function MessageView({ message, onReply, onForward, onDelete, onT
 
       {/* Body */}
       <div className="flex-1 overflow-auto p-4">
-        <div className="prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: message.body_html || message.body_text || '' }} />
+        {(() => {
+          // Safety net: strip leftover IMAP trailers / MIME boundary lines from older bad rows
+          const sanitize = (s: string) =>
+            (s || '')
+              .split(/\r?\n/)
+              .filter((l) => !/^A\d{4}\s+(OK|NO|BAD)\b/.test(l))
+              .filter((l) => !/^--[0-9a-zA-Z'()+_,\-./:=?]{10,}--?\s*$/.test(l))
+              .filter((l) => !/^Content-(Type|Transfer-Encoding|Disposition):/i.test(l))
+              .join('\n')
+              .trim();
+
+          const html = sanitize(message.body_html || '');
+          const text = sanitize(message.body_text || '');
+          if (html) {
+            return <div className="prose prose-sm max-w-none dark:prose-invert" dangerouslySetInnerHTML={{ __html: html }} />;
+          }
+          return <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">{text || '(empty message)'}</pre>;
+        })()}
       </div>
 
       {/* Attachments */}
