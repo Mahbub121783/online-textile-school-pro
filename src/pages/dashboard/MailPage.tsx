@@ -11,7 +11,7 @@ import SignatureManager from '@/components/mail/SignatureManager';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Search, Trash2, MailOpen, RefreshCw } from 'lucide-react';
+import { Search, Trash2, MailOpen, RefreshCw, Wrench } from 'lucide-react';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 
@@ -77,12 +77,12 @@ const MailPage = () => {
     },
   });
 
-  const syncInbox = useCallback(async (showToast = false) => {
+  const syncInbox = useCallback(async (showToast = false, reset = false) => {
     if (!user || emailReq?.status !== 'approved') return;
 
     setIsSyncing(true);
     try {
-      const { data, error } = await supabase.functions.invoke('edumail-imap-sync');
+      const { data, error } = await supabase.functions.invoke('edumail-imap-sync', reset ? { body: { reset: true } } : undefined);
 
       if (error) {
         let message = 'Inbox sync failed';
@@ -103,7 +103,9 @@ const MailPage = () => {
 
       if (showToast) {
         toast.success(
-          data?.new_messages > 0
+          reset
+            ? `Inbox repaired. ${data?.new_messages || 0} message(s) re-imported.`
+            : data?.new_messages > 0
             ? `${data.new_messages} new message(s) received.`
             : 'Inbox is up to date.'
         );
@@ -268,8 +270,22 @@ const MailPage = () => {
                 <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                 <Input className="h-8 pl-7 text-xs" placeholder="Search mail..." value={searchQ} onChange={e => setSearchQ(e.target.value)} />
               </div>
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => void syncInbox(true)} disabled={isSyncing}>
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => void syncInbox(true)} disabled={isSyncing} title="Refresh">
                 <RefreshCw className={`h-3.5 w-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => {
+                  if (confirm('This will wipe your inbox and re-import all messages with the latest parser. Continue?')) {
+                    void syncInbox(true, true);
+                  }
+                }}
+                disabled={isSyncing}
+                title="Repair inbox (reset & re-sync)"
+              >
+                <Wrench className="h-3.5 w-3.5" />
               </Button>
             </div>
             {selectedIds.size > 0 && (

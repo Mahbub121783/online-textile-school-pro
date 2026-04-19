@@ -56,22 +56,51 @@ export default function MessageView({ message, onReply, onForward, onDelete, onT
       {/* Body */}
       <div className="flex-1 overflow-auto p-4">
         {(() => {
-          // Safety net: strip leftover IMAP trailers / MIME boundary lines from older bad rows
+          // Strip MIME / IMAP leftovers from legacy bad rows
           const sanitize = (s: string) =>
             (s || '')
               .split(/\r?\n/)
-              .filter((l) => !/^A\d{4}\s+(OK|NO|BAD)\b/.test(l))
-              .filter((l) => !/^--[0-9a-zA-Z'()+_,\-./:=?]{10,}--?\s*$/.test(l))
-              .filter((l) => !/^Content-(Type|Transfer-Encoding|Disposition):/i.test(l))
+              .filter((l) => !/^A\d{4}\s+(OK|NO|BAD)\b/i.test(l))
+              .filter((l) => !/^--[0-9a-zA-Z'()+_,\-./:=?]{8,}--?\s*$/.test(l))
+              .filter((l) => !/^Content-(Type|Transfer-Encoding|Disposition|ID|Description):/i.test(l))
+              .filter((l) => !/^MIME-Version:/i.test(l))
+              .filter((l) => !/^(boundary|charset|format|delsp|name|filename)=/i.test(l.trim()))
+              .filter((l) => !/^\)\s*$/.test(l))
+              .filter((l) => !/^\s*\)\s*A\d{4}\s/i.test(l))
               .join('\n')
+              .replace(/\n{3,}/g, '\n\n')
               .trim();
 
-          const html = sanitize(message.body_html || '');
-          const text = sanitize(message.body_text || '');
-          if (html) {
-            return <div className="prose prose-sm max-w-none dark:prose-invert" dangerouslySetInnerHTML={{ __html: html }} />;
+          // Detect "fake HTML" — body_html that is actually raw MIME text
+          const looksLikeRawMime = (s: string) =>
+            /Content-Type:\s*multipart/i.test(s) ||
+            /Content-Transfer-Encoding:/i.test(s) ||
+            /^--[0-9a-zA-Z]{16,}/m.test(s) ||
+            /\bA\d{4}\s+OK\s+Fetch\s+completed/i.test(s);
+
+          // Detect real HTML (must have actual HTML tags, not just plain text)
+          const hasRealHtml = (s: string) =>
+            /<\s*(html|body|div|p|br|span|a|table|h[1-6]|ul|ol|li|img|strong|em|b|i)\b/i.test(s);
+
+          const rawHtml = message.body_html || '';
+          const rawText = message.body_text || '';
+
+          if (rawHtml && hasRealHtml(rawHtml) && !looksLikeRawMime(rawHtml)) {
+            return (
+              <div
+                className="prose prose-sm max-w-none dark:prose-invert"
+                dangerouslySetInnerHTML={{ __html: sanitize(rawHtml) }}
+              />
+            );
           }
-          return <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">{text || '(empty message)'}</pre>;
+
+          // Fallback: render as cleaned plain text
+          const cleanText = sanitize(rawText) || sanitize(rawHtml.replace(/<[^>]+>/g, ''));
+          return (
+            <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">
+              {cleanText || '(empty message)'}
+            </pre>
+          );
         })()}
       </div>
 
