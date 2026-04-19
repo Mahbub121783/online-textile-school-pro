@@ -1,38 +1,94 @@
 
+## What’s actually wrong
 
-## Problem
-Inbox messages render raw MIME (boundary markers like `--000000000000f4fc29064fb253d0`, `Content-Type:` headers, and the IMAP trailer `A0004 OK Fetch completed`) instead of clean message body. Root cause is in `supabase/functions/edumail-imap-sync/index.ts` — the parser does no real MIME parsing.
+Do I know what the issue is? Yes.
 
-## Fix (two parts)
+This is most likely **not the parser code alone anymore**. The key problem is that the app is still showing **old, already-saved bad inbox rows**.
 
-### 1. Rewrite MIME parsing in `edumail-imap-sync`
-Replace `parseEmailFromFetch` + the IMAP read loop with proper handling:
+Why I’m confident:
+- `MailPage.tsx` still calls `edumail-imap-sync` with no reset payload.
+- The edge function supports `{ reset: true }`, but the UI never uses it.
+- Your screenshot still shows:
+  - raw MIME boundary lines
+  - a trailing `)`
+  - encoded subject text in the list  
+  Those are strong signs of **legacy broken rows still in `edumail_messages`**, not freshly re-parsed messages.
 
-- **Strip IMAP envelope**: remove the leading `* N FETCH (BODY[] {SIZE}\r\n` literal header and the trailing `)\r\nA#### OK Fetch completed...` so only the raw RFC822 message remains.
-- **Parse headers vs body** correctly (split on first `\r\n\r\n` of the RFC822 message only).
-- **Decode MIME-encoded headers** (`=?utf-8?Q?...?=` / `=?utf-8?B?...?=`) for Subject/From/To.
-- **Walk multipart bodies**:
-  - Read `Content-Type: multipart/...; boundary="..."`.
-  - Split parts on `--boundary`, recursively pick `text/html` (preferred) else `text/plain`.
-  - Honor `Content-Transfer-Encoding`: decode `quoted-printable` and `base64`.
-  - Honor `charset` (decode UTF-8 / latin1 via `TextDecoder`).
-- **Detect attachments**: parts with `Content-Disposition: attachment` → record name/size in `attachments` JSON, set `has_attachments`.
-- **Fallback**: if no usable text part, store empty body (do NOT dump raw MIME).
+So the previous fix was incomplete: the parser changed, but the inbox data was never rebuilt.
 
-### 2. Sanitize on the client (defense in depth)
-In `src/components/mail/MessageView.tsx`:
-- If `body_html` is empty, render `body_text` inside `<pre className="whitespace-pre-wrap">` — not raw HTML.
-- Strip any leftover lines that look like IMAP trailers (`A\d{4} OK ...`) or bare MIME boundary lines (`^--[0-9a-f]{20,}`) before render — safety net for already-synced bad rows.
+## Fix plan
 
-### 3. Re-sync existing bad rows (optional, safe)
-Add a tiny one-shot button on the mail page (or just rely on next sync) — existing rows in `edumail_messages` already contain the garbled body. Easiest: a "Re-parse inbox" action that deletes inbox rows and resets `last_synced_uid = 0` so the next sync re-pulls them with the fixed parser. Keep this off by default; just document it.
+### 1. Add a real “Reset inbox and re-sync” action
+Update both:
+- `src/pages/dashboard/MailPage.tsx`
+- `src/pages/dashboard/EduMailPage.tsx`
 
-## Files
+Add a clear admin/user action that:
+- calls `supabase.functions.invoke('edumail-imap-sync', { body: { reset: true } })`
+- wipes old inbox rows for that user
+- resets `last_synced_uid`
+- re-fetches messages immediately
+- shows a success/error toast
+
+This is the missing piece to actually replace the corrupted stored data.
+
+### 2. Make normal refresh smarter
+Keep the normal refresh button for incremental sync, but add a second repair action like:
+- “Repair Inbox”
+- or “Reset & Re-sync”
+
+This avoids mixing “check new mail” with “rebuild broken mail”.
+
+### 3. Harden the message renderer for bad legacy rows
+Update `src/components/mail/MessageView.tsx` so it does **not trust `body_html` blindly**.
+
+If `body_html` contains MIME artifacts like:
+- `Content-Type:`
+- `Content-Transfer-Encoding:`
+- multipart boundary markers
+- IMAP trailer fragments
+- looks like plain text with no real HTML tags
+
+then:
+- skip `dangerouslySetInnerHTML`
+- render cleaned plain text instead
+
+This gives a safe fallback even before reset is run.
+
+### 4. Improve sanitization rules
+Expand the current cleanup in `MessageView.tsx` to also strip:
+- trailing standalone `)`
+- `MIME-Version:`
+- `charset=`
+- `boundary=`
+- other common mail header leftovers
+- encoded-word subjects/body fragments where needed
+
+This helps old rows look less broken.
+
+### 5. Optional UX: show repair banner when suspicious messages are detected
+If the selected message body looks like raw MIME, show a small banner:
+- “This email was synced with an older parser. Repair inbox to re-import clean content.”
+
+This makes the issue understandable instead of looking random.
+
+## Files to change
+
 | File | Change |
 |---|---|
-| `supabase/functions/edumail-imap-sync/index.ts` | Real MIME parser: strip IMAP envelope, decode encoded-words, walk multipart boundaries, decode QP/base64, extract attachments |
-| `src/components/mail/MessageView.tsx` | Render plain text in `<pre>` when no HTML; strip stray IMAP trailers/boundary lines as safety net |
+| `src/pages/dashboard/MailPage.tsx` | Add “Reset & Re-sync Inbox” flow using `{ reset: true }`, refetch queries afterward |
+| `src/pages/dashboard/EduMailPage.tsx` | Add the same repair/reset action from the account-level mail page |
+| `src/components/mail/MessageView.tsx` | Detect fake/broken HTML, prefer cleaned plain text, strengthen MIME cleanup |
+| `supabase/functions/edumail-imap-sync/index.ts` | Keep current reset support; only adjust if needed for cleaner reset response payload |
 
-## Result
-Inbox shows clean message body (e.g. just "Test mail") with no boundary markers, no `Content-Type` lines, and no `A0004 OK Fetch completed` trailer. HTML emails render properly; plain-text emails render as readable text; attachments appear in the attachments strip.
+## Expected result
 
+After this:
+- old corrupted inbox rows get removed
+- messages are re-imported using the fixed parser
+- raw MIME boundaries stop appearing
+- encoded subjects should display properly
+- even if a bad row still exists temporarily, the message view will degrade more safely
+
+## Important note
+The parser fix alone cannot solve already-saved broken messages. The inbox must be **re-synced with reset**, and the UI currently does not expose that path. That is the main reason it still looks unsolved.
