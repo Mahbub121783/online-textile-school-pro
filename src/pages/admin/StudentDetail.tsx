@@ -565,8 +565,13 @@ export default function StudentDetail() {
               <CardHeader className="pb-3"><CardTitle className="text-sm flex items-center gap-2"><MapPin className="h-4 w-4" /> Location</CardTitle></CardHeader>
               <CardContent className="grid grid-cols-2 gap-4">
                 <ProfileField label="District" value={profile.district} />
-                <ProfileField label="Division" value={profile.division} />
+                <ProfileField label="Upazila" value={profile.upazila} />
+                <ProfileField label="Campus" value={profile.campus} />
                 <ProfileField label="Country" value={profile.country} />
+                <ProfileField label="Username" value={profile.username} />
+                <ProfileField label="Gender" value={profile.gender} />
+                <ProfileField label="NID" value={profile.nid_number} />
+                <ProfileField label="Emergency Contact" value={profile.emergency_contact} />
               </CardContent>
             </Card>
           </div>

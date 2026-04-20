@@ -5249,6 +5249,7 @@ export type Database = {
           bio: string | null
           blood_group: string | null
           business_type: string | null
+          campus: string | null
           company_name: string | null
           country: string | null
           created_at: string | null
@@ -5256,8 +5257,12 @@ export type Database = {
           date_of_birth: string | null
           district: string | null
           division: string | null
+          emergency_contact: string | null
           expertise: string[] | null
+          facebook_url: string | null
           full_name: string | null
+          gender: string | null
+          github_url: string | null
           graduation_year: number | null
           headline: string | null
           id: string
@@ -5265,7 +5270,11 @@ export type Database = {
           is_public_contributor: boolean
           language_preference: string | null
           latitude: number | null
+          linkedin_url: string | null
+          location_updated_at: string | null
           longitude: number | null
+          name_last_changed_at: string | null
+          nid_number: string | null
           occupation: string | null
           phone: string | null
           preferred_language: string | null
@@ -5276,9 +5285,11 @@ export type Database = {
           social_links: Json | null
           theme_preference: string | null
           university: string | null
+          upazila: string | null
           updated_at: string | null
           username: string | null
           vote_count: number
+          website_url: string | null
         }
         Insert: {
           avatar_url?: string | null
@@ -5286,6 +5297,7 @@ export type Database = {
           bio?: string | null
           blood_group?: string | null
           business_type?: string | null
+          campus?: string | null
           company_name?: string | null
           country?: string | null
           created_at?: string | null
@@ -5293,8 +5305,12 @@ export type Database = {
           date_of_birth?: string | null
           district?: string | null
           division?: string | null
+          emergency_contact?: string | null
           expertise?: string[] | null
+          facebook_url?: string | null
           full_name?: string | null
+          gender?: string | null
+          github_url?: string | null
           graduation_year?: number | null
           headline?: string | null
           id: string
@@ -5302,7 +5318,11 @@ export type Database = {
           is_public_contributor?: boolean
           language_preference?: string | null
           latitude?: number | null
+          linkedin_url?: string | null
+          location_updated_at?: string | null
           longitude?: number | null
+          name_last_changed_at?: string | null
+          nid_number?: string | null
           occupation?: string | null
           phone?: string | null
           preferred_language?: string | null
@@ -5313,9 +5333,11 @@ export type Database = {
           social_links?: Json | null
           theme_preference?: string | null
           university?: string | null
+          upazila?: string | null
           updated_at?: string | null
           username?: string | null
           vote_count?: number
+          website_url?: string | null
         }
         Update: {
           avatar_url?: string | null
@@ -5323,6 +5345,7 @@ export type Database = {
           bio?: string | null
           blood_group?: string | null
           business_type?: string | null
+          campus?: string | null
           company_name?: string | null
           country?: string | null
           created_at?: string | null
@@ -5330,8 +5353,12 @@ export type Database = {
           date_of_birth?: string | null
           district?: string | null
           division?: string | null
+          emergency_contact?: string | null
           expertise?: string[] | null
+          facebook_url?: string | null
           full_name?: string | null
+          gender?: string | null
+          github_url?: string | null
           graduation_year?: number | null
           headline?: string | null
           id?: string
@@ -5339,7 +5366,11 @@ export type Database = {
           is_public_contributor?: boolean
           language_preference?: string | null
           latitude?: number | null
+          linkedin_url?: string | null
+          location_updated_at?: string | null
           longitude?: number | null
+          name_last_changed_at?: string | null
+          nid_number?: string | null
           occupation?: string | null
           phone?: string | null
           preferred_language?: string | null
@@ -5350,9 +5381,11 @@ export type Database = {
           social_links?: Json | null
           theme_preference?: string | null
           university?: string | null
+          upazila?: string | null
           updated_at?: string | null
           username?: string | null
           vote_count?: number
+          website_url?: string | null
         }
         Relationships: [
           {

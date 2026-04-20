@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { Eye, EyeOff, Mail, Lock, User } from 'lucide-react';
+import { Eye, EyeOff, Mail, Lock, User, AtSign, Check, X, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -8,17 +8,41 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 import OTSLogo from '@/assets/OTS_LOGO.png';
 
+const USERNAME_REGEX = /^[a-z0-9_]{3,30}$/;
+
 const Register = () => {
   const [formData, setFormData] = useState({
-    fullName: '', email: '', password: '', confirmPassword: '',
+    fullName: '', username: '', email: '', password: '', confirmPassword: '',
   });
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [usernameStatus, setUsernameStatus] = useState<'idle' | 'checking' | 'available' | 'taken' | 'invalid'>('idle');
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const refCode = searchParams.get('ref') || '';
 
-  const update = (field: string, value: string) => setFormData((prev) => ({ ...prev, [field]: value }));
+  const update = (field: string, value: string) => {
+    if (field === 'username') value = value.toLowerCase().replace(/[^a-z0-9_]/g, '');
+    setFormData((prev) => ({ ...prev, [field]: value }));
+  };
+
+  // Live username availability check (debounced)
+  useEffect(() => {
+    const u = formData.username.trim();
+    if (!u) { setUsernameStatus('idle'); return; }
+    if (!USERNAME_REGEX.test(u)) { setUsernameStatus('invalid'); return; }
+    setUsernameStatus('checking');
+    const t = setTimeout(async () => {
+      const { data, error } = await supabase
+        .from('user_profiles')
+        .select('id')
+        .eq('username', u)
+        .maybeSingle();
+      if (error) { setUsernameStatus('idle'); return; }
+      setUsernameStatus(data ? 'taken' : 'available');
+    }, 400);
+    return () => clearTimeout(t);
+  }, [formData.username]);
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,6 +54,14 @@ const Register = () => {
       toast({ title: 'Error', description: 'Password must be at least 6 characters', variant: 'destructive' });
       return;
     }
+    if (!USERNAME_REGEX.test(formData.username)) {
+      toast({ title: 'Invalid username', description: '3–30 characters, lowercase letters, numbers, underscores only.', variant: 'destructive' });
+      return;
+    }
+    if (usernameStatus === 'taken') {
+      toast({ title: 'Username taken', description: 'Please choose a different username.', variant: 'destructive' });
+      return;
+    }
     setLoading(true);
     const { error } = await supabase.auth.signUp({
       email: formData.email,
@@ -38,6 +70,7 @@ const Register = () => {
         emailRedirectTo: window.location.origin,
         data: {
           full_name: formData.fullName,
+          username: formData.username,
           ...(refCode ? { ref: refCode } : {}),
         },
       },
@@ -45,7 +78,6 @@ const Register = () => {
     if (error) {
       toast({ title: 'Registration failed', description: error.message, variant: 'destructive' });
     } else {
-      // Send welcome email (non-blocking)
       try {
         await supabase.functions.invoke('send-smtp-email', {
           body: {
@@ -66,6 +98,16 @@ const Register = () => {
     setLoading(false);
   };
 
+  const usernameHelper = () => {
+    switch (usernameStatus) {
+      case 'checking': return <span className="text-xs text-muted-foreground flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> Checking…</span>;
+      case 'available': return <span className="text-xs text-green-600 flex items-center gap-1"><Check className="h-3 w-3" /> Available</span>;
+      case 'taken': return <span className="text-xs text-destructive flex items-center gap-1"><X className="h-3 w-3" /> Already taken</span>;
+      case 'invalid': return <span className="text-xs text-destructive">3–30 chars: lowercase, numbers, underscores only</span>;
+      default: return <span className="text-xs text-muted-foreground">Lowercase letters, numbers, underscores</span>;
+    }
+  };
+
   return (
     <div className="min-h-screen bg-secondary flex items-center justify-center p-4 py-8">
       <div className="w-full max-w-md bg-card border rounded-xl shadow-lg p-8">
@@ -82,6 +124,15 @@ const Register = () => {
               <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input placeholder="Your full name" value={formData.fullName} onChange={(e) => update('fullName', e.target.value)} className="pl-10" required />
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Username *</Label>
+            <div className="relative">
+              <AtSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input placeholder="your_username" value={formData.username} onChange={(e) => update('username', e.target.value)} className="pl-10" maxLength={30} required />
+            </div>
+            {usernameHelper()}
           </div>
 
           <div className="space-y-2">
@@ -109,7 +160,7 @@ const Register = () => {
             </div>
           </div>
 
-          <Button type="submit" className="w-full bg-accent hover:bg-accent-hover text-accent-foreground h-11 mt-2" disabled={loading}>
+          <Button type="submit" className="w-full bg-accent hover:bg-accent-hover text-accent-foreground h-11 mt-2" disabled={loading || usernameStatus === 'taken' || usernameStatus === 'invalid' || usernameStatus === 'checking'}>
             {loading ? 'Creating account...' : 'Create Account'}
           </Button>
         </form>
