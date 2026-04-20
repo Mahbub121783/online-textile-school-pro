@@ -27,7 +27,7 @@ export const useProfileCompleteness = (profile: any) => {
       { key: 'preferred_language', label: 'Language Preference', weight: 3, completed: !!profile.preferred_language },
       { key: 'headline', label: 'Public Headline', weight: 4, completed: !!profile.headline },
       { key: 'bio', label: 'Bio', weight: 4, completed: !!profile.bio && profile.bio.length > 20 },
-      { key: 'emergency_contact', label: 'Emergency Contact', weight: 4, completed: !!profile.emergency_contact },
+      { key: 'whatsapp_number', label: 'WhatsApp Number', weight: 4, completed: !!profile.whatsapp_number },
       { key: 'location', label: 'Location Captured', weight: 3, completed: !!profile.latitude && !!profile.longitude },
       { key: 'social', label: 'A Social Link', weight: 4, completed: !!(profile.linkedin_url || profile.facebook_url || profile.github_url || profile.website_url) },
       { key: 'conditional', label: 'Role Details', weight: 3, completed: profile.professional_role === 'student' || (profile.professional_role === 'employee' && !!profile.company_name && !!profile.occupation) || (profile.professional_role === 'businessman' && !!profile.business_type) || !profile.professional_role },
