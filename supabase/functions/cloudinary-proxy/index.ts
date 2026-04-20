@@ -182,7 +182,7 @@ async function handleUpload(supabase: any, body: any) {
 }
 
 async function handleFetchUrl(supabase: any, body: any) {
-  const { remote_url, file_name, file_type } = body;
+  const { remote_url, file_name, file_type, folder: folderOverride, public_id } = body;
   if (!remote_url) return jsonResponse({ error: "remote_url required" }, 400);
 
   let parsedUrl: URL;
@@ -196,16 +196,23 @@ async function handleFetchUrl(supabase: any, body: any) {
 
   try {
     const timestamp = Math.floor(Date.now() / 1000).toString();
-    const folder = "uploads/avatars";
-    const publicIdBase = (file_name || parsedUrl.pathname.split("/").pop() || "avatar")
+    const folder = folderOverride || "uploads/avatars";
+    const publicIdBase = (public_id || file_name || parsedUrl.pathname.split("/").pop() || "image")
       .replace(/\.[a-zA-Z0-9]+$/, "")
       .replace(/[^a-zA-Z0-9/_-]/g, "_")
-      .slice(0, 100) || "avatar";
+      .slice(0, 100) || "image";
 
     const signParams: Record<string, string> = {
       folder, public_id: publicIdBase, timestamp,
+      overwrite: "true",
+      invalidate: "true",
+      unique_filename: "false",
+      use_filename: "false",
     };
     const signature = await buildSignedParams(signParams, account.api_secret);
+
+    const isVideo = (file_type || "").startsWith("video/");
+    const resourceType = isVideo ? "video" : "image";
 
     const formData = new URLSearchParams({
       file: parsedUrl.toString(),
@@ -213,10 +220,9 @@ async function handleFetchUrl(supabase: any, body: any) {
       signature,
       ...signParams,
     });
-    if (file_type) formData.append("resource_type", file_type.startsWith("video/") ? "video" : "image");
 
     const res = await fetch(
-      `https://api.cloudinary.com/v1_1/${account.cloud_name}/image/upload`,
+      `https://api.cloudinary.com/v1_1/${account.cloud_name}/${resourceType}/upload`,
       { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: formData }
     );
     const result = await res.json();
