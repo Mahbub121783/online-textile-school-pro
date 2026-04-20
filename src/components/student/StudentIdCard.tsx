@@ -75,7 +75,7 @@ export default function StudentIdCard({ userId }: Props) {
     rollId: targetProfile.roll_id || '—',
     bloodGroup: targetProfile.blood_group || '—',
     dateOfBirth: targetProfile.date_of_birth ? format(new Date(targetProfile.date_of_birth), 'dd MMM yyyy') : '—',
-    address: [targetProfile.district, targetProfile.division].filter(Boolean).join(', ') || '—',
+    address: [targetProfile.upazila, targetProfile.district].filter(Boolean).join(', ') || '—',
     photoUrl: targetProfile.avatar_url || null,
     cardNumber: idCard.card_number,
     validUntil: format(new Date(idCard.valid_until), 'MMMM yyyy'),
