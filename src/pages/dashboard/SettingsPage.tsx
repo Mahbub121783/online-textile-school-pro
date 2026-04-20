@@ -46,8 +46,7 @@ const SettingsPage = () => {
     professional_role: '',
     company_name: '',
     business_type: '',
-    nid_number: '',
-    emergency_contact: '',
+    whatsapp_number: '',
     linkedin_url: '',
     facebook_url: '',
     github_url: '',
@@ -80,8 +79,7 @@ const SettingsPage = () => {
         professional_role: profile.professional_role || '',
         company_name: profile.company_name || '',
         business_type: profile.business_type || '',
-        nid_number: profile.nid_number || '',
-        emergency_contact: profile.emergency_contact || '',
+        whatsapp_number: profile.whatsapp_number || '',
         linkedin_url: profile.linkedin_url || '',
         facebook_url: profile.facebook_url || '',
         github_url: profile.github_url || '',
@@ -304,8 +302,27 @@ const SettingsPage = () => {
             <Input value={user?.email || ''} disabled className="bg-muted" />
           </div>
           <div className="space-y-2">
-            <Label>Phone (WhatsApp)</Label>
+            <Label>Phone</Label>
             <Input value={form.phone} onChange={(e) => update('phone', e.target.value)} placeholder="+880..." />
+          </div>
+          <div className="space-y-2">
+            <Label>WhatsApp Number</Label>
+            <div className="flex gap-2">
+              <Input
+                value={form.whatsapp_number}
+                onChange={(e) => update('whatsapp_number', e.target.value)}
+                placeholder="+880... (include country code)"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => update('whatsapp_number', form.phone)}
+                disabled={!form.phone}
+              >
+                Same as phone
+              </Button>
+            </div>
           </div>
           <div className="space-y-2">
             <Label>Date of Birth</Label>
@@ -324,10 +341,6 @@ const SettingsPage = () => {
               <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
               <SelectContent>{BLOOD_GROUPS.map((b) => <SelectItem key={b} value={b}>{b}</SelectItem>)}</SelectContent>
             </Select>
-          </div>
-          <div className="space-y-2">
-            <Label>National ID (NID)</Label>
-            <Input value={form.nid_number} onChange={(e) => update('nid_number', e.target.value)} placeholder="Optional" />
           </div>
         </div>
       </div>
@@ -461,15 +474,6 @@ const SettingsPage = () => {
             <Label>Personal Website</Label>
             <Input value={form.website_url} onChange={(e) => update('website_url', e.target.value)} placeholder="https://yoursite.com" />
           </div>
-        </div>
-      </div>
-
-      {/* Emergency */}
-      <div className="bg-card border rounded-xl p-6">
-        <h3 className="font-heading font-bold mb-4">Emergency Contact</h3>
-        <div className="space-y-2">
-          <Label>Emergency phone / contact info</Label>
-          <Input value={form.emergency_contact} onChange={(e) => update('emergency_contact', e.target.value)} placeholder="Name & phone of emergency contact" />
         </div>
       </div>
 

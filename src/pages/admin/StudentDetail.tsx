@@ -570,8 +570,7 @@ export default function StudentDetail() {
                 <ProfileField label="Country" value={profile.country} />
                 <ProfileField label="Username" value={profile.username} />
                 <ProfileField label="Gender" value={profile.gender} />
-                <ProfileField label="NID" value={profile.nid_number} />
-                <ProfileField label="Emergency Contact" value={profile.emergency_contact} />
+                <ProfileField label="WhatsApp" value={profile.whatsapp_number} />
               </CardContent>
             </Card>
           </div>

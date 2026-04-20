@@ -5257,7 +5257,6 @@ export type Database = {
           date_of_birth: string | null
           district: string | null
           division: string | null
-          emergency_contact: string | null
           expertise: string[] | null
           facebook_url: string | null
           full_name: string | null
@@ -5274,7 +5273,6 @@ export type Database = {
           location_updated_at: string | null
           longitude: number | null
           name_last_changed_at: string | null
-          nid_number: string | null
           occupation: string | null
           phone: string | null
           preferred_language: string | null
@@ -5290,6 +5288,7 @@ export type Database = {
           username: string | null
           vote_count: number
           website_url: string | null
+          whatsapp_number: string | null
         }
         Insert: {
           avatar_url?: string | null
@@ -5305,7 +5304,6 @@ export type Database = {
           date_of_birth?: string | null
           district?: string | null
           division?: string | null
-          emergency_contact?: string | null
           expertise?: string[] | null
           facebook_url?: string | null
           full_name?: string | null
@@ -5322,7 +5320,6 @@ export type Database = {
           location_updated_at?: string | null
           longitude?: number | null
           name_last_changed_at?: string | null
-          nid_number?: string | null
           occupation?: string | null
           phone?: string | null
           preferred_language?: string | null
@@ -5338,6 +5335,7 @@ export type Database = {
           username?: string | null
           vote_count?: number
           website_url?: string | null
+          whatsapp_number?: string | null
         }
         Update: {
           avatar_url?: string | null
@@ -5353,7 +5351,6 @@ export type Database = {
           date_of_birth?: string | null
           district?: string | null
           division?: string | null
-          emergency_contact?: string | null
           expertise?: string[] | null
           facebook_url?: string | null
           full_name?: string | null
@@ -5370,7 +5367,6 @@ export type Database = {
           location_updated_at?: string | null
           longitude?: number | null
           name_last_changed_at?: string | null
-          nid_number?: string | null
           occupation?: string | null
           phone?: string | null
           preferred_language?: string | null
@@ -5386,6 +5382,7 @@ export type Database = {
           username?: string | null
           vote_count?: number
           website_url?: string | null
+          whatsapp_number?: string | null
         }
         Relationships: [
           {
