@@ -10,16 +10,31 @@ const isCloudinaryUrl = (url?: string | null) =>
 const shouldNormalizeAvatarUrl = (url?: string | null) =>
   !!url && /^https?:\/\//i.test(url) && !isCloudinaryUrl(url);
 
+/**
+ * Google profile thumbnails come at low res by default (e.g. `=s96-c` = 96px).
+ * Upgrade to 400px before importing so the stored Cloudinary copy is sharp.
+ */
+const upgradeRemoteAvatarUrl = (url: string): string => {
+  if (/googleusercontent\.com/.test(url)) {
+    // Replace =s{N}-c (or similar) with =s400-c
+    if (/=s\d+(-c)?/.test(url)) return url.replace(/=s\d+(-c)?/, '=s400-c');
+    // Append size param if missing
+    if (!url.includes('=s')) return `${url}${url.includes('?') ? '&' : '='}s400-c`;
+  }
+  return url;
+};
+
 const normalizeAvatarToCloudinary = async (userId: string, avatarUrl?: string | null) => {
   if (!shouldNormalizeAvatarUrl(avatarUrl) || avatarNormalizationInFlight.has(userId)) return null;
 
   avatarNormalizationInFlight.add(userId);
   try {
     const fileName = `avatar-${userId}`;
+    const upgradedUrl = upgradeRemoteAvatarUrl(avatarUrl as string);
     const { data, error } = await supabase.functions.invoke('cloudinary-proxy', {
       body: {
         action: 'fetch-url',
-        remote_url: avatarUrl,
+        remote_url: upgradedUrl,
         file_name: fileName,
         file_type: 'image/jpeg',
       },
