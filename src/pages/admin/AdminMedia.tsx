@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useFileUpload } from '@/hooks/useFileUpload';
-import { handleImgError } from '@/lib/cloudinaryUrl';
+import { handleImgError, cldImg } from '@/lib/cloudinaryUrl';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
@@ -138,9 +138,11 @@ const AdminMedia = () => {
     if (!files?.length) return;
     setUploading(true);
 
+    const folder = user?.id ? `uploads/${user.id}` : 'uploads';
+
     for (const file of Array.from(files)) {
       try {
-        const result = await fileUpload(file);
+        const result = await fileUpload(file, { folder });
 
         await supabase.from('media_library').upsert({
           file_url: result.url,
@@ -158,6 +160,61 @@ const AdminMedia = () => {
     toast.success('Upload complete');
     setUploading(false);
     e.target.value = '';
+  };
+
+  // ---------- Repair legacy & low-quality (re-import via cloudinary-proxy fetch-url) ----------
+  const [repairing, setRepairing] = useState(false);
+  const [repairProgress, setRepairProgress] = useState({ done: 0, total: 0, failed: 0 });
+  const [repairStop, setRepairStop] = useState(false);
+
+  const needsRepair = (url: string) => {
+    if (!url) return false;
+    // Legacy Supabase Storage rows
+    if (url.includes('/storage/v1/object/public/')) return true;
+    // Cloudinary URL with no transform segment in /upload/
+    if (/res\.cloudinary\.com\/[^/]+\/(image|video)\/upload\/v\d+\//.test(url)) return true;
+    return false;
+  };
+
+  const runRepair = async () => {
+    if (!confirm('Re-import legacy and low-quality images into Cloudinary with proper folders & transforms? This may take a while.')) return;
+    setRepairing(true);
+    setRepairStop(false);
+    setRepairProgress({ done: 0, total: 0, failed: 0 });
+
+    const { data: rows } = await supabase
+      .from('media_library')
+      .select('id, file_url, file_name, file_type, uploaded_by')
+      .order('created_at', { ascending: false });
+
+    const targets = (rows || []).filter((r: any) => (r.file_type || '').startsWith('image/') && needsRepair(r.file_url));
+    setRepairProgress({ done: 0, total: targets.length, failed: 0 });
+
+    for (const row of targets) {
+      if (repairStop) break;
+      try {
+        const folder = row.uploaded_by ? `uploads/${row.uploaded_by}` : 'uploads';
+        const { data, error } = await supabase.functions.invoke('cloudinary-proxy', {
+          body: {
+            action: 'fetch-url',
+            remote_url: row.file_url,
+            file_name: row.file_name,
+            file_type: row.file_type,
+            folder,
+          },
+        });
+        if (error || data?.error || !data?.url) throw new Error(data?.error || error?.message || 'fetch-url failed');
+
+        await supabase.from('media_library').update({ file_url: data.url }).eq('id', row.id);
+        setRepairProgress((p) => ({ ...p, done: p.done + 1 }));
+      } catch {
+        setRepairProgress((p) => ({ ...p, done: p.done + 1, failed: p.failed + 1 }));
+      }
+    }
+
+    setRepairing(false);
+    queryClient.invalidateQueries({ queryKey: ['admin-media'] });
+    toast.success('Repair finished');
   };
 
   const copyUrl = (url: string) => {
