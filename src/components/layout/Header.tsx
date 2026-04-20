@@ -134,6 +134,10 @@ const Header = () => {
             <Link to="/ebooks" className="px-3 py-2 text-sm font-medium text-foreground hover:text-primary transition-colors rounded-md">
               eBooks
             </Link>
+
+            <Link to="/register" className="px-3 py-2 text-sm font-medium text-foreground hover:text-primary transition-colors rounded-md">
+              Registration
+            </Link>
           </nav>
 
           {/* Search */}
@@ -340,6 +344,7 @@ const Header = () => {
               { label: 'Courses', href: '/courses' },
               { label: 'Learning Paths', href: '/learning-paths' },
               { label: 'eBooks', href: '/ebooks' },
+              { label: 'Registration', href: '/register' },
               { label: 'Events', href: '/events' },
               { label: 'Workshops', href: '/workshops' },
               { label: 'Blog', href: '/blog' },
