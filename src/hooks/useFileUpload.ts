@@ -58,25 +58,38 @@ interface UploadResult {
   fileKey?: string;
 }
 
+interface UploadOptions {
+  forceR2?: boolean;
+  /** Cloudinary public_id (without folder). Folder will be prepended. */
+  publicId?: string;
+  /** Cloudinary folder, e.g. `uploads/{user_id}` or `content/course/{slug}`. */
+  folder?: string;
+  /** Allow overwriting existing public_id. Default true. */
+  overwrite?: boolean;
+}
+
 export function useFileUpload() {
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
   const cloudinary = useCloudinaryUpload();
 
-  const upload = async (file: File, options?: { forceR2?: boolean }): Promise<UploadResult> => {
+  const upload = async (file: File, options?: UploadOptions): Promise<UploadResult> => {
     setUploading(true);
     setProgress(0);
 
     try {
       // HARD RULE: Supabase Storage is NEVER used. Images→Cloudinary, all else→R2.
-      // forceR2 bypasses image detection — always goes to R2
       if (options?.forceR2) {
         return await uploadToR2Reliable(file);
       }
 
       // Route: images → Cloudinary (any size, for f_auto/q_auto optimization)
       if (isImageFile(file) && !isHeavyFile(file)) {
-        const result = await cloudinary.upload(file);
+        const result = await cloudinary.upload(file, {
+          publicId: options?.publicId,
+          folder: options?.folder,
+          overwrite: options?.overwrite,
+        });
         setProgress(100);
         return {
           url: result.url,
@@ -98,15 +111,11 @@ export function useFileUpload() {
 
   /**
    * Reliable R2 upload: uses chunked server-side proxy for ALL sizes.
-   * This avoids browser CORS dependency entirely.
    */
   const uploadToR2Reliable = async (file: File): Promise<UploadResult> => {
-    // For files under 4.5MB, single proxy upload
     if (file.size <= PROXY_UPLOAD_MAX_BYTES) {
       return await uploadToR2Proxy(file);
     }
-
-    // For larger files, use chunked proxy upload
     return await uploadToR2Chunked(file);
   };
 
@@ -144,15 +153,9 @@ export function useFileUpload() {
     };
   };
 
-  /**
-   * Chunked proxy upload: splits file into chunks and uploads each
-   * through the edge function, then assembles on R2.
-   * This bypasses both the 4.5MB edge function limit AND browser CORS.
-   */
   const uploadToR2Chunked = async (file: File): Promise<UploadResult> => {
     setProgress(2);
 
-    // Step 1: Initialize chunked upload
     const { data: initData, error: initError } = await supabase.functions.invoke('r2-presign', {
       body: {
         action: 'chunked-init',
@@ -171,7 +174,6 @@ export function useFileUpload() {
     const { uploadId, fileKey, accountId } = initData;
     setProgress(5);
 
-    // Step 2: Upload chunks
     const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
     for (let i = 0; i < totalChunks; i++) {
       const start = i * CHUNK_SIZE;
@@ -201,7 +203,6 @@ export function useFileUpload() {
       setProgress(pct);
     }
 
-    // Step 3: Finalize chunked upload
     const { data: finalData, error: finalError } = await supabase.functions.invoke('r2-presign', {
       body: {
         action: 'chunked-complete',

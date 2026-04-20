@@ -15,6 +15,7 @@ import { Progress } from '@/components/ui/progress';
 import { useProfileCompleteness } from '@/hooks/useProfileCompleteness';
 import { useCloudinaryUpload } from '@/hooks/useCloudinaryUpload';
 import LocationCapture from '@/components/LocationCapture';
+import { cldImg } from '@/lib/cloudinaryUrl';
 
 const ROLE_OPTIONS = [
   { value: 'student', label: 'Student' },
@@ -255,7 +256,7 @@ const SettingsPage = () => {
           <div className="relative group">
             <div className="w-20 h-20 rounded-full bg-muted flex items-center justify-center overflow-hidden border-2 border-border">
               {profile?.avatar_url ? (
-                <img src={profile.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
+                <img src={cldImg(profile.avatar_url, { w: 200, c: 'fill', g: 'face' })} alt="Avatar" className="w-full h-full object-cover" />
               ) : (
                 <span className="text-2xl font-heading font-bold text-muted-foreground">
                   {profile?.full_name?.[0]?.toUpperCase() || 'U'}

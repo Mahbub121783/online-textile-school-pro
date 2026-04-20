@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useFileUpload } from '@/hooks/useFileUpload';
-import { handleImgError } from '@/lib/cloudinaryUrl';
+import { handleImgError, cldImg } from '@/lib/cloudinaryUrl';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
@@ -138,9 +138,11 @@ const AdminMedia = () => {
     if (!files?.length) return;
     setUploading(true);
 
+    const folder = user?.id ? `uploads/${user.id}` : 'uploads';
+
     for (const file of Array.from(files)) {
       try {
-        const result = await fileUpload(file);
+        const result = await fileUpload(file, { folder });
 
         await supabase.from('media_library').upsert({
           file_url: result.url,
@@ -158,6 +160,61 @@ const AdminMedia = () => {
     toast.success('Upload complete');
     setUploading(false);
     e.target.value = '';
+  };
+
+  // ---------- Repair legacy & low-quality (re-import via cloudinary-proxy fetch-url) ----------
+  const [repairing, setRepairing] = useState(false);
+  const [repairProgress, setRepairProgress] = useState({ done: 0, total: 0, failed: 0 });
+  const [repairStop, setRepairStop] = useState(false);
+
+  const needsRepair = (url: string) => {
+    if (!url) return false;
+    // Legacy Supabase Storage rows
+    if (url.includes('/storage/v1/object/public/')) return true;
+    // Cloudinary URL with no transform segment in /upload/
+    if (/res\.cloudinary\.com\/[^/]+\/(image|video)\/upload\/v\d+\//.test(url)) return true;
+    return false;
+  };
+
+  const runRepair = async () => {
+    if (!confirm('Re-import legacy and low-quality images into Cloudinary with proper folders & transforms? This may take a while.')) return;
+    setRepairing(true);
+    setRepairStop(false);
+    setRepairProgress({ done: 0, total: 0, failed: 0 });
+
+    const { data: rows } = await supabase
+      .from('media_library')
+      .select('id, file_url, file_name, file_type, uploaded_by')
+      .order('created_at', { ascending: false });
+
+    const targets = (rows || []).filter((r: any) => (r.file_type || '').startsWith('image/') && needsRepair(r.file_url));
+    setRepairProgress({ done: 0, total: targets.length, failed: 0 });
+
+    for (const row of targets) {
+      if (repairStop) break;
+      try {
+        const folder = row.uploaded_by ? `uploads/${row.uploaded_by}` : 'uploads';
+        const { data, error } = await supabase.functions.invoke('cloudinary-proxy', {
+          body: {
+            action: 'fetch-url',
+            remote_url: row.file_url,
+            file_name: row.file_name,
+            file_type: row.file_type,
+            folder,
+          },
+        });
+        if (error || data?.error || !data?.url) throw new Error(data?.error || error?.message || 'fetch-url failed');
+
+        await supabase.from('media_library').update({ file_url: data.url }).eq('id', row.id);
+        setRepairProgress((p) => ({ ...p, done: p.done + 1 }));
+      } catch {
+        setRepairProgress((p) => ({ ...p, done: p.done + 1, failed: p.failed + 1 }));
+      }
+    }
+
+    setRepairing(false);
+    queryClient.invalidateQueries({ queryKey: ['admin-media'] });
+    toast.success('Repair finished');
   };
 
   const copyUrl = (url: string) => {
@@ -187,6 +244,13 @@ const AdminMedia = () => {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h2 className="font-heading text-2xl font-bold">Media Library</h2>
         <div className="flex gap-2 flex-wrap">
+          <Button variant="outline" onClick={runRepair} disabled={repairing || uploading}>
+            {repairing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <CloudUpload className="h-4 w-4 mr-2" />}
+            {repairing ? `Repairing ${repairProgress.done}/${repairProgress.total}…` : 'Repair legacy & low-quality'}
+          </Button>
+          {repairing && (
+            <Button variant="destructive" size="sm" onClick={() => setRepairStop(true)}>Stop</Button>
+          )}
           <label>
             <input type="file" multiple accept="image/*,video/*,.pdf,.doc,.docx" className="hidden" onChange={handleUpload} />
             <Button asChild disabled={uploading}>
@@ -273,9 +337,9 @@ const AdminMedia = () => {
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
           {filtered.map((item: any) => (
             <Card key={item.id} className="overflow-hidden cursor-pointer hover:ring-2 ring-primary transition-all" onClick={() => setSelectedMedia(item)}>
-              <div className="aspect-square bg-muted flex items-center justify-center">
+              <div className="aspect-square bg-muted/30 flex items-center justify-center">
                 {isImage(item.file_type) ? (
-                  <img src={item.file_url} alt={item.alt_text || item.file_name} className="w-full h-full object-cover" onError={(e) => handleImgError(e)} />
+                  <img src={cldImg(item.file_url, { w: 320, c: 'fill', g: 'auto' })} alt={item.alt_text || item.file_name} className="w-full h-full object-contain" loading="lazy" onError={(e) => handleImgError(e)} />
                 ) : (
                   <div className="flex flex-col items-center gap-2 text-muted-foreground">
                     <File className="h-10 w-10" />
@@ -303,7 +367,7 @@ const AdminMedia = () => {
             <div key={item.id} className="flex items-center gap-3 bg-card border rounded-lg p-3 cursor-pointer hover:bg-muted/50" onClick={() => setSelectedMedia(item)}>
               <div className="w-12 h-12 bg-muted rounded flex items-center justify-center shrink-0">
                 {isImage(item.file_type) ? (
-                  <img src={item.file_url} alt="" className="w-full h-full object-cover rounded" onError={(e) => handleImgError(e)} />
+                  <img src={cldImg(item.file_url, { w: 96, c: 'fill', g: 'auto' })} alt="" className="w-full h-full object-cover rounded" loading="lazy" onError={(e) => handleImgError(e)} />
                 ) : (
                   <div className="flex flex-col items-center gap-1 text-muted-foreground">
                     <File className="h-5 w-5" />
@@ -327,7 +391,7 @@ const AdminMedia = () => {
           {selectedMedia && (
             <div className="space-y-4">
               {isImage(selectedMedia.file_type) && (
-                <img src={selectedMedia.file_url} alt="" className="w-full rounded-lg max-h-64 object-contain bg-muted" onError={(e) => handleImgError(e)} />
+                <img src={cldImg(selectedMedia.file_url, { w: 1200, c: 'limit' })} alt="" className="w-full rounded-lg max-h-64 object-contain bg-muted" onError={(e) => handleImgError(e)} />
               )}
               {!isImage(selectedMedia.file_type) && (
                 <div className="flex min-h-48 flex-col items-center justify-center rounded-lg border border-dashed bg-muted/30 p-6 text-center">

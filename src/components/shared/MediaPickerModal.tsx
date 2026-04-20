@@ -10,7 +10,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useFileUpload } from '@/hooks/useFileUpload';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
-import { handleImgError } from '@/lib/cloudinaryUrl';
+import { handleImgError, cldImg } from '@/lib/cloudinaryUrl';
 import { useRef } from 'react';
 
 type MediaItem = {
@@ -66,7 +66,8 @@ const MediaPickerModal = ({ open, onClose, onSelect, accept }: MediaPickerModalP
 
   const handleUpload = async (file: File) => {
     try {
-      const result = await upload(file);
+      const folder = user?.id ? `uploads/${user.id}` : 'uploads';
+      const result = await upload(file, { folder });
       // Save to media_library
       await supabase.from('media_library').upsert({
         file_url: result.url,
@@ -222,9 +223,10 @@ const MediaPickerModal = ({ open, onClose, onSelect, accept }: MediaPickerModalP
                     >
                       {isImage(item.file_type) ? (
                         <img
-                          src={item.file_url}
+                          src={cldImg(item.file_url, { w: 240, c: 'fill', g: 'auto' })}
                           alt={item.file_name}
                           className="w-full h-full object-cover"
+                          loading="lazy"
                           onError={(e) => handleImgError(e)}
                         />
                       ) : (

@@ -3,7 +3,7 @@ import { Upload, X, Loader2, Library } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { useFileUpload } from '@/hooks/useFileUpload';
-import { handleImgError } from '@/lib/cloudinaryUrl';
+import { handleImgError, cldImg } from '@/lib/cloudinaryUrl';
 import { Progress } from '@/components/ui/progress';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -27,7 +27,8 @@ const MediaUploader = ({ value, onChange, accept = 'image/*', label = 'Upload Im
 
   const handleUpload = async (file: File) => {
     try {
-      const result = await upload(file);
+      const folder = user?.id ? `uploads/${user.id}` : 'uploads';
+      const result = await upload(file, { folder });
       onChange(result.url);
       if (result.fallbackUrl) setFallbackUrl(result.fallbackUrl);
 
@@ -63,7 +64,7 @@ const MediaUploader = ({ value, onChange, accept = 'image/*', label = 'Upload Im
       <div className="relative rounded-lg overflow-hidden border bg-muted/20">
         {accept.startsWith('image') ? (
           <img
-            src={value}
+            src={cldImg(value, { w: 800, c: 'limit' })}
             alt="Preview"
             className="w-full object-cover"
             style={{ aspectRatio: aspectRatio || '16/9' }}
