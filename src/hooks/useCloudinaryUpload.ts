@@ -10,17 +10,19 @@ interface UploadResult {
   accountId?: string;
 }
 
+interface UploadOptions {
+  publicId?: string;
+  folder?: string;
+  overwrite?: boolean;
+}
+
 export function useCloudinaryUpload() {
   const [uploading, setUploading] = useState(false);
 
   const invokeUpload = async (body: Record<string, unknown>): Promise<UploadResult> => {
-    const { data, error } = await supabase.functions.invoke('cloudinary-proxy', {
-      body,
-    });
-
+    const { data, error } = await supabase.functions.invoke('cloudinary-proxy', { body });
     if (error) throw new Error(error.message || 'Upload failed');
     if (data?.error) throw new Error(data.error);
-
     return {
       url: data.url,
       publicId: data.publicId,
@@ -40,16 +42,18 @@ export function useCloudinaryUpload() {
     reader.readAsDataURL(file);
   });
 
-  const upload = async (file: File): Promise<UploadResult> => {
+  const upload = async (file: File, options?: UploadOptions): Promise<UploadResult> => {
     setUploading(true);
     try {
       const base64 = await fileToBase64(file);
-
       return await invokeUpload({
         action: 'upload',
         file_base64: base64,
         file_name: file.name,
         file_type: file.type,
+        public_id: options?.publicId,
+        folder: options?.folder,
+        overwrite: options?.overwrite,
       });
     } catch (err: any) {
       toast.error('Upload failed: ' + (err.message || 'Unknown error'));
