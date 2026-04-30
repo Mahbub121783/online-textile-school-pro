@@ -41,7 +41,7 @@ function loadCachedMessages(): AiMsg[] {
   } catch { return []; }
 }
 
-const AiTutorTab = ({ user }: { user: any }) => {
+const AiTutorTab = ({ user, headerActions }: { user: any; headerActions?: React.ReactNode }) => {
   const [messages, setMessages] = useState<AiMsg[]>(loadCachedMessages);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
