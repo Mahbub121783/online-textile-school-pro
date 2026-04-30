@@ -163,9 +163,12 @@ const AiTutorTab = ({ user, headerActions }: { user: any; headerActions?: React.
             <span className="text-[10px] text-emerald-100">Textile Engineering Expert</span>
           </div>
         </div>
-        <button onClick={() => { setMessages([]); localStorage.removeItem(AI_SESSION_KEY); localStorage.removeItem(AI_SESSION_TS_KEY); }} className="p-1 hover:bg-white/20 rounded-lg transition" title="Clear chat">
-          <Trash2 className="h-3.5 w-3.5" />
-        </button>
+        <div className="flex items-center gap-1">
+          <button onClick={() => { setMessages([]); localStorage.removeItem(AI_SESSION_KEY); localStorage.removeItem(AI_SESSION_TS_KEY); }} className="p-1.5 hover:bg-white/20 rounded-lg transition" title="Clear chat" aria-label="Clear chat">
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+          {headerActions}
+        </div>
       </div>
 
       {/* Messages */}
