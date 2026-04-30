@@ -208,28 +208,45 @@ const AiTutorTab = ({ user, headerActions }: { user: any; headerActions?: React.
             </div>
           </div>
         )}
-        {messages.map((msg, i) => (
-          <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} gap-1.5`}>
-            {msg.role === 'assistant' && (
-              <div className="w-5 h-5 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shrink-0 mt-1">
-                <Bot className="h-3 w-3 text-white" />
-              </div>
-            )}
-            <div className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm ${
-              msg.role === 'user'
-                ? 'bg-primary text-primary-foreground rounded-br-md'
-                : 'bg-muted rounded-bl-md'
-            }`}>
-              {msg.role === 'assistant' ? (
-                <div className="prose prose-sm dark:prose-invert max-w-none [&>p]:mb-1 [&>p:last-child]:mb-0 [&>ul]:my-1 [&>ol]:my-1 [&>h3]:text-sm [&>h3]:font-semibold [&>h3]:mt-2 text-xs">
-                  <ReactMarkdown>{msg.content}</ReactMarkdown>
+        {messages.map((msg, i) => {
+          const isLastAssistant = msg.role === 'assistant' && i === messages.length - 1 && !loading;
+          return (
+            <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} gap-1.5 group`}>
+              {msg.role === 'assistant' && (
+                <div className="w-5 h-5 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shrink-0 mt-1">
+                  <Bot className="h-3 w-3 text-white" />
                 </div>
-              ) : (
-                <p className="text-xs">{msg.content}</p>
               )}
+              <div className="max-w-[80%]">
+                <div className={`rounded-2xl px-3 py-2 text-sm ${
+                  msg.role === 'user'
+                    ? 'bg-primary text-primary-foreground rounded-br-md'
+                    : 'bg-muted rounded-bl-md'
+                }`}>
+                  {msg.role === 'assistant' ? (
+                    <div className="prose prose-sm dark:prose-invert max-w-none [&>p]:mb-1 [&>p:last-child]:mb-0 [&>ul]:my-1 [&>ol]:my-1 [&>h3]:text-sm [&>h3]:font-semibold [&>h3]:mt-2 text-xs">
+                      <ReactMarkdown>{msg.content}</ReactMarkdown>
+                    </div>
+                  ) : (
+                    <p className="text-xs">{msg.content}</p>
+                  )}
+                </div>
+                {msg.role === 'assistant' && msg.content && (
+                  <div className="flex gap-1 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button onClick={() => copyToClipboard(msg.content)} className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-0.5" title="Copy">
+                      <Copy className="h-3 w-3" /> Copy
+                    </button>
+                    {isLastAssistant && (
+                      <button onClick={regenerate} className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-0.5" title="Regenerate">
+                        <RotateCcw className="h-3 w-3" /> Regenerate
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
         {loading && messages[messages.length - 1]?.role === 'user' && (
           <div className="flex justify-start gap-1.5">
             <div className="w-5 h-5 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shrink-0">
