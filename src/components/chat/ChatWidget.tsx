@@ -1064,10 +1064,19 @@ const ChatWidget = () => {
                       ) : (
                         <ScrollArea className="h-full">
                           <div className="p-2">
-                            {conversations.length === 0 ? (
-                              <p className="text-center text-sm text-muted-foreground py-8">No conversations yet. Search for users to connect!</p>
-                            ) : (
-                              conversations.map((conv: any) => (
+                            {(() => {
+                              const filtered = search.trim()
+                                ? conversations.filter((c: any) =>
+                                    (c.name || '').toLowerCase().includes(search.toLowerCase()) ||
+                                    (c.lastMessage || '').toLowerCase().includes(search.toLowerCase()))
+                                : conversations;
+                              if (conversations.length === 0) {
+                                return <p className="text-center text-sm text-muted-foreground py-8">No conversations yet. Search for users to connect!</p>;
+                              }
+                              if (filtered.length === 0) {
+                                return <p className="text-center text-sm text-muted-foreground py-8">No conversations match "{search}".</p>;
+                              }
+                              return filtered.map((conv: any) => (
                                 <button
                                   key={conv.userId}
                                   onClick={() => setSelectedUser(conv)}
