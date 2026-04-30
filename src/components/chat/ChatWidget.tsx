@@ -349,8 +349,70 @@ const ChatWidget = () => {
   const handlePointerUp = useCallback(() => {
     setIsDragging(false);
     dragStartRef.current = null;
-    localStorage.setItem('chat_bubble_pos', JSON.stringify(bubblePos));
+    // Snap to nearest left/right edge
+    const snapX = bubblePos.x + 28 < window.innerWidth / 2 ? 8 : window.innerWidth - 64;
+    const snapped = { x: snapX, y: bubblePos.y };
+    setBubblePos(snapped);
+    localStorage.setItem('chat_bubble_pos', JSON.stringify(snapped));
   }, [bubblePos]);
+
+  // ── Esc to minimize ──
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (selectedUser) setSelectedUser(null);
+        else setOpen(false);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, selectedUser]);
+
+  // ── Draft persistence per conversation ──
+  useEffect(() => {
+    if (!selectedUser?.userId) return;
+    try {
+      const draft = localStorage.getItem(`chat_draft_${selectedUser.userId}`) || '';
+      setMessage(draft);
+    } catch {}
+  }, [selectedUser?.userId]);
+
+  useEffect(() => {
+    if (!selectedUser?.userId) return;
+    try {
+      if (message) localStorage.setItem(`chat_draft_${selectedUser.userId}`, message);
+      else localStorage.removeItem(`chat_draft_${selectedUser.userId}`);
+    } catch {}
+  }, [message, selectedUser?.userId]);
+
+  // ── Notification sound on new incoming message while closed ──
+  const lastNotifiedRef = useRef<number>(Date.now());
+  useEffect(() => {
+    if (!user?.id) return;
+    const ch = supabase.channel(`chat-notify-${user.id}-${Date.now()}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages', filter: `receiver_id=eq.${user.id}` }, (payload: any) => {
+        if (open && selectedUser?.userId === payload.new?.sender_id) return; // already viewing
+        const ts = new Date(payload.new?.created_at || Date.now()).getTime();
+        if (ts <= lastNotifiedRef.current) return;
+        lastNotifiedRef.current = ts;
+        try {
+          // Soft chime via WebAudio (no asset needed)
+          const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+          const o = ctx.createOscillator();
+          const g = ctx.createGain();
+          o.frequency.value = 880;
+          g.gain.value = 0.05;
+          o.connect(g); g.connect(ctx.destination);
+          o.start();
+          o.frequency.exponentialRampToValueAtTime(660, ctx.currentTime + 0.18);
+          g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
+          o.stop(ctx.currentTime + 0.26);
+        } catch {}
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [user?.id, open, selectedUser?.userId]);
 
   // ── Presence & Typing Channel ──
   useEffect(() => {
