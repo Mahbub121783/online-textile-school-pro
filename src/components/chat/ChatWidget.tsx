@@ -4,7 +4,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import {
   MessageCircle, X, Send, ArrowLeft, UserPlus, Check, XIcon,
-  Ban, Trash2, Inbox, MessageSquare, Clock, Bot, Loader2, Sparkles, LogIn
+  Ban, Trash2, Inbox, MessageSquare, Clock, Bot, Loader2, Sparkles, LogIn,
+  Minus, Maximize2, Minimize2, Copy, RotateCcw,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -40,7 +41,7 @@ function loadCachedMessages(): AiMsg[] {
   } catch { return []; }
 }
 
-const AiTutorTab = ({ user }: { user: any }) => {
+const AiTutorTab = ({ user, headerActions }: { user: any; headerActions?: React.ReactNode }) => {
   const [messages, setMessages] = useState<AiMsg[]>(loadCachedMessages);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -65,18 +66,9 @@ const AiTutorTab = ({ user }: { user: any }) => {
     inputRef.current?.focus();
   }, []);
 
-  const sendMessage = async () => {
-    const text = input.trim();
-    if (!text || loading) return;
-
-    const userMsg: AiMsg = { role: 'user', content: text };
-    const allMessages = [...messages, userMsg];
-    setMessages(allMessages);
-    setInput('');
+  const streamReply = async (allMessages: AiMsg[]) => {
     setLoading(true);
-
     let assistantSoFar = '';
-
     try {
       const resp = await fetch(AI_TUTOR_URL, {
         method: 'POST',
@@ -142,6 +134,30 @@ const AiTutorTab = ({ user }: { user: any }) => {
     setLoading(false);
   };
 
+  const sendMessage = async () => {
+    const text = input.trim();
+    if (!text || loading) return;
+    const userMsg: AiMsg = { role: 'user', content: text };
+    const allMessages = [...messages, userMsg];
+    setMessages(allMessages);
+    setInput('');
+    await streamReply(allMessages);
+  };
+
+  const regenerate = async () => {
+    if (loading) return;
+    // Drop trailing assistant messages, regenerate from last user
+    let trimmed = [...messages];
+    while (trimmed.length && trimmed[trimmed.length - 1].role === 'assistant') trimmed.pop();
+    if (!trimmed.length) return;
+    setMessages(trimmed);
+    await streamReply(trimmed);
+  };
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard?.writeText(text).catch(() => {});
+  };
+
   const quickPrompts = [
     "What is GSM in textiles?",
     "Explain ring spinning",
@@ -162,9 +178,12 @@ const AiTutorTab = ({ user }: { user: any }) => {
             <span className="text-[10px] text-emerald-100">Textile Engineering Expert</span>
           </div>
         </div>
-        <button onClick={() => { setMessages([]); localStorage.removeItem(AI_SESSION_KEY); localStorage.removeItem(AI_SESSION_TS_KEY); }} className="p-1 hover:bg-white/20 rounded-lg transition" title="Clear chat">
-          <Trash2 className="h-3.5 w-3.5" />
-        </button>
+        <div className="flex items-center gap-1">
+          <button onClick={() => { setMessages([]); localStorage.removeItem(AI_SESSION_KEY); localStorage.removeItem(AI_SESSION_TS_KEY); }} className="p-1.5 hover:bg-white/20 rounded-lg transition" title="Clear chat" aria-label="Clear chat">
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+          {headerActions}
+        </div>
       </div>
 
       {/* Messages */}
@@ -189,28 +208,45 @@ const AiTutorTab = ({ user }: { user: any }) => {
             </div>
           </div>
         )}
-        {messages.map((msg, i) => (
-          <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} gap-1.5`}>
-            {msg.role === 'assistant' && (
-              <div className="w-5 h-5 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shrink-0 mt-1">
-                <Bot className="h-3 w-3 text-white" />
-              </div>
-            )}
-            <div className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm ${
-              msg.role === 'user'
-                ? 'bg-primary text-primary-foreground rounded-br-md'
-                : 'bg-muted rounded-bl-md'
-            }`}>
-              {msg.role === 'assistant' ? (
-                <div className="prose prose-sm dark:prose-invert max-w-none [&>p]:mb-1 [&>p:last-child]:mb-0 [&>ul]:my-1 [&>ol]:my-1 [&>h3]:text-sm [&>h3]:font-semibold [&>h3]:mt-2 text-xs">
-                  <ReactMarkdown>{msg.content}</ReactMarkdown>
+        {messages.map((msg, i) => {
+          const isLastAssistant = msg.role === 'assistant' && i === messages.length - 1 && !loading;
+          return (
+            <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} gap-1.5 group`}>
+              {msg.role === 'assistant' && (
+                <div className="w-5 h-5 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shrink-0 mt-1">
+                  <Bot className="h-3 w-3 text-white" />
                 </div>
-              ) : (
-                <p className="text-xs">{msg.content}</p>
               )}
+              <div className="max-w-[80%]">
+                <div className={`rounded-2xl px-3 py-2 text-sm ${
+                  msg.role === 'user'
+                    ? 'bg-primary text-primary-foreground rounded-br-md'
+                    : 'bg-muted rounded-bl-md'
+                }`}>
+                  {msg.role === 'assistant' ? (
+                    <div className="prose prose-sm dark:prose-invert max-w-none [&>p]:mb-1 [&>p:last-child]:mb-0 [&>ul]:my-1 [&>ol]:my-1 [&>h3]:text-sm [&>h3]:font-semibold [&>h3]:mt-2 text-xs">
+                      <ReactMarkdown>{msg.content}</ReactMarkdown>
+                    </div>
+                  ) : (
+                    <p className="text-xs">{msg.content}</p>
+                  )}
+                </div>
+                {msg.role === 'assistant' && msg.content && (
+                  <div className="flex gap-1 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button onClick={() => copyToClipboard(msg.content)} className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-0.5" title="Copy">
+                      <Copy className="h-3 w-3" /> Copy
+                    </button>
+                    {isLastAssistant && (
+                      <button onClick={regenerate} className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-0.5" title="Regenerate">
+                        <RotateCcw className="h-3 w-3" /> Regenerate
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
         {loading && messages[messages.length - 1]?.role === 'user' && (
           <div className="flex justify-start gap-1.5">
             <div className="w-5 h-5 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shrink-0">
@@ -266,6 +302,10 @@ const ChatWidget = () => {
   const { user } = useAuth();
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
+  const [dismissed, setDismissed] = useState(() => {
+    try { return sessionStorage.getItem('chat_widget_dismissed') === '1'; } catch { return false; }
+  });
+  const [fullscreen, setFullscreen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const [message, setMessage] = useState('');
   const [search, setSearch] = useState('');
@@ -309,8 +349,70 @@ const ChatWidget = () => {
   const handlePointerUp = useCallback(() => {
     setIsDragging(false);
     dragStartRef.current = null;
-    localStorage.setItem('chat_bubble_pos', JSON.stringify(bubblePos));
+    // Snap to nearest left/right edge
+    const snapX = bubblePos.x + 28 < window.innerWidth / 2 ? 8 : window.innerWidth - 64;
+    const snapped = { x: snapX, y: bubblePos.y };
+    setBubblePos(snapped);
+    localStorage.setItem('chat_bubble_pos', JSON.stringify(snapped));
   }, [bubblePos]);
+
+  // ── Esc to minimize ──
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (selectedUser) setSelectedUser(null);
+        else setOpen(false);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, selectedUser]);
+
+  // ── Draft persistence per conversation ──
+  useEffect(() => {
+    if (!selectedUser?.userId) return;
+    try {
+      const draft = localStorage.getItem(`chat_draft_${selectedUser.userId}`) || '';
+      setMessage(draft);
+    } catch {}
+  }, [selectedUser?.userId]);
+
+  useEffect(() => {
+    if (!selectedUser?.userId) return;
+    try {
+      if (message) localStorage.setItem(`chat_draft_${selectedUser.userId}`, message);
+      else localStorage.removeItem(`chat_draft_${selectedUser.userId}`);
+    } catch {}
+  }, [message, selectedUser?.userId]);
+
+  // ── Notification sound on new incoming message while closed ──
+  const lastNotifiedRef = useRef<number>(Date.now());
+  useEffect(() => {
+    if (!user?.id) return;
+    const ch = supabase.channel(`chat-notify-${user.id}-${Date.now()}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages', filter: `receiver_id=eq.${user.id}` }, (payload: any) => {
+        if (open && selectedUser?.userId === payload.new?.sender_id) return; // already viewing
+        const ts = new Date(payload.new?.created_at || Date.now()).getTime();
+        if (ts <= lastNotifiedRef.current) return;
+        lastNotifiedRef.current = ts;
+        try {
+          // Soft chime via WebAudio (no asset needed)
+          const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+          const o = ctx.createOscillator();
+          const g = ctx.createGain();
+          o.frequency.value = 880;
+          g.gain.value = 0.05;
+          o.connect(g); g.connect(ctx.destination);
+          o.start();
+          o.frequency.exponentialRampToValueAtTime(660, ctx.currentTime + 0.18);
+          g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
+          o.stop(ctx.currentTime + 0.26);
+        } catch {}
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [user?.id, open, selectedUser?.userId]);
 
   // ── Presence & Typing Channel ──
   useEffect(() => {
@@ -648,42 +750,95 @@ const ChatWidget = () => {
 
   const totalUnread = conversations.reduce((sum: number, c: any) => sum + (c.unread || 0), 0);
   const pendingCount = chatRequests.incoming.length;
+  const anyOnline = onlineUsers.size > 0;
+
+  const minimizeChat = () => setOpen(false);
+  const closeChat = () => {
+    setOpen(false);
+    setDismissed(true);
+    try { sessionStorage.setItem('chat_widget_dismissed', '1'); } catch {}
+  };
+  const reopenChat = () => {
+    setDismissed(false);
+    try { sessionStorage.removeItem('chat_widget_dismissed'); } catch {}
+    setOpen(true);
+  };
+
+  // Reusable header control cluster (minimize / fullscreen / close)
+  const ControlCluster = ({ tone = 'default' }: { tone?: 'default' | 'light' }) => {
+    const baseBtn = tone === 'light'
+      ? 'p-1.5 hover:bg-white/20 rounded-lg transition text-white'
+      : 'p-1.5 hover:bg-muted rounded-lg transition text-muted-foreground hover:text-foreground';
+    return (
+      <div className="flex items-center gap-0.5">
+        <button onClick={() => setFullscreen(f => !f)} className={`${baseBtn} hidden sm:inline-flex`} title={fullscreen ? 'Exit fullscreen' : 'Expand'} aria-label={fullscreen ? 'Exit fullscreen' : 'Expand'}>
+          {fullscreen ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+        </button>
+        <button onClick={minimizeChat} className={baseBtn} title="Minimize" aria-label="Minimize">
+          <Minus className="h-4 w-4" />
+        </button>
+        <button onClick={closeChat} className={baseBtn} title="Close" aria-label="Close">
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+    );
+  };
 
   return (
     <>
+      {/* Reopen pill when fully dismissed */}
+      {dismissed && !open && (
+        <button
+          onClick={reopenChat}
+          className="fixed z-[9999] bottom-4 right-4 h-10 px-3 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 text-white text-xs font-medium shadow-lg hover:shadow-xl flex items-center gap-1.5"
+          aria-label="Show chat"
+        >
+          <MessageCircle className="h-4 w-4" /> Chat
+        </button>
+      )}
+
       {/* Floating bubble — draggable, semi-transparent */}
-      <button
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onClick={() => { if (!didDragRef.current) setOpen(!open); }}
-        className="fixed z-[9999] h-14 w-14 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-lg hover:shadow-2xl transition-shadow flex items-center justify-center touch-none select-none"
-        style={{
-          left: bubblePos.x,
-          top: bubblePos.y,
-          opacity: isDragging ? 0.9 : 0.6,
-          cursor: isDragging ? 'grabbing' : 'grab',
-        }}
-      >
-        {open ? <X className="h-6 w-6" /> : <MessageCircle className="h-6 w-6" />}
-        {!open && (totalUnread + pendingCount) > 0 && (
-          <span className="absolute -top-1 -right-1 h-5 w-5 bg-destructive text-destructive-foreground text-xs rounded-full flex items-center justify-center opacity-100">
-            {totalUnread + pendingCount}
-          </span>
-        )}
-      </button>
+      {!dismissed && (
+        <button
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onClick={() => { if (!didDragRef.current) setOpen(!open); }}
+          className="fixed z-[9999] h-14 w-14 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-lg hover:shadow-2xl transition-shadow flex items-center justify-center touch-none select-none"
+          style={{
+            left: bubblePos.x,
+            top: bubblePos.y,
+            opacity: isDragging ? 0.9 : open ? 0.85 : 0.6,
+            cursor: isDragging ? 'grabbing' : 'grab',
+          }}
+          aria-label={open ? 'Close chat' : 'Open chat'}
+        >
+          {open ? <X className="h-6 w-6" /> : <MessageCircle className="h-6 w-6" />}
+          {!open && (totalUnread + pendingCount) > 0 && (
+            <span className="absolute -top-1 -right-1 h-5 w-5 bg-destructive text-destructive-foreground text-xs rounded-full flex items-center justify-center opacity-100">
+              {totalUnread + pendingCount}
+            </span>
+          )}
+          {!open && anyOnline && (totalUnread + pendingCount) === 0 && (
+            <span className="absolute bottom-0 right-0 h-3 w-3 bg-green-500 rounded-full border-2 border-white" />
+          )}
+        </button>
+      )}
 
       {/* Chat panel — responsive: full-screen on mobile, positioned on desktop */}
       {open && (
         <div
-          className="fixed z-[9999] bg-background/95 backdrop-blur-sm border rounded-xl shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 fade-in duration-200
-            inset-2 sm:inset-auto sm:w-96 sm:h-[30rem]"
-          style={{
-            ...(window.innerWidth >= 640 ? {
-              left: Math.min(Math.max(8, bubblePos.x - 320), window.innerWidth - 400),
-              top: Math.max(8, Math.min(bubblePos.y - 490, window.innerHeight - 490)),
-            } : {}),
-          }}
+          className={`fixed z-[9999] bg-background/95 backdrop-blur-sm border rounded-xl shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 fade-in duration-200 inset-2 ${
+            fullscreen ? 'sm:inset-4' : 'sm:inset-auto sm:w-96 sm:h-[30rem]'
+          }`}
+          style={
+            !fullscreen && typeof window !== 'undefined' && window.innerWidth >= 640
+              ? {
+                  left: Math.min(Math.max(8, bubblePos.x - 320), window.innerWidth - 400),
+                  top: Math.max(8, Math.min(bubblePos.y - 490, window.innerHeight - 490)),
+                }
+              : undefined
+          }
         >
           {selectedUser ? (
             <>
@@ -716,9 +871,11 @@ const ChatWidget = () => {
                   variant="ghost"
                   className="h-7 w-7 text-destructive hover:text-destructive"
                   onClick={() => { if (confirm('Block this user?')) blockUser.mutate(selectedUser.userId); }}
+                  aria-label="Block user"
                 >
                   <Ban className="h-3.5 w-3.5" />
                 </Button>
+                <ControlCluster />
               </div>
 
               {/* Messages */}
@@ -813,9 +970,10 @@ const ChatWidget = () => {
           ) : (
             <>
               {/* Header */}
-              <div className="px-4 py-2.5 border-b bg-primary/5 flex items-center gap-2">
-                <MessageCircle className="h-5 w-5 text-primary" />
-                <span className="font-heading font-bold text-sm">Messages</span>
+              <div className="px-3 py-2 border-b bg-primary/5 flex items-center gap-2">
+                <MessageCircle className="h-5 w-5 text-primary shrink-0" />
+                <span className="font-heading font-bold text-sm flex-1">Messages</span>
+                <ControlCluster />
               </div>
 
               {/* Tabs */}
@@ -853,7 +1011,7 @@ const ChatWidget = () => {
                         <Input
                           value={search}
                           onChange={(e) => setSearch(e.target.value)}
-                          placeholder="Search users to connect..."
+                          placeholder="Search chats or find users…"
                           className="h-8 text-sm"
                         />
                       </div>
@@ -906,10 +1064,19 @@ const ChatWidget = () => {
                       ) : (
                         <ScrollArea className="h-full">
                           <div className="p-2">
-                            {conversations.length === 0 ? (
-                              <p className="text-center text-sm text-muted-foreground py-8">No conversations yet. Search for users to connect!</p>
-                            ) : (
-                              conversations.map((conv: any) => (
+                            {(() => {
+                              const filtered = search.trim()
+                                ? conversations.filter((c: any) =>
+                                    (c.name || '').toLowerCase().includes(search.toLowerCase()) ||
+                                    (c.lastMessage || '').toLowerCase().includes(search.toLowerCase()))
+                                : conversations;
+                              if (conversations.length === 0) {
+                                return <p className="text-center text-sm text-muted-foreground py-8">No conversations yet. Search for users to connect!</p>;
+                              }
+                              if (filtered.length === 0) {
+                                return <p className="text-center text-sm text-muted-foreground py-8">No conversations match "{search}".</p>;
+                              }
+                              return filtered.map((conv: any) => (
                                 <button
                                   key={conv.userId}
                                   onClick={() => setSelectedUser(conv)}
@@ -937,8 +1104,8 @@ const ChatWidget = () => {
                                     {formatDistanceToNow(new Date(conv.lastTime), { addSuffix: true })}
                                   </span>
                                 </button>
-                              ))
-                            )}
+                              ));
+                            })()}
                           </div>
                         </ScrollArea>
                       )}
