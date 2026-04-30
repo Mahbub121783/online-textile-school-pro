@@ -1,81 +1,59 @@
+## Problem (confirmed by live test)
 
+Sharing any link on WhatsApp / Facebook / Messenger / Telegram returns **HTTP 503** from your cPanel server. Reason: `public/.htaccess` proxies bot traffic to the Supabase `og-meta` edge function using Apache's `[P]` (mod_proxy) flag — but **mod_proxy is not enabled** on your LiteSpeed/cPanel host, so the rewrite engine fails for every crawler User-Agent.
 
-## What's actually happening
+Verified just now:
+- Browser UA → `200 OK`
+- `facebookexternalhit/1.1` UA → `503`
+- WhatsApp UA → `503`
+- Direct call to the edge function → `200` in ~0.8s (function is healthy)
 
-I checked the DB. Originals are fine on Cloudinary — e.g. a 1MB PNG is stored as 1MB, a 90KB WhatsApp photo as 90KB. **Nothing in our code compresses bytes before upload.** So the upload pipeline itself is OK.
+## Fix
 
-The "small / over-compressed" look in your screenshot is from **how images are displayed**, plus a few real pipeline gaps:
+Change the `.htaccess` rule from a server-side proxy `[P]` to a **302 redirect** `[R=302,L]`. Crawlers follow redirects, hit the edge function, and receive the proper OG meta HTML. Real users continue to be served `index.html` by the SPA fallback below.
 
-1. **Display problem (main visual cause)**
-   - The Cloudinary URLs we save have **no sizing transform** (e.g. `…/upload/v177…/uploads/abc.png` — no `f_auto,q_auto,w_…`).
-   - The browser downloads the full original, then the page shrinks it visually inside small `aspect-square` cards using `object-cover`, which crops the subject and makes everything look tiny/grainy on the dark checker background you screenshotted.
+### File to change
+- `public/.htaccess`
 
-2. **`publicId` not honored for general uploads**
-   - `useCloudinaryUpload` already accepts `{publicId, folder}`, but `useFileUpload` (the hook used by **AdminMedia, MediaPickerModal, MediaUploader, all CMS forms**) never forwards them. So only the avatar follows the `users/{id}/avatar` rule — every other upload is dumped into `uploads/<random>`.
+### Change
+Replace this block:
 
-3. **Avatar auto-import from external sources is low-res**
-   - `useAuth` silently re-uploads any external avatar URL (e.g. Google's `…=s96-c` 96px thumbnail) into Cloudinary. After that, your "Cloudinary" avatar is genuinely 96×96 because the source was 96×96.
+```apache
+RewriteCond %{HTTP_USER_AGENT} (facebookexternalhit|Facebot|Twitterbot|...) [NC]
+RewriteCond %{REQUEST_URI} !^/og-default\.png$
+RewriteCond %{REQUEST_URI} !\.(png|jpe?g|...)$ [NC]
+RewriteRule ^(.*)$ https://kaiiyssrwkapromkfidv.supabase.co/functions/v1/og-meta?path=/$1 [P,L]
+```
 
-4. **Old legacy rows still in the library**
-   - Some entries point to Supabase Storage (`/storage/v1/object/public/media/...`) — they look different from new ones.
+With:
 
-## Fix plan
+```apache
+RewriteCond %{HTTP_USER_AGENT} (facebookexternalhit|Facebot|Twitterbot|LinkedInBot|WhatsApp|TelegramBot|Slackbot|Discordbot|Pinterest|redditbot|SkypeUriPreview|vkShare|W3C_Validator|Applebot|bingbot|Googlebot-Image) [NC]
+RewriteCond %{REQUEST_URI} !^/og-default\.png$
+RewriteCond %{REQUEST_URI} !\.(png|jpe?g|webp|gif|svg|ico|css|js|woff2?|ttf|json|xml|txt|pdf|mp4)$ [NC]
+RewriteRule ^(.*)$ https://kaiiyssrwkapromkfidv.supabase.co/functions/v1/og-meta?path=/$1 [R=302,L]
+```
 
-### A. Display: render images through Cloudinary transforms
-- Add a `cldImg(url, {w?, h?, ar?, c?})` helper in `src/lib/cloudinaryUrl.ts` that injects `f_auto,q_auto,w_…,h_…,c_fill,g_auto` into the existing secure URL (or returns the URL untouched if not Cloudinary).
-- Update display sites:
-  - `AdminMedia.tsx` grid/list thumbnails → 320w `c_fill,g_auto`; detail dialog → 1200w `c_limit`.
-  - `MediaPickerModal.tsx` grid → 240w.
-  - `MediaUploader.tsx` preview → 800w.
-  - Avatars in `SettingsPage`, `Header`, chat, leaderboard, etc. → 200w `c_fill,g_face`.
-  - Course/eBook/post thumbnails → 600w `c_fill`.
-- Switch Media Library cards from `object-cover` to `object-contain` on a neutral background so users see the **actual** uploaded image, not a cropped slice.
+Only the last line changes: `[P,L]` → `[R=302,L]`.
 
-### B. Upload: forward naming/folder for everything (not just avatars)
-- Extend `useFileUpload.upload(file, options)` to accept `{ publicId?, folder? }` and pass them through to `useCloudinaryUpload`.
-- Update callers to opt in:
-  - **AdminMedia / MediaPickerModal / MediaUploader** → folder `uploads/{user_id}` so each user's uploads are grouped by their profile id (per your earlier request).
-  - **CMS thumbnails (course/post/ebook/workshop)** → folder `content/{type}/{slug or id}`.
-  - **Hero slides, sponsors, certificate templates** → folder `site/{section}`.
+## Why this works
 
-### C. Avatar quality safeguards
-- Stop auto-normalizing Google profile thumbnails. In `useAuth.normalizeAvatarToCloudinary`:
-  - Skip if URL contains `googleusercontent.com` and matches `=s\d+-c` → leave as-is OR upgrade `=s96-c` → `=s400-c` before importing.
-  - Always store a "served" URL with `c_fill,g_face,w_400,h_400,f_auto,q_auto` while keeping the original public_id intact.
+- **Crawlers (FB/WA/etc.)** follow 302s by default. They land on the Supabase edge function, get a 200 with full OG/Twitter/JSON-LD tags, and render the preview correctly.
+- **Real users** never match the bot User-Agent regex, so they keep getting `index.html` (SPA fallback) — direct clicks from WhatsApp/Messenger work normally because the messaging apps' in-app browsers send a normal browser UA, not a bot UA.
+- **No server modules required** — works on every Apache/LiteSpeed/cPanel setup.
 
-### D. Edge function tighten-up (`cloudinary-proxy`)
-- Always send `unique_filename=false` and `use_filename=false` when `public_id` is supplied (already done).
-- Keep upload at original quality (no `quality_analysis`, no `eager`); rely on delivery transforms (we never want byte-level recompression at upload).
-- Add `resource_type=image` to the auto endpoint when MIME starts with `image/` so signed params line up; current `auto/upload` is fine but explicit avoids edge cases.
+## Deployment note
 
-### E. Repair existing assets (you chose "Fix both")
-One-time admin action behind a button in **AdminMedia → "Repair legacy & low-quality"**:
-1. Scan `media_library` for rows whose `file_url` is Supabase legacy or whose Cloudinary URL has no transform path.
-2. For each row, call `cloudinary-proxy` `fetch-url` to re-import into the proper folder/public_id.
-3. Update `media_library.file_url` to the new Cloudinary URL (with `f_auto,q_auto`).
-4. For users whose `avatar_url` came from Google `=s96-c`, re-import the upgraded `=s400-c` version.
+`public/.htaccess` is shipped to your cPanel host as part of the production build. After this change is published (Publish → Update), redeploy/upload the new `public_html/.htaccess` (or wait for your normal deploy pipeline) so the live server picks it up. Then re-test with:
 
-Run as a queued, resumable job (similar to the existing migration worker), with progress UI and a Stop button.
+```
+curl -I -A "facebookexternalhit/1.1" https://onlinetextileschool.com/
+```
 
-## Files I'll change
-
-| File | Change |
-|---|---|
-| `src/lib/cloudinaryUrl.ts` | Add `cldImg()` transform helper |
-| `src/hooks/useFileUpload.ts` | Accept & forward `{publicId, folder}` |
-| `src/hooks/useAuth.tsx` | Skip / upgrade Google `=s96-c` avatars |
-| `src/pages/admin/AdminMedia.tsx` | Use `cldImg`, `object-contain`, add Repair button |
-| `src/components/shared/MediaPickerModal.tsx` | Thumbnails via `cldImg`, pass `folder: uploads/{userId}` |
-| `src/components/instructor/MediaUploader.tsx` | Same as above |
-| `src/pages/dashboard/SettingsPage.tsx` | Avatar URL through `cldImg(…, {w:200, c:'fill', g:'face'})` |
-| `src/components/layout/Header.tsx` (avatar) | `cldImg` for header avatar |
-| `supabase/functions/cloudinary-proxy/index.ts` | Minor: explicit resource_type, ensure no recompression flags |
-| `supabase/functions/migrate-storage-to-cloud/index.ts` (or new `repair-media`) | Add "repair" action that re-imports rows |
+Expected: `302` → follow to Supabase → `200` with OG tags. You can also use Facebook's Sharing Debugger (`developers.facebook.com/tools/debug/`) to clear the cached 503 and verify the new preview.
 
 ## Result
 
-- Thumbnails are sharp (Cloudinary delivers right-sized WebP/AVIF), no apparent compression.
-- Originals stay full-quality on Cloudinary, organized by user ID / content scope.
-- Google-signed-up users no longer end up with a 96×96 avatar.
-- Existing low-quality rows can be re-imported with one click.
-
+- Link previews show correct title/description/image on WhatsApp, Messenger, Facebook, Telegram, LinkedIn, Slack, Discord, Twitter.
+- Clicking the shared link opens the page normally instead of an error.
+- No code changes needed in React, edge functions, or the database — the `og-meta` function is already returning the right HTML.
