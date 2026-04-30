@@ -970,9 +970,10 @@ const ChatWidget = () => {
           ) : (
             <>
               {/* Header */}
-              <div className="px-4 py-2.5 border-b bg-primary/5 flex items-center gap-2">
-                <MessageCircle className="h-5 w-5 text-primary" />
-                <span className="font-heading font-bold text-sm">Messages</span>
+              <div className="px-3 py-2 border-b bg-primary/5 flex items-center gap-2">
+                <MessageCircle className="h-5 w-5 text-primary shrink-0" />
+                <span className="font-heading font-bold text-sm flex-1">Messages</span>
+                <ControlCluster />
               </div>
 
               {/* Tabs */}
