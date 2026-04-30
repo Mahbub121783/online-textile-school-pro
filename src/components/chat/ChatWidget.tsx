@@ -1011,7 +1011,7 @@ const ChatWidget = () => {
                         <Input
                           value={search}
                           onChange={(e) => setSearch(e.target.value)}
-                          placeholder="Search users to connect..."
+                          placeholder="Search chats or find users…"
                           className="h-8 text-sm"
                         />
                       </div>
