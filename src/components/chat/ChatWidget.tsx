@@ -750,42 +750,95 @@ const ChatWidget = () => {
 
   const totalUnread = conversations.reduce((sum: number, c: any) => sum + (c.unread || 0), 0);
   const pendingCount = chatRequests.incoming.length;
+  const anyOnline = onlineUsers.size > 0;
+
+  const minimizeChat = () => setOpen(false);
+  const closeChat = () => {
+    setOpen(false);
+    setDismissed(true);
+    try { sessionStorage.setItem('chat_widget_dismissed', '1'); } catch {}
+  };
+  const reopenChat = () => {
+    setDismissed(false);
+    try { sessionStorage.removeItem('chat_widget_dismissed'); } catch {}
+    setOpen(true);
+  };
+
+  // Reusable header control cluster (minimize / fullscreen / close)
+  const ControlCluster = ({ tone = 'default' }: { tone?: 'default' | 'light' }) => {
+    const baseBtn = tone === 'light'
+      ? 'p-1.5 hover:bg-white/20 rounded-lg transition text-white'
+      : 'p-1.5 hover:bg-muted rounded-lg transition text-muted-foreground hover:text-foreground';
+    return (
+      <div className="flex items-center gap-0.5">
+        <button onClick={() => setFullscreen(f => !f)} className={`${baseBtn} hidden sm:inline-flex`} title={fullscreen ? 'Exit fullscreen' : 'Expand'} aria-label={fullscreen ? 'Exit fullscreen' : 'Expand'}>
+          {fullscreen ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+        </button>
+        <button onClick={minimizeChat} className={baseBtn} title="Minimize" aria-label="Minimize">
+          <Minus className="h-4 w-4" />
+        </button>
+        <button onClick={closeChat} className={baseBtn} title="Close" aria-label="Close">
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+    );
+  };
 
   return (
     <>
+      {/* Reopen pill when fully dismissed */}
+      {dismissed && !open && (
+        <button
+          onClick={reopenChat}
+          className="fixed z-[9999] bottom-4 right-4 h-10 px-3 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 text-white text-xs font-medium shadow-lg hover:shadow-xl flex items-center gap-1.5"
+          aria-label="Show chat"
+        >
+          <MessageCircle className="h-4 w-4" /> Chat
+        </button>
+      )}
+
       {/* Floating bubble — draggable, semi-transparent */}
-      <button
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onClick={() => { if (!didDragRef.current) setOpen(!open); }}
-        className="fixed z-[9999] h-14 w-14 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-lg hover:shadow-2xl transition-shadow flex items-center justify-center touch-none select-none"
-        style={{
-          left: bubblePos.x,
-          top: bubblePos.y,
-          opacity: isDragging ? 0.9 : 0.6,
-          cursor: isDragging ? 'grabbing' : 'grab',
-        }}
-      >
-        {open ? <X className="h-6 w-6" /> : <MessageCircle className="h-6 w-6" />}
-        {!open && (totalUnread + pendingCount) > 0 && (
-          <span className="absolute -top-1 -right-1 h-5 w-5 bg-destructive text-destructive-foreground text-xs rounded-full flex items-center justify-center opacity-100">
-            {totalUnread + pendingCount}
-          </span>
-        )}
-      </button>
+      {!dismissed && (
+        <button
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onClick={() => { if (!didDragRef.current) setOpen(!open); }}
+          className="fixed z-[9999] h-14 w-14 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-lg hover:shadow-2xl transition-shadow flex items-center justify-center touch-none select-none"
+          style={{
+            left: bubblePos.x,
+            top: bubblePos.y,
+            opacity: isDragging ? 0.9 : open ? 0.85 : 0.6,
+            cursor: isDragging ? 'grabbing' : 'grab',
+          }}
+          aria-label={open ? 'Close chat' : 'Open chat'}
+        >
+          {open ? <X className="h-6 w-6" /> : <MessageCircle className="h-6 w-6" />}
+          {!open && (totalUnread + pendingCount) > 0 && (
+            <span className="absolute -top-1 -right-1 h-5 w-5 bg-destructive text-destructive-foreground text-xs rounded-full flex items-center justify-center opacity-100">
+              {totalUnread + pendingCount}
+            </span>
+          )}
+          {!open && anyOnline && (totalUnread + pendingCount) === 0 && (
+            <span className="absolute bottom-0 right-0 h-3 w-3 bg-green-500 rounded-full border-2 border-white" />
+          )}
+        </button>
+      )}
 
       {/* Chat panel — responsive: full-screen on mobile, positioned on desktop */}
       {open && (
         <div
-          className="fixed z-[9999] bg-background/95 backdrop-blur-sm border rounded-xl shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 fade-in duration-200
-            inset-2 sm:inset-auto sm:w-96 sm:h-[30rem]"
-          style={{
-            ...(window.innerWidth >= 640 ? {
-              left: Math.min(Math.max(8, bubblePos.x - 320), window.innerWidth - 400),
-              top: Math.max(8, Math.min(bubblePos.y - 490, window.innerHeight - 490)),
-            } : {}),
-          }}
+          className={`fixed z-[9999] bg-background/95 backdrop-blur-sm border rounded-xl shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 fade-in duration-200 inset-2 ${
+            fullscreen ? 'sm:inset-4' : 'sm:inset-auto sm:w-96 sm:h-[30rem]'
+          }`}
+          style={
+            !fullscreen && typeof window !== 'undefined' && window.innerWidth >= 640
+              ? {
+                  left: Math.min(Math.max(8, bubblePos.x - 320), window.innerWidth - 400),
+                  top: Math.max(8, Math.min(bubblePos.y - 490, window.innerHeight - 490)),
+                }
+              : undefined
+          }
         >
           {selectedUser ? (
             <>
