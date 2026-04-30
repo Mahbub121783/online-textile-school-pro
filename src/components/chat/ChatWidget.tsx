@@ -66,18 +66,9 @@ const AiTutorTab = ({ user, headerActions }: { user: any; headerActions?: React.
     inputRef.current?.focus();
   }, []);
 
-  const sendMessage = async () => {
-    const text = input.trim();
-    if (!text || loading) return;
-
-    const userMsg: AiMsg = { role: 'user', content: text };
-    const allMessages = [...messages, userMsg];
-    setMessages(allMessages);
-    setInput('');
+  const streamReply = async (allMessages: AiMsg[]) => {
     setLoading(true);
-
     let assistantSoFar = '';
-
     try {
       const resp = await fetch(AI_TUTOR_URL, {
         method: 'POST',
@@ -141,6 +132,30 @@ const AiTutorTab = ({ user, headerActions }: { user: any; headerActions?: React.
       setMessages(prev => [...prev, { role: 'assistant', content: '⚠️ Connection error. Please try again.' }]);
     }
     setLoading(false);
+  };
+
+  const sendMessage = async () => {
+    const text = input.trim();
+    if (!text || loading) return;
+    const userMsg: AiMsg = { role: 'user', content: text };
+    const allMessages = [...messages, userMsg];
+    setMessages(allMessages);
+    setInput('');
+    await streamReply(allMessages);
+  };
+
+  const regenerate = async () => {
+    if (loading) return;
+    // Drop trailing assistant messages, regenerate from last user
+    let trimmed = [...messages];
+    while (trimmed.length && trimmed[trimmed.length - 1].role === 'assistant') trimmed.pop();
+    if (!trimmed.length) return;
+    setMessages(trimmed);
+    await streamReply(trimmed);
+  };
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard?.writeText(text).catch(() => {});
   };
 
   const quickPrompts = [
