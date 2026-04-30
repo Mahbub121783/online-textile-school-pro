@@ -1104,8 +1104,8 @@ const ChatWidget = () => {
                                     {formatDistanceToNow(new Date(conv.lastTime), { addSuffix: true })}
                                   </span>
                                 </button>
-                              ))
-                            )}
+                              ));
+                            })()}
                           </div>
                         </ScrollArea>
                       )}
