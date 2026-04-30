@@ -1,59 +1,72 @@
-## Problem (confirmed by live test)
+## Problem
 
-Sharing any link on WhatsApp / Facebook / Messenger / Telegram returns **HTTP 503** from your cPanel server. Reason: `public/.htaccess` proxies bot traffic to the Supabase `og-meta` edge function using Apache's `[P]` (mod_proxy) flag — but **mod_proxy is not enabled** on your LiteSpeed/cPanel host, so the rewrite engine fails for every crawler User-Agent.
+The floating "Messages" panel (`src/components/chat/ChatWidget.tsx`) header currently shows only an icon + "Messages" title. There is no visible **minimize** or **close (X)** button inside the panel. Users have to find the small floating bubble (which turns into an X) to dismiss it — which is hidden behind the panel on small viewports and not obvious.
 
-Verified just now:
-- Browser UA → `200 OK`
-- `facebookexternalhit/1.1` UA → `503`
-- WhatsApp UA → `503`
-- Direct call to the edge function → `200` in ~0.8s (function is healthy)
+## Plan
 
-## Fix
+### Part A — Fix the missing controls (core fix)
 
-Change the `.htaccess` rule from a server-side proxy `[P]` to a **302 redirect** `[R=302,L]`. Crawlers follow redirects, hit the edge function, and receive the proper OG meta HTML. Real users continue to be served `index.html` by the SPA fallback below.
+1. Add a control cluster on the **right side of the panel header** (line 816 area):
+   - **Minimize** button (`Minus` icon) → closes the panel but keeps the floating bubble & unread badge in place. Same as `setOpen(false)`.
+   - **Close** button (`X` icon) → closes the panel AND hides the bubble for the rest of the session (`sessionStorage` flag `chat_widget_dismissed`). A small "Show chat" pill reappears after 30s or on next page load.
+   - **Expand / Fullscreen toggle** (`Maximize2` / `Minimize2`) → on desktop, expands panel to ~720×640 instead of 384×480.
 
-### File to change
-- `public/.htaccess`
+2. Mirror the same control on the **conversation sub-header** (line 691) and **AI Tutor sub-header** (line 155) so users can always close from any sub-view, not only the contact list.
 
-### Change
-Replace this block:
+3. Mobile: since the panel is full-screen (`inset-2`), the close X is essential. Make the header tap targets ≥36px and add `aria-label`s.
 
-```apache
-RewriteCond %{HTTP_USER_AGENT} (facebookexternalhit|Facebot|Twitterbot|...) [NC]
-RewriteCond %{REQUEST_URI} !^/og-default\.png$
-RewriteCond %{REQUEST_URI} !\.(png|jpe?g|...)$ [NC]
-RewriteRule ^(.*)$ https://kaiiyssrwkapromkfidv.supabase.co/functions/v1/og-meta?path=/$1 [P,L]
-```
+4. Keyboard: bind **Esc** to minimize the panel when open.
 
-With:
+### Part B — Advanced upgrades (opt-in improvements)
 
-```apache
-RewriteCond %{HTTP_USER_AGENT} (facebookexternalhit|Facebot|Twitterbot|LinkedInBot|WhatsApp|TelegramBot|Slackbot|Discordbot|Pinterest|redditbot|SkypeUriPreview|vkShare|W3C_Validator|Applebot|bingbot|Googlebot-Image) [NC]
-RewriteCond %{REQUEST_URI} !^/og-default\.png$
-RewriteCond %{REQUEST_URI} !\.(png|jpe?g|webp|gif|svg|ico|css|js|woff2?|ttf|json|xml|txt|pdf|mp4)$ [NC]
-RewriteRule ^(.*)$ https://kaiiyssrwkapromkfidv.supabase.co/functions/v1/og-meta?path=/$1 [R=302,L]
-```
+1. **Sound + browser notification on new message**
+   - Play a soft chime (small base64 wav) when a new `chat_messages` row arrives for the user and the panel is closed or on a different tab.
+   - Use the Web Notifications API (with permission prompt) for desktop pop-ups; click focuses the conversation.
 
-Only the last line changes: `[P,L]` → `[R=302,L]`.
+2. **Search inside Chats tab**
+   - The `search` state already exists but is unused. Wire it to a small input above the conversation list to filter by name / last message.
 
-## Why this works
+3. **Per-conversation draft persistence**
+   - Save the unsent input per `selectedUser.userId` to `localStorage` so switching contacts doesn't lose typing.
 
-- **Crawlers (FB/WA/etc.)** follow 302s by default. They land on the Supabase edge function, get a 200 with full OG/Twitter/JSON-LD tags, and render the preview correctly.
-- **Real users** never match the bot User-Agent regex, so they keep getting `index.html` (SPA fallback) — direct clicks from WhatsApp/Messenger work normally because the messaging apps' in-app browsers send a normal browser UA, not a bot UA.
-- **No server modules required** — works on every Apache/LiteSpeed/cPanel setup.
+4. **Unread separator + "Jump to latest" pill**
+   - Insert a "─ New messages ─" divider above the first unread message; show a floating "↓ N new" button when scrolled up.
 
-## Deployment note
+5. **Quick emoji reactions in input bar**
+   - Add a small 👍 / ❤️ / 😂 picker next to the Send button (uses existing `REACTIONS` array).
 
-`public/.htaccess` is shipped to your cPanel host as part of the production build. After this change is published (Publish → Update), redeploy/upload the new `public_html/.htaccess` (or wait for your normal deploy pipeline) so the live server picks it up. Then re-test with:
+6. **Online presence dot on bubble**
+   - Tiny green dot on the floating bubble when any contact is online.
 
-```
-curl -I -A "facebookexternalhit/1.1" https://onlinetextileschool.com/
-```
+7. **Reduce bubble friction**
+   - Snap-to-edge after drag (left or right edge, whichever is closer).
+   - Auto-fade to 30% opacity after 4s of no interaction.
 
-Expected: `302` → follow to Supabase → `200` with OG tags. You can also use Facebook's Sharing Debugger (`developers.facebook.com/tools/debug/`) to clear the cached 503 and verify the new preview.
+8. **AI Tutor: copy + regenerate**
+   - "Copy" button on assistant messages.
+   - "Regenerate" button when the last message is from assistant.
+
+### Part C — Optional (ask before doing)
+
+- File / image attachments in 1-to-1 chat (needs Cloudinary upload wiring).
+- Voice notes (MediaRecorder → R2).
+- Read receipts (✓✓) — schema already has `is_read`.
+
+These three are larger; I'll only build them if you say yes.
+
+## Files to change
+
+| File | Change |
+|---|---|
+| `src/components/chat/ChatWidget.tsx` | Header control cluster, Esc key, fullscreen state, search wiring, draft persistence, sound, snap-to-edge, copy/regenerate, unread divider |
+| `public/sounds/chime.mp3` (new, ~3 KB) | Notification sound |
+
+No DB migrations needed for Part A + B.
 
 ## Result
 
-- Link previews show correct title/description/image on WhatsApp, Messenger, Facebook, Telegram, LinkedIn, Slack, Discord, Twitter.
-- Clicking the shared link opens the page normally instead of an error.
-- No code changes needed in React, edge functions, or the database — the `og-meta` function is already returning the right HTML.
+- Clear **minimize**, **close**, and **expand** buttons in every chat header.
+- Esc to dismiss; mobile-friendly tap targets.
+- Optional advanced UX (sound, search, drafts, fullscreen, snap-to-edge, copy/regenerate) layered on top without breaking existing flows.
+
+Approve and I'll implement Part A + B. Tell me which items in Part C (if any) to include.
