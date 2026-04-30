@@ -302,6 +302,10 @@ const ChatWidget = () => {
   const { user } = useAuth();
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
+  const [dismissed, setDismissed] = useState(() => {
+    try { return sessionStorage.getItem('chat_widget_dismissed') === '1'; } catch { return false; }
+  });
+  const [fullscreen, setFullscreen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const [message, setMessage] = useState('');
   const [search, setSearch] = useState('');
