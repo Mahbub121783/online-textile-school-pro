@@ -871,9 +871,11 @@ const ChatWidget = () => {
                   variant="ghost"
                   className="h-7 w-7 text-destructive hover:text-destructive"
                   onClick={() => { if (confirm('Block this user?')) blockUser.mutate(selectedUser.userId); }}
+                  aria-label="Block user"
                 >
                   <Ban className="h-3.5 w-3.5" />
                 </Button>
+                <ControlCluster />
               </div>
 
               {/* Messages */}
