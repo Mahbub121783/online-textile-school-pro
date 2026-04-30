@@ -4,7 +4,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import {
   MessageCircle, X, Send, ArrowLeft, UserPlus, Check, XIcon,
-  Ban, Trash2, Inbox, MessageSquare, Clock, Bot, Loader2, Sparkles, LogIn
+  Ban, Trash2, Inbox, MessageSquare, Clock, Bot, Loader2, Sparkles, LogIn,
+  Minus, Maximize2, Minimize2, Copy, RotateCcw, Search as SearchIcon,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
