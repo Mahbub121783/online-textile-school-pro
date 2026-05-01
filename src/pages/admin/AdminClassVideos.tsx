@@ -53,7 +53,7 @@ export default function AdminClassVideos() {
         title: form.title,
         slug: form.slug || slugify(form.title),
         description: form.description || null,
-        thumbnail_url: form.thumbnail_url || null,
+        thumbnail_url: null,
         category_id: form.category_id || null,
         video_url: form.video_url,
         video_platform: form.video_platform,
