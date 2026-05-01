@@ -146,8 +146,18 @@ export default function AdminWorkshops() {
 
   const saveMutation = useMutation({
     mutationFn: async (ws: any) => {
+      // Block publishing without a valid Google Meet link — root cause of "Start Workshop not appearing".
+      const isPublishingState = ws.status && ws.status !== 'draft';
+      const trimmedLink = (ws.meet_link || '').trim();
+      if (isPublishingState && trimmedLink.length === 0) {
+        throw new Error('Cannot publish a workshop without a Google Meet link. Add the link or save as Draft.');
+      }
+      if (trimmedLink.length > 0 && !/^https?:\/\//i.test(trimmedLink)) {
+        throw new Error('Meet link must start with http:// or https://');
+      }
       const payload = {
         ...ws,
+        meet_link: trimmedLink || null,
         fake_registration_count: ws.fake_registration_count ? Number(ws.fake_registration_count) : 0,
         max_participants: ws.max_participants ? Number(ws.max_participants) : null,
         registration_deadline: ws.registration_deadline || null,
@@ -163,6 +173,8 @@ export default function AdminWorkshops() {
       delete payload.instructor_name;
       delete payload.instructor_bio;
       delete payload.instructor_avatar;
+      delete payload.start_at; // auto-computed by DB trigger
+      delete payload.end_at;   // auto-computed by DB trigger
       if (editWs?.id) {
         const { error } = await supabase.from('workshops').update(payload).eq('id', editWs.id);
         if (error) throw error;
@@ -303,6 +315,11 @@ export default function AdminWorkshops() {
         <div className="grid gap-4">
           {workshops.map((ws: any) => {
             const regCount = (allRegCounts as any)[ws.id] || 0;
+            const startAt = ws.start_at ? new Date(ws.start_at) : new Date(`${ws.start_date}T${ws.start_time || '00:00'}:00`);
+            const endAt = ws.end_at ? new Date(ws.end_at) : new Date(`${ws.end_date || ws.start_date}T${ws.end_time || ws.start_time || '23:59'}:00`);
+            const nowMs = Date.now();
+            const shouldBeOngoing = ws.status === 'published' && startAt.getTime() <= nowMs && endAt.getTime() + 30 * 60 * 1000 > nowMs;
+            const shouldBeCompleted = ws.status === 'ongoing' && endAt.getTime() + 30 * 60 * 1000 <= nowMs;
             return (
             <Card key={ws.id}>
               <CardContent className="p-4 flex flex-col md:flex-row md:items-center gap-4">
@@ -313,6 +330,15 @@ export default function AdminWorkshops() {
                     <Badge>{ws.status}</Badge>
                     <Badge variant="outline">{ws.workshop_type === 'multi_day' ? 'Multi-Day' : 'One Day'}</Badge>
                     {regCount > 0 && <Badge variant="secondary" className="text-[10px]">{regCount} registrations</Badge>}
+                    {!ws.meet_link && ws.status !== 'draft' && (
+                      <Badge variant="destructive" className="text-[10px]">⚠ No Meet Link</Badge>
+                    )}
+                    {shouldBeOngoing && (
+                      <Badge className="text-[10px] bg-amber-500 text-white border-none">⚠ Should be Ongoing</Badge>
+                    )}
+                    {shouldBeCompleted && (
+                      <Badge className="text-[10px] bg-amber-500 text-white border-none">⚠ Should be Completed</Badge>
+                    )}
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">
                     {format(new Date(ws.start_date), 'MMM dd, yyyy')} · /{ws.slug}
@@ -320,6 +346,21 @@ export default function AdminWorkshops() {
                   </p>
                 </div>
                 <div className="flex gap-2 flex-wrap">
+                  {(shouldBeOngoing || shouldBeCompleted) && (
+                    <Button
+                      size="sm"
+                      className="bg-amber-500 hover:bg-amber-600 text-white"
+                      onClick={async () => {
+                        const newStatus = shouldBeCompleted ? 'completed' : 'ongoing';
+                        const { error } = await supabase.from('workshops').update({ status: newStatus }).eq('id', ws.id);
+                        if (error) toast.error(error.message);
+                        else { toast.success(`Marked as ${newStatus}`); queryClient.invalidateQueries({ queryKey: ['admin-workshops'] }); }
+                      }}
+                      title={`Mark as ${shouldBeCompleted ? 'completed' : 'ongoing'}`}
+                    >
+                      Mark {shouldBeCompleted ? 'Completed' : 'Live'}
+                    </Button>
+                  )}
                   <Button variant="outline" size="sm" onClick={() => setViewRegs(ws.id)} title="View Registrations"><Users className="h-4 w-4" /></Button>
                   <Button variant="outline" size="sm" onClick={() => { setNotifyWs(ws); setNotifyForm({ title: '', message: '' }); }} title="Send In-App Notification"><Bell className="h-4 w-4" /></Button>
                   {ws.meet_link && (
