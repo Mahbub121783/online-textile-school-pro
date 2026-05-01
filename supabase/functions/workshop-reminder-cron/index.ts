@@ -98,10 +98,14 @@ Deno.serve(async (req) => {
       }
     }));
 
-    await supabase
-      .from('workshops')
-      .update({ reminder_sent_at: new Date().toISOString() })
-      .eq('id', ws.id);
+    // Only mark as reminded if we actually sent at least one email,
+    // OR there were genuinely zero registrations (so we don't keep retrying empty workshops).
+    if (sent > 0 || (regs?.length || 0) === 0) {
+      await supabase
+        .from('workshops')
+        .update({ reminder_sent_at: new Date().toISOString() })
+        .eq('id', ws.id);
+    }
 
     // In-app notifications
     try {
