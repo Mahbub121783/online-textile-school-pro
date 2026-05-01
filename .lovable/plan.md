@@ -1,83 +1,57 @@
-# eBook System Deep Audit
+# Fix: Image previews not rendering on Media Library
 
-## TL;DR
+## What you're seeing
+On `/admin/media`, file rows load correctly (filename, size, source badge — Cloudinary, R2, Supabase legacy), but image **thumbnails render as broken images** (only the alt-text `Orange and Black Corporate Event…`, `WhatsApp Image…`, `asutex.png`, etc. is visible).
 
-The eBook **code/architecture is fully wired and working** — all routes, edge functions, RLS-aware queries, DRM watermarking, PDF.js streaming, purchase gating, reading progress, highlights/notes, admin CRUD, and showcase are present and consistent.
+## Root cause (almost certainly remix-related)
 
-**However, the storage backends required for eBook files are NOT configured in this remix.** No eBooks can be uploaded or read end-to-end until you add credentials.
+The `media_library` table was carried over during the remix, but the assets it points to live in **external storage accounts that belong to the original project**, not yours:
 
----
+- **Cloudinary URLs** (`https://res.cloudinary.com/<old-cloud-name>/image/upload/.../foo.png`) — the `<old-cloud-name>` is the original owner's Cloudinary account. Your remix doesn't have credentials to that account, but more importantly the URLs themselves point to a cloud you don't own.
+- **R2 URLs** — same situation; signed/public URLs point to the original owner's R2 bucket.
+- **Supabase legacy URLs** — these point to the *original* Supabase project's storage bucket (different project ref), so they 404 from your new project.
 
-## What I verified (working)
+Your **new** Cloudinary + R2 accounts (the credentials you just configured in `Setup → Cloudinary` and `Setup → R2`) are healthy and ready, but no files have been uploaded **into them** yet — so the existing `media_library` rows are essentially dead pointers.
 
+The code itself (`AdminMedia.tsx`, `cldImg`, `handleImgError`) is correct. It's a **data/asset ownership problem**, not a code bug.
 
-| Layer                               | Status | Notes                                                                                                                                                                                                |
-| ----------------------------------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| DB schema                           | OK     | `ebooks`, `ebook_access_tokens`, `ebook_reading_progress` exist with FK to `ebooks`                                                                                                                  |
-| Routes                              | OK     | `/ebooks`, `/ebooks/:slug`, `/read/:ebookId` all registered in `App.tsx`                                                                                                                             |
-| Catalog (`EbookCatalog.tsx`)        | OK     | Filters, sort, wishlist, "Owned" badge, pagination                                                                                                                                                   |
-| Detail (`EbookDetail.tsx`)          | OK     | Slug + UUID lookup, related ebooks, purchase/pending states, JSON-LD Book schema                                                                                                                     |
-| Showcase (home)                     | OK     | Newest 4 published, ordered by `created_at desc`                                                                                                                                                     |
-| My eBooks dashboard                 | OK     | Joins `order_items` with completed orders, shows reading progress                                                                                                                                    |
-| Cart / purchase                     | OK     | `addItem` fires Meta `AddToCart`, BDT currency                                                                                                                                                       |
-| Edge function `ebook-secure-access` | OK     | Validates purchase, generates 30-min reusable token, GET-stream w/ Range support, R2 S3 fallback, structured `EBOOK_FILE_MISSING` error                                                              |
-| Reader (`EbookReader.tsx`)          | OK     | PDF.js with local worker, range streaming, DRM (block ctx-menu/copy/print/PrintScreen), tab-blur, watermark with user email, highlights, notes, TOC, brightness, zoom, dark/sepia, progress autosave |
-| Admin (`AdminEbooks.tsx`)           | OK     | Forces R2 for `file_url`, blocks Cloudinary URLs, refuses publish without file, blocks save during upload, scope-aware (admin vs instructor)                                                         |
-| Upload routing (`useFileUpload`)    | OK     | Images→Cloudinary; PDFs/heavy→R2; ≤4.5 MB direct proxy; >4.5 MB chunked (4 MB chunks)                                                                                                                |
+## Verification steps (I'll run these first)
 
+1. Query `media_library` for a few sample rows and confirm the cloud_name in the URLs does **not** match any nickname/cloud_name in your `cloudinary_accounts` table.
+2. Query `cloudinary_accounts` and `cloudflare_r2_accounts` to confirm at least one active account exists per category (images / documents / video / R2).
+3. Hit one of the failing Cloudinary URLs from a script to see the exact response (404 / 401 / unauthorized).
 
-## What is broken (blocking)
+## Fix options
 
-The remix has **only 6 secrets** configured: `CPANEL_*`, `META_*`, `LOVABLE_API_KEY`. Missing:
+You only need to pick one — I recommend **Option A**.
 
-1. **Cloudflare R2 accounts** — `cloudflare_r2_accounts` table is empty / no active rows. Without this:
-  - Cover image upload still works (Cloudinary handles images), **but**
-  - PDF file upload (`r2-presign` edge function) will fail with "No active R2 accounts found"
-  - Reader streaming fallback to S3 will also fail
-2. **Cloudinary credentials** (`CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`) — needed for cover image upload via `cloudinary-proxy`.
-
-Net effect: a fresh admin trying to add a new eBook will fail at both the cover upload step and the PDF upload step. Existing eBooks (if any rows survived the remix and point to old R2/Cloudinary URLs) will also fail to stream because the R2 account row is gone.
-
-## Minor code observations (non-blocking, optional)
-
-- `EbookReader.tsx` line 282: type cast `progress?.notes as unknown as ReaderData | NoteItem[]` — backwards-compat shim is fine but the schema also has a separate `highlights` jsonb column that the reader currently ignores (writes everything into `notes`). Functional, just slightly redundant.
-- `ebook-secure-access` legacy POST `stream_file` path marks token as `used` (single-use). The active GET path correctly keeps tokens reusable for 30 minutes. Legacy path is unused by current reader — safe to leave.
-- Cover image fallback currently throws if Cloudinary is unset; a graceful "no cover available" toast would be nicer but not required.
-
----
-
-## Proposed fix (what I'd do once you approve)
-
-Two short steps — no code changes needed for the eBook system itself, only configuration:
-
-&nbsp;
-
-cloudinary already added from admin dashboard also cloudflare you can check , and working perfectly
-
-1. **Add Cloudinary secrets** so cover/gallery image uploads work:
-  - `CLOUDINARY_CLOUD_NAME`
-  - `CLOUDINARY_API_KEY`
-  - `CLOUDINARY_API_SECRET`
-2. **Provision at least one Cloudflare R2 account row** in `cloudflare_r2_accounts` (status='active') with:
-  - `endpoint_url`, `access_key_id`, `secret_access_key`, `bucket_name`, `public_domain_url`
-   I'll open the secure secret form and then create the DB row for you.
-
-After that I'll do an end-to-end smoke test:
+### Option A — Clean slate (recommended, fastest)
+Delete all `media_library` rows that point to the previous owner's storage. The library will be empty, and any new uploads (via the "Upload Files" button or via instructor/admin forms) will land in **your** Cloudinary/R2 and show up correctly.
 
 ```text
-1. Admin → Add eBook → upload cover (Cloudinary)
-2. Same form → upload sample PDF (R2)
-3. Save + publish
-4. Visit /ebooks, /ebooks/:slug
-5. Test purchase flow → mark order complete
-6. Open /read/:id, verify token, range streaming, watermark, progress save
+DELETE FROM media_library
+WHERE file_url LIKE '%res.cloudinary.com%'
+   OR file_url LIKE '%/storage/v1/object/public/%'
+   OR file_url LIKE '%r2.cloudflarestorage.com%'
+   OR file_url LIKE '%r2.dev%';
 ```
 
-## What I will NOT change
+I'll write this as a reversible migration (with a backup table `media_library_remix_backup` first, so nothing is truly lost).
 
-- Reader DRM behavior, highlight storage shape, edge-function streaming logic — all working as designed.
-- Existing routes or RLS policies.
+### Option B — Re-import via "Repair legacy & low-quality"
+Your `AdminMedia` page already has a **"Repair legacy & low-quality"** button that calls `cloudinary-proxy → fetch-url` to re-upload remote images into your Cloudinary. This works **only if the original URLs are publicly fetchable**. For the previous owner's Cloudinary, they likely are — so this could rescue the image thumbnails. PDFs and R2-hosted files cannot be repaired this way.
 
----
+I'll prepare both and let you pick.
 
-**To proceed I just need you to confirm:** do you want me to (a) only verify and report, or (b) collect the missing Cloudinary + R2 credentials now and wire everything up so eBook upload + reading works end-to-end?
+### Option C — Do nothing, just upload fresh
+If you don't care about the old library content, just start using the **"Upload Files"** button. New uploads will work immediately and show thumbnails. The dead rows will just sit there with broken previews until cleaned up.
+
+## What I'll do once you approve
+
+1. Run a quick DB check (sample `media_library` rows + your `cloudinary_accounts` / `cloudflare_r2_accounts` config) and report what I find.
+2. Apply **Option A** by default (with backup table) — say "use B" or "use C" if you prefer.
+3. Test by uploading one image via `/admin/media` and confirming the thumbnail renders.
+4. Optionally run **Repair** to attempt re-importing any salvageable old Cloudinary images.
+
+## Out of scope
+No code changes are needed — `AdminMedia.tsx`, `cldImg`, `MediaUploader`, and the `cloudinary-proxy` / `r2-presign` edge functions are all working correctly.
