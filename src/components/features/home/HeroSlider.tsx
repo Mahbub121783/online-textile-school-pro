@@ -155,7 +155,50 @@ const HeroSlider = () => {
     placeholderData: [],
   });
 
-  const slides = useMemo(() => (dbSlides && dbSlides.length > 0 ? dbSlides : FALLBACK_SLIDES), [dbSlides]);
+  // Auto-fetch the latest upcoming published workshop to feature on the hero
+  const { data: latestWorkshop } = useQuery({
+    queryKey: ['hero-latest-workshop'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('workshops')
+        .select('id, title, slug, short_description, thumbnail_url, start_at, instructor:user_profiles!workshops_instructor_id_fkey(full_name)')
+        .eq('status', 'published')
+        .gt('start_at', new Date().toISOString())
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      return data;
+    },
+    staleTime: 60_000,
+  });
+
+  const slides = useMemo(() => {
+    const base = dbSlides && dbSlides.length > 0 ? dbSlides : FALLBACK_SLIDES;
+    if (!latestWorkshop) return base;
+    const ws: any = latestWorkshop;
+    const link = `/workshops/${ws.slug || ws.id}`;
+    const instructorName = ws.instructor?.full_name;
+    const workshopSlide = {
+      id: `ws-${ws.id}`,
+      title: ws.title,
+      subtitle: ws.short_description || (instructorName ? `Live workshop with ${instructorName}. Limited seats — register now.` : 'Live workshop. Limited seats — register now.'),
+      cta_text: 'Register Now',
+      cta_link: link,
+      secondary_cta_text: 'View Details',
+      secondary_cta_link: link,
+      image_url: ws.thumbnail_url || '',
+      gradient_from: 'accent',
+      gradient_to: 'primary-dark',
+      gradient_direction: 'br',
+      overlay_opacity: 15,
+      text_alignment: 'left',
+      title_color: null,
+      subtitle_color: null,
+      countdown_target: ws.start_at,
+      is_workshop_slide: true,
+    };
+    return [workshopSlide, ...base];
+  }, [dbSlides, latestWorkshop]);
 
   const goTo = useCallback((idx: number) => {
     if (isTransitioning) return;
