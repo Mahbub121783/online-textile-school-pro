@@ -220,9 +220,18 @@ const SecureMediaPlayer = ({
     const onLoaded = () => {
       setDuration(v.duration);
       setLoading(false);
-      if (startPosition) v.currentTime = startPosition;
+      if (effectiveStart) v.currentTime = effectiveStart;
     };
     const onTimeUpdate = () => {
+      // Enforce clipEnd
+      if (clipEnd && clipEnd > 0 && v.currentTime >= clipEnd) {
+        v.pause();
+        v.currentTime = clipEnd;
+      }
+      // Enforce clipStart (in case user scrubs before)
+      if (effectiveStart && v.currentTime < effectiveStart - 0.5) {
+        v.currentTime = effectiveStart;
+      }
       setCurrentTime(v.currentTime);
       onProgress?.(v.currentTime);
       if (v.duration > 0) {
