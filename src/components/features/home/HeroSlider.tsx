@@ -83,6 +83,17 @@ const SlideContent = ({ slide, animKey }: { slide: any; animKey: number }) => {
 
   return (
     <div className={`max-w-2xl ${align === 'center' ? 'text-center mx-auto' : align === 'right' ? 'text-right ml-auto' : ''}`}>
+      {slide.is_workshop_slide && (
+        <div className={`mb-4 ${align === 'center' ? 'flex justify-center' : align === 'right' ? 'flex justify-end' : ''}`}>
+          <span className="inline-flex items-center gap-2 bg-accent/95 text-accent-foreground text-xs sm:text-sm font-bold uppercase tracking-wider px-4 py-1.5 rounded-full shadow-lg backdrop-blur-sm hero-new-badge">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary-foreground opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-primary-foreground"></span>
+            </span>
+            New Workshop Live
+          </span>
+        </div>
+      )}
       {countdown && <CountdownDisplay parts={countdown} align={align} />}
 
       <h1
