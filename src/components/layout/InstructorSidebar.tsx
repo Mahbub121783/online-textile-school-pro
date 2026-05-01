@@ -31,6 +31,8 @@ const navGroups = [
       { title: 'Assignments', url: '/instructor/assignments', icon: ClipboardList },
       { title: 'eBooks', url: '/instructor/ebooks', icon: Library },
       { title: 'Certificates', url: '/instructor/certificates', icon: Award },
+      { title: 'Class Videos', url: '/admin/class-videos', icon: Video },
+      { title: 'Video Categories', url: '/admin/class-video-categories', icon: Library },
     ],
   },
   {
