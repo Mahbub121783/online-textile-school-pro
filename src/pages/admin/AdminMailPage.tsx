@@ -153,12 +153,12 @@ const AdminMailPage = () => {
     setComposeOpen(true);
   };
 
-  if (!emailReq) {
+  if (!userEmail) {
     return (
       <div className="flex flex-col items-center justify-center py-16 space-y-4">
         <Mail className="h-12 w-12 text-muted-foreground" />
-        <p className="text-muted-foreground">No institutional email configured for your admin account.</p>
-        <p className="text-xs text-muted-foreground">Request one from the EduMail management page or use the Compose Email tool under Setup.</p>
+        <p className="text-muted-foreground">No system email configured.</p>
+        <p className="text-xs text-muted-foreground">Configure SMTP "From Email" in Admin → Setup → SMTP Settings (e.g. info@onlinetextileschool.com).</p>
       </div>
     );
   }
