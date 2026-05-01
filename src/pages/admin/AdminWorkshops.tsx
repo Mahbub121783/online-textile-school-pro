@@ -173,6 +173,8 @@ export default function AdminWorkshops() {
       delete payload.instructor_name;
       delete payload.instructor_bio;
       delete payload.instructor_avatar;
+      delete payload.start_at; // auto-computed by DB trigger
+      delete payload.end_at;   // auto-computed by DB trigger
       if (editWs?.id) {
         const { error } = await supabase.from('workshops').update(payload).eq('id', editWs.id);
         if (error) throw error;
