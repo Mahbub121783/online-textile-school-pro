@@ -1,84 +1,86 @@
-## Class Videos — Category Playlist System
+## Class Videos — Category-wise Playlist System
 
-A dedicated free video library, separate from paid courses. Browseable by category/subject, searchable, with likes and threaded comments. Reuses the existing `SecureMediaPlayer` (already supports YouTube, Drive, direct upload).
+A free video library separate from paid courses. Browseable by subject, searchable, with likes & threaded comments. Reuses your existing `SecureMediaPlayer`. Header e notun menu link, homepage e "Our Expert Tutors" er upore section.
 
 ---
 
-### 1. Database (new migration)
+### 1. Database (Supabase migration — 6 notun table)
 
 **`video_categories`** — subject buckets (Spinning, Dyeing, Weaving…)
-- `id`, `slug` (unique), `name`, `description`, `icon`, `cover_url`, `sort_order`, `is_active`, `created_at`
+- `id, slug (unique), name, description, icon, cover_url, sort_order, is_active, created_at`
 
-**`class_videos`** — the videos themselves
-- `id`, `title`, `slug`, `description`, `thumbnail_url`
+**`class_videos`** — main video table
+- `id, title, slug (unique), description, thumbnail_url`
 - `category_id` → video_categories
-- `video_url`, `video_platform` (`upload` | `drive` | `youtube`)
-- `clip_start_seconds` int default 0, `clip_end_seconds` int nullable — player only plays this range
-- `duration_seconds`, `tags` text[]
-- `visibility` enum: `public` | `logged_in` | `paid` (admin-controlled per video)
-- `required_course_id` nullable (for `paid` visibility — grants access if user is enrolled)
-- `is_published`, `is_featured`, `views_count`, `likes_count`, `comments_count`
-- `uploaded_by`, `created_at`, `updated_at`
+- `video_url, video_platform` (`upload` | `drive` | `youtube`)
+- `clip_start_seconds` (default 0), `clip_end_seconds` (nullable) — player only plays this range
+- `duration_seconds, tags text[]`
+- `visibility` enum: `public` | `logged_in` | `paid`
+- `required_course_id` (nullable, paid videos er jonno — enrolled hole access)
+- `is_published, is_featured, views_count, likes_count, comments_count`
+- `uploaded_by, created_at, updated_at`
 
 **`class_video_likes`** — `(video_id, user_id)` unique
-**`class_video_comments`** — `id`, `video_id`, `user_id`, `parent_id` (nullable, for nested replies), `content`, `likes_count`, `created_at`, `is_deleted`
+**`class_video_comments`** — `id, video_id, user_id, parent_id (nullable, for nested replies), content, likes_count, is_deleted, created_at, updated_at`
 **`class_video_comment_likes`** — `(comment_id, user_id)` unique
-**`class_video_views`** — `(video_id, user_id|null, viewed_at)` for analytics + view counting
+**`class_video_views`** — `(video_id, user_id|null, viewed_at)` analytics
 
-**RLS**
-- Categories: public read, admin write
-- Videos: read filtered by `visibility` + auth state + enrollment in `required_course_id`; admin/instructor write
-- Likes & comments: insert/update/delete only by owner & only if user can read the video; read public
-- Counters maintained by triggers (likes_count, comments_count, views_count)
+**RLS**:
+- Categories: public read (active), admin/super_admin write
+- Videos: read filtered by visibility + auth + enrollment in `required_course_id`; admin write
+- Likes/comments: insert/delete only by owner; read public
+- Counter triggers: likes_count, comments_count, views_count, comment likes_count
+- `updated_at` triggers
+- `can_view_class_video()` security-definer helper for visibility logic
 
 ---
 
-### 2. Public Pages & Routing
+### 2. Public pages & routing
 
 | Route | Purpose |
 |---|---|
-| `/class-videos` | Hub: featured + all categories grid + global search |
-| `/class-videos/category/:slug` | All videos in a subject (filters: newest/popular, search within) |
-| `/class-videos/:slug` | Watch page: player + description + likes + threaded comments + related videos |
+| `/class-videos` | Hub: featured + categories grid + global search |
+| `/class-videos/category/:slug` | All videos in a subject (newest/popular sort, in-page search) |
+| `/class-videos/:slug` | Watch page: player + likes + threaded comments + related |
 
-Header menu: new top-level link **"Class Videos"** (desktop + mobile drawer).
-
-Homepage: new section **"Free Class Videos"** placed right under `InstructorSpotlight` ("Our Expert Tutors") — shows 6 latest/featured videos + **View All** button → `/class-videos`.
+**Header**: notun "Class Videos" link (desktop + mobile drawer)
+**Homepage**: notun `<ClassVideosShowcase />` section `InstructorSpotlight` ("Our Expert Tutors") er **upore** — 6 ta featured/latest video + "View All" button → `/class-videos`
 
 ---
 
 ### 3. Watch page features
 
-- **Player**: reuses `SecureMediaPlayer`. New prop `clipStart`/`clipEnd` — auto-seeks to `clipStart` on load and pauses at `clipEnd`. For direct uploads, enforced via `timeupdate`. For YouTube embeds, append `?start=X&end=Y` to the embed URL. For Drive, seek on load (end-clip best-effort).
-- **Like button** with optimistic update.
-- **Threaded comments** (1 level of nesting like YouTube): top-level + replies. Each comment can be liked. Author can delete (soft).
-- **Related**: same category, sorted by views.
-- **View tracking**: insert into `class_video_views` on play start.
+- **Player**: existing `SecureMediaPlayer`-e notun `clipStart`/`clipEnd` props
+  - Direct upload: `timeupdate` event diye start e seek + end e pause
+  - YouTube: embed URL e `?start=X&end=Y` append
+  - Drive: load e seek (end best-effort)
+- **Like button**: optimistic update
+- **Threaded comments**: 1-level nesting (YouTube style) — top-level + replies, each likeable, owner soft-delete
+- **Related**: same category, views diye sort
+- **View tracking**: play start e `class_video_views` insert
 
 ---
 
-### 4. Admin
+### 4. Admin panel (`/admin/class-videos`)
 
-New admin page `/admin/class-videos`:
-- Categories CRUD (with icon + cover)
-- Videos CRUD with fields above
-- Per-video visibility selector (Public / Logged-in / Paid)
-- Clip range inputs (start sec / end sec) with a small preview
-- Source picker (Upload via existing `useFileUpload` → R2 / Drive link / YouTube link)
-- Featured + publish toggles, drag-to-reorder
-
-Sidebar entry under "Engagement" group.
+- Categories CRUD (icon + cover image)
+- Videos CRUD with all fields
+- Visibility selector per video (Public / Logged-in / Paid + course picker)
+- Clip range input (start sec / end sec) with mini preview
+- Source picker: Upload (existing `useFileUpload` → R2/Cloudinary) / Drive link / YouTube link
+- Featured + publish toggles
+- AdminSidebar e "Engagement" group er niche entry
 
 ---
 
 ### 5. Search
 
-- Client-side filter on category pages (debounced)
-- Global hub page uses ilike on `title`, `description`, `tags` against `class_videos`. (No new pg_search index needed at this scale — can add later.)
+- Hub page: `ilike` on title/description/tags (debounced)
+- Category page: in-page client filter
 
 ---
 
-### 6. Files to create
+### Files to create
 
 ```text
 src/pages/class-videos/ClassVideosHub.tsx
@@ -89,26 +91,28 @@ src/components/class-videos/CategoryCard.tsx
 src/components/class-videos/CommentThread.tsx
 src/components/class-videos/CommentItem.tsx
 src/components/class-videos/LikeButton.tsx
-src/components/features/home/ClassVideosShowcase.tsx   (homepage section)
+src/components/features/home/ClassVideosShowcase.tsx
 src/pages/admin/AdminClassVideos.tsx
 src/pages/admin/AdminClassVideoCategories.tsx
 src/hooks/useClassVideos.ts
 src/hooks/useVideoComments.ts
-supabase/migrations/<timestamp>_class_videos.sql
 ```
 
-### 7. Files to edit
+### Files to edit
 
-- `src/components/media/SecureMediaPlayer.tsx` — add `clipStart`/`clipEnd` props + enforcement
-- `src/components/layout/Header.tsx` — add "Class Videos" nav link
-- `src/components/layout/AdminSidebar.tsx` — add admin entries
-- `src/pages/Index.tsx` — insert `<ClassVideosShowcase />` under `InstructorSpotlight`
-- `src/App.tsx` — register 3 public routes + 2 admin routes
+- `src/components/media/SecureMediaPlayer.tsx` — `clipStart`/`clipEnd` props enforce
+- `src/components/layout/Header.tsx` — "Class Videos" nav link
+- `src/components/layout/AdminSidebar.tsx` — admin entries
+- `src/pages/Index.tsx` — `<ClassVideosShowcase />` insert (InstructorSpotlight er upore)
+- `src/App.tsx` — 3 public + 2 admin route register
 
 ---
 
-### Summary of decisions applied
-- Default visibility = **public**, admin can switch any video to **logged-in only** or **paid (course-gated)**
-- Comments & likes require login
-- Sources: Upload + Drive + YouTube (Vimeo skipped)
-- Timestamps = clip range (start–end seconds)
+### Decisions applied (apnar earlier reply theke)
+
+- Default visibility = **public**, admin chaile **logged-in** ba **paid (course-gated)** korte parbe
+- Comments & likes: **logged-in users only**
+- Sources: **Upload + Drive + YouTube**
+- Timestamps: **clip range (start–end seconds)**
+
+Approve korle ami sathe sathe migration apply korbo + sob frontend/admin code build korbo ek shathe.
