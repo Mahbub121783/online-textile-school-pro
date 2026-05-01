@@ -213,6 +213,9 @@ const AppRoutes = () => {
           <Route path="/ebooks/:slug" element={<EbookDetail />} />
           <Route path="/learning-paths" element={<LearningPaths />} />
           <Route path="/learning-paths/:slug" element={<LearningPathDetail />} />
+          <Route path="/class-videos" element={<ClassVideosHub />} />
+          <Route path="/class-videos/category/:slug" element={<ClassVideoCategory />} />
+          <Route path="/class-videos/:slug" element={<ClassVideoWatch />} />
           <Route path="/cart" element={<CartPage />} />
           <Route path="/checkout" element={<Checkout />} />
           <Route path="/payment/success" element={<PaymentSuccess />} />
