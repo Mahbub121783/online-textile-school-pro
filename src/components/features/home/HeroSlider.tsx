@@ -197,8 +197,19 @@ const HeroSlider = () => {
       countdown_target: ws.start_at,
       is_workshop_slide: true,
     };
+    // Workshop slide ALWAYS pinned to position 1 (index 0), regardless of admin sort_order
     return [workshopSlide, ...base];
   }, [dbSlides, latestWorkshop]);
+
+  // When the workshop slide appears (or changes), snap back to it so it's the first thing users see
+  useEffect(() => {
+    if (latestWorkshop) {
+      setCurrent(0);
+      setProgress(0);
+      progressRef.current = 0;
+      lastTickRef.current = Date.now();
+    }
+  }, [latestWorkshop?.id]);
 
   const goTo = useCallback((idx: number) => {
     if (isTransitioning) return;
