@@ -146,8 +146,18 @@ export default function AdminWorkshops() {
 
   const saveMutation = useMutation({
     mutationFn: async (ws: any) => {
+      // Block publishing without a valid Google Meet link — root cause of "Start Workshop not appearing".
+      const isPublishingState = ws.status && ws.status !== 'draft';
+      const trimmedLink = (ws.meet_link || '').trim();
+      if (isPublishingState && trimmedLink.length === 0) {
+        throw new Error('Cannot publish a workshop without a Google Meet link. Add the link or save as Draft.');
+      }
+      if (trimmedLink.length > 0 && !/^https?:\/\//i.test(trimmedLink)) {
+        throw new Error('Meet link must start with http:// or https://');
+      }
       const payload = {
         ...ws,
+        meet_link: trimmedLink || null,
         fake_registration_count: ws.fake_registration_count ? Number(ws.fake_registration_count) : 0,
         max_participants: ws.max_participants ? Number(ws.max_participants) : null,
         registration_deadline: ws.registration_deadline || null,
