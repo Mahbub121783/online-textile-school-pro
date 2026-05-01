@@ -1,39 +1,77 @@
-# Workshop reminder system — auto + manual
+## Goal
 
-Reuses the existing `send-smtp-email` function and the already-configured `workshop_live_link` template (no new email infrastructure needed).
+Resolve the security warnings shown in the Security panel after publishing. Most are real issues we can fix via SQL migration; two require a manual toggle in the Supabase dashboard.
 
-## What this delivers
+## What we'll fix automatically (single SQL migration)
 
-1. **Automatic** — Every registered student receives an email **30 minutes before** the workshop starts, containing the Meet link, exact date/time (Asia/Dhaka), and workshop title. Students also get an in-app bell notification.
-2. **Manual** — Admin can click **"Send reminder now"** from the workshop card at any time to immediately blast all registered students.
-3. **No-duplicate guarantee** — A `reminder_sent_at` flag prevents the cron from firing twice for the same workshop.
+### 1. Error: `user_roles` broadcast on Realtime
+**Fix:** Remove `public.user_roles` from the `supabase_realtime` publication. The admin UI doesn't need live role updates — refresh on demand is enough. This also resolves the related "Role assignments broadcast" warning.
 
-## Implementation steps
+```sql
+ALTER PUBLICATION supabase_realtime DROP TABLE public.user_roles;
+```
+Then remove the `user_roles` listener from `src/hooks/useRealtime.ts` (admin queries already invalidate on user actions).
 
-### 1. Migration
-- Add column `workshops.reminder_sent_at timestamptz` (nullable).
-- Schedule pg_cron `workshop-reminder-cron` every 5 minutes calling the new edge function.
+### 2. SMS logs SELECT gap
+**Fix:** Add an explicit restrictive SELECT policy so only admins can read `sms_logs` (closes any ambiguity from the existing `FOR ALL` policy).
 
-### 2. New edge function `workshop-reminder-cron`
-- **Cron mode** (no body): finds all workshops with
-  `meet_link IS NOT NULL`, `start_at` between `now()` and `now() + 35 min`, `reminder_sent_at IS NULL`, status in `published`/`ongoing`. Sends email to all `registered` students, sets `reminder_sent_at = now()`, and inserts a `notifications` row for each user.
-- **Manual mode** (`POST { workshop_id: "uuid" }`): same logic for one workshop, ignoring the time window and `reminder_sent_at` (admin can re-send).
-- Uses Asia/Dhaka local time formatting in the email body.
+```sql
+CREATE POLICY "Only admins can read sms_logs"
+  ON public.sms_logs FOR SELECT TO authenticated
+  USING (has_role(auth.uid(), 'admin') OR has_role(auth.uid(), 'super_admin'));
+```
 
-### 3. Admin UI
-- In `AdminWorkshops.tsx`, add a green **"Send reminder"** button (envelope icon) next to existing actions for workshops that have a meet link. Confirm dialog → invoke `workshop-reminder-cron` with `workshop_id`. Toast success with `sent/total` count.
-- Show a small badge `Reminder sent` if `reminder_sent_at` is set.
+### 3. Quizzes with NULL `course_id` privilege escalation
+**Fix:** Tighten the policy so instructors can only manage quizzes attached to a course they own; NULL-course quizzes restricted to admins.
 
-### 4. Email content (already exists)
-Uses existing template `workshop_live_link` with placeholders:
-- `user_name`, `workshop_title`, `start_time` (formatted Asia/Dhaka), `meet_link`.
+```sql
+DROP POLICY "Instructors manage quizzes of their courses" ON public.quizzes;
+CREATE POLICY "Instructors manage quizzes of their courses"
+  ON public.quizzes FOR ALL TO authenticated
+  USING (
+    (course_id IS NOT NULL AND can_manage_course(course_id))
+    OR has_role(auth.uid(), 'admin') OR has_role(auth.uid(), 'super_admin')
+  )
+  WITH CHECK (
+    (course_id IS NOT NULL AND can_manage_course(course_id))
+    OR has_role(auth.uid(), 'admin') OR has_role(auth.uid(), 'super_admin')
+  );
+```
 
-No template changes needed unless you want me to also update its design.
+### 4. SECURITY DEFINER functions executable by anon/authenticated
+**Fix:** Revoke `EXECUTE` from `anon` and `authenticated` on internal helper functions that should only run from triggers / edge functions / other SECURITY DEFINER functions. We'll keep callable: `has_role`, `can_manage_course`, `can_manage_content_contributors`, `search_forum`, `increment_*_view`, `increment_*_download` (these are intentionally callable). Revoke from the rest (`credit_wallet`, `debit_wallet`, `notify_admins`, `cleanup_old_ai_chats`, `auto_update_workshop_status`, `enforce_name_change_cooldown`, `update_*` trigger functions, `handle_new_user`, etc.).
 
-## Files
+### 5. RLS Policy Always True
+**Fix:** Find any non-SELECT policy with `USING (true)` / `WITH CHECK (true)` and tighten. We'll audit and replace with role-based or owner-based conditions.
 
-- `supabase/migrations/<ts>_workshop_reminders.sql` — column + cron job
-- `supabase/functions/workshop-reminder-cron/index.ts` — new function
-- `src/pages/admin/AdminWorkshops.tsx` — "Send reminder" button + status badge
+### 6. Public bucket allows listing (`media`)
+**Fix:** Add a restrictive listing policy so unauthenticated users can only download files by direct URL but cannot list bucket contents:
+```sql
+CREATE POLICY "Block listing of media bucket"
+  ON storage.objects FOR SELECT TO anon
+  USING (false);
+-- Keep authenticated SELECT for reading metadata where needed.
+```
+(Direct public URLs for images still work — only the LIST operation is blocked.)
 
-## Approve to implement.
+### 7. Extension in public schema
+**Fix:** Move extensions (e.g., `citext`, `pg_net`, `http`) out of `public` into `extensions` schema where safe. We'll only move ones that are clearly safe to relocate; if any are referenced in existing code/migrations we'll leave them and document.
+
+## What requires manual action (cannot fix via code)
+
+### 8. Leaked Password Protection Disabled
+You need to enable this in the Supabase dashboard:
+**Authentication → Providers → Email → Enable "Leaked password protection"**
+
+I'll include a direct link in the implementation message.
+
+## Files to change
+
+- `supabase/migrations/<ts>_security_hardening.sql` — all SQL fixes above
+- `src/hooks/useRealtime.ts` — remove `user_roles` realtime subscription
+
+## After implementation
+
+Click "Update" in the Security panel to re-scan. The Error + 7 of the warnings should clear. The remaining one (Leaked Password Protection) clears once you enable it in the dashboard.
+
+Approve to implement.
