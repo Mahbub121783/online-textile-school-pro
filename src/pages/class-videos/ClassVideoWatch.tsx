@@ -46,7 +46,7 @@ export default function ClassVideoWatch() {
       <SEOHead
         title={`${video.title} — Class Videos`}
         description={video.description?.slice(0, 160) || `Watch ${video.title} on Online Textile School`}
-        image={video.thumbnail_url || undefined}
+        ogImage={video.thumbnail_url || undefined}
       />
 
       <div className="container py-6 max-w-6xl">
