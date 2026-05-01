@@ -20,7 +20,7 @@ function slugify(s: string) {
 }
 
 const EMPTY = {
-  title: '', slug: '', description: '', thumbnail_url: '', category_id: '',
+  title: '', slug: '', description: '', category_id: '',
   video_url: '', video_platform: 'upload' as 'upload' | 'drive' | 'youtube',
   clip_start_seconds: 0, clip_end_seconds: null as number | null,
   duration_seconds: null as number | null, tags: '' as string,
@@ -53,7 +53,7 @@ export default function AdminClassVideos() {
         title: form.title,
         slug: form.slug || slugify(form.title),
         description: form.description || null,
-        thumbnail_url: form.thumbnail_url || null,
+        thumbnail_url: null,
         category_id: form.category_id || null,
         video_url: form.video_url,
         video_platform: form.video_platform,
@@ -99,7 +99,7 @@ export default function AdminClassVideos() {
     setEditing(v);
     setForm({
       title: v.title, slug: v.slug, description: v.description ?? '',
-      thumbnail_url: v.thumbnail_url ?? '', category_id: v.category_id ?? '',
+      category_id: v.category_id ?? '',
       video_url: v.video_url, video_platform: v.video_platform,
       clip_start_seconds: v.clip_start_seconds, clip_end_seconds: v.clip_end_seconds,
       duration_seconds: v.duration_seconds, tags: (v.tags ?? []).join(', '),
@@ -166,7 +166,7 @@ export default function AdminClassVideos() {
             <div><Label>Title *</Label><Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></div>
             <div><Label>Slug</Label><Input value={form.slug} placeholder={slugify(form.title)} onChange={(e) => setForm({ ...form, slug: e.target.value })} /></div>
             <div><Label>Description</Label><Textarea rows={3} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
-            <div><Label>Thumbnail URL</Label><Input value={form.thumbnail_url} onChange={(e) => setForm({ ...form, thumbnail_url: e.target.value })} /></div>
+            <p className="text-xs text-muted-foreground">Thumbnail er dorkar nai — card-e direct video preview hover/scroll-e auto-play hobe (reel-style).</p>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
