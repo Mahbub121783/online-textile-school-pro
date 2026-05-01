@@ -387,6 +387,9 @@ const HeroSlider = () => {
         .hero-slide-cta {
           animation: slideUp 0.6s ease-out 0.3s both;
         }
+        .hero-new-badge {
+          animation: slideUp 0.5s ease-out both;
+        }
       `}</style>
     </section>
   );
