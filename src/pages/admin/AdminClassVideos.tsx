@@ -166,7 +166,7 @@ export default function AdminClassVideos() {
             <div><Label>Title *</Label><Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></div>
             <div><Label>Slug</Label><Input value={form.slug} placeholder={slugify(form.title)} onChange={(e) => setForm({ ...form, slug: e.target.value })} /></div>
             <div><Label>Description</Label><Textarea rows={3} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
-            <div><Label>Thumbnail URL</Label><Input value={form.thumbnail_url} onChange={(e) => setForm({ ...form, thumbnail_url: e.target.value })} /></div>
+            <p className="text-xs text-muted-foreground">Thumbnail er dorkar nai — card-e direct video preview hover/scroll-e auto-play hobe (reel-style).</p>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
