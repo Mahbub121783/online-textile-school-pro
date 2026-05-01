@@ -786,6 +786,227 @@ export type Database = {
         }
         Relationships: []
       }
+      class_video_comment_likes: {
+        Row: {
+          comment_id: string
+          created_at: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          comment_id: string
+          created_at?: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          comment_id?: string
+          created_at?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "class_video_comment_likes_comment_id_fkey"
+            columns: ["comment_id"]
+            isOneToOne: false
+            referencedRelation: "class_video_comments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      class_video_comments: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          is_deleted: boolean
+          likes_count: number
+          parent_id: string | null
+          updated_at: string
+          user_id: string
+          video_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          is_deleted?: boolean
+          likes_count?: number
+          parent_id?: string | null
+          updated_at?: string
+          user_id: string
+          video_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          is_deleted?: boolean
+          likes_count?: number
+          parent_id?: string | null
+          updated_at?: string
+          user_id?: string
+          video_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "class_video_comments_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "class_video_comments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "class_video_comments_video_id_fkey"
+            columns: ["video_id"]
+            isOneToOne: false
+            referencedRelation: "class_videos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      class_video_likes: {
+        Row: {
+          created_at: string
+          id: string
+          user_id: string
+          video_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          user_id: string
+          video_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          user_id?: string
+          video_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "class_video_likes_video_id_fkey"
+            columns: ["video_id"]
+            isOneToOne: false
+            referencedRelation: "class_videos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      class_video_views: {
+        Row: {
+          id: string
+          user_id: string | null
+          video_id: string
+          viewed_at: string
+        }
+        Insert: {
+          id?: string
+          user_id?: string | null
+          video_id: string
+          viewed_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string | null
+          video_id?: string
+          viewed_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "class_video_views_video_id_fkey"
+            columns: ["video_id"]
+            isOneToOne: false
+            referencedRelation: "class_videos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      class_videos: {
+        Row: {
+          category_id: string | null
+          clip_end_seconds: number | null
+          clip_start_seconds: number
+          comments_count: number
+          created_at: string
+          description: string | null
+          duration_seconds: number | null
+          id: string
+          is_featured: boolean
+          is_published: boolean
+          likes_count: number
+          required_course_id: string | null
+          slug: string
+          tags: string[]
+          thumbnail_url: string | null
+          title: string
+          updated_at: string
+          uploaded_by: string | null
+          video_platform: Database["public"]["Enums"]["class_video_platform"]
+          video_url: string
+          views_count: number
+          visibility: Database["public"]["Enums"]["class_video_visibility"]
+        }
+        Insert: {
+          category_id?: string | null
+          clip_end_seconds?: number | null
+          clip_start_seconds?: number
+          comments_count?: number
+          created_at?: string
+          description?: string | null
+          duration_seconds?: number | null
+          id?: string
+          is_featured?: boolean
+          is_published?: boolean
+          likes_count?: number
+          required_course_id?: string | null
+          slug: string
+          tags?: string[]
+          thumbnail_url?: string | null
+          title: string
+          updated_at?: string
+          uploaded_by?: string | null
+          video_platform?: Database["public"]["Enums"]["class_video_platform"]
+          video_url: string
+          views_count?: number
+          visibility?: Database["public"]["Enums"]["class_video_visibility"]
+        }
+        Update: {
+          category_id?: string | null
+          clip_end_seconds?: number | null
+          clip_start_seconds?: number
+          comments_count?: number
+          created_at?: string
+          description?: string | null
+          duration_seconds?: number | null
+          id?: string
+          is_featured?: boolean
+          is_published?: boolean
+          likes_count?: number
+          required_course_id?: string | null
+          slug?: string
+          tags?: string[]
+          thumbnail_url?: string | null
+          title?: string
+          updated_at?: string
+          uploaded_by?: string | null
+          video_platform?: Database["public"]["Enums"]["class_video_platform"]
+          video_url?: string
+          views_count?: number
+          visibility?: Database["public"]["Enums"]["class_video_visibility"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "class_videos_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "video_categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cloudflare_r2_accounts: {
         Row: {
           access_key_id: string
@@ -5423,6 +5644,42 @@ export type Database = {
           },
         ]
       }
+      video_categories: {
+        Row: {
+          cover_url: string | null
+          created_at: string
+          description: string | null
+          icon: string | null
+          id: string
+          is_active: boolean
+          name: string
+          slug: string
+          sort_order: number
+        }
+        Insert: {
+          cover_url?: string | null
+          created_at?: string
+          description?: string | null
+          icon?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          slug: string
+          sort_order?: number
+        }
+        Update: {
+          cover_url?: string | null
+          created_at?: string
+          description?: string | null
+          icon?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          slug?: string
+          sort_order?: number
+        }
+        Relationships: []
+      }
       virtual_lab_completions: {
         Row: {
           completed_at: string
@@ -6107,6 +6364,8 @@ export type Database = {
         | "content_writer"
         | "instructor"
         | "student"
+      class_video_platform: "upload" | "drive" | "youtube"
+      class_video_visibility: "public" | "logged_in" | "paid"
       workshop_registration_status:
         | "registered"
         | "attended"
@@ -6254,6 +6513,8 @@ export const Constants = {
         "instructor",
         "student",
       ],
+      class_video_platform: ["upload", "drive", "youtube"],
+      class_video_visibility: ["public", "logged_in", "paid"],
       workshop_registration_status: [
         "registered",
         "attended",

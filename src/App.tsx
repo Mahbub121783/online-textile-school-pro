@@ -91,6 +91,11 @@ const AssignmentSubmit = lazy(() => import("./pages/assignment/AssignmentSubmit"
 const EbookCatalog = lazy(() => import("./pages/ebooks/EbookCatalog"));
 const EbookDetail = lazy(() => import("./pages/ebooks/EbookDetail"));
 const EbookReader = lazy(() => import("./pages/ebooks/EbookReader"));
+const ClassVideosHub = lazy(() => import("./pages/class-videos/ClassVideosHub"));
+const ClassVideoCategory = lazy(() => import("./pages/class-videos/ClassVideoCategory"));
+const ClassVideoWatch = lazy(() => import("./pages/class-videos/ClassVideoWatch"));
+const AdminClassVideos = lazy(() => import("./pages/admin/AdminClassVideos"));
+const AdminClassVideoCategories = lazy(() => import("./pages/admin/AdminClassVideoCategories"));
 const LearningPaths = lazy(() => import("./pages/courses/LearningPaths"));
 const LearningPathDetail = lazy(() => import("./pages/courses/LearningPathDetail"));
 const WishlistPage = lazy(() => import("./pages/dashboard/WishlistPage"));
@@ -208,6 +213,9 @@ const AppRoutes = () => {
           <Route path="/ebooks/:slug" element={<EbookDetail />} />
           <Route path="/learning-paths" element={<LearningPaths />} />
           <Route path="/learning-paths/:slug" element={<LearningPathDetail />} />
+          <Route path="/class-videos" element={<ClassVideosHub />} />
+          <Route path="/class-videos/category/:slug" element={<ClassVideoCategory />} />
+          <Route path="/class-videos/:slug" element={<ClassVideoWatch />} />
           <Route path="/cart" element={<CartPage />} />
           <Route path="/checkout" element={<Checkout />} />
           <Route path="/payment/success" element={<PaymentSuccess />} />
@@ -312,6 +320,8 @@ const AppRoutes = () => {
             <Route path="id-card-settings" element={<AdminIdCardSettings />} />
             <Route path="id-card-management" element={<AdminIdCardManagement />} />
             <Route path="forum" element={<AdminForum />} />
+            <Route path="class-videos" element={<AdminClassVideos />} />
+            <Route path="class-video-categories" element={<AdminClassVideoCategories />} />
             <Route path="students" element={<AdminStudents />} />
             <Route path="students/:id" element={<StudentDetail />} />
             <Route path="registrations" element={<AdminRegistrations />} />

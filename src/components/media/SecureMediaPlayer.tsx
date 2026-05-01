@@ -25,6 +25,10 @@ interface SecureMediaPlayerProps {
   watermark?: string;
   showControls?: boolean;
   className?: string;
+  /** Clip range start (seconds) — player will seek here on load */
+  clipStart?: number | null;
+  /** Clip range end (seconds) — player will pause here */
+  clipEnd?: number | null;
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -148,6 +152,8 @@ const SecureMediaPlayer = ({
   watermark,
   showControls = true,
   className = '',
+  clipStart,
+  clipEnd,
 }: SecureMediaPlayerProps) => {
   const { user, profile } = useAuth();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -166,9 +172,24 @@ const SecureMediaPlayer = ({
   const [controlsVisible, setControlsVisible] = useState(true);
   const hideTimer = useRef<ReturnType<typeof setTimeout>>();
 
+  const effectiveStart = useMemo(
+    () => Math.max(0, clipStart ?? startPosition ?? 0),
+    [clipStart, startPosition]
+  );
+
   const source = useMemo(
-    () => parseVideoSource(videoUrl || '', videoPlatform),
-    [videoUrl, videoPlatform]
+    () => {
+      const base = parseVideoSource(videoUrl || '', videoPlatform);
+      // Append clip range params for YouTube
+      if (base.type === 'youtube' && (clipStart || clipEnd)) {
+        const params: string[] = [];
+        if (clipStart && clipStart > 0) params.push(`start=${Math.floor(clipStart)}`);
+        if (clipEnd && clipEnd > 0) params.push(`end=${Math.floor(clipEnd)}`);
+        return { ...base, embedUrl: `${base.embedUrl}&${params.join('&')}` };
+      }
+      return base;
+    },
+    [videoUrl, videoPlatform, clipStart, clipEnd]
   );
 
   const isDirect = source.type === 'direct';
@@ -182,9 +203,9 @@ const SecureMediaPlayer = ({
   }, [volume, muted, playbackRate, isDirect]);
 
   useEffect(() => {
-    if (!isDirect || !videoRef.current || !startPosition) return;
-    videoRef.current.currentTime = startPosition;
-  }, [startPosition, isDirect]);
+    if (!isDirect || !videoRef.current || !effectiveStart) return;
+    videoRef.current.currentTime = effectiveStart;
+  }, [effectiveStart, isDirect]);
 
   const watchMilestonesRef = useRef<Set<number>>(new Set());
 
@@ -199,9 +220,18 @@ const SecureMediaPlayer = ({
     const onLoaded = () => {
       setDuration(v.duration);
       setLoading(false);
-      if (startPosition) v.currentTime = startPosition;
+      if (effectiveStart) v.currentTime = effectiveStart;
     };
     const onTimeUpdate = () => {
+      // Enforce clipEnd
+      if (clipEnd && clipEnd > 0 && v.currentTime >= clipEnd) {
+        v.pause();
+        v.currentTime = clipEnd;
+      }
+      // Enforce clipStart (in case user scrubs before)
+      if (effectiveStart && v.currentTime < effectiveStart - 0.5) {
+        v.currentTime = effectiveStart;
+      }
       setCurrentTime(v.currentTime);
       onProgress?.(v.currentTime);
       if (v.duration > 0) {
@@ -250,7 +280,7 @@ const SecureMediaPlayer = ({
       v.removeEventListener('waiting', onWaiting);
       v.removeEventListener('canplay', onCanPlay);
     };
-  }, [isDirect, startPosition, onProgress, videoUrl, title]);
+  }, [isDirect, effectiveStart, clipEnd, onProgress, videoUrl, title]);
 
   useEffect(() => {
     if (isDirect || !playing) return;

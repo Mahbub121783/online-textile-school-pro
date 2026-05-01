@@ -71,6 +71,8 @@ const engagementSubItems = [
   { title: 'Forum', url: '/admin/forum', icon: MessageSquare },
   { title: 'AI Chatbot', url: '/admin/ai-chatbot', icon: Activity },
   { title: 'Workshops', url: '/admin/workshops', icon: Presentation },
+  { title: 'Class Videos', url: '/admin/class-videos', icon: Video },
+  { title: 'Video Categories', url: '/admin/class-video-categories', icon: Layers },
   { title: 'Popups', url: '/admin/popups', icon: Bell },
 ];
 
