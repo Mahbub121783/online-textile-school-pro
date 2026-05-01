@@ -83,6 +83,17 @@ const SlideContent = ({ slide, animKey }: { slide: any; animKey: number }) => {
 
   return (
     <div className={`max-w-2xl ${align === 'center' ? 'text-center mx-auto' : align === 'right' ? 'text-right ml-auto' : ''}`}>
+      {slide.is_workshop_slide && (
+        <div className={`mb-4 ${align === 'center' ? 'flex justify-center' : align === 'right' ? 'flex justify-end' : ''}`}>
+          <span className="inline-flex items-center gap-2 bg-accent/95 text-accent-foreground text-xs sm:text-sm font-bold uppercase tracking-wider px-4 py-1.5 rounded-full shadow-lg backdrop-blur-sm hero-new-badge">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary-foreground opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-primary-foreground"></span>
+            </span>
+            New Workshop Live
+          </span>
+        </div>
+      )}
       {countdown && <CountdownDisplay parts={countdown} align={align} />}
 
       <h1
@@ -144,7 +155,50 @@ const HeroSlider = () => {
     placeholderData: [],
   });
 
-  const slides = useMemo(() => (dbSlides && dbSlides.length > 0 ? dbSlides : FALLBACK_SLIDES), [dbSlides]);
+  // Auto-fetch the latest upcoming published workshop to feature on the hero
+  const { data: latestWorkshop } = useQuery({
+    queryKey: ['hero-latest-workshop'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('workshops')
+        .select('id, title, slug, short_description, thumbnail_url, start_at, instructor:user_profiles!workshops_instructor_id_fkey(full_name)')
+        .eq('status', 'published')
+        .gt('start_at', new Date().toISOString())
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      return data;
+    },
+    staleTime: 60_000,
+  });
+
+  const slides = useMemo(() => {
+    const base = dbSlides && dbSlides.length > 0 ? dbSlides : FALLBACK_SLIDES;
+    if (!latestWorkshop) return base;
+    const ws: any = latestWorkshop;
+    const link = `/workshops/${ws.slug || ws.id}`;
+    const instructorName = ws.instructor?.full_name;
+    const workshopSlide = {
+      id: `ws-${ws.id}`,
+      title: ws.title,
+      subtitle: ws.short_description || (instructorName ? `Live workshop with ${instructorName}. Limited seats — register now.` : 'Live workshop. Limited seats — register now.'),
+      cta_text: 'Register Now',
+      cta_link: link,
+      secondary_cta_text: 'View Details',
+      secondary_cta_link: link,
+      image_url: ws.thumbnail_url || '',
+      gradient_from: 'accent',
+      gradient_to: 'primary-dark',
+      gradient_direction: 'br',
+      overlay_opacity: 15,
+      text_alignment: 'left',
+      title_color: null,
+      subtitle_color: null,
+      countdown_target: ws.start_at,
+      is_workshop_slide: true,
+    };
+    return [workshopSlide, ...base];
+  }, [dbSlides, latestWorkshop]);
 
   const goTo = useCallback((idx: number) => {
     if (isTransitioning) return;
@@ -332,6 +386,9 @@ const HeroSlider = () => {
         }
         .hero-slide-cta {
           animation: slideUp 0.6s ease-out 0.3s both;
+        }
+        .hero-new-badge {
+          animation: slideUp 0.5s ease-out both;
         }
       `}</style>
     </section>
