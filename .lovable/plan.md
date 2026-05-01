@@ -1,57 +1,114 @@
-# Fix: Image previews not rendering on Media Library
+## Class Videos — Category Playlist System
 
-## What you're seeing
-On `/admin/media`, file rows load correctly (filename, size, source badge — Cloudinary, R2, Supabase legacy), but image **thumbnails render as broken images** (only the alt-text `Orange and Black Corporate Event…`, `WhatsApp Image…`, `asutex.png`, etc. is visible).
+A dedicated free video library, separate from paid courses. Browseable by category/subject, searchable, with likes and threaded comments. Reuses the existing `SecureMediaPlayer` (already supports YouTube, Drive, direct upload).
 
-## Root cause (almost certainly remix-related)
+---
 
-The `media_library` table was carried over during the remix, but the assets it points to live in **external storage accounts that belong to the original project**, not yours:
+### 1. Database (new migration)
 
-- **Cloudinary URLs** (`https://res.cloudinary.com/<old-cloud-name>/image/upload/.../foo.png`) — the `<old-cloud-name>` is the original owner's Cloudinary account. Your remix doesn't have credentials to that account, but more importantly the URLs themselves point to a cloud you don't own.
-- **R2 URLs** — same situation; signed/public URLs point to the original owner's R2 bucket.
-- **Supabase legacy URLs** — these point to the *original* Supabase project's storage bucket (different project ref), so they 404 from your new project.
+**`video_categories`** — subject buckets (Spinning, Dyeing, Weaving…)
+- `id`, `slug` (unique), `name`, `description`, `icon`, `cover_url`, `sort_order`, `is_active`, `created_at`
 
-Your **new** Cloudinary + R2 accounts (the credentials you just configured in `Setup → Cloudinary` and `Setup → R2`) are healthy and ready, but no files have been uploaded **into them** yet — so the existing `media_library` rows are essentially dead pointers.
+**`class_videos`** — the videos themselves
+- `id`, `title`, `slug`, `description`, `thumbnail_url`
+- `category_id` → video_categories
+- `video_url`, `video_platform` (`upload` | `drive` | `youtube`)
+- `clip_start_seconds` int default 0, `clip_end_seconds` int nullable — player only plays this range
+- `duration_seconds`, `tags` text[]
+- `visibility` enum: `public` | `logged_in` | `paid` (admin-controlled per video)
+- `required_course_id` nullable (for `paid` visibility — grants access if user is enrolled)
+- `is_published`, `is_featured`, `views_count`, `likes_count`, `comments_count`
+- `uploaded_by`, `created_at`, `updated_at`
 
-The code itself (`AdminMedia.tsx`, `cldImg`, `handleImgError`) is correct. It's a **data/asset ownership problem**, not a code bug.
+**`class_video_likes`** — `(video_id, user_id)` unique
+**`class_video_comments`** — `id`, `video_id`, `user_id`, `parent_id` (nullable, for nested replies), `content`, `likes_count`, `created_at`, `is_deleted`
+**`class_video_comment_likes`** — `(comment_id, user_id)` unique
+**`class_video_views`** — `(video_id, user_id|null, viewed_at)` for analytics + view counting
 
-## Verification steps (I'll run these first)
+**RLS**
+- Categories: public read, admin write
+- Videos: read filtered by `visibility` + auth state + enrollment in `required_course_id`; admin/instructor write
+- Likes & comments: insert/update/delete only by owner & only if user can read the video; read public
+- Counters maintained by triggers (likes_count, comments_count, views_count)
 
-1. Query `media_library` for a few sample rows and confirm the cloud_name in the URLs does **not** match any nickname/cloud_name in your `cloudinary_accounts` table.
-2. Query `cloudinary_accounts` and `cloudflare_r2_accounts` to confirm at least one active account exists per category (images / documents / video / R2).
-3. Hit one of the failing Cloudinary URLs from a script to see the exact response (404 / 401 / unauthorized).
+---
 
-## Fix options
+### 2. Public Pages & Routing
 
-You only need to pick one — I recommend **Option A**.
+| Route | Purpose |
+|---|---|
+| `/class-videos` | Hub: featured + all categories grid + global search |
+| `/class-videos/category/:slug` | All videos in a subject (filters: newest/popular, search within) |
+| `/class-videos/:slug` | Watch page: player + description + likes + threaded comments + related videos |
 
-### Option A — Clean slate (recommended, fastest)
-Delete all `media_library` rows that point to the previous owner's storage. The library will be empty, and any new uploads (via the "Upload Files" button or via instructor/admin forms) will land in **your** Cloudinary/R2 and show up correctly.
+Header menu: new top-level link **"Class Videos"** (desktop + mobile drawer).
+
+Homepage: new section **"Free Class Videos"** placed right under `InstructorSpotlight` ("Our Expert Tutors") — shows 6 latest/featured videos + **View All** button → `/class-videos`.
+
+---
+
+### 3. Watch page features
+
+- **Player**: reuses `SecureMediaPlayer`. New prop `clipStart`/`clipEnd` — auto-seeks to `clipStart` on load and pauses at `clipEnd`. For direct uploads, enforced via `timeupdate`. For YouTube embeds, append `?start=X&end=Y` to the embed URL. For Drive, seek on load (end-clip best-effort).
+- **Like button** with optimistic update.
+- **Threaded comments** (1 level of nesting like YouTube): top-level + replies. Each comment can be liked. Author can delete (soft).
+- **Related**: same category, sorted by views.
+- **View tracking**: insert into `class_video_views` on play start.
+
+---
+
+### 4. Admin
+
+New admin page `/admin/class-videos`:
+- Categories CRUD (with icon + cover)
+- Videos CRUD with fields above
+- Per-video visibility selector (Public / Logged-in / Paid)
+- Clip range inputs (start sec / end sec) with a small preview
+- Source picker (Upload via existing `useFileUpload` → R2 / Drive link / YouTube link)
+- Featured + publish toggles, drag-to-reorder
+
+Sidebar entry under "Engagement" group.
+
+---
+
+### 5. Search
+
+- Client-side filter on category pages (debounced)
+- Global hub page uses ilike on `title`, `description`, `tags` against `class_videos`. (No new pg_search index needed at this scale — can add later.)
+
+---
+
+### 6. Files to create
 
 ```text
-DELETE FROM media_library
-WHERE file_url LIKE '%res.cloudinary.com%'
-   OR file_url LIKE '%/storage/v1/object/public/%'
-   OR file_url LIKE '%r2.cloudflarestorage.com%'
-   OR file_url LIKE '%r2.dev%';
+src/pages/class-videos/ClassVideosHub.tsx
+src/pages/class-videos/ClassVideoCategory.tsx
+src/pages/class-videos/ClassVideoWatch.tsx
+src/components/class-videos/VideoCard.tsx
+src/components/class-videos/CategoryCard.tsx
+src/components/class-videos/CommentThread.tsx
+src/components/class-videos/CommentItem.tsx
+src/components/class-videos/LikeButton.tsx
+src/components/features/home/ClassVideosShowcase.tsx   (homepage section)
+src/pages/admin/AdminClassVideos.tsx
+src/pages/admin/AdminClassVideoCategories.tsx
+src/hooks/useClassVideos.ts
+src/hooks/useVideoComments.ts
+supabase/migrations/<timestamp>_class_videos.sql
 ```
 
-I'll write this as a reversible migration (with a backup table `media_library_remix_backup` first, so nothing is truly lost).
+### 7. Files to edit
 
-### Option B — Re-import via "Repair legacy & low-quality"
-Your `AdminMedia` page already has a **"Repair legacy & low-quality"** button that calls `cloudinary-proxy → fetch-url` to re-upload remote images into your Cloudinary. This works **only if the original URLs are publicly fetchable**. For the previous owner's Cloudinary, they likely are — so this could rescue the image thumbnails. PDFs and R2-hosted files cannot be repaired this way.
+- `src/components/media/SecureMediaPlayer.tsx` — add `clipStart`/`clipEnd` props + enforcement
+- `src/components/layout/Header.tsx` — add "Class Videos" nav link
+- `src/components/layout/AdminSidebar.tsx` — add admin entries
+- `src/pages/Index.tsx` — insert `<ClassVideosShowcase />` under `InstructorSpotlight`
+- `src/App.tsx` — register 3 public routes + 2 admin routes
 
-I'll prepare both and let you pick.
+---
 
-### Option C — Do nothing, just upload fresh
-If you don't care about the old library content, just start using the **"Upload Files"** button. New uploads will work immediately and show thumbnails. The dead rows will just sit there with broken previews until cleaned up.
-
-## What I'll do once you approve
-
-1. Run a quick DB check (sample `media_library` rows + your `cloudinary_accounts` / `cloudflare_r2_accounts` config) and report what I find.
-2. Apply **Option A** by default (with backup table) — say "use B" or "use C" if you prefer.
-3. Test by uploading one image via `/admin/media` and confirming the thumbnail renders.
-4. Optionally run **Repair** to attempt re-importing any salvageable old Cloudinary images.
-
-## Out of scope
-No code changes are needed — `AdminMedia.tsx`, `cldImg`, `MediaUploader`, and the `cloudinary-proxy` / `r2-presign` edge functions are all working correctly.
+### Summary of decisions applied
+- Default visibility = **public**, admin can switch any video to **logged-in only** or **paid (course-gated)**
+- Comments & likes require login
+- Sources: Upload + Drive + YouTube (Vimeo skipped)
+- Timestamps = clip range (start–end seconds)
