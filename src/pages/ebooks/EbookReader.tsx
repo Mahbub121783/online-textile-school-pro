@@ -165,8 +165,14 @@ const EbookReader = () => {
         'ebook-secure-access',
         { body: { action: 'generate_token', ebook_id: ebookId } }
       );
+      // Friendly handling for known structured errors
+      if (tokenData?.error === 'EBOOK_FILE_MISSING') {
+        setLoadingState('error');
+        setErrorMsg(tokenData.message || 'This eBook is not ready yet. Please contact support.');
+        return;
+      }
       if (tokenError || tokenData?.error) {
-        throw new Error(tokenData?.error || tokenError?.message || 'Token generation failed');
+        throw new Error(tokenData?.message || tokenData?.error || tokenError?.message || 'Token generation failed');
       }
 
       const format = (tokenData.file_format || 'pdf').toLowerCase();
