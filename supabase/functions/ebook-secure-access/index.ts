@@ -89,6 +89,13 @@ async function handleGenerateToken(
     .eq("id", ebook_id)
     .single();
 
+  if (!ebook?.file_url || ebook.file_url.trim().length === 0) {
+    return jsonResponse({
+      error: "EBOOK_FILE_MISSING",
+      message: "This eBook is not ready yet — the publisher has not uploaded the PDF file. Please contact support and we'll fix it for you.",
+    }, 422);
+  }
+
   const tokenValue = crypto.randomUUID();
   // Reusable token: valid for 30 minutes, NOT single-use
   const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
