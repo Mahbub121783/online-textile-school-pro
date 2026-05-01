@@ -22,7 +22,14 @@ const AdminLayout = () => {
   if (!user) return <Navigate to="/auth/login?redirect=/admin" replace />;
 
   const isAdmin = roles.includes('admin') || roles.includes('super_admin');
-  if (!isAdmin) {
+  const isInstructor = roles.includes('instructor');
+  // Instructors are allowed inside Admin Panel ONLY for Class Video management routes
+  const isClassVideoRoute =
+    location.pathname.startsWith('/admin/class-videos') ||
+    location.pathname.startsWith('/admin/class-video-categories');
+  const allowed = isAdmin || (isInstructor && isClassVideoRoute);
+
+  if (!allowed) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center max-w-md p-8">
