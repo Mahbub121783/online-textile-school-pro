@@ -99,7 +99,7 @@ export default function AdminClassVideos() {
     setEditing(v);
     setForm({
       title: v.title, slug: v.slug, description: v.description ?? '',
-      thumbnail_url: v.thumbnail_url ?? '', category_id: v.category_id ?? '',
+      category_id: v.category_id ?? '',
       video_url: v.video_url, video_platform: v.video_platform,
       clip_start_seconds: v.clip_start_seconds, clip_end_seconds: v.clip_end_seconds,
       duration_seconds: v.duration_seconds, tags: (v.tags ?? []).join(', '),
