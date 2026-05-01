@@ -106,6 +106,14 @@ const AdminEbooks = () => {
       if (data.file_url && isCloudinaryUrl(data.file_url)) {
         throw new Error('Ebook files must be stored on Cloudflare R2, not Cloudinary. Please re-upload the ebook file.');
       }
+      // Block publishing without a file — students get a 404 in the reader otherwise
+      if (data.is_published && (!data.file_url || data.file_url.trim().length === 0)) {
+        throw new Error('Cannot publish an eBook without a PDF file. Please upload the file to Cloudflare R2 first, or save as Draft.');
+      }
+      // Block save while an upload is still in progress
+      if (uploading) {
+        throw new Error('A file upload is still in progress. Please wait for it to finish.');
+      }
       const { id, ...rest } = data;
       const payload: any = {
         ...rest,
