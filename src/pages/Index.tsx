@@ -74,6 +74,7 @@ const Index = () => {
         <LazySection><LearningPathsPreview /></LazySection>
         <LazySection><EbookShowcase /></LazySection>
         <LazySection><UpcomingEvents /></LazySection>
+        <LazySection><ClassVideosShowcase /></LazySection>
         <LazySection><InstructorSpotlight /></LazySection>
         <LazySection><TestimonialsSection /></LazySection>
         <LazySection><FeaturedWorkshops /></LazySection>
