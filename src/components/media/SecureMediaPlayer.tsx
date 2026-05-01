@@ -152,6 +152,8 @@ const SecureMediaPlayer = ({
   watermark,
   showControls = true,
   className = '',
+  clipStart,
+  clipEnd,
 }: SecureMediaPlayerProps) => {
   const { user, profile } = useAuth();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -170,9 +172,24 @@ const SecureMediaPlayer = ({
   const [controlsVisible, setControlsVisible] = useState(true);
   const hideTimer = useRef<ReturnType<typeof setTimeout>>();
 
+  const effectiveStart = useMemo(
+    () => Math.max(0, clipStart ?? startPosition ?? 0),
+    [clipStart, startPosition]
+  );
+
   const source = useMemo(
-    () => parseVideoSource(videoUrl || '', videoPlatform),
-    [videoUrl, videoPlatform]
+    () => {
+      const base = parseVideoSource(videoUrl || '', videoPlatform);
+      // Append clip range params for YouTube
+      if (base.type === 'youtube' && (clipStart || clipEnd)) {
+        const params: string[] = [];
+        if (clipStart && clipStart > 0) params.push(`start=${Math.floor(clipStart)}`);
+        if (clipEnd && clipEnd > 0) params.push(`end=${Math.floor(clipEnd)}`);
+        return { ...base, embedUrl: `${base.embedUrl}&${params.join('&')}` };
+      }
+      return base;
+    },
+    [videoUrl, videoPlatform, clipStart, clipEnd]
   );
 
   const isDirect = source.type === 'direct';
