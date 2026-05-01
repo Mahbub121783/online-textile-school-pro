@@ -201,6 +201,7 @@ export function AdminSidebar() {
               <CollapsibleMenu label="CMS" icon={BookOpen} items={cmsSubItems} basePath="/admin/cms" collapsed={collapsed} groupClass="group/collapsible-cms" />
               <CollapsibleMenu label="Setup" icon={Wrench} items={setupSubItems} basePath="/admin/setup" collapsed={collapsed} groupClass="group/collapsible-setup" />
               <CollapsibleMenu label="Payment" icon={CreditCard} items={paymentSubItems} basePath="/admin/payment" collapsed={collapsed} groupClass="group/collapsible-pay" />
+              <CollapsibleMenu label="Class Videos" icon={Video} items={classVideoSubItems} basePath="/admin/class-video" collapsed={collapsed} groupClass="group/collapsible-cv" />
               <CollapsibleMenu label="Engagement" icon={Star} items={engagementSubItems} basePath="/admin/reviews" collapsed={collapsed} groupClass="group/collapsible-eng" />
               <CollapsibleMenu label="Career & Research" icon={Briefcase} items={careerSubItems} basePath="/admin/internships" collapsed={collapsed} groupClass="group/collapsible-career" />
               {bottomItems.map(renderNavItem)}
