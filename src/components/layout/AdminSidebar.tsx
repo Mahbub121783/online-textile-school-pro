@@ -71,9 +71,12 @@ const engagementSubItems = [
   { title: 'Forum', url: '/admin/forum', icon: MessageSquare },
   { title: 'AI Chatbot', url: '/admin/ai-chatbot', icon: Activity },
   { title: 'Workshops', url: '/admin/workshops', icon: Presentation },
-  { title: 'Class Videos', url: '/admin/class-videos', icon: Video },
-  { title: 'Video Categories', url: '/admin/class-video-categories', icon: Layers },
   { title: 'Popups', url: '/admin/popups', icon: Bell },
+];
+
+const classVideoSubItems = [
+  { title: 'All Videos', url: '/admin/class-videos', icon: Video },
+  { title: 'Categories', url: '/admin/class-video-categories', icon: Layers },
 ];
 
 const careerSubItems = [
@@ -198,6 +201,7 @@ export function AdminSidebar() {
               <CollapsibleMenu label="CMS" icon={BookOpen} items={cmsSubItems} basePath="/admin/cms" collapsed={collapsed} groupClass="group/collapsible-cms" />
               <CollapsibleMenu label="Setup" icon={Wrench} items={setupSubItems} basePath="/admin/setup" collapsed={collapsed} groupClass="group/collapsible-setup" />
               <CollapsibleMenu label="Payment" icon={CreditCard} items={paymentSubItems} basePath="/admin/payment" collapsed={collapsed} groupClass="group/collapsible-pay" />
+              <CollapsibleMenu label="Class Videos" icon={Video} items={classVideoSubItems} basePath="/admin/class-video" collapsed={collapsed} groupClass="group/collapsible-cv" />
               <CollapsibleMenu label="Engagement" icon={Star} items={engagementSubItems} basePath="/admin/reviews" collapsed={collapsed} groupClass="group/collapsible-eng" />
               <CollapsibleMenu label="Career & Research" icon={Briefcase} items={careerSubItems} basePath="/admin/internships" collapsed={collapsed} groupClass="group/collapsible-career" />
               {bottomItems.map(renderNavItem)}

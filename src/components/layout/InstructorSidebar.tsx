@@ -1,4 +1,4 @@
-import { BookOpen, LayoutDashboard, PlusCircle, FileQuestion, ClipboardList, DollarSign, LogOut, GraduationCap, Wallet, Bell, FileText, Award, MessageSquare, Megaphone, BarChart3, Users, FlaskConical, Briefcase, ShieldAlert, Mail, AtSign, Library } from 'lucide-react';
+import { BookOpen, LayoutDashboard, PlusCircle, FileQuestion, ClipboardList, DollarSign, LogOut, GraduationCap, Wallet, Bell, FileText, Award, MessageSquare, Megaphone, BarChart3, Users, FlaskConical, Briefcase, ShieldAlert, Mail, AtSign, Library, Video } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
@@ -31,6 +31,8 @@ const navGroups = [
       { title: 'Assignments', url: '/instructor/assignments', icon: ClipboardList },
       { title: 'eBooks', url: '/instructor/ebooks', icon: Library },
       { title: 'Certificates', url: '/instructor/certificates', icon: Award },
+      { title: 'Class Videos', url: '/admin/class-videos', icon: Video },
+      { title: 'Video Categories', url: '/admin/class-video-categories', icon: Library },
     ],
   },
   {
