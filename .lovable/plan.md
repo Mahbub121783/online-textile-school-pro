@@ -1,77 +1,73 @@
 ## Goal
 
-Resolve the security warnings shown in the Security panel after publishing. Most are real issues we can fix via SQL migration; two require a manual toggle in the Supabase dashboard.
+Jokhon kono notun workshop launch hobe (status `published`, `start_at` future e), seta automatically Hero Slider er **prothome** ekta sundor "NEW WORKSHOP" slide hishebe show korbe — admin er kichu korte hobe na. Sob workshop na, just **upcoming workshop er moddhe shob theke notun ta** (sort by `created_at desc`, take 1).
 
-## What we'll fix automatically (single SQL migration)
+## Behavior
 
-### 1. Error: `user_roles` broadcast on Realtime
-**Fix:** Remove `public.user_roles` from the `supabase_realtime` publication. The admin UI doesn't need live role updates — refresh on demand is enough. This also resolves the related "Role assignments broadcast" warning.
+- Hero Slider load hobar shomoy `workshops` table query korbe: `status = 'published'` AND `start_at > now()`, order by `created_at desc`, limit 1.
+- Pawa gele, oi workshop ta automatically slides array er **first slide** hishebe inject hobe (admin's hero_slides rows er age).
+- Workshop slide e thakbe:
+  - "🔴 NEW WORKSHOP" badge (animated pulse)
+  - Workshop title (large heading)
+  - Short description / tagline
+  - Live countdown to `start_at` (existing CountdownDisplay component reuse)
+  - Workshop thumbnail as background image (with gradient overlay)
+  - Two CTAs: "Register Now" → `/workshops/{slug}` ar "Learn More" → same link
+  - Instructor name + start date display
+- Workshop launch/start hoye gele (start_at < now), automatically next workshop ashbe ba slide ta hide hoye jabe.
+- Manual override nei — eta puro automatic.
 
-```sql
-ALTER PUBLICATION supabase_realtime DROP TABLE public.user_roles;
+## Technical approach
+
+`HeroSlider.tsx` er moddhe ekta notun query add korbo:
+```ts
+const { data: latestWorkshop } = useQuery({
+  queryKey: ['hero-latest-workshop'],
+  queryFn: async () => {
+    const { data } = await supabase
+      .from('workshops')
+      .select('id, title, slug, short_description, thumbnail_url, start_at, instructor:user_profiles!workshops_instructor_id_fkey(full_name)')
+      .eq('status', 'published')
+      .gt('start_at', new Date().toISOString())
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    return data;
+  },
+  staleTime: 60_000,
+});
 ```
-Then remove the `user_roles` listener from `src/hooks/useRealtime.ts` (admin queries already invalidate on user actions).
 
-### 2. SMS logs SELECT gap
-**Fix:** Add an explicit restrictive SELECT policy so only admins can read `sms_logs` (closes any ambiguity from the existing `FOR ALL` policy).
-
-```sql
-CREATE POLICY "Only admins can read sms_logs"
-  ON public.sms_logs FOR SELECT TO authenticated
-  USING (has_role(auth.uid(), 'admin') OR has_role(auth.uid(), 'super_admin'));
+Tarpor existing `slides` memoization e workshop ke ekta slide-shaped object e convert kore array er prothome push korbo:
+```ts
+const slides = useMemo(() => {
+  const base = dbSlides && dbSlides.length > 0 ? dbSlides : FALLBACK_SLIDES;
+  if (!latestWorkshop) return base;
+  const workshopSlide = {
+    id: `ws-${latestWorkshop.id}`,
+    title: latestWorkshop.title,
+    subtitle: latestWorkshop.short_description || `Live workshop with ${latestWorkshop.instructor?.full_name}`,
+    cta_text: 'Register Now',
+    cta_link: `/workshops/${latestWorkshop.slug || latestWorkshop.id}`,
+    secondary_cta_text: 'Learn More',
+    secondary_cta_link: `/workshops/${latestWorkshop.slug || latestWorkshop.id}`,
+    image_url: latestWorkshop.thumbnail_url || '',
+    gradient_from: 'accent',
+    gradient_to: 'primary-dark',
+    gradient_direction: 'br',
+    overlay_opacity: 15,
+    text_alignment: 'left',
+    countdown_target: latestWorkshop.start_at,
+    is_workshop_slide: true, // for badge rendering
+  };
+  return [workshopSlide, ...base];
+}, [dbSlides, latestWorkshop]);
 ```
 
-### 3. Quizzes with NULL `course_id` privilege escalation
-**Fix:** Tighten the policy so instructors can only manage quizzes attached to a course they own; NULL-course quizzes restricted to admins.
-
-```sql
-DROP POLICY "Instructors manage quizzes of their courses" ON public.quizzes;
-CREATE POLICY "Instructors manage quizzes of their courses"
-  ON public.quizzes FOR ALL TO authenticated
-  USING (
-    (course_id IS NOT NULL AND can_manage_course(course_id))
-    OR has_role(auth.uid(), 'admin') OR has_role(auth.uid(), 'super_admin')
-  )
-  WITH CHECK (
-    (course_id IS NOT NULL AND can_manage_course(course_id))
-    OR has_role(auth.uid(), 'admin') OR has_role(auth.uid(), 'super_admin')
-  );
-```
-
-### 4. SECURITY DEFINER functions executable by anon/authenticated
-**Fix:** Revoke `EXECUTE` from `anon` and `authenticated` on internal helper functions that should only run from triggers / edge functions / other SECURITY DEFINER functions. We'll keep callable: `has_role`, `can_manage_course`, `can_manage_content_contributors`, `search_forum`, `increment_*_view`, `increment_*_download` (these are intentionally callable). Revoke from the rest (`credit_wallet`, `debit_wallet`, `notify_admins`, `cleanup_old_ai_chats`, `auto_update_workshop_status`, `enforce_name_change_cooldown`, `update_*` trigger functions, `handle_new_user`, etc.).
-
-### 5. RLS Policy Always True
-**Fix:** Find any non-SELECT policy with `USING (true)` / `WITH CHECK (true)` and tighten. We'll audit and replace with role-based or owner-based conditions.
-
-### 6. Public bucket allows listing (`media`)
-**Fix:** Add a restrictive listing policy so unauthenticated users can only download files by direct URL but cannot list bucket contents:
-```sql
-CREATE POLICY "Block listing of media bucket"
-  ON storage.objects FOR SELECT TO anon
-  USING (false);
--- Keep authenticated SELECT for reading metadata where needed.
-```
-(Direct public URLs for images still work — only the LIST operation is blocked.)
-
-### 7. Extension in public schema
-**Fix:** Move extensions (e.g., `citext`, `pg_net`, `http`) out of `public` into `extensions` schema where safe. We'll only move ones that are clearly safe to relocate; if any are referenced in existing code/migrations we'll leave them and document.
-
-## What requires manual action (cannot fix via code)
-
-### 8. Leaked Password Protection Disabled
-You need to enable this in the Supabase dashboard:
-**Authentication → Providers → Email → Enable "Leaked password protection"**
-
-I'll include a direct link in the implementation message.
+`SlideContent` component e `slide.is_workshop_slide` true hole top e ekta animated "🔴 NEW WORKSHOP" badge render korbo (pulse animation diye attention grab korbe).
 
 ## Files to change
 
-- `supabase/migrations/<ts>_security_hardening.sql` — all SQL fixes above
-- `src/hooks/useRealtime.ts` — remove `user_roles` realtime subscription
-
-## After implementation
-
-Click "Update" in the Security panel to re-scan. The Error + 7 of the warnings should clear. The remaining one (Leaked Password Protection) clears once you enable it in the dashboard.
+- `src/components/features/home/HeroSlider.tsx` — query add, slide injection, badge rendering
 
 Approve to implement.
