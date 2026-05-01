@@ -1,7 +1,9 @@
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Play, Eye, Heart, MessageCircle, Lock, Users, Globe } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import type { ClassVideo } from '@/hooks/useClassVideos';
+import { getYoutubeThumb, getYoutubeEmbedUrl } from '@/lib/youtube';
 
 function formatDuration(seconds: number | null) {
   if (!seconds) return '';
@@ -16,6 +18,8 @@ function visibilityIcon(v: ClassVideo['visibility']) {
   return <Globe className="h-3 w-3" />;
 }
 
+const ACTIVE_EVENT = 'class-video-card-active';
+
 interface Props {
   video: ClassVideo;
 }
@@ -26,35 +30,158 @@ export default function VideoCard({ video }: Props) {
     ? video.clip_end_seconds - video.clip_start_seconds
     : video.duration_seconds;
 
+  const containerRef = useRef<HTMLDivElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [isPreviewing, setIsPreviewing] = useState(false);
+  const cardIdRef = useRef<string>(video.id);
+
+  const isYouTube = video.video_platform === 'youtube';
+  const ytThumb = isYouTube ? getYoutubeThumb(video.video_url, 'hq') : null;
+  const ytEmbed = isYouTube
+    ? getYoutubeEmbedUrl(video.video_url, {
+        autoplay: true, mute: true, controls: false,
+        start: video.clip_start_seconds || undefined,
+        end: video.clip_end_seconds || undefined,
+        loop: true,
+      })
+    : null;
+
+  // Broadcast active card to pause others
+  const activate = () => {
+    window.dispatchEvent(new CustomEvent(ACTIVE_EVENT, { detail: cardIdRef.current }));
+    setIsPreviewing(true);
+  };
+  const deactivate = () => {
+    setIsPreviewing(false);
+    const v = videoRef.current;
+    if (v) {
+      v.pause();
+      try { v.currentTime = video.clip_start_seconds || 0; } catch { /* ignore */ }
+    }
+  };
+
+  // Listen for other cards activating — pause self
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail !== cardIdRef.current) deactivate();
+    };
+    window.addEventListener(ACTIVE_EVENT, handler);
+    return () => window.removeEventListener(ACTIVE_EVENT, handler);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Mobile: IntersectionObserver auto-play when ≥60% visible (touch devices only)
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const isTouch = typeof window !== 'undefined' && window.matchMedia('(hover: none)').matches;
+    if (!isTouch) return;
+
+    const io = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting && entry.intersectionRatio >= 0.6) {
+            activate();
+          } else if (!entry.isIntersecting) {
+            deactivate();
+          }
+        });
+      },
+      { threshold: [0, 0.6, 1] }
+    );
+    io.observe(el);
+    return () => io.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Trigger play on <video> when previewing
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v || isYouTube) return;
+    if (isPreviewing) {
+      try { v.currentTime = video.clip_start_seconds || 0; } catch { /* ignore */ }
+      v.play().catch(() => { /* autoplay blocked, ignore */ });
+    }
+  }, [isPreviewing, isYouTube, video.clip_start_seconds]);
+
+  // Enforce clip end for direct video
+  const handleTimeUpdate = () => {
+    const v = videoRef.current;
+    if (!v) return;
+    if (video.clip_end_seconds && v.currentTime >= video.clip_end_seconds) {
+      v.currentTime = video.clip_start_seconds || 0;
+      v.play().catch(() => { /* ignore */ });
+    }
+  };
+
   return (
     <Link
       to={`/class-videos/${video.slug}`}
       className="group block rounded-xl overflow-hidden bg-card border border-border hover:border-primary/40 hover:shadow-lg transition-all"
     >
-      <div className="relative aspect-video bg-muted overflow-hidden">
-        {video.thumbnail_url ? (
+      <div
+        ref={containerRef}
+        className="relative aspect-video bg-muted overflow-hidden"
+        onMouseEnter={activate}
+        onMouseLeave={deactivate}
+      >
+        {/* Poster / fallback layer */}
+        {isYouTube && ytThumb ? (
           <img
-            src={video.thumbnail_url}
+            src={ytThumb}
             alt={video.title}
             loading="lazy"
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+            className="absolute inset-0 w-full h-full object-cover"
           />
         ) : (
-          <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-primary/20 to-accent/20">
+          !isYouTube && (
+            <video
+              ref={videoRef}
+              src={video.video_url}
+              muted
+              playsInline
+              loop
+              preload="metadata"
+              onTimeUpdate={handleTimeUpdate}
+              className="absolute inset-0 w-full h-full object-cover"
+            />
+          )
+        )}
+
+        {/* Fallback placeholder when no YT thumb and not video */}
+        {isYouTube && !ytThumb && (
+          <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-primary/20 to-accent/20">
             <Play className="h-12 w-12 text-primary/60" />
           </div>
         )}
-        <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-          <div className="h-14 w-14 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-xl">
-            <Play className="h-6 w-6 ml-0.5" fill="currentColor" />
+
+        {/* YouTube hover preview iframe */}
+        {isYouTube && isPreviewing && ytEmbed && (
+          <iframe
+            src={ytEmbed}
+            title={video.title}
+            allow="autoplay; encrypted-media; picture-in-picture"
+            allowFullScreen
+            className="absolute inset-0 w-full h-full pointer-events-none"
+          />
+        )}
+
+        {/* Play button overlay (hidden while previewing) */}
+        {!isPreviewing && (
+          <div className="absolute inset-0 bg-black/10 group-hover:bg-black/30 transition-colors flex items-center justify-center">
+            <div className="h-14 w-14 rounded-full bg-primary/90 text-primary-foreground flex items-center justify-center shadow-xl opacity-90 group-hover:scale-110 transition-transform">
+              <Play className="h-6 w-6 ml-0.5" fill="currentColor" />
+            </div>
           </div>
-        </div>
+        )}
+
         {duration ? (
-          <span className="absolute bottom-2 right-2 px-1.5 py-0.5 rounded text-[11px] font-medium bg-black/80 text-white tabular-nums">
+          <span className="absolute bottom-2 right-2 px-1.5 py-0.5 rounded text-[11px] font-medium bg-black/80 text-white tabular-nums z-10">
             {formatDuration(duration)}
           </span>
         ) : null}
-        <span className="absolute top-2 left-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide bg-black/70 text-white backdrop-blur-sm">
+        <span className="absolute top-2 left-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide bg-black/70 text-white backdrop-blur-sm z-10">
           {visibilityIcon(video.visibility)}
           {video.visibility === 'paid' ? 'Paid' : video.visibility === 'logged_in' ? 'Login' : 'Free'}
         </span>
