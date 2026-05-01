@@ -200,8 +200,11 @@ async function streamEbookFile(
     .eq("id", ebook_id)
     .single();
 
-  if (!ebook?.file_url) {
-    return jsonResponse({ error: "Ebook file not found" }, 404);
+  if (!ebook?.file_url || ebook.file_url.trim().length === 0) {
+    return jsonResponse({
+      error: "EBOOK_FILE_MISSING",
+      message: "This eBook is not ready yet — the publisher has not uploaded the PDF file. Please contact support and we'll fix it for you.",
+    }, 422);
   }
 
   const fileUrl = ebook.file_url;
