@@ -39,11 +39,6 @@ export function useAdminRealtime() {
         queryClient.invalidateQueries({ queryKey: ['admin-course-stats'] });
         queryClient.invalidateQueries({ queryKey: ['courses-revenue-share'] });
       })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'user_roles' }, () => {
-        queryClient.invalidateQueries({ queryKey: ['admin-users'] });
-        queryClient.invalidateQueries({ queryKey: ['admin-instructors-list'] });
-        queryClient.invalidateQueries({ queryKey: ['instructors-financial'] });
-      })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'user_profiles' }, () => {
         queryClient.invalidateQueries({ queryKey: ['admin-users'] });
         queryClient.invalidateQueries({ queryKey: ['admin-students'] });
