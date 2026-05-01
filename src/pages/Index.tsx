@@ -15,6 +15,7 @@ const FeaturedWorkshops = lazy(() => import('@/components/features/home/Featured
 const UpcomingEvents = lazy(() => import('@/components/features/home/UpcomingEvents'));
 const LearningPathsPreview = lazy(() => import('@/components/features/home/LearningPathsPreview'));
 const SponsorsSection = lazy(() => import('@/components/features/home/SponsorsSection'));
+const ClassVideosShowcase = lazy(() => import('@/components/features/home/ClassVideosShowcase'));
 
 const SectionFallback = () => (
   <div className="py-12 min-h-[320px] flex items-center justify-center">
