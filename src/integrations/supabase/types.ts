@@ -5906,6 +5906,7 @@ export type Database = {
           og_image_url: string | null
           prerequisites: string | null
           registration_deadline: string | null
+          reminder_sent_at: string | null
           seo_keywords: string | null
           short_description: string | null
           slug: string
@@ -5941,6 +5942,7 @@ export type Database = {
           og_image_url?: string | null
           prerequisites?: string | null
           registration_deadline?: string | null
+          reminder_sent_at?: string | null
           seo_keywords?: string | null
           short_description?: string | null
           slug: string
@@ -5976,6 +5978,7 @@ export type Database = {
           og_image_url?: string | null
           prerequisites?: string | null
           registration_deadline?: string | null
+          reminder_sent_at?: string | null
           seo_keywords?: string | null
           short_description?: string | null
           slug?: string
