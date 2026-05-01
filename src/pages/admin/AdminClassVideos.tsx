@@ -20,7 +20,7 @@ function slugify(s: string) {
 }
 
 const EMPTY = {
-  title: '', slug: '', description: '', thumbnail_url: '', category_id: '',
+  title: '', slug: '', description: '', category_id: '',
   video_url: '', video_platform: 'upload' as 'upload' | 'drive' | 'youtube',
   clip_start_seconds: 0, clip_end_seconds: null as number | null,
   duration_seconds: null as number | null, tags: '' as string,
