@@ -25,6 +25,10 @@ interface SecureMediaPlayerProps {
   watermark?: string;
   showControls?: boolean;
   className?: string;
+  /** Clip range start (seconds) — player will seek here on load */
+  clipStart?: number | null;
+  /** Clip range end (seconds) — player will pause here */
+  clipEnd?: number | null;
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
