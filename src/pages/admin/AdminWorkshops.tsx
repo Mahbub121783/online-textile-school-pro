@@ -368,40 +368,21 @@ export default function AdminWorkshops() {
                   <Button variant="outline" size="sm" onClick={() => { setNotifyWs(ws); setNotifyForm({ title: '', message: '' }); }} title="Send In-App Notification"><Bell className="h-4 w-4" /></Button>
                   {ws.meet_link && (
                     <Button
-                      variant="outline" size="sm" title="Email meet link to all registrants"
+                      variant="outline" size="sm" title="Send reminder email + Meet link to all registrants"
                       onClick={async () => {
-                        if (!confirm(`Email the meet link to all registrants of "${ws.title}"?`)) return;
+                        if (!confirm(`Send reminder email with the Meet link to all registrants of "${ws.title}"?`)) return;
+                        const t = toast.loading('Sending reminders...');
                         try {
-                          const { data: regs } = await supabase
-                            .from('workshop_registrations')
-                            .select('email, full_name')
-                            .eq('workshop_id', ws.id)
-                            .eq('status', 'registered');
-                          if (!regs?.length) { toast.error('No registrants found'); return; }
-                          const startTime = ws.start_time
-                            ? `${format(new Date(ws.start_date), 'PPP')} at ${ws.start_time.slice(0, 5)}`
-                            : format(new Date(ws.start_date), 'PPP');
-                          let sent = 0;
-                          await Promise.all(regs.map(async (r: any) => {
-                            try {
-                              await supabase.functions.invoke('send-smtp-email', {
-                                body: {
-                                  templateKey: 'workshop_live_link',
-                                  recipientEmail: r.email,
-                                  placeholders: {
-                                    user_name: r.full_name || 'Student',
-                                    workshop_title: ws.title,
-                                    start_time: startTime,
-                                    meet_link: ws.meet_link,
-                                  },
-                                },
-                              });
-                              sent++;
-                            } catch { /* skip */ }
-                          }));
-                          toast.success(`Meet link sent to ${sent}/${regs.length} registrants`);
+                          const { data, error } = await supabase.functions.invoke('workshop-reminder-cron', {
+                            body: { workshop_id: ws.id },
+                          });
+                          if (error) throw error;
+                          const r = (data as any)?.results?.[0];
+                          if (r) toast.success(`Sent to ${r.sent}/${r.total} registrants${r.failed ? ` (${r.failed} failed)` : ''}`, { id: t });
+                          else toast.success('Reminder dispatched', { id: t });
+                          queryClient.invalidateQueries({ queryKey: ['admin-workshops'] });
                         } catch (err: any) {
-                          toast.error(err.message || 'Failed to send');
+                          toast.error(err.message || 'Failed to send', { id: t });
                         }
                       }}
                     ><Video className="h-4 w-4" /></Button>
