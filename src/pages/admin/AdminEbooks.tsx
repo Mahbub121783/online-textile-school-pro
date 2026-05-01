@@ -288,9 +288,15 @@ const AdminEbooks = () => {
                   </Badge>
                 </div>
                 {/* Storage source badge for file_url */}
-                {ebook.file_url && (
+                {ebook.file_url ? (
                   <div className="absolute top-2 left-2">
                     <StorageBadge url={ebook.file_url} />
+                  </div>
+                ) : (
+                  <div className="absolute top-2 left-2">
+                    <Badge variant="destructive" className="gap-1">
+                      <AlertTriangle className="h-3 w-3" /> Missing file
+                    </Badge>
                   </div>
                 )}
               </div>
