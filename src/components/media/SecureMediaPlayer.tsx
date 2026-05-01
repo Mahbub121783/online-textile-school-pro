@@ -280,7 +280,7 @@ const SecureMediaPlayer = ({
       v.removeEventListener('waiting', onWaiting);
       v.removeEventListener('canplay', onCanPlay);
     };
-  }, [isDirect, startPosition, onProgress, videoUrl, title]);
+  }, [isDirect, effectiveStart, clipEnd, onProgress, videoUrl, title]);
 
   useEffect(() => {
     if (isDirect || !playing) return;
