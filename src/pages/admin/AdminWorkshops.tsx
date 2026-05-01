@@ -339,6 +339,9 @@ export default function AdminWorkshops() {
                     {shouldBeCompleted && (
                       <Badge className="text-[10px] bg-amber-500 text-white border-none">⚠ Should be Completed</Badge>
                     )}
+                    {ws.reminder_sent_at && (
+                      <Badge className="text-[10px] bg-emerald-600 text-white border-none" title={`Sent ${format(new Date(ws.reminder_sent_at), 'PPp')}`}>✓ Reminder sent</Badge>
+                    )}
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">
                     {format(new Date(ws.start_date), 'MMM dd, yyyy')} · /{ws.slug}
