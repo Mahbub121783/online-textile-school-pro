@@ -59,10 +59,19 @@ export default function MyWorkshopsPage() {
           {registrations.map((reg: any) => {
             const ws = reg.workshops;
             if (!ws) return null;
-            const startDt = new Date(`${ws.start_date}T${ws.start_time || '00:00'}`);
-            const isUpcoming = startDt > new Date();
+            // Prefer timezone-correct start_at/end_at; fall back to legacy date+time.
+            const startDt = ws.start_at
+              ? new Date(ws.start_at)
+              : new Date(`${ws.start_date}T${ws.start_time || '00:00'}:00`);
+            const endDt = ws.end_at
+              ? new Date(ws.end_at)
+              : new Date(`${ws.end_date || ws.start_date}T${ws.end_time || ws.start_time || '23:59'}:00`);
+            const now = Date.now();
+            // Early-join window: 10 min before start, grace 30 min after end.
+            const isWithinWindow = now >= startDt.getTime() - 10 * 60 * 1000 && now <= endDt.getTime() + 30 * 60 * 1000;
             const isOngoing = ws.status === 'ongoing';
-            const isLive = isOngoing || (!isUpcoming && ws.status !== 'completed' && ws.status !== 'cancelled');
+            const isUpcoming = startDt.getTime() - 10 * 60 * 1000 > now;
+            const isLive = (isOngoing || isWithinWindow) && ws.status !== 'completed' && ws.status !== 'cancelled';
             const materials = (ws.materials as any[]) || [];
 
             return (

@@ -5888,6 +5888,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           description: string | null
+          end_at: string | null
           end_date: string | null
           end_time: string | null
           fake_registration_count: number
@@ -5908,6 +5909,7 @@ export type Database = {
           seo_keywords: string | null
           short_description: string | null
           slug: string
+          start_at: string | null
           start_date: string
           start_time: string | null
           status: Database["public"]["Enums"]["workshop_status"]
@@ -5921,6 +5923,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           description?: string | null
+          end_at?: string | null
           end_date?: string | null
           end_time?: string | null
           fake_registration_count?: number
@@ -5941,6 +5944,7 @@ export type Database = {
           seo_keywords?: string | null
           short_description?: string | null
           slug: string
+          start_at?: string | null
           start_date: string
           start_time?: string | null
           status?: Database["public"]["Enums"]["workshop_status"]
@@ -5954,6 +5958,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           description?: string | null
+          end_at?: string | null
           end_date?: string | null
           end_time?: string | null
           fake_registration_count?: number
@@ -5974,6 +5979,7 @@ export type Database = {
           seo_keywords?: string | null
           short_description?: string | null
           slug?: string
+          start_at?: string | null
           start_date?: string
           start_time?: string | null
           status?: Database["public"]["Enums"]["workshop_status"]
@@ -5998,6 +6004,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      auto_update_workshop_status: { Args: never; Returns: undefined }
       can_manage_content_contributors: {
         Args: { _content_id: string; _content_type: string }
         Returns: boolean

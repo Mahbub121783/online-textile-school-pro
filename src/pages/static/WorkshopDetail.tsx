@@ -183,10 +183,18 @@ export default function WorkshopDetail() {
   if (isLoading) return <div className="min-h-screen flex items-center justify-center"><PageSkeleton /></div>;
   if (!workshop) return <div className="min-h-screen flex items-center justify-center"><p>Workshop not found</p></div>;
 
-  const startDt = new Date(`${workshop.start_date}T${workshop.start_time || '00:00'}`);
+  const startDt = (workshop as any).start_at
+    ? new Date((workshop as any).start_at)
+    : new Date(`${workshop.start_date}T${workshop.start_time || '00:00'}:00`);
+  const endDt = (workshop as any).end_at
+    ? new Date((workshop as any).end_at)
+    : new Date(`${workshop.end_date || workshop.start_date}T${workshop.end_time || workshop.start_time || '23:59'}:00`);
+  const _now = Date.now();
   const isOngoing = workshop.status === 'ongoing';
-  const isUpcoming = startDt > new Date();
-  const isLive = isOngoing || (!isUpcoming && workshop.status !== 'completed' && workshop.status !== 'cancelled');
+  // Early-join window: 10 min before start, grace 30 min after end.
+  const isWithinWindow = _now >= startDt.getTime() - 10 * 60 * 1000 && _now <= endDt.getTime() + 30 * 60 * 1000;
+  const isUpcoming = startDt.getTime() - 10 * 60 * 1000 > _now;
+  const isLive = (isOngoing || isWithinWindow) && workshop.status !== 'completed' && workshop.status !== 'cancelled';
   const slotsLeft = workshop.max_participants ? workshop.max_participants - regCount : null;
   const isFull = slotsLeft !== null && slotsLeft <= 0;
   const isRegistered = !!myRegistration || registered;
