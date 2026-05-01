@@ -320,6 +320,8 @@ const AppRoutes = () => {
             <Route path="id-card-settings" element={<AdminIdCardSettings />} />
             <Route path="id-card-management" element={<AdminIdCardManagement />} />
             <Route path="forum" element={<AdminForum />} />
+            <Route path="class-videos" element={<AdminClassVideos />} />
+            <Route path="class-video-categories" element={<AdminClassVideoCategories />} />
             <Route path="students" element={<AdminStudents />} />
             <Route path="students/:id" element={<StudentDetail />} />
             <Route path="registrations" element={<AdminRegistrations />} />
