@@ -203,9 +203,9 @@ const SecureMediaPlayer = ({
   }, [volume, muted, playbackRate, isDirect]);
 
   useEffect(() => {
-    if (!isDirect || !videoRef.current || !startPosition) return;
-    videoRef.current.currentTime = startPosition;
-  }, [startPosition, isDirect]);
+    if (!isDirect || !videoRef.current || !effectiveStart) return;
+    videoRef.current.currentTime = effectiveStart;
+  }, [effectiveStart, isDirect]);
 
   const watchMilestonesRef = useRef<Set<number>>(new Set());
 
