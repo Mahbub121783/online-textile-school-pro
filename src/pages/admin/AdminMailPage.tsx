@@ -27,6 +27,21 @@ const AdminMailPage = () => {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showSettings, setShowSettings] = useState(false);
 
+  // Admin Mail always sends FROM the system SMTP "from email" (e.g. info@onlinetextileschool.com)
+  // configured in Admin → Setup → SMTP Settings. Falls back to institutional email only if SMTP not set.
+  const { data: smtpFrom } = useQuery({
+    queryKey: ['admin-smtp-from-email'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('site_settings')
+        .select('key, value')
+        .in('key', ['smtp_from_email', 'smtp_user']);
+      const map: Record<string, string> = {};
+      (data || []).forEach((s: any) => { map[s.key] = s.value || ''; });
+      return map.smtp_from_email || map.smtp_user || '';
+    },
+  });
+
   const { data: emailReq } = useQuery({
     queryKey: ['admin-edumail', user?.id],
     enabled: !!user,
@@ -41,7 +56,8 @@ const AdminMailPage = () => {
     },
   });
 
-  const userEmail = emailReq?.requested_email || '';
+  // Always prefer the system SMTP from-email so all admin mail goes from one branded address.
+  const userEmail = smtpFrom || emailReq?.requested_email || '';
 
   const { data: messages = [], isLoading, refetch } = useQuery({
     queryKey: ['admin-mail-messages', user?.id, folder, searchQ],
