@@ -44,11 +44,13 @@ Deno.serve(async (req) => {
   if (forcedWorkshopId) {
     q = q.eq('id', forcedWorkshopId);
   } else {
+    // Catch any workshop starting within the next 40 minutes that hasn't been
+    // reminded yet. Window is wider than 30 to absorb cron jitter.
     const now = new Date();
-    const in35min = new Date(now.getTime() + 35 * 60 * 1000);
+    const in40min = new Date(now.getTime() + 40 * 60 * 1000);
     q = q
       .gte('start_at', now.toISOString())
-      .lte('start_at', in35min.toISOString())
+      .lte('start_at', in40min.toISOString())
       .is('reminder_sent_at', null)
       .in('status', ['published', 'ongoing']);
   }
@@ -96,10 +98,14 @@ Deno.serve(async (req) => {
       }
     }));
 
-    await supabase
-      .from('workshops')
-      .update({ reminder_sent_at: new Date().toISOString() })
-      .eq('id', ws.id);
+    // Only mark as reminded if we actually sent at least one email,
+    // OR there were genuinely zero registrations (so we don't keep retrying empty workshops).
+    if (sent > 0 || (regs?.length || 0) === 0) {
+      await supabase
+        .from('workshops')
+        .update({ reminder_sent_at: new Date().toISOString() })
+        .eq('id', ws.id);
+    }
 
     // In-app notifications
     try {
