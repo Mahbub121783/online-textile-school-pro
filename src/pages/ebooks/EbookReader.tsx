@@ -165,8 +165,14 @@ const EbookReader = () => {
         'ebook-secure-access',
         { body: { action: 'generate_token', ebook_id: ebookId } }
       );
+      // Friendly handling for known structured errors
+      if (tokenData?.error === 'EBOOK_FILE_MISSING') {
+        setLoadingState('error');
+        setErrorMsg(tokenData.message || 'This eBook is not ready yet. Please contact support.');
+        return;
+      }
       if (tokenError || tokenData?.error) {
-        throw new Error(tokenData?.error || tokenError?.message || 'Token generation failed');
+        throw new Error(tokenData?.message || tokenData?.error || tokenError?.message || 'Token generation failed');
       }
 
       const format = (tokenData.file_format || 'pdf').toLowerCase();
@@ -721,14 +727,22 @@ const EbookReader = () => {
   }
 
   if (loadingState === 'error') {
+    const isMissingFile = /not ready yet|not been uploaded|EBOOK_FILE_MISSING/i.test(errorMsg);
     return (
       <div className="h-screen flex flex-col items-center justify-center bg-background gap-4 px-4">
         <BookOpen className="h-16 w-16 text-muted-foreground" />
-        <h2 className="font-heading text-xl font-bold text-center">Unable to load eBook</h2>
+        <h2 className="font-heading text-xl font-bold text-center">
+          {isMissingFile ? 'eBook is being prepared' : 'Unable to load eBook'}
+        </h2>
         <p className="text-muted-foreground text-sm max-w-md text-center">{errorMsg}</p>
-        <Button onClick={() => navigate(-1)} variant="outline">
-          <ArrowLeft className="h-4 w-4 mr-2" /> Go Back
-        </Button>
+        <div className="flex flex-wrap gap-2 justify-center">
+          <Button onClick={() => navigate(-1)} variant="outline">
+            <ArrowLeft className="h-4 w-4 mr-2" /> Go Back
+          </Button>
+          {isMissingFile && (
+            <Button onClick={() => navigate('/contact')}>Contact Support</Button>
+          )}
+        </div>
       </div>
     );
   }

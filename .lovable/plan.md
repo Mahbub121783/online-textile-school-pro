@@ -1,72 +1,48 @@
-## Problem
+# Fix: "Unable to load eBook" (404 from edge function)
 
-The floating "Messages" panel (`src/components/chat/ChatWidget.tsx`) header currently shows only an icon + "Messages" title. There is no visible **minimize** or **close (X)** button inside the panel. Users have to find the small floating bubble (which turns into an X) to dismiss it — which is hidden behind the panel on small viewports and not obvious.
+## Root cause (confirmed)
+
+The failing eBook is **"TEXTILE ENGINEER'S VIVA AND INTERVIEW PREPARATION — Wet Process Engineering"** (id `b4534ebc-bab1-41b6-a926-60b006d55679`).
+
+Database check shows its `file_url` column is **empty** — the PDF was never actually uploaded to Cloudflare R2, but the eBook record was saved and published anyway. When students click "Read", the `ebook-secure-access` edge function looks up the file URL, gets nothing usable, and returns 404.
+
+The R2 storage system itself is working — the other published eBook ("FABRIC SKEWNESS...") has a proper `pub-d06c...r2.dev/...pdf` URL and reads fine.
+
+So this is **not** an R2/edge-function bug. It's a **data integrity + admin UX bug**: the admin form lets you save/publish an eBook without a file.
 
 ## Plan
 
-### Part A — Fix the missing controls (core fix)
+### 1. Repair the broken record (immediate)
+Re-upload the PDF for the failing eBook through the Admin → eBooks → Edit form so `file_url` becomes a valid R2 URL. This is a manual step the admin (you) does in the UI; no code change needed for this single fix, but the next steps make sure it never happens again.
 
-1. Add a control cluster on the **right side of the panel header** (line 816 area):
-   - **Minimize** button (`Minus` icon) → closes the panel but keeps the floating bubble & unread badge in place. Same as `setOpen(false)`.
-   - **Close** button (`X` icon) → closes the panel AND hides the bubble for the rest of the session (`sessionStorage` flag `chat_widget_dismissed`). A small "Show chat" pill reappears after 30s or on next page load.
-   - **Expand / Fullscreen toggle** (`Maximize2` / `Minimize2`) → on desktop, expands panel to ~720×640 instead of 384×480.
+### 2. Prevent empty-file eBooks from being saved/published
+In `src/pages/admin/AdminEbooks.tsx` `saveMutation`:
+- If `is_published === true` and `file_url` is empty/blank → block save with a clear toast: *"Cannot publish an eBook without a PDF file. Please upload the file to Cloudflare R2 first."*
+- Allow saving as **draft** without a file (so admin can prepare metadata first), but never published.
+- Also block if the upload is still in progress (`uploading === true`).
 
-2. Mirror the same control on the **conversation sub-header** (line 691) and **AI Tutor sub-header** (line 155) so users can always close from any sub-view, not only the contact list.
+### 3. Audit + flag any other broken eBooks
+Run a one-time check (already done — only this 1 record is broken today). Add a small visual indicator in the Admin eBooks list: rows with empty `file_url` show a red **"Missing file"** badge next to the storage badge so admins spot them at a glance.
 
-3. Mobile: since the panel is full-screen (`inset-2`), the close X is essential. Make the header tap targets ≥36px and add `aria-label`s.
+### 4. Better error message in the reader
+In `src/pages/ebooks/EbookReader.tsx` (and the secure-access edge function response), when the eBook has no `file_url`, return a friendlier message instead of a generic 404:
+- Edge function: return `400` with `{ error: "This eBook has no file uploaded yet. Please contact support." }` when `file_url` is empty.
+- Reader: detect that message and show *"This eBook is being prepared. Please try again later or contact support."* with a Contact button — not the raw "Edge Function returned non-2xx" technical error.
 
-4. Keyboard: bind **Esc** to minimize the panel when open.
+### 5. (Optional) Notify admins of broken eBooks automatically
+Add a daily `pg_cron` job (or simple admin dashboard widget) that lists all published eBooks with empty `file_url` so the team is alerted before students hit the error.
 
-### Part B — Advanced upgrades (opt-in improvements)
+## Files touched
 
-1. **Sound + browser notification on new message**
-   - Play a soft chime (small base64 wav) when a new `chat_messages` row arrives for the user and the panel is closed or on a different tab.
-   - Use the Web Notifications API (with permission prompt) for desktop pop-ups; click focuses the conversation.
+- `src/pages/admin/AdminEbooks.tsx` — validation in `saveMutation`, "Missing file" badge in list
+- `src/pages/ebooks/EbookReader.tsx` — friendlier error UI
+- `supabase/functions/ebook-secure-access/index.ts` — early friendly response when `file_url` is empty
+- (Optional) new migration for the cron-based admin alert
 
-2. **Search inside Chats tab**
-   - The `search` state already exists but is unused. Wire it to a small input above the conversation list to filter by name / last message.
+## What this does NOT change
 
-3. **Per-conversation draft persistence**
-   - Save the unsent input per `selectedUser.userId` to `localStorage` so switching contacts doesn't lose typing.
+- R2 storage configuration (working fine)
+- The edge function's R2 streaming logic (working fine)
+- Token / purchase validation (working fine)
 
-4. **Unread separator + "Jump to latest" pill**
-   - Insert a "─ New messages ─" divider above the first unread message; show a floating "↓ N new" button when scrolled up.
-
-5. **Quick emoji reactions in input bar**
-   - Add a small 👍 / ❤️ / 😂 picker next to the Send button (uses existing `REACTIONS` array).
-
-6. **Online presence dot on bubble**
-   - Tiny green dot on the floating bubble when any contact is online.
-
-7. **Reduce bubble friction**
-   - Snap-to-edge after drag (left or right edge, whichever is closer).
-   - Auto-fade to 30% opacity after 4s of no interaction.
-
-8. **AI Tutor: copy + regenerate**
-   - "Copy" button on assistant messages.
-   - "Regenerate" button when the last message is from assistant.
-
-### Part C — Optional (ask before doing)
-
-- File / image attachments in 1-to-1 chat (needs Cloudinary upload wiring).
-- Voice notes (MediaRecorder → R2).
-- Read receipts (✓✓) — schema already has `is_read`.
-
-These three are larger; I'll only build them if you say yes.
-
-## Files to change
-
-| File | Change |
-|---|---|
-| `src/components/chat/ChatWidget.tsx` | Header control cluster, Esc key, fullscreen state, search wiring, draft persistence, sound, snap-to-edge, copy/regenerate, unread divider |
-| `public/sounds/chime.mp3` (new, ~3 KB) | Notification sound |
-
-No DB migrations needed for Part A + B.
-
-## Result
-
-- Clear **minimize**, **close**, and **expand** buttons in every chat header.
-- Esc to dismiss; mobile-friendly tap targets.
-- Optional advanced UX (sound, search, drafts, fullscreen, snap-to-edge, copy/regenerate) layered on top without breaking existing flows.
-
-Approve and I'll implement Part A + B. Tell me which items in Part C (if any) to include.
+Approve and I'll implement steps 2–4 (and 5 if you want it).
