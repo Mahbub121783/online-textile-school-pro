@@ -348,6 +348,7 @@ const Header = () => {
               { label: 'Registration', href: '/register' },
               { label: 'Events', href: '/events' },
               { label: 'Workshops', href: '/workshops' },
+              { label: 'Class Videos', href: '/class-videos' },
               { label: 'Blog', href: '/blog' },
               { label: 'Forum', href: '/forum' },
               { label: 'About', href: '/about' },
