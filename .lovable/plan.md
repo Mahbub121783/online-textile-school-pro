@@ -1,101 +1,96 @@
 ## Goal
 
-Watch page ke TikTok / YouTube Shorts er moto **continuous vertical scroll feed** banano — ekta video sesh hole automatic next video (same category theke priority, then global) load hobe, infinite scroll cholbe. Mobile e card grid layout o improve kora hobe (better spacing, taller portrait-style preview, snappier touch targets).
+Three improvements to the Reels-style Class Video feed:
 
-## Part 1 — Reel-style Watch Feed (`ClassVideoWatch.tsx`)
+1. **Stable autoplay** — only the active reel plays; previous one always pauses, even on fast scrolling.
+2. **Persistent like + view tracking** — likes survive reload, views increment once per user/session per video.
+3. **Swipeable comments sheet** — opens for the active video, supports replies, shows loading skeletons, draggable to dismiss.
 
-Currently watch page ekta single video + sidebar related list dekhay. Eta full refactor hobe — full-screen vertical feed style.
+---
 
-### Behavior
+## 1. Stable autoplay (`ReelSlot.tsx` + `ClassVideoWatch.tsx`)
 
-- URL `/class-videos/:slug` open korle: oi video first slot e load hobe, ar same category theke baki published videos queue te add hobe (current ta exclude). Category sesh hole global newest videos append hobe (already-shown gula bad).
-- Each "slot" = full viewport height (`h-[100dvh]` on mobile, capped on desktop e.g. `h-[calc(100vh-64px)]`) — ekta vertical snap container (`overflow-y-auto snap-y snap-mandatory`).
-- IntersectionObserver: jei slot ≥70% visible, **only oi video play** hobe (full audio, full controls), baki sob pause. Active slot er video sesh hole (`onEnded`) auto-scroll next slot e (`scrollIntoView({ behavior: 'smooth' })`).
-- URL sync: active video change hole `history.replaceState` diye URL slug update hobe — share korle exact video e land korbe, but page reload na.
-- Infinite load: last 3 slot er moddhe pouchale next batch fetch (paginated by `created_at`).
-- Each slot e overlay action rail (right side, TikTok style): Like, Comment count, Share, Category badge. Bottom overlay: title, description (truncated, expand-able), uploader, tags.
-- Comments: bottom sheet / drawer (mobile) ba right panel (desktop ≥lg) — toggle by comment button. `CommentThread` reuse.
-- View tracking: `useTrackVideoView` fire when slot becomes active for ≥2 seconds (debounced).
+Current bug: when scrolling fast, the IntersectionObserver may not fire `isActive=false` on the previous slot before the next one starts, so two videos can briefly play. YouTube iframes also don't pause when isActive flips because we re-render the iframe instead of commanding it.
 
-### New hook: `useVideoFeed(startSlug)`
+Fixes:
 
-Returns `{ videos, loadMore, isLoading }`. Internally:
-1. Fetch the start video (by slug).
-2. Fetch same-category videos (ordered by `created_at desc`, exclude start).
-3. When exhausted, fetch global videos (exclude already-loaded ids) in batches of 8.
-4. Dedup by id.
+- **Single source of truth for active**: keep `activeIndex` in `ClassVideoWatch`, but additionally pause *every* `<video>` that isn't the active one inside `ReelSlot` whenever `isActive` changes (using a `useEffect` that calls `videoRef.current.pause()` and resets currentTime in the unmount/inactive branch).
+- **Listen to a global "active changed" event in every slot**: when a slot receives the event and its own id ≠ active id, force-pause its `<video>` and, for YouTube, post `{event:'command', func:'pauseVideo'}` to the iframe via `contentWindow.postMessage`.
+- **YouTube control via postMessage**: switch the embed URL to include `enablejsapi=1` and keep the iframe mounted across active/inactive transitions (no remount on mute toggle). Add helper `sendYTCommand(iframe, 'pauseVideo' | 'playVideo' | 'mute' | 'unMute')` in `src/lib/youtube.ts`.
+- **Scroll-end debounce**: in `ClassVideoWatch`, after scroll stops (150ms), recompute the slot whose center is closest to viewport center and force-set it as active. This guarantees correctness after fast flicks where IO ratios are noisy.
+- **Tighten IO threshold**: keep observer but only mark active when `intersectionRatio >= 0.7` AND it is the highest. Pause all others immediately when active changes.
 
-### Layout
+---
 
-- **Desktop (≥lg)**: centered video column (max-w `420px` for portrait videos, `min(900px, 80vh*16/9)` for landscape) + optional right panel for comments when toggled. Two-column: feed column + collapsible comments panel.
-- **Mobile (<lg)**: full bleed, video fills viewport, overlay UI on top, snap scroll. No header/footer chrome on this page (hide global Header/BottomNav via a `fullBleed` prop or conditional render).
+## 2. Persistent likes + per-user view tracking
 
-### Aspect handling
+### Likes
+Already persisted via `class_video_likes` (UNIQUE on video_id+user_id). Improvements:
 
-Videos can be landscape (YouTube) or portrait. We render inside a centered `aspect-[9/16]` frame on mobile with `object-contain` against a black/blur backdrop (so landscape YouTube videos still look clean — letterboxed on a blurred poster background).
+- Add **optimistic update** in `useVideoLike.toggle` so the heart and counter flip instantly and roll back on error.
+- Update the cached `likes_count` on the video object in the React Query cache (so the rail count is always correct without refetch).
+- Show login toast + redirect-to-login link when a guest taps like (current code only toasts).
 
-## Part 2 — Mobile grid card improvements
+### Views
+`class_video_views` has no UNIQUE constraint, so the current `INSERT` on every 2-second activation inflates counts (multiple per scroll). Migration + hook update:
 
-`VideoCard.tsx` and grid containers in `ClassVideosHub`, `ClassVideoCategory`, `ClassVideosShowcase`:
+- **Migration**:
+  - Add `UNIQUE (video_id, user_id)` for authenticated views.
+  - For anonymous views, add a `session_key text` column and `UNIQUE (video_id, session_key) WHERE user_id IS NULL`.
+  - The existing `tg_class_video_views_count` trigger already increments `views_count`, so it will only fire on genuine new rows (insert ignored on conflict → no count bump).
+- **`useTrackVideoView`**: switch to `.upsert(..., { onConflict: 'video_id,user_id', ignoreDuplicates: true })` for logged-in users and a session-key based upsert for anon (key stored in `localStorage` as `cv_session_key`).
+- **Trigger view only when watched ≥ 3s AND video is the active one** (prevents counting fast scroll-throughs). Use a per-slot `viewedRef` (already exists) but reset it when the slot becomes inactive so re-entry can re-evaluate (still deduped server-side by unique constraint).
 
-- Mobile grid: change `grid-cols-2 gap-4` → `grid-cols-2 gap-3` with tighter padding; cards switch aspect from `aspect-video` (16:9) to `aspect-[3/4]` on mobile (`sm:aspect-video`) — more reel-like, more visible per scroll.
-- Larger tap target: entire card tappable, "Play" overlay simplified (smaller icon on mobile), title font-size `text-[13px]` mobile / `text-sm` desktop, line-clamp-2.
-- Stats row: hide likes/comments icon on `<sm`, keep only views to reduce visual noise.
-- Visibility badge: smaller (`text-[9px] px-1`) on mobile.
-- Add subtle `active:scale-[0.98]` for touch feedback.
-- Showcase section (homepage): switch to horizontal scroll snap on mobile (`overflow-x-auto snap-x` row of cards) instead of 2-column grid — feels more like a YouTube shelf.
+---
 
-## Part 3 — Header/footer chrome on watch page
+## 3. Swipeable comments sheet (`CommentsSheet.tsx` + `CommentThread.tsx`)
 
-Watch page er global Header + BottomNav hide korte hobe immersive feel er jonno (mobile e). Achieve by:
-- `App.tsx` route layout check kore `/class-videos/:slug` route e `Header` + `BottomNav` na render kora (or pass `hideChrome` prop). Existing pattern check korbo first.
+Currently the sheet uses shadcn `Sheet` from the bottom but isn't drag-to-dismiss and the loading state is a basic skeleton inside the thread. Open behavior is per-video already.
 
-## Technical Details
+Changes:
 
-### Files to create
-- `src/hooks/useClassVideoFeed.ts` — feed pagination hook (start video + category queue + global queue, dedup, loadMore).
-- `src/components/class-videos/ReelSlot.tsx` — single full-height video slot with overlay actions, IntersectionObserver based play/pause, onEnded auto-advance, view tracking.
-- `src/components/class-videos/ReelOverlayActions.tsx` — right-side action rail (like/comment/share/back).
-- `src/components/class-videos/CommentsSheet.tsx` — Drawer (mobile) / Sheet (desktop) wrapping `CommentThread`.
+- **Open for active video**: `ClassVideoWatch` already sets `commentsFor` to a specific video id; ensure tapping the comment button while scrolling closes any open sheet for the prior video and opens for the new one. Add a `useEffect` that, when `activeIndex` changes and the sheet is open, swaps `commentsFor` to the new active video id (so the user keeps the panel open and sees the new video's comments).
+- **Swipe-to-dismiss**: wrap the `SheetContent` body in a small drag handler (pointer events) — when user drags down past 80px or with velocity > 0.5px/ms, close the sheet. Add a visible drag handle bar at the top.
+- **Reply support**: already implemented in `CommentItem`, keep — confirm the reply textarea is visible inside the sheet and the keyboard doesn't cover it (add `pb-[env(safe-area-inset-bottom)]` and make the comment list scroll independently of the input).
+- **Sticky composer**: pin the "Add a comment" textarea to the bottom of the sheet so it's always reachable; comment list scrolls above.
+- **Loading skeletons**: replace the 3 generic `Skeleton h-20` blocks with a `CommentSkeleton` component that mimics avatar + 2 text lines + action row, rendered 5x while `isLoading`. Also show skeletons for the active video header (title + counts) until the first batch resolves.
+- **Inline reply skeleton**: when posting, optimistically append the comment with a "Posting…" muted state and reconcile on success.
 
-### Files to edit
-- `src/pages/class-videos/ClassVideoWatch.tsx` — full rewrite into reel feed container.
-- `src/components/class-videos/VideoCard.tsx` — responsive aspect (`aspect-[3/4] sm:aspect-video`), smaller mobile overlay/badges, tap feedback.
-- `src/components/features/home/ClassVideosShowcase.tsx` — horizontal scroll on mobile.
-- `src/pages/class-videos/ClassVideosHub.tsx` & `ClassVideoCategory.tsx` — tighter mobile grid `gap-3`.
-- `src/App.tsx` (or layout) — hide global chrome on `/class-videos/:slug`.
+---
 
-### Single-active-player coordination
+## Files
 
-Reuse existing `class-video-card-active` CustomEvent pattern, scoped by a different event name (`class-video-reel-active`) to avoid collision with grid card previews.
+**New**
+- `src/components/class-videos/CommentSkeleton.tsx` — avatar + lines skeleton
 
-### URL sync without rerender
+**Edited**
+- `src/lib/youtube.ts` — add `sendYTCommand` helper, `enablejsapi=1` in embed URL
+- `src/components/class-videos/ReelSlot.tsx` — keep YouTube iframe mounted, drive play/pause via postMessage, listen to active-changed event, force-pause on inactive
+- `src/components/class-videos/CommentsSheet.tsx` — drag-to-dismiss, sticky composer, drag handle, follow active video
+- `src/components/class-videos/CommentThread.tsx` — swap loading state to use `CommentSkeleton`, sticky bottom composer layout
+- `src/hooks/useClassVideos.ts` — optimistic like update, session-key view tracking with upsert
+- `src/hooks/useVideoComments.ts` — optimistic comment insert
+- `src/pages/class-videos/ClassVideoWatch.tsx` — debounced scroll-end snap correction, sync `commentsFor` with `activeIndex` while sheet is open
 
-```ts
-window.history.replaceState({}, '', `/class-videos/${activeSlug}`);
+**Migration**
+- Add `session_key text` to `class_video_views`; add UNIQUE indexes (one for `user_id NOT NULL`, one for anon by `session_key`).
+
+---
+
+## Technical notes
+
+```text
+[scroll]
+   ↓
+[IO sets candidate active]
+   ↓ (150ms debounce after scroll stops)
+[snap-correct: pick slot with center nearest viewport center]
+   ↓
+[setActiveIndex]
+   ↓ broadcast 'reel-active' event
+   ↓
+each slot: if id !== active → pause <video> OR postMessage('pauseVideo')
+active slot: play() / postMessage('playVideo')
 ```
-React Router state untouched, so `useClassVideo` hook doesn't re-fire.
 
-### Auto-advance
-
-```ts
-<video onEnded={() => nextSlotRef.current?.scrollIntoView({ behavior: 'smooth' })} />
-```
-For YouTube iframe: use YouTube IFrame API (`enablejsapi=1` + postMessage listener for `onStateChange === 0`) to detect end.
-
-### View tracking debounce
-
-Slot active for 2s before insert into `class_video_views` — prevents view spam when user scrolls past quickly.
-
-### Performance
-
-- Only mount `<video>` / `<iframe>` for slots within ±1 of active index; others render poster + play icon. Reduces memory & autoplay battles on mobile.
-- React Query `staleTime: 60s` for feed batches.
-
-## Out of scope
-
-- DB schema changes (none needed).
-- Swipe gestures beyond native scroll snap (browser handles it).
-- Picture-in-picture, fullscreen API integration (browser controls suffice).
-
-No DB migration. No new dependencies.
+View dedup: `upsert({video_id, user_id|session_key}, { onConflict, ignoreDuplicates: true })` → trigger only fires on real inserts.
