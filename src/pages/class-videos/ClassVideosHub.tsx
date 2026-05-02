@@ -52,7 +52,7 @@ export default function ClassVideosHub() {
                   <Sparkles className="h-5 w-5 text-primary" />
                   <h2 className="text-xl md:text-2xl font-heading font-bold">Featured Videos</h2>
                 </div>
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
                   {featured.map((v) => <VideoCard key={v.id} video={v} />)}
                 </div>
               </section>
@@ -61,13 +61,13 @@ export default function ClassVideosHub() {
             <section className="mb-12">
               <h2 className="text-xl md:text-2xl font-heading font-bold mb-4">Browse by Subject</h2>
               {loadingCats ? (
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
                   {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="aspect-[16/10]" />)}
                 </div>
               ) : !categories || categories.length === 0 ? (
                 <p className="text-muted-foreground text-sm">No categories yet.</p>
               ) : (
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
                   {categories.map((c) => <CategoryCard key={c.id} category={c} />)}
                 </div>
               )}
@@ -79,7 +79,7 @@ export default function ClassVideosHub() {
           <section>
             <h2 className="text-xl font-bold mb-4">Search results</h2>
             {loadingResults ? (
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
                 {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="aspect-video" />)}
               </div>
             ) : !results || results.length === 0 ? (
@@ -87,7 +87,7 @@ export default function ClassVideosHub() {
                 No videos match "{search}". Try a different keyword.
               </p>
             ) : (
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
                 {results.map((v) => <VideoCard key={v.id} video={v} />)}
               </div>
             )}
@@ -98,11 +98,11 @@ export default function ClassVideosHub() {
           <section>
             <h2 className="text-xl md:text-2xl font-heading font-bold mb-4">Latest Videos</h2>
             {loadingResults ? (
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
                 {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="aspect-video" />)}
               </div>
             ) : (
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
                 {results?.map((v) => <VideoCard key={v.id} video={v} />)}
               </div>
             )}
