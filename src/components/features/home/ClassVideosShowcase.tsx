@@ -31,12 +31,18 @@ export default function ClassVideosShowcase() {
         </div>
 
         {isLoading ? (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="aspect-video" />)}
+          <div className="flex sm:grid sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 overflow-x-auto sm:overflow-visible -mx-4 px-4 sm:mx-0 sm:px-0 snap-x snap-mandatory">
+            {[1, 2, 3, 4].map((i) => (
+              <Skeleton key={i} className="aspect-[3/4] sm:aspect-video shrink-0 w-[45%] sm:w-auto snap-start" />
+            ))}
           </div>
         ) : (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {videos!.slice(0, 8).map((v) => <VideoCard key={v.id} video={v} />)}
+          <div className="flex sm:grid sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 overflow-x-auto sm:overflow-visible -mx-4 px-4 sm:mx-0 sm:px-0 snap-x snap-mandatory scrollbar-hide">
+            {videos!.slice(0, 8).map((v) => (
+              <div key={v.id} className="shrink-0 w-[45%] sm:w-auto snap-start">
+                <VideoCard video={v} />
+              </div>
+            ))}
           </div>
         )}
       </div>
