@@ -118,11 +118,11 @@ export default function VideoCard({ video }: Props) {
   return (
     <Link
       to={`/class-videos/${video.slug}`}
-      className="group block rounded-xl overflow-hidden bg-card border border-border hover:border-primary/40 hover:shadow-lg transition-all"
+      className="group block rounded-lg sm:rounded-xl overflow-hidden bg-card border border-border hover:border-primary/40 hover:shadow-lg transition-all active:scale-[0.98]"
     >
       <div
         ref={containerRef}
-        className="relative aspect-video bg-muted overflow-hidden"
+        className="relative aspect-[3/4] sm:aspect-video bg-muted overflow-hidden"
         onMouseEnter={activate}
         onMouseLeave={deactivate}
       >
@@ -170,23 +170,35 @@ export default function VideoCard({ video }: Props) {
         {/* Play button overlay (hidden while previewing) */}
         {!isPreviewing && (
           <div className="absolute inset-0 bg-black/10 group-hover:bg-black/30 transition-colors flex items-center justify-center">
-            <div className="h-14 w-14 rounded-full bg-primary/90 text-primary-foreground flex items-center justify-center shadow-xl opacity-90 group-hover:scale-110 transition-transform">
-              <Play className="h-6 w-6 ml-0.5" fill="currentColor" />
+            <div className="h-10 w-10 sm:h-14 sm:w-14 rounded-full bg-primary/90 text-primary-foreground flex items-center justify-center shadow-xl opacity-90 group-hover:scale-110 transition-transform">
+              <Play className="h-4 w-4 sm:h-6 sm:w-6 ml-0.5" fill="currentColor" />
             </div>
           </div>
         )}
 
+        {/* Mobile-only bottom title overlay (reel-style) */}
+        <div className="sm:hidden absolute inset-x-0 bottom-0 p-2 pt-6 bg-gradient-to-t from-black/80 to-transparent z-10 pointer-events-none">
+          <h3 className="text-[12px] font-semibold text-white leading-tight line-clamp-2 drop-shadow">
+            {video.title}
+          </h3>
+          <div className="flex items-center gap-2 text-[10px] text-white/80 mt-1">
+            <span className="flex items-center gap-1"><Eye className="h-3 w-3" /> {video.views_count}</span>
+            {duration ? <span className="tabular-nums">{formatDuration(duration)}</span> : null}
+          </div>
+        </div>
+
         {duration ? (
-          <span className="absolute bottom-2 right-2 px-1.5 py-0.5 rounded text-[11px] font-medium bg-black/80 text-white tabular-nums z-10">
+          <span className="hidden sm:inline-flex absolute bottom-2 right-2 px-1.5 py-0.5 rounded text-[11px] font-medium bg-black/80 text-white tabular-nums z-10">
             {formatDuration(duration)}
           </span>
         ) : null}
-        <span className="absolute top-2 left-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide bg-black/70 text-white backdrop-blur-sm z-10">
+        <span className="absolute top-1.5 left-1.5 sm:top-2 sm:left-2 inline-flex items-center gap-1 px-1 sm:px-1.5 py-0.5 rounded text-[9px] sm:text-[10px] font-semibold uppercase tracking-wide bg-black/70 text-white backdrop-blur-sm z-10">
           {visibilityIcon(video.visibility)}
-          {video.visibility === 'paid' ? 'Paid' : video.visibility === 'logged_in' ? 'Login' : 'Free'}
+          <span className="hidden sm:inline">{video.visibility === 'paid' ? 'Paid' : video.visibility === 'logged_in' ? 'Login' : 'Free'}</span>
         </span>
       </div>
-      <div className="p-3 space-y-1.5">
+      {/* Desktop info area (mobile uses overlay above) */}
+      <div className="hidden sm:block p-3 space-y-1.5">
         {cat && (
           <Badge variant="secondary" className="text-[10px] font-medium">
             {cat.name}
