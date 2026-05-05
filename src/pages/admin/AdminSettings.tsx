@@ -81,7 +81,7 @@ const AdminSettings = () => {
       }
       await supabase.from('admin_activity_log').insert({ admin_id: user!.id, action: 'Updated site settings', target_type: 'settings', target_id: 'global' });
     },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['admin-site-settings'] }); toast.success('Settings saved'); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['admin-site-settings'] }); queryClient.invalidateQueries({ queryKey: ['site-settings'] }); toast.success('Settings saved'); },
     onError: () => toast.error('Failed to save settings'),
   });
 
@@ -90,7 +90,7 @@ const AdminSettings = () => {
       await upsertSetting('indexnow_key', indexNowKey.trim());
       await supabase.from('admin_activity_log').insert({ admin_id: user!.id, action: 'Updated IndexNow key', target_type: 'seo', target_id: 'indexnow' });
     },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['admin-site-settings'] }); toast.success('IndexNow key saved'); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['admin-site-settings'] }); queryClient.invalidateQueries({ queryKey: ['site-settings'] }); toast.success('IndexNow key saved'); },
     onError: () => toast.error('Failed to save IndexNow key'),
   });
 
@@ -102,7 +102,7 @@ const AdminSettings = () => {
       await upsertSetting('meta_pixel_require_consent', pixelRequireConsent ? 'true' : 'false');
       await supabase.from('admin_activity_log').insert({ admin_id: user!.id, action: 'Updated Meta Pixel config', target_type: 'tracking', target_id: 'meta_pixel' });
     },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['admin-site-settings'] }); toast.success('Meta Pixel settings saved'); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['admin-site-settings'] }); queryClient.invalidateQueries({ queryKey: ['site-settings'] }); toast.success('Meta Pixel settings saved'); },
     onError: () => toast.error('Failed to save Meta Pixel settings'),
   });
 
