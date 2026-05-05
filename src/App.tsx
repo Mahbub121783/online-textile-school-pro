@@ -173,12 +173,12 @@ const ContributorProfile = lazy(() => import("./pages/contributor/ContributorPro
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 15 * 60 * 1000,     // 15 min — free-tier friendly
-      gcTime: 60 * 60 * 1000,         // 1 hour garbage collection
+      staleTime: 5 * 60 * 1000,        // 5 min default — fresh feel
+      gcTime: 30 * 60 * 1000,          // 30 min garbage collection
       refetchOnWindowFocus: false,
-      refetchOnReconnect: false,
-      retry: 1,                        // Single retry to survive transient blips
-      refetchOnMount: false,           // Use cache when fresh
+      refetchOnReconnect: true,        // Reconnect = refresh
+      retry: 1,
+      refetchOnMount: true,            // Background refetch if stale
     },
   },
 });
