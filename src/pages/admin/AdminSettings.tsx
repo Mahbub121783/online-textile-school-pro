@@ -43,6 +43,8 @@ const AdminSettings = () => {
       const { data } = await supabase.from('site_settings').select('*');
       return data ?? [];
     },
+    staleTime: 0,
+    refetchOnMount: 'always',
   });
 
   useEffect(() => {
