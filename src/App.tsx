@@ -173,11 +173,12 @@ const ContributorProfile = lazy(() => import("./pages/contributor/ContributorPro
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 5 * 60 * 1000,      // 5 min — data stays fresh, no refetch
-      gcTime: 30 * 60 * 1000,         // 30 min garbage collection
-      refetchOnWindowFocus: false,     // Don't refetch on tab switch
-      retry: 1,                        // Only 1 retry on failure
-      refetchOnMount: true,             // Refetch only when data is stale
+      staleTime: 15 * 60 * 1000,     // 15 min — free-tier friendly
+      gcTime: 60 * 60 * 1000,         // 1 hour garbage collection
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: false,
+      retry: 0,                        // No retries — avoid hammering free-tier Supabase
+      refetchOnMount: false,           // Use cache when fresh
     },
   },
 });

@@ -1,64 +1,120 @@
-1. Fix profile photo rendering and avatar upload UX
+# Plan: solve the login + Supabase overload without upgrading paid compute
 
-- Update the settings/profile avatar rendering so Cloudinary URLs display reliably instead of failing for some uploaded images.
-- Remove the technical storage-path helper text (“Stored as users/... on Cloudinary”) from the user-facing settings card.
-- Keep the upload action, preview, and fallback initial intact.
-- Reuse the same safe avatar rendering approach in the main profile header and relevant admin/student views where broken avatar display can also happen.
+## What I think is happening
+Your screenshot shows Supabase resource exhaustion, so this is most likely a load/efficiency problem, not a broken schema.
 
-2. Relax and correct profile completeness logic
+From the codebase, there are several things that can overload a free Supabase project:
+- the public homepage fires many separate Supabase queries
+- `SEOHead` loads `site_settings` on many routes
+- engagement tracking sends repeated Edge Function calls (`PageView`, `PageScroll`, `TimeOnPage`)
+- auth boot does extra write work on login (`last_login_at`) and also tries avatar normalization through `cloudinary-proxy`
+- dashboard/admin/instructor layouts keep realtime subscriptions open
 
-- Rewrite `useProfileCompleteness` so 100% can be reached with the actually important student fields only.
-- Remove Public Profile and Social Links from completeness calculation.
-- Stop requiring extra role-detail fields for students.
-- Make role-dependent requirements conditional only for business/job users.
-- Treat username as complete when it already exists or is auto-generated during backfill.
-- Keep the completeness widget and settings page in sync with the same rules.
+That combination can exhaust free resources and then auth/login starts failing or timing out.
 
-3. Fix settings form behavior for username and role-based fields
+There is also one more possibility: Lovable preview sometimes breaks Supabase auth requests even when the real app is okay. So I want to verify both:
+1. real overload from your Supabase free tier
+2. preview-only login failure
 
-- Ensure the username is auto-generated for users who still have it blank, instead of showing an empty permanent field.
-- Update the settings page so student users do not see business/job-specific designation/current job inputs.
-- Show those fields only when the selected role needs them.
-- Preserve existing data for employee/businessman roles while hiding irrelevant inputs for students.
+## Implementation plan
 
-4. Backfill missing usernames in the database
+### 1) Stop non-essential traffic first
+I’ll reduce the requests that are not required for login or core browsing:
+- temporarily disable or heavily throttle `TimeOnPage` and `PageScroll` server-side tracking
+- keep only the essential `PageView` event, or turn Meta CAPI off entirely while debugging
+- remove write-on-click behavior like sponsor `click_count` updates from public pages, or defer them
+- ensure public pages do not trigger background writes
 
-- Add a migration that safely generates unique usernames for existing users whose `user_profiles.username` is null/blank.
-- Use a deterministic slug from full name, with uniqueness fallback when needed.
-- Also update the signup trigger/function so future accounts always receive a username even if signup metadata does not include one.
-- This addresses the current data issue I found: many existing profiles are missing usernames, so the UI cannot show them.
+Why this matters: free Supabase gets stressed fastest by lots of small background requests.
 
-5. Add real admin-visible login information
+### 2) Make auth bootstrap lightweight
+I’ll simplify everything that runs immediately after sign-in / session restore:
+- keep `getSession()` + minimal profile fetch
+- prevent non-critical work during auth startup
+- move avatar normalization out of `useAuth` so login does not invoke Cloudinary fetch + DB update
+- make `last_login_at` update non-blocking and only run once after confirmed sign-in
+- make auth resilient if profile/role fetch is slow, so session login still completes
 
-- Create a proper public-side tracking field/table for login visibility, because the current admin UI is not showing true login data.
-- Right now the app shows `updated_at` as “Last active”, which is not login information.
-- Add a migration to store last successful login timestamp per user in a public table/column that admins can read through RLS-safe policies.
-- Update the auth/session flow to write that login timestamp after a successful authenticated session is established.
-- Surface this in admin screens such as Admin Users / Student Detail as “Last login” instead of the misleading “Last active”.
+Why this matters: login should not depend on image processing or extra writes.
 
-Technical details
+### 3) Reduce homepage query pressure
+The homepage currently loads many sections separately. I’ll reduce that load by:
+- keeping only high-priority sections on initial load
+- deferring or lazy-loading more sections after the page is visible
+- replacing `select('*')` with small column lists where possible
+- reducing duplicate settings/content fetches
+- avoiding route-wide settings fetches when hardcoded fallbacks are enough
 
-- Files likely to update:
-  - `src/pages/dashboard/SettingsPage.tsx`
-  - `src/pages/Profile.tsx`
-  - `src/hooks/useProfileCompleteness.ts`
-  - `src/hooks/useAuth.tsx`
-  - `src/pages/admin/AdminUsers.tsx`
-  - `src/pages/admin/StudentDetail.tsx`
-  - optionally shared avatar/image helpers for consistency
-- Database work:
-  - new migration to backfill/generate usernames for existing users
-  - update `handle_new_user()` to auto-generate username when metadata username is absent
-  - new migration for admin-visible last-login storage and policies if needed
-- Important findings from inspection:
-  - The settings page currently hardcodes storage text under the avatar upload UI.
-  - The completeness hook currently includes Public Profile + Social Links and counts role details too strictly.
-  - Student role currently still sees designation/current-job inputs.
-  - 206 existing profiles are missing usernames.
-  - Admin login visibility is not implemented correctly today; `StudentDetail` is showing `updated_at` as “Last active”, which is misleading and not actual login data.
+Main hotspots I found on the public side:
+- hero slides + latest workshop
+- stats section
+- featured courses
+- ebooks
+- events
+- learning paths
+- testimonials
+- sponsors
+- instructors
+- class videos
+- `SEOHead` -> `useSettings()`
 
-If you approve, I’ll implement the code changes plus the required database migration(s).
+### 4) Limit realtime to where it truly matters
+Realtime is useful, but on free tier it should be used carefully.
+I’ll review mounted realtime hooks and make sure:
+- only dashboard/admin/instructor screens use subscriptions
+- public pages never subscribe unnecessarily
+- channels are removed cleanly
+- invalidations are not too broad
 
-&nbsp;
+If needed, I’ll downgrade some live updates to manual refresh / normal query refetch.
 
-yes i am approving all of these implement this and then run for all profile , for preventing the all of issue . 
+### 5) Add safer caching defaults for low-cost operation
+I’ll tune React Query behavior for a free-tier-friendly app:
+- longer stale times for public content
+- fewer automatic refetches
+- avoid unnecessary refetch on remount for stable content
+- keep critical auth/account data fresh, but let public marketing content stay cached longer
+
+This lowers load without changing the user experience much.
+
+### 6) Verify whether login failure is real app issue or preview-only issue
+After optimization, I’ll test login carefully in two contexts:
+- preview URL
+- published/production app behavior pattern
+
+Reason: Lovable preview can sometimes show `Failed to fetch` for Supabase auth even when the real deployment is fine. I will separate that from actual Supabase overload.
+
+## Technical changes I expect to make
+- `src/hooks/useAuth.tsx`
+  - remove avatar normalization from auth bootstrap
+  - minimize login-time writes
+  - harden session/profile loading
+- `src/hooks/useEngagementTracking.ts`
+  - disable or reduce noisy tracking events
+- `src/lib/metaPixel.ts`
+  - limit server-side CAPI calls during debugging / free-tier mode
+- `src/components/SEOHead.tsx`
+  - avoid expensive repeated settings fetches on every route where not needed
+- homepage sections under `src/components/features/home/*`
+  - cut `select('*')`
+  - reduce initial query count and defer non-critical sections
+- `src/hooks/useRealtime.ts`
+  - narrow realtime invalidation behavior if needed
+- possibly selected public hooks like `useSettings`, `useSiteContent`, `useClassVideos`
+  - stronger caching and lighter queries
+
+## Expected result
+After these changes, the app should:
+- stop exhausting Supabase so quickly on free tier
+- let users log in more reliably
+- reduce background DB/Edge Function traffic
+- keep the public homepage working with much lower cost
+
+## Important note
+If login still fails only inside Lovable preview after these optimizations, then the remaining issue is likely the preview auth proxy behavior, not your Supabase project itself. In that case I’ll give you the cleanest workaround path without asking you to upgrade compute.
+
+## After approval
+I’ll implement the low-cost optimization pass first, then re-check login behavior and identify whether any remaining problem is:
+- true Supabase free-tier exhaustion
+- a specific heavy query/page
+- or a preview-only auth issue
