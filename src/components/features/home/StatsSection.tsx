@@ -10,7 +10,8 @@ const CountUp = ({ end, decimal, suffix }: { end: number; decimal?: boolean; suf
 
   useEffect(() => {
     const el = ref.current;
-    if (!el) return;
+    if (!el || end <= 0) return;
+    hasAnimated.current = false;
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting && !hasAnimated.current) {
