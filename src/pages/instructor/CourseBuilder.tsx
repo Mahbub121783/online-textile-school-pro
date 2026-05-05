@@ -118,14 +118,15 @@ const CourseBuilder = () => {
       certificate_threshold_pct: Number(form.certificate_threshold_pct) || 100,
       revenue_share_pct: Number(form.revenue_share_pct) || 70,
       cert_template_id: form.cert_template_id || null,
-      instructor_id: course?.instructor_id || user!.id,
+      instructor_id: (isAdmin && form.instructor_id) ? form.instructor_id : (course?.instructor_id || user!.id),
     };
     if (status) payload.review_status = status;
     if (status === 'approved') payload.is_published = true;
 
+    const editBase = isAdminScope ? '/admin/cms/courses' : '/instructor/courses';
     if (isNew) {
       const { data, error } = await supabase.from('courses').insert(payload).select().single();
-      if (error) { toast.error(error.message); } else { toast.success('Course created!'); navigate(`/instructor/courses/${data.id}`, { replace: true }); }
+      if (error) { toast.error(error.message); } else { toast.success('Course created!'); navigate(`${editBase}/${data.id}`, { replace: true }); }
     } else {
       const { error } = await supabase.from('courses').update(payload).eq('id', courseId!);
       if (error) { toast.error(error.message); } else { toast.success('Course saved!'); qc.invalidateQueries({ queryKey: ['instructor-course', courseId] }); }
