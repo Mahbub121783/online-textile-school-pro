@@ -104,55 +104,53 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const recordLogin = (userId: string) => {
       if (loginRecorded.has(userId)) return;
       loginRecorded.add(userId);
-      // Fire-and-forget — never block UI
-      supabase.from('user_profiles').update({ last_login_at: new Date().toISOString() }).eq('id', userId).then(() => {});
+      // Defer non-critical write so login UI never waits on it
+      setTimeout(() => {
+        supabase.from('user_profiles').update({ last_login_at: new Date().toISOString() }).eq('id', userId).then(() => {});
+      }, 2000);
     };
 
-    // 1. Primary init — fetch session first, then profile/roles
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!mounted) return;
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        const uid = session.user.id;
-        recordLogin(uid);
-        fetchUserData(uid).then(d => {
+    const loadProfileAndRoles = (uid: string) => {
+      // Fire-and-forget; UI is already unblocked
+      fetchUserData(uid).then(d => {
+        if (!mounted) return;
+        setProfile(d.profile);
+        setRoles(d.roles);
+        // Avatar normalization is heavy (Cloudinary fetch + DB update).
+        // Defer to idle time so it never delays login or stresses Supabase on free tier.
+        const idle: any = (window as any).requestIdleCallback || ((cb: any) => setTimeout(cb, 5000));
+        idle(() => {
           if (!mounted) return;
-          setProfile(d.profile);
-          setRoles(d.roles);
           normalizeAvatarToCloudinary(uid, d.profile?.avatar_url).then((normalizedUrl) => {
             if (!mounted || !normalizedUrl) return;
             setProfile((prev: any) => prev ? { ...prev, avatar_url: normalizedUrl } : prev);
           });
-          setLoading(false);
-          setIsReady(true);
-        }).catch(() => {
-          if (mounted) { setLoading(false); setIsReady(true); }
         });
-      } else {
-        setLoading(false);
-        setIsReady(true);
-      }
+      }).catch(() => {});
+    };
+
+    // 1. Primary init — unblock UI as soon as session is known
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!mounted) return;
+      setSession(session);
+      setUser(session?.user ?? null);
+      setLoading(false);
+      setIsReady(true);
+      if (session?.user) loadProfileAndRoles(session.user.id);
+    }).catch(() => {
+      if (mounted) { setLoading(false); setIsReady(true); }
     });
 
-    // 2. Listener — fire-and-forget, NO await to prevent deadlocks
+    // 2. Listener — synchronous state update, defer DB work
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
-        if (event === 'INITIAL_SESSION') return; // Already handled by getSession above
+        if (event === 'INITIAL_SESSION') return;
         setSession(session);
         setUser(session?.user ?? null);
         if (session?.user) {
           const uid = session.user.id;
           if (event === 'SIGNED_IN') recordLogin(uid);
-          fetchUserData(uid).then(d => {
-            if (!mounted) return;
-            setProfile(d.profile);
-            setRoles(d.roles);
-            normalizeAvatarToCloudinary(uid, d.profile?.avatar_url).then((normalizedUrl) => {
-              if (!mounted || !normalizedUrl) return;
-              setProfile((prev: any) => prev ? { ...prev, avatar_url: normalizedUrl } : prev);
-            });
-          });
+          loadProfileAndRoles(uid);
         } else {
           setProfile(null);
           setRoles([]);
