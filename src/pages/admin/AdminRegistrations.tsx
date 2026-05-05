@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Settings, Palette, Database, Plus, Trash2, Edit, Download, Eye, Users, Search, X, Image as ImageIcon } from 'lucide-react';
 import MediaPickerModal from '@/components/shared/MediaPickerModal';
+import CustomFieldsBuilder, { CustomField } from '@/components/admin/CustomFieldsBuilder';
 import * as XLSX from 'xlsx';
 
 interface Purpose {
@@ -41,7 +42,7 @@ function FormSettingsTab() {
   const [purposes, setPurposes] = useState<Purpose[]>([]);
   const [editing, setEditing] = useState<Purpose | null>(null);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ name: '', slug: '', is_active: true, max_entries: '', photo_required: false, starts_at: '', ends_at: '', custom_fields: '[]' });
+  const [form, setForm] = useState<{ name: string; slug: string; is_active: boolean; max_entries: string; photo_required: boolean; starts_at: string; ends_at: string; custom_fields: CustomField[]; }>({ name: '', slug: '', is_active: true, max_entries: '', photo_required: false, starts_at: '', ends_at: '', custom_fields: [] });
 
   const load = useCallback(async () => {
     const { data } = await supabase.from('registration_purposes' as any).select('*').order('sort_order');
@@ -50,26 +51,32 @@ function FormSettingsTab() {
 
   useEffect(() => { load(); }, [load]);
 
-  const openNew = () => { setEditing(null); setForm({ name: '', slug: '', is_active: true, max_entries: '', photo_required: false, starts_at: '', ends_at: '', custom_fields: '[]' }); setShowForm(true); };
+  const openNew = () => { setEditing(null); setForm({ name: '', slug: '', is_active: true, max_entries: '', photo_required: false, starts_at: '', ends_at: '', custom_fields: [] }); setShowForm(true); };
   const openEdit = (p: Purpose) => {
     setEditing(p);
     setForm({
       name: p.name, slug: p.slug, is_active: p.is_active,
       max_entries: p.max_entries?.toString() || '', photo_required: p.photo_required,
       starts_at: p.starts_at ? p.starts_at.slice(0, 16) : '', ends_at: p.ends_at ? p.ends_at.slice(0, 16) : '',
-      custom_fields: JSON.stringify(p.custom_fields || [], null, 2),
+      custom_fields: Array.isArray(p.custom_fields) ? (p.custom_fields as CustomField[]) : [],
     });
     setShowForm(true);
   };
 
   const save = async () => {
-    let customFields: any[];
-    try { customFields = JSON.parse(form.custom_fields); } catch { toast({ title: 'Invalid JSON in custom fields', variant: 'destructive' }); return; }
+    // validate keys
+    const keys = form.custom_fields.map(f => f.key);
+    const hasDup = keys.some((k, i) => keys.indexOf(k) !== i);
+    const hasInvalid = form.custom_fields.some(f => !/^[a-z0-9_]+$/.test(f.key) || !f.label?.trim());
+    if (hasDup || hasInvalid) {
+      toast({ title: 'Fix custom field errors before saving', variant: 'destructive' });
+      return;
+    }
     const payload: any = {
       name: form.name, slug: form.slug || form.name.toLowerCase().replace(/\s+/g, '-'),
       is_active: form.is_active, max_entries: form.max_entries ? parseInt(form.max_entries) : null,
       photo_required: form.photo_required, starts_at: form.starts_at || null, ends_at: form.ends_at || null,
-      custom_fields: customFields,
+      custom_fields: form.custom_fields,
     };
     if (editing) {
       await supabase.from('registration_purposes' as any).update(payload).eq('id', editing.id);
@@ -131,7 +138,7 @@ function FormSettingsTab() {
       </div>
 
       <Dialog open={showForm} onOpenChange={setShowForm}>
-        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>{editing ? 'Edit Purpose' : 'New Purpose'}</DialogTitle></DialogHeader>
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
@@ -147,12 +154,14 @@ function FormSettingsTab() {
               <div className="space-y-1"><Label>Ends At</Label><Input type="datetime-local" value={form.ends_at} onChange={e => setForm(p => ({ ...p, ends_at: e.target.value }))} /></div>
             </div>
             <div className="flex items-center gap-2"><Switch checked={form.is_active} onCheckedChange={v => setForm(p => ({ ...p, is_active: v }))} /><Label>Active</Label></div>
-            <div className="space-y-1">
-              <Label>Custom Fields (JSON)</Label>
-              <Textarea rows={5} value={form.custom_fields} onChange={e => setForm(p => ({ ...p, custom_fields: e.target.value }))} className="font-mono text-xs"
-                placeholder='[{"key":"tshirt_size","label":"T-Shirt Size","type":"select","required":true,"options":["S","M","L","XL"]}]' />
-              <p className="text-xs text-muted-foreground">Array of objects: key, label, type (text/select/number/date), required, options[]</p>
+
+            <div className="border-t pt-4">
+              <CustomFieldsBuilder
+                value={form.custom_fields}
+                onChange={(fields) => setForm(p => ({ ...p, custom_fields: fields }))}
+              />
             </div>
+
             <Button onClick={save} className="w-full">{editing ? 'Update' : 'Create'} Purpose</Button>
           </div>
         </DialogContent>
