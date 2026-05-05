@@ -53,15 +53,20 @@ export default function AdminPopups() {
 
   useEffect(() => { load(); }, []);
 
+  // Invalidate the public popup engine cache so admin changes show up immediately.
+  const clearPopupCache = () => { try { delete (window as any).__popupCache; } catch {} };
+
   const toggleActive = async (id: string, value: boolean) => {
     await supabase.from('popups').update({ is_active: value }).eq('id', id);
     setPopups(p => p.map(x => x.id === id ? { ...x, is_active: value } : x));
+    clearPopupCache();
     toast.success(value ? 'Popup activated' : 'Popup deactivated');
   };
 
   const remove = async (id: string) => {
     await supabase.from('popups').delete().eq('id', id);
     setPopups(p => p.filter(x => x.id !== id));
+    clearPopupCache();
     toast.success('Deleted');
   };
 
@@ -70,6 +75,7 @@ export default function AdminPopups() {
     if (!data) return;
     const { id: _, created_at: __, updated_at: ___, ...rest } = data;
     await supabase.from('popups').insert({ ...rest, name: `${rest.name} (Copy)`, is_active: false });
+    clearPopupCache();
     toast.success('Duplicated');
     load();
   };

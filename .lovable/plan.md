@@ -1,120 +1,44 @@
-# Plan: solve the login + Supabase overload without upgrading paid compute
 
-## What I think is happening
-Your screenshot shows Supabase resource exhaustion, so this is most likely a load/efficiency problem, not a broken schema.
+# Optimization Audit — Ki Break Hoiche, Ki Hoy Nai
 
-From the codebase, there are several things that can overload a free Supabase project:
-- the public homepage fires many separate Supabase queries
-- `SEOHead` loads `site_settings` on many routes
-- engagement tracking sends repeated Edge Function calls (`PageView`, `PageScroll`, `TimeOnPage`)
-- auth boot does extra write work on login (`last_login_at`) and also tries avatar normalization through `cloudinary-proxy`
-- dashboard/admin/instructor layouts keep realtime subscriptions open
+Recent free-tier optimization (App.tsx defaults, useAuth, useEngagementTracking, useSettings, useCurrency, usePopupEngine, SponsorsSection, Index.tsx LazySection) — full system check korechi. **Major kono feature break hoy nai**, but kichu side-effect/trade-off ase ja addressing dorkar.
 
-That combination can exhaust free resources and then auth/login starts failing or timing out.
+## ✅ Verified working (no break)
 
-There is also one more possibility: Lovable preview sometimes breaks Supabase auth requests even when the real app is okay. So I want to verify both:
-1. real overload from your Supabase free tier
-2. preview-only login failure
+1. **useAuth** — `INITIAL_SESSION` skip kora hoyeche karon `getSession()` already handle korche. `SIGNED_IN`/`SIGNED_OUT`/`TOKEN_REFRESHED` shob event ekhono process hocche. Profile/roles + realtime subscription intact.
+2. **useEngagementTracking** — no-op kora hoyeche. Hook signature same, call sites unaffected. PageView (Meta CAPI) ekhono `App.tsx` te route change e fire korche.
+3. **useCurrency** — `select('code, symbol, exchange_rate, is_default')` — `CurrencySelector` only `code` + `symbol` use kore, `useConvertPrice` `code` + `exchange_rate` use kore. `AdminCurrencies` ta separate query (`select('*')`) — admin CRUD intact.
+4. **useSettings** — `select('key, value')` only. `useSetting(key)` consumers shob ei 2 column e use kore. SEOHead, footer, branding shob fine.
+5. **SponsorsSection** — click tracking disable korechi but link open korar functionality intact.
+6. **Index.tsx LazySection** — `rootMargin: 200px` use korche, FeaturedCourses (first below-hero section) timely render hobe.
 
-## Implementation plan
+## ⚠️ Trade-offs (UX impact, not break)
 
-### 1) Stop non-essential traffic first
-I’ll reduce the requests that are not required for login or core browsing:
-- temporarily disable or heavily throttle `TimeOnPage` and `PageScroll` server-side tracking
-- keep only the essential `PageView` event, or turn Meta CAPI off entirely while debugging
-- remove write-on-click behavior like sponsor `click_count` updates from public pages, or defer them
-- ensure public pages do not trigger background writes
+| Area | Behavior | Impact |
+|---|---|---|
+| Global QueryClient `staleTime: 15min` + `refetchOnMount: false` | Page revisit e fresh data fetch hobe na | Admin-published new course/post 15 min loga te dekhabe (until manual invalidate) |
+| `usePopupEngine` 30-min `window.__popupCache` | Admin saved new popup ta same session e 30 min por dekhabe | Popup admin testing kora kothin |
+| `useSettings` 30-min cache | Admin settings change shoonge shoonge reflect hobe na | Logo/contact update 30 min late |
+| `retry: 0` global | Network timeout e retry hobe na | Free-tier 504/timeout e blank section dekhate pare (Supabase JS still retries internally) |
 
-Why this matters: free Supabase gets stressed fastest by lots of small background requests.
+## 🛠 Recommended fixes
 
-### 2) Make auth bootstrap lightweight
-I’ll simplify everything that runs immediately after sign-in / session restore:
-- keep `getSession()` + minimal profile fetch
-- prevent non-critical work during auth startup
-- move avatar normalization out of `useAuth` so login does not invoke Cloudinary fetch + DB update
-- make `last_login_at` update non-blocking and only run once after confirmed sign-in
-- make auth resilient if profile/role fetch is slow, so session login still completes
+1. **Admin pages exempt korbo** — admin queries (e.g. `AdminCurrencies`, `AdminSettings`, `AdminPopups`, `AdminUsers`) e per-query `staleTime: 0, refetchOnMount: 'always'` add korbo, jate admin live data dekhe.
+2. **Mutation invalidation flow tighten** — jekhane admin `update`/`insert` korche, `qc.invalidateQueries({ queryKey: [...] })` use kora — many places already kore, audit kore missing gulo add korbo.
+3. **Popup cache key reduce** — `30min → 5min`, ar admin save korle clear korar mechanism (window event or short staleTime) jog korbo.
+4. **`retry: 1`** global e — 0 theke 1 e nilo, jate transient network blip e empty UI na dekhay (1 retry minimal load).
+5. **Optional**: `useEngagementTracking` ke completely off na rakhe, only `TimeOnPage` + `PageScroll` off, ar `InternalClick` keep korbo (low frequency, useful analytics).
 
-Why this matters: login should not depend on image processing or extra writes.
+## Files to touch
 
-### 3) Reduce homepage query pressure
-The homepage currently loads many sections separately. I’ll reduce that load by:
-- keeping only high-priority sections on initial load
-- deferring or lazy-loading more sections after the page is visible
-- replacing `select('*')` with small column lists where possible
-- reducing duplicate settings/content fetches
-- avoiding route-wide settings fetches when hardcoded fallbacks are enough
+- `src/App.tsx` — `retry: 0 → 1`
+- `src/hooks/useSettings.ts` — admin path detect kore short stale, ba ekta `useSettingsLive()` variant
+- `src/hooks/usePopupEngine.tsx` — cache 5 min + admin invalidation
+- `src/pages/admin/AdminCurrencies.tsx`, `AdminSettings.tsx`, `AdminPopups.tsx` — per-query overrides
+- (Optional) `src/hooks/useEngagementTracking.ts` — re-enable InternalClick only
 
-Main hotspots I found on the public side:
-- hero slides + latest workshop
-- stats section
-- featured courses
-- ebooks
-- events
-- learning paths
-- testimonials
-- sponsors
-- instructors
-- class videos
-- `SEOHead` -> `useSettings()`
+## Out of scope (alada msg e korte hobe)
 
-### 4) Limit realtime to where it truly matters
-Realtime is useful, but on free tier it should be used carefully.
-I’ll review mounted realtime hooks and make sure:
-- only dashboard/admin/instructor screens use subscriptions
-- public pages never subscribe unnecessarily
-- channels are removed cleanly
-- invalidations are not too broad
+- Login intermittent failures — eta Supabase free-tier infrastructure pressure (504 timeout dekha gechilo). Code thik ase. Database upgrade ba off-peak retry chara solve korar moto kichu nai.
 
-If needed, I’ll downgrade some live updates to manual refresh / normal query refetch.
-
-### 5) Add safer caching defaults for low-cost operation
-I’ll tune React Query behavior for a free-tier-friendly app:
-- longer stale times for public content
-- fewer automatic refetches
-- avoid unnecessary refetch on remount for stable content
-- keep critical auth/account data fresh, but let public marketing content stay cached longer
-
-This lowers load without changing the user experience much.
-
-### 6) Verify whether login failure is real app issue or preview-only issue
-After optimization, I’ll test login carefully in two contexts:
-- preview URL
-- published/production app behavior pattern
-
-Reason: Lovable preview can sometimes show `Failed to fetch` for Supabase auth even when the real deployment is fine. I will separate that from actual Supabase overload.
-
-## Technical changes I expect to make
-- `src/hooks/useAuth.tsx`
-  - remove avatar normalization from auth bootstrap
-  - minimize login-time writes
-  - harden session/profile loading
-- `src/hooks/useEngagementTracking.ts`
-  - disable or reduce noisy tracking events
-- `src/lib/metaPixel.ts`
-  - limit server-side CAPI calls during debugging / free-tier mode
-- `src/components/SEOHead.tsx`
-  - avoid expensive repeated settings fetches on every route where not needed
-- homepage sections under `src/components/features/home/*`
-  - cut `select('*')`
-  - reduce initial query count and defer non-critical sections
-- `src/hooks/useRealtime.ts`
-  - narrow realtime invalidation behavior if needed
-- possibly selected public hooks like `useSettings`, `useSiteContent`, `useClassVideos`
-  - stronger caching and lighter queries
-
-## Expected result
-After these changes, the app should:
-- stop exhausting Supabase so quickly on free tier
-- let users log in more reliably
-- reduce background DB/Edge Function traffic
-- keep the public homepage working with much lower cost
-
-## Important note
-If login still fails only inside Lovable preview after these optimizations, then the remaining issue is likely the preview auth proxy behavior, not your Supabase project itself. In that case I’ll give you the cleanest workaround path without asking you to upgrade compute.
-
-## After approval
-I’ll implement the low-cost optimization pass first, then re-check login behavior and identify whether any remaining problem is:
-- true Supabase free-tier exhaustion
-- a specific heavy query/page
-- or a preview-only auth issue
+Approve korle ami implement korbo.

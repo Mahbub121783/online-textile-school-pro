@@ -177,7 +177,7 @@ const queryClient = new QueryClient({
       gcTime: 60 * 60 * 1000,         // 1 hour garbage collection
       refetchOnWindowFocus: false,
       refetchOnReconnect: false,
-      retry: 0,                        // No retries — avoid hammering free-tier Supabase
+      retry: 1,                        // Single retry to survive transient blips
       refetchOnMount: false,           // Use cache when fresh
     },
   },
