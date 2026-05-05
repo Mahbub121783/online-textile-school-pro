@@ -422,3 +422,147 @@ export default function PublicRegistration() {
     </>
   );
 }
+
+// ─── Custom field renderer ───
+function CustomFieldRenderer({ field, value, onChange, uploader }: { field: any; value: any; onChange: (v: any) => void; uploader: (file: File) => Promise<{ url?: string } | null | undefined> | any; }) {
+  const widthClass = field.width === 'half' ? '' : 'md:col-span-2';
+  const id = `cf_${field.key}`;
+  const helpText = field.helpText && <p className="text-xs text-muted-foreground">{field.helpText}</p>;
+
+  let control: JSX.Element;
+  switch (field.type) {
+    case 'textarea':
+      control = <Textarea id={id} value={value || ''} onChange={e => onChange(e.target.value)} placeholder={field.placeholder} required={field.required} />;
+      break;
+    case 'select':
+      control = (
+        <Select value={value || ''} onValueChange={onChange}>
+          <SelectTrigger><SelectValue placeholder={field.placeholder || 'Select...'} /></SelectTrigger>
+          <SelectContent>
+            {(field.options || []).map((o: string) => <SelectItem key={o} value={o}>{o}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      );
+      break;
+    case 'multiselect': {
+      const arr: string[] = Array.isArray(value) ? value : [];
+      control = (
+        <div className="space-y-1.5 border rounded-md p-3">
+          {(field.options || []).map((o: string) => (
+            <label key={o} className="flex items-center gap-2 cursor-pointer">
+              <Checkbox
+                checked={arr.includes(o)}
+                onCheckedChange={(c) => {
+                  if (c) onChange([...arr, o]);
+                  else onChange(arr.filter(x => x !== o));
+                }}
+              />
+              <span className="text-sm">{o}</span>
+            </label>
+          ))}
+        </div>
+      );
+      break;
+    }
+    case 'radio':
+      control = (
+        <RadioGroup value={value || ''} onValueChange={onChange} className="space-y-1.5">
+          {(field.options || []).map((o: string) => (
+            <label key={o} className="flex items-center gap-2 cursor-pointer">
+              <RadioGroupItem value={o} id={`${id}_${o}`} />
+              <span className="text-sm">{o}</span>
+            </label>
+          ))}
+        </RadioGroup>
+      );
+      break;
+    case 'checkbox':
+      control = (
+        <div className="flex items-center gap-2 pt-1">
+          <Switch checked={!!value} onCheckedChange={onChange} />
+          <span className="text-sm text-muted-foreground">{field.placeholder || 'Yes'}</span>
+        </div>
+      );
+      break;
+    case 'rating': {
+      const max = field.max || 5;
+      const current = Number(value) || 0;
+      control = (
+        <div className="flex gap-1">
+          {Array.from({ length: max }).map((_, i) => (
+            <button key={i} type="button" onClick={() => onChange(i + 1)} className="hover:scale-110 transition">
+              <Star className={`w-6 h-6 ${i < current ? 'fill-yellow-400 text-yellow-400' : 'text-muted-foreground'}`} />
+            </button>
+          ))}
+        </div>
+      );
+      break;
+    }
+    case 'file':
+      control = (
+        <div>
+          {value ? (
+            <div className="flex items-center gap-2">
+              <a href={value} target="_blank" rel="noreferrer" className="text-sm text-primary underline truncate">View uploaded file</a>
+              <Button type="button" variant="outline" size="sm" onClick={() => onChange('')}>Remove</Button>
+            </div>
+          ) : (
+            <label className="flex items-center justify-center gap-2 border-2 border-dashed rounded-lg p-4 cursor-pointer hover:border-primary/50">
+              <FileUp className="w-4 h-4 text-muted-foreground" />
+              <span className="text-xs text-muted-foreground">Click to upload</span>
+              <input
+                type="file"
+                className="hidden"
+                onChange={async (e) => {
+                  const f = e.target.files?.[0];
+                  if (!f) return;
+                  const r = await uploader(f);
+                  if (r?.url) onChange(r.url);
+                }}
+              />
+            </label>
+          )}
+        </div>
+      );
+      break;
+    case 'number':
+    case 'email':
+    case 'phone':
+    case 'url':
+    case 'date':
+    case 'time':
+    case 'datetime':
+    case 'text':
+    default: {
+      const inputType =
+        field.type === 'number' ? 'number'
+        : field.type === 'email' ? 'email'
+        : field.type === 'phone' ? 'tel'
+        : field.type === 'url' ? 'url'
+        : field.type === 'date' ? 'date'
+        : field.type === 'time' ? 'time'
+        : field.type === 'datetime' ? 'datetime-local'
+        : 'text';
+      control = (
+        <Input
+          id={id}
+          type={inputType}
+          value={value ?? ''}
+          onChange={e => onChange(e.target.value)}
+          placeholder={field.placeholder}
+          required={field.required}
+          min={field.min}
+          max={field.max}
+        />
+      );
+    }
+  }
+
+  return (
+    <div className={`space-y-2 ${widthClass}`}>
+      <Label htmlFor={id}>{field.label} {field.required && <span className="text-destructive">*</span>}</Label>
+      {control}
+      {helpText}
+    </div>
+  );
+}
