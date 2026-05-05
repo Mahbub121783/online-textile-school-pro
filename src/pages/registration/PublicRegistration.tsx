@@ -167,6 +167,17 @@ export default function PublicRegistration() {
     if (activePurpose?.photo_required && !formData.photo_url) {
       toast({ title: 'Photo is required for this registration', variant: 'destructive' }); return;
     }
+    // Validate custom required fields
+    const cfs = (activePurpose?.custom_fields || []) as any[];
+    for (const cf of cfs) {
+      if (!cf.required) continue;
+      const v = extraFields[cf.key];
+      const empty = v === undefined || v === null || v === '' || (Array.isArray(v) && v.length === 0);
+      if (empty) {
+        toast({ title: `${cf.label} is required`, variant: 'destructive' });
+        return;
+      }
+    }
 
     setSubmitting(true);
     const { data, error } = await supabase.from('registrations' as any).insert({
