@@ -269,8 +269,8 @@ const SettingsPage = () => {
             </label>
           </div>
           <div>
-            <p className="text-sm font-medium">Upload original-quality photo</p>
-            <p className="text-xs text-muted-foreground">Stored as users/{user?.id?.slice(0, 8)}…/avatar on Cloudinary</p>
+            <p className="text-sm font-medium">Upload your photo</p>
+            <p className="text-xs text-muted-foreground">JPG or PNG, up to 10MB. Click the avatar to change.</p>
             {avatarUploading && <p className="text-xs text-primary mt-1">Uploading…</p>}
           </div>
         </div>
