@@ -113,14 +113,15 @@ const AdminUsers = () => {
                 <TableHead>Profile</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Joined</TableHead>
+                <TableHead>Last login</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
-                <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Loading...</TableCell></TableRow>
+                <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Loading...</TableCell></TableRow>
               ) : users?.length === 0 ? (
-                <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">No users found.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">No users found.</TableCell></TableRow>
               ) : (
                 users?.map((u: any) => (
                   <TableRow key={u.id}>
@@ -159,6 +160,9 @@ const AdminUsers = () => {
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {u.created_at ? new Date(u.created_at).toLocaleDateString() : '—'}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {u.last_login_at ? new Date(u.last_login_at).toLocaleString() : <span className="italic text-xs">Never</span>}
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">

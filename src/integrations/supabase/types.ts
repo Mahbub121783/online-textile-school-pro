@@ -5492,6 +5492,7 @@ export type Database = {
           is_active: boolean | null
           is_public_contributor: boolean
           language_preference: string | null
+          last_login_at: string | null
           latitude: number | null
           linkedin_url: string | null
           location_updated_at: string | null
@@ -5539,6 +5540,7 @@ export type Database = {
           is_active?: boolean | null
           is_public_contributor?: boolean
           language_preference?: string | null
+          last_login_at?: string | null
           latitude?: number | null
           linkedin_url?: string | null
           location_updated_at?: string | null
@@ -5586,6 +5588,7 @@ export type Database = {
           is_active?: boolean | null
           is_public_contributor?: boolean
           language_preference?: string | null
+          last_login_at?: string | null
           latitude?: number | null
           linkedin_url?: string | null
           location_updated_at?: string | null
@@ -6296,6 +6299,7 @@ export type Database = {
         Args: { _existing_id?: string; _table_name: string; _title: string }
         Returns: string
       }
+      generate_unique_username: { Args: { _base: string }; Returns: string }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

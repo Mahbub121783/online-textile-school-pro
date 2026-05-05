@@ -99,6 +99,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => {
     let mounted = true;
+    const loginRecorded = new Set<string>();
+
+    const recordLogin = (userId: string) => {
+      if (loginRecorded.has(userId)) return;
+      loginRecorded.add(userId);
+      // Fire-and-forget — never block UI
+      supabase.from('user_profiles').update({ last_login_at: new Date().toISOString() }).eq('id', userId).then(() => {});
+    };
 
     // 1. Primary init — fetch session first, then profile/roles
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -106,11 +114,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
-        fetchUserData(session.user.id).then(d => {
+        const uid = session.user.id;
+        recordLogin(uid);
+        fetchUserData(uid).then(d => {
           if (!mounted) return;
           setProfile(d.profile);
           setRoles(d.roles);
-          normalizeAvatarToCloudinary(session.user.id, d.profile?.avatar_url).then((normalizedUrl) => {
+          normalizeAvatarToCloudinary(uid, d.profile?.avatar_url).then((normalizedUrl) => {
             if (!mounted || !normalizedUrl) return;
             setProfile((prev: any) => prev ? { ...prev, avatar_url: normalizedUrl } : prev);
           });
@@ -132,11 +142,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setSession(session);
         setUser(session?.user ?? null);
         if (session?.user) {
-          fetchUserData(session.user.id).then(d => {
+          const uid = session.user.id;
+          if (event === 'SIGNED_IN') recordLogin(uid);
+          fetchUserData(uid).then(d => {
             if (!mounted) return;
             setProfile(d.profile);
             setRoles(d.roles);
-            normalizeAvatarToCloudinary(session.user.id, d.profile?.avatar_url).then((normalizedUrl) => {
+            normalizeAvatarToCloudinary(uid, d.profile?.avatar_url).then((normalizedUrl) => {
               if (!mounted || !normalizedUrl) return;
               setProfile((prev: any) => prev ? { ...prev, avatar_url: normalizedUrl } : prev);
             });

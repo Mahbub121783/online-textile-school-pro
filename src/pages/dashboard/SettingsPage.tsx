@@ -256,7 +256,16 @@ const SettingsPage = () => {
           <div className="relative group">
             <div className="w-20 h-20 rounded-full bg-muted flex items-center justify-center overflow-hidden border-2 border-border">
               {profile?.avatar_url ? (
-                <img src={cldImg(profile.avatar_url, { w: 200, c: 'fill', g: 'face' })} alt="Avatar" className="w-full h-full object-cover" />
+                <img
+                  src={cldImg(profile.avatar_url, { w: 200, c: 'fill', g: 'auto' })}
+                  alt="Avatar"
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    const img = e.currentTarget;
+                    if (img.src !== profile.avatar_url) img.src = profile.avatar_url;
+                    else img.style.display = 'none';
+                  }}
+                />
               ) : (
                 <span className="text-2xl font-heading font-bold text-muted-foreground">
                   {profile?.full_name?.[0]?.toUpperCase() || 'U'}
@@ -269,8 +278,8 @@ const SettingsPage = () => {
             </label>
           </div>
           <div>
-            <p className="text-sm font-medium">Upload original-quality photo</p>
-            <p className="text-xs text-muted-foreground">Stored as users/{user?.id?.slice(0, 8)}…/avatar on Cloudinary</p>
+            <p className="text-sm font-medium">Upload your photo</p>
+            <p className="text-xs text-muted-foreground">JPG or PNG, up to 10MB. Click the avatar to change.</p>
             {avatarUploading && <p className="text-xs text-primary mt-1">Uploading…</p>}
           </div>
         </div>
@@ -411,14 +420,18 @@ const SettingsPage = () => {
             </Select>
           </div>
 
-          <div className="space-y-2">
-            <Label>Designation</Label>
-            <Input value={form.occupation} onChange={(e) => update('occupation', e.target.value)} placeholder="e.g. QC Manager" />
-          </div>
-          <div className="space-y-2">
-            <Label>Present Job</Label>
-            <Input value={form.current_job} onChange={(e) => update('current_job', e.target.value)} placeholder="e.g. Senior Merchandiser" />
-          </div>
+          {(form.professional_role === 'employee' || form.professional_role === 'businessman') && (
+            <>
+              <div className="space-y-2">
+                <Label>Designation</Label>
+                <Input value={form.occupation} onChange={(e) => update('occupation', e.target.value)} placeholder="e.g. QC Manager" />
+              </div>
+              <div className="space-y-2">
+                <Label>Present Job</Label>
+                <Input value={form.current_job} onChange={(e) => update('current_job', e.target.value)} placeholder="e.g. Senior Merchandiser" />
+              </div>
+            </>
+          )}
 
           {form.professional_role === 'employee' && (
             <div className="space-y-2">

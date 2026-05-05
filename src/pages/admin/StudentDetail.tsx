@@ -394,9 +394,9 @@ export default function StudentDetail() {
                 {profile.username && <Badge variant="secondary">@{profile.username}</Badge>}
                 <Badge variant="secondary">{profile.phone || 'No Phone'}</Badge>
               </div>
-              <div className="flex gap-4 mt-1 text-xs text-muted-foreground">
+              <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1 text-xs text-muted-foreground">
                 <span>Joined {profile.created_at ? new Date(profile.created_at).toLocaleDateString() : '—'}</span>
-                <span>Last active {profile.updated_at ? new Date(profile.updated_at).toLocaleDateString() : '—'}</span>
+                <span>Last login {profile.last_login_at ? new Date(profile.last_login_at).toLocaleString() : '—'}</span>
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
