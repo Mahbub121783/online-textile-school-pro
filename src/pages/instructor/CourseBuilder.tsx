@@ -443,12 +443,42 @@ const CourseBuilder = () => {
               </div>
             </div>
             <div className="space-y-6">
+              {isAdmin && (
+                <div className="bg-card border rounded-xl p-6 space-y-3">
+                  <h4 className="font-heading font-semibold">Instructor</h4>
+                  <p className="text-xs text-muted-foreground">Assign this course to an instructor. Their revenue share will be paid out from sales.</p>
+                  <Input
+                    placeholder="Search by name..."
+                    value={instructorSearch}
+                    onChange={(e) => setInstructorSearch(e.target.value)}
+                    className="h-9 text-sm"
+                  />
+                  <div className="max-h-56 overflow-y-auto space-y-1 border rounded-lg p-2">
+                    <label className="flex items-center gap-2 text-sm cursor-pointer hover:bg-muted/50 rounded px-2 py-1.5">
+                      <input type="radio" checked={!form.instructor_id} onChange={() => update('instructor_id', '')} className="accent-primary" />
+                      <span className="text-muted-foreground">Self ({user?.email})</span>
+                    </label>
+                    {filteredInstructors.map((i: any) => (
+                      <label key={i.id} className={`flex items-center gap-3 text-sm cursor-pointer rounded px-2 py-1.5 transition-colors ${form.instructor_id === i.id ? 'bg-primary/10 border border-primary/30' : 'hover:bg-muted/50'}`}>
+                        <input type="radio" checked={form.instructor_id === i.id} onChange={() => update('instructor_id', i.id)} className="accent-primary" />
+                        <div className="w-7 h-7 rounded-full bg-muted overflow-hidden shrink-0 border">
+                          {i.avatar_url ? <img src={i.avatar_url} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-[10px] text-muted-foreground">{(i.full_name || '?').charAt(0)}</div>}
+                        </div>
+                        <span className="font-medium truncate">{i.full_name || 'Unnamed'}</span>
+                      </label>
+                    ))}
+                    {filteredInstructors.length === 0 && (
+                      <p className="text-xs text-muted-foreground text-center py-3">No instructors found.</p>
+                    )}
+                  </div>
+                </div>
+              )}
               <div className="bg-card border rounded-xl p-6 space-y-4">
                 <h4 className="font-heading font-semibold">Revenue</h4>
                 <div className="space-y-2">
-                  <Label>Revenue Share (%)</Label>
+                  <Label>{isAdminScope ? 'Instructor Revenue Share (%)' : 'Revenue Share (%)'}</Label>
                   <Input type="number" value={form.revenue_share_pct} onChange={(e) => update('revenue_share_pct', e.target.value)} min={0} max={100} />
-                  <p className="text-xs text-muted-foreground">Instructor's share of course revenue.</p>
+                  <p className="text-xs text-muted-foreground">{isAdminScope ? 'Percentage of revenue paid to the assigned instructor.' : "Instructor's share of course revenue."}</p>
                 </div>
               </div>
             </div>
