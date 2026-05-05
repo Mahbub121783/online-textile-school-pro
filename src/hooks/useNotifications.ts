@@ -21,7 +21,9 @@ export function useNotifications() {
 
   const { data: notifications = [], isLoading } = useQuery<Notification[]>({
     queryKey: ['notifications', user?.id],
-    staleTime: 30000,
+    staleTime: 30 * 1000,            // 30s — bell feels live
+    refetchOnMount: true,
+    refetchInterval: 2 * 60 * 1000,  // 2 min polling fallback when realtime drops
     queryFn: async () => {
       if (!user) return [];
       const { data, error } = await supabase
@@ -38,8 +40,26 @@ export function useNotifications() {
 
   const unreadCount = notifications.filter(n => !n.is_read).length;
 
-  // Realtime subscription removed — layout-level hooks (useStudentRealtime,
-  // useAdminRealtime, useInstructorRealtime) already invalidate notifications.
+  // Per-user realtime channel — pushes new notifications instantly.
+  // Free-tier safe: 1 channel per logged-in user, no DB query cost.
+  useEffect(() => {
+    if (!user?.id) return;
+    const channelName = `notifications:${user.id}:${Date.now()}`;
+    const channel = supabase
+      .channel(channelName)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ['notifications', user.id] });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id, queryClient]);
 
   const markAsRead = useMutation({
     mutationFn: async (id: string) => {
