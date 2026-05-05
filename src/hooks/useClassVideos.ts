@@ -147,14 +147,40 @@ export function useRelatedVideos(video: ClassVideo | null | undefined) {
   });
 }
 
+function getOrCreateSessionKey(): string {
+  try {
+    const KEY = 'cv_session_key';
+    let v = localStorage.getItem(KEY);
+    if (!v) {
+      v = (crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2)) + '-' + Date.now().toString(36);
+      localStorage.setItem(KEY, v);
+    }
+    return v;
+  } catch {
+    return 'anon-' + Math.random().toString(36).slice(2);
+  }
+}
+
 export function useTrackVideoView() {
   return useMutation({
     mutationFn: async (videoId: string) => {
       const { data: { user } } = await supabase.auth.getUser();
-      await supabase.from('class_video_views').insert({
-        video_id: videoId,
-        user_id: user?.id ?? null,
-      });
+      if (user?.id) {
+        await supabase
+          .from('class_video_views')
+          .upsert(
+            { video_id: videoId, user_id: user.id },
+            { onConflict: 'video_id,user_id', ignoreDuplicates: true }
+          );
+      } else {
+        const session_key = getOrCreateSessionKey();
+        await supabase
+          .from('class_video_views')
+          .upsert(
+            { video_id: videoId, user_id: null, session_key },
+            { onConflict: 'video_id,session_key', ignoreDuplicates: true }
+          );
+      }
     },
   });
 }
@@ -194,15 +220,24 @@ export function useVideoLike(videoId: string | undefined) {
         if (error) throw error;
       }
     },
-    onSuccess: () => {
+    onMutate: async (currentlyLiked: boolean) => {
+      // Optimistic flip of liked flag
+      await qc.cancelQueries({ queryKey: ['class-video-like', videoId] });
+      const prev = qc.getQueryData(['class-video-like', videoId, user?.id]);
+      qc.setQueryData(['class-video-like', videoId, user?.id], !currentlyLiked);
+      return { prev };
+    },
+    onError: (e: any, _vars, ctx) => {
+      qc.setQueryData(['class-video-like', videoId, user?.id], ctx?.prev);
+      toast({ title: 'Action failed', description: e.message, variant: 'destructive' });
+    },
+    onSettled: () => {
       qc.invalidateQueries({ queryKey: ['class-video-like', videoId] });
       qc.invalidateQueries({ queryKey: ['class-video'] });
       qc.invalidateQueries({ queryKey: ['class-videos'] });
-    },
-    onError: (e: any) => {
-      toast({ title: 'Action failed', description: e.message, variant: 'destructive' });
     },
   });
 
   return { isLiked: !!liked.data, toggle };
 }
+
