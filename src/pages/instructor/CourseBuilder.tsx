@@ -20,12 +20,16 @@ const steps = ['Basics', 'Curriculum', 'Settings'];
 const CourseBuilder = () => {
   const { courseId } = useParams();
   const isNew = !courseId || courseId === 'new';
-  const { user } = useAuth();
+  const { user, roles } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const isAdminScope = location.pathname.startsWith('/admin');
+  const isAdmin = roles.includes('admin') || roles.includes('super_admin');
   const qc = useQueryClient();
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
   const [optionsTab, setOptionsTab] = useState('general');
+  const [instructorSearch, setInstructorSearch] = useState('');
 
   const [form, setForm] = useState({
     title: '', slug: '', short_description: '', description: '', difficulty_level: 'beginner',
@@ -34,6 +38,7 @@ const CourseBuilder = () => {
     max_students: '', is_public: true, content_drip_enabled: false,
     certificate_threshold_pct: '100', revenue_share_pct: '70',
     review_status: 'draft', cert_template_id: '',
+    instructor_id: '' as string,
   });
   const [certSearch, setCertSearch] = useState('');
 
