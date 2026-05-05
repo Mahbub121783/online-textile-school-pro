@@ -138,7 +138,7 @@ function FormSettingsTab() {
       </div>
 
       <Dialog open={showForm} onOpenChange={setShowForm}>
-        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>{editing ? 'Edit Purpose' : 'New Purpose'}</DialogTitle></DialogHeader>
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
@@ -154,12 +154,14 @@ function FormSettingsTab() {
               <div className="space-y-1"><Label>Ends At</Label><Input type="datetime-local" value={form.ends_at} onChange={e => setForm(p => ({ ...p, ends_at: e.target.value }))} /></div>
             </div>
             <div className="flex items-center gap-2"><Switch checked={form.is_active} onCheckedChange={v => setForm(p => ({ ...p, is_active: v }))} /><Label>Active</Label></div>
-            <div className="space-y-1">
-              <Label>Custom Fields (JSON)</Label>
-              <Textarea rows={5} value={form.custom_fields} onChange={e => setForm(p => ({ ...p, custom_fields: e.target.value }))} className="font-mono text-xs"
-                placeholder='[{"key":"tshirt_size","label":"T-Shirt Size","type":"select","required":true,"options":["S","M","L","XL"]}]' />
-              <p className="text-xs text-muted-foreground">Array of objects: key, label, type (text/select/number/date), required, options[]</p>
+
+            <div className="border-t pt-4">
+              <CustomFieldsBuilder
+                value={form.custom_fields}
+                onChange={(fields) => setForm(p => ({ ...p, custom_fields: fields }))}
+              />
             </div>
+
             <Button onClick={save} className="w-full">{editing ? 'Update' : 'Create'} Purpose</Button>
           </div>
         </DialogContent>
