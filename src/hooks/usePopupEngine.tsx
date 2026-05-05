@@ -111,23 +111,33 @@ export function usePopupEngine() {
   const triggerCleanup = useRef<(() => void) | null>(null);
   const shownRef = useRef<Set<string>>(new Set());
 
-  // Fetch eligible popups when route changes
+  // Cache popup config in module scope so we only hit Supabase once per session
+  // (popup config changes are rare; reduces free-tier load significantly).
   useEffect(() => {
     let cancelled = false;
     const fetchPopups = async () => {
       const now = new Date().toISOString();
-      const { data, error } = await supabase
-        .from('popups')
-        .select('*')
-        .eq('is_active', true)
-        .order('priority', { ascending: false });
-      if (error || !data || cancelled) return;
+      const cache = (window as any).__popupCache as { at: number; data: PopupRow[] } | undefined;
+      let data: PopupRow[] | null = null;
+      if (cache && Date.now() - cache.at < 30 * 60 * 1000) {
+        data = cache.data;
+      } else {
+        const res = await supabase
+          .from('popups')
+          .select('*')
+          .eq('is_active', true)
+          .order('priority', { ascending: false });
+        if (res.error || !res.data) return;
+        data = res.data as PopupRow[];
+        (window as any).__popupCache = { at: Date.now(), data };
+      }
+      if (cancelled || !data) return;
 
       const path = location.pathname;
       const userState = user ? 'logged_in' : 'guest';
       const device = isMobile() ? 'mobile' : 'desktop';
 
-      const matching = (data as PopupRow[]).filter(p => {
+      const matching = data.filter(p => {
         if (p.start_date && p.start_date > now) return false;
         if (p.end_date && p.end_date < now) return false;
         if (p.target_user_state !== 'all' && p.target_user_state !== userState) return false;

@@ -67,10 +67,8 @@ const Index = () => {
       <MemoHeader />
       <main className="flex-1 pb-14 lg:pb-0">
         <HeroSlider />
-        <Suspense fallback={<SectionFallback />}>
-          <StatsSection />
-        </Suspense>
         <LazySection><FeaturedCourses /></LazySection>
+        <LazySection><StatsSection /></LazySection>
         <LazySection><LearningPathsPreview /></LazySection>
         <LazySection><EbookShowcase /></LazySection>
         <LazySection><UpcomingEvents /></LazySection>

@@ -24,12 +24,16 @@ export const useCurrencies = () => {
     queryFn: async () => {
       const { data } = await supabase
         .from('currencies')
-        .select('*')
+        .select('code, symbol, exchange_rate, is_default')
         .eq('is_active', true)
         .order('is_default', { ascending: false });
       return data ?? [];
     },
-    staleTime: 5 * 60 * 1000,
+    staleTime: 60 * 60 * 1000, // 1h — rarely changes
+    gcTime: 2 * 60 * 60 * 1000,
+    retry: 0,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
   });
 };
 
