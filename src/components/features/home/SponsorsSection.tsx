@@ -32,9 +32,8 @@ const SponsorsSection = () => {
     return acc;
   }, [] as { tier: string; items: any[] }[]);
 
-  const handleClick = async (sponsor: any) => {
-    // Fire-and-forget click tracking
-    supabase.from('sponsors').update({ click_count: (sponsor.click_count || 0) + 1 }).eq('id', sponsor.id).then();
+  const handleClick = (sponsor: any) => {
+    // Click tracking disabled on free tier to reduce DB writes from public pages.
     if (sponsor.website_url) {
       window.open(sponsor.website_url, '_blank', 'noopener,noreferrer');
     }
