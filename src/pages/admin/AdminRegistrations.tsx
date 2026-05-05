@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Settings, Palette, Database, Plus, Trash2, Edit, Download, Eye, Users, Search, X, Image as ImageIcon } from 'lucide-react';
 import MediaPickerModal from '@/components/shared/MediaPickerModal';
+import CustomFieldsBuilder, { CustomField } from '@/components/admin/CustomFieldsBuilder';
 import * as XLSX from 'xlsx';
 
 interface Purpose {
