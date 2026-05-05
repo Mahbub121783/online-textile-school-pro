@@ -38,5 +38,23 @@ export function getYoutubeEmbedUrl(
   p.set('modestbranding', '1');
   p.set('rel', '0');
   p.set('playsinline', '1');
+  p.set('enablejsapi', '1');
   return `https://www.youtube.com/embed/${id}?${p.toString()}`;
+}
+
+/** Send a YT IFrame API command via postMessage (requires enablejsapi=1). */
+export function sendYTCommand(
+  iframe: HTMLIFrameElement | null,
+  func: 'playVideo' | 'pauseVideo' | 'mute' | 'unMute',
+  args: unknown[] = []
+) {
+  if (!iframe?.contentWindow) return;
+  try {
+    iframe.contentWindow.postMessage(
+      JSON.stringify({ event: 'command', func, args }),
+      '*'
+    );
+  } catch {
+    /* ignore */
+  }
 }

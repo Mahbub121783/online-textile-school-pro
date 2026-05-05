@@ -1,11 +1,10 @@
 import { useEffect, useRef, useState, forwardRef } from 'react';
 import { Link } from 'react-router-dom';
-import { Heart, MessageCircle, Share2, Eye, Volume2, VolumeX, Play, Pause, ChevronLeft } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Heart, MessageCircle, Share2, Eye, Volume2, VolumeX, Play, ChevronLeft } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/hooks/useAuth';
 import { useTrackVideoView, useVideoLike, type ClassVideo } from '@/hooks/useClassVideos';
-import { getYoutubeEmbedUrl, getYoutubeThumb } from '@/lib/youtube';
+import { getYoutubeEmbedUrl, getYoutubeThumb, sendYTCommand } from '@/lib/youtube';
 import { toast } from '@/hooks/use-toast';
 
 const ACTIVE_EVENT = 'class-video-reel-active';
@@ -28,21 +27,25 @@ const ReelSlot = forwardRef<HTMLDivElement, Props>(function ReelSlot(
   const { isLiked, toggle } = useVideoLike(video.id);
   const trackView = useTrackVideoView();
   const videoRef = useRef<HTMLVideoElement>(null);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
   const [isPaused, setIsPaused] = useState(false);
   const [expandedDesc, setExpandedDesc] = useState(false);
   const viewedRef = useRef(false);
+  const [optimisticLikes, setOptimisticLikes] = useState(0);
 
   const isYouTube = video.video_platform === 'youtube';
   const ytThumb = isYouTube ? getYoutubeThumb(video.video_url, 'max') || getYoutubeThumb(video.video_url, 'hq') : null;
-  const ytEmbed = isYouTube
-    ? getYoutubeEmbedUrl(video.video_url, {
-        autoplay: isActive,
-        mute: muted,
-        controls: true,
-        start: video.clip_start_seconds || undefined,
-        end: video.clip_end_seconds || undefined,
-      })
-    : null;
+  // Build embed URL ONCE — never change it on mute/active flip (we control via postMessage)
+  const ytEmbedRef = useRef<string | null>(null);
+  if (isYouTube && ytEmbedRef.current == null) {
+    ytEmbedRef.current = getYoutubeEmbedUrl(video.video_url, {
+      autoplay: false,
+      mute: true,
+      controls: true,
+      start: video.clip_start_seconds || undefined,
+      end: video.clip_end_seconds || undefined,
+    });
+  }
 
   // Broadcast active to pause others when becoming active
   useEffect(() => {
@@ -51,52 +54,75 @@ const ReelSlot = forwardRef<HTMLDivElement, Props>(function ReelSlot(
     }
   }, [isActive, video.id]);
 
-  // Track view after 2s of being active
+  // Track view after 3s of being active (deduped server-side)
   useEffect(() => {
-    if (!isActive || viewedRef.current) return;
+    if (!isActive) return;
+    if (viewedRef.current) return;
     const t = setTimeout(() => {
       if (viewedRef.current) return;
       viewedRef.current = true;
       trackView.mutate(video.id);
-    }, 2000);
+    }, 3000);
     return () => clearTimeout(t);
   }, [isActive, video.id, trackView]);
 
-  // Drive direct video play/pause based on active
+  // Drive media play/pause based on active + paused state
   useEffect(() => {
-    const v = videoRef.current;
-    if (!v || isYouTube) return;
-    if (isActive && !isPaused) {
-      try { if (v.currentTime < (video.clip_start_seconds || 0)) v.currentTime = video.clip_start_seconds || 0; } catch { /* ignore */ }
-      v.play().catch(() => { /* autoplay blocked */ });
+    if (isYouTube) {
+      const f = iframeRef.current;
+      if (!f) return;
+      if (isActive && !isPaused) {
+        sendYTCommand(f, muted ? 'mute' : 'unMute');
+        sendYTCommand(f, 'playVideo');
+      } else {
+        sendYTCommand(f, 'pauseVideo');
+      }
     } else {
-      v.pause();
+      const v = videoRef.current;
+      if (!v) return;
+      if (isActive && !isPaused) {
+        try {
+          if (v.currentTime < (video.clip_start_seconds || 0)) {
+            v.currentTime = video.clip_start_seconds || 0;
+          }
+        } catch { /* ignore */ }
+        v.play().catch(() => { /* autoplay blocked */ });
+      } else {
+        v.pause();
+      }
     }
-  }, [isActive, isPaused, isYouTube, video.clip_start_seconds]);
+  }, [isActive, isPaused, isYouTube, muted, video.clip_start_seconds]);
 
-  // Sync mute
+  // Sync mute on direct video
   useEffect(() => {
     const v = videoRef.current;
     if (!v || isYouTube) return;
     v.muted = muted;
   }, [muted, isYouTube]);
 
-  // Listen for other slots becoming active
+  // Sync mute on YT iframe (without restarting)
+  useEffect(() => {
+    if (!isYouTube || !isActive) return;
+    sendYTCommand(iframeRef.current, muted ? 'mute' : 'unMute');
+  }, [muted, isActive, isYouTube]);
+
+  // Listen for other slots becoming active — force pause this one
   useEffect(() => {
     const handler = (e: Event) => {
       const detail = (e as CustomEvent).detail;
       if (detail !== video.id) {
-        const v = videoRef.current;
-        if (v && !isYouTube) v.pause();
+        if (isYouTube) {
+          sendYTCommand(iframeRef.current, 'pauseVideo');
+        } else {
+          videoRef.current?.pause();
+        }
       }
     };
     window.addEventListener(ACTIVE_EVENT, handler);
     return () => window.removeEventListener(ACTIVE_EVENT, handler);
   }, [video.id, isYouTube]);
 
-  const handleEnded = () => {
-    onAdvance();
-  };
+  const handleEnded = () => onAdvance();
 
   const handleTimeUpdate = () => {
     const v = videoRef.current;
@@ -116,7 +142,10 @@ const ReelSlot = forwardRef<HTMLDivElement, Props>(function ReelSlot(
       toast({ title: 'Login required', description: 'Login to like videos' });
       return;
     }
-    toggle.mutate(isLiked);
+    setOptimisticLikes((n) => n + (isLiked ? -1 : 1));
+    toggle.mutate(isLiked, {
+      onError: () => setOptimisticLikes((n) => n + (isLiked ? 1 : -1)),
+    });
   };
 
   const handleShare = async () => {
@@ -132,6 +161,8 @@ const ReelSlot = forwardRef<HTMLDivElement, Props>(function ReelSlot(
       }
     }
   };
+
+  const displayedLikes = Math.max(0, video.likes_count + optimisticLikes);
 
   return (
     <div
@@ -152,23 +183,17 @@ const ReelSlot = forwardRef<HTMLDivElement, Props>(function ReelSlot(
       {/* Centered media frame */}
       <div className="relative z-10 w-full h-full flex items-center justify-center" onClick={togglePlayPause}>
         {isYouTube ? (
-          isActive && ytEmbed ? (
+          ytEmbedRef.current ? (
             <iframe
-              key={`${video.id}-${muted ? 'm' : 'u'}`}
-              src={ytEmbed}
+              ref={iframeRef}
+              src={ytEmbedRef.current}
               title={video.title}
               allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
               allowFullScreen
               className="w-full h-full max-w-[min(100vw,calc(100dvh*16/9))] max-h-[100dvh] aspect-video"
             />
           ) : (
-            ytThumb && (
-              <img
-                src={ytThumb}
-                alt={video.title}
-                className="max-w-full max-h-full object-contain"
-              />
-            )
+            ytThumb && <img src={ytThumb} alt={video.title} className="max-w-full max-h-full object-contain" />
           )
         ) : (
           <video
@@ -204,16 +229,14 @@ const ReelSlot = forwardRef<HTMLDivElement, Props>(function ReelSlot(
         <ChevronLeft className="h-5 w-5" />
       </Link>
 
-      {/* Top-right mute toggle (only for non-YT, since YT iframe has its own controls) */}
-      {!isYouTube && (
-        <button
-          onClick={(e) => { e.stopPropagation(); onToggleMute(); }}
-          className="absolute top-4 right-3 z-30 h-9 w-9 rounded-full bg-black/40 backdrop-blur flex items-center justify-center text-white hover:bg-black/60 transition-colors"
-          aria-label={muted ? 'Unmute' : 'Mute'}
-        >
-          {muted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
-        </button>
-      )}
+      {/* Top-right mute toggle */}
+      <button
+        onClick={(e) => { e.stopPropagation(); onToggleMute(); }}
+        className="absolute top-4 right-3 z-30 h-9 w-9 rounded-full bg-black/40 backdrop-blur flex items-center justify-center text-white hover:bg-black/60 transition-colors"
+        aria-label={muted ? 'Unmute' : 'Mute'}
+      >
+        {muted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
+      </button>
 
       {/* Right action rail */}
       <div className="absolute right-2 sm:right-4 bottom-28 sm:bottom-32 z-30 flex flex-col items-center gap-4">
@@ -225,7 +248,7 @@ const ReelSlot = forwardRef<HTMLDivElement, Props>(function ReelSlot(
           <div className={`h-11 w-11 rounded-full backdrop-blur flex items-center justify-center transition-colors ${isLiked ? 'bg-primary' : 'bg-black/40 hover:bg-black/60'}`}>
             <Heart className={`h-5 w-5 ${isLiked ? 'fill-current' : ''}`} />
           </div>
-          <span className="text-[11px] font-semibold tabular-nums drop-shadow">{video.likes_count + (isLiked && !video.likes_count ? 1 : 0)}</span>
+          <span className="text-[11px] font-semibold tabular-nums drop-shadow">{displayedLikes}</span>
         </button>
 
         <button

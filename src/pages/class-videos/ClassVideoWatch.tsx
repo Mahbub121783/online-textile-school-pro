@@ -29,14 +29,13 @@ export default function ClassVideoWatch() {
 
     const io = new IntersectionObserver(
       (entries) => {
-        // Pick the entry with highest intersection ratio that is at least 0.6
         let best: { idx: number; ratio: number } | null = null;
         entries.forEach((entry) => {
           const id = (entry.target as HTMLElement).dataset.videoId;
           if (!id) return;
           const idx = videos.findIndex((v) => v.id === id);
           if (idx < 0) return;
-          if (entry.intersectionRatio >= 0.6 && (!best || entry.intersectionRatio > best.ratio)) {
+          if (entry.intersectionRatio >= 0.7 && (!best || entry.intersectionRatio > best.ratio)) {
             best = { idx, ratio: entry.intersectionRatio };
           }
         });
@@ -44,11 +43,49 @@ export default function ClassVideoWatch() {
           setActiveIndex((cur) => (cur === best!.idx ? cur : best!.idx));
         }
       },
-      { root, threshold: [0, 0.4, 0.6, 0.8, 1] }
+      { root, threshold: [0, 0.4, 0.7, 0.9, 1] }
     );
 
     slotRefs.current.forEach((el) => io.observe(el));
     return () => io.disconnect();
+  }, [videos]);
+
+  // Scroll-end debounce: snap to slot whose center is closest to viewport center.
+  // Guarantees correct active slot after fast flicks where IO ratios are noisy.
+  useEffect(() => {
+    const root = containerRef.current;
+    if (!root || videos.length === 0) return;
+    let timer: number | null = null;
+    const onScroll = () => {
+      if (timer) window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        const rootRect = root.getBoundingClientRect();
+        const centerY = rootRect.top + rootRect.height / 2;
+        let bestIdx = -1;
+        let bestDist = Infinity;
+        slotRefs.current.forEach((el) => {
+          const r = el.getBoundingClientRect();
+          const c = r.top + r.height / 2;
+          const d = Math.abs(c - centerY);
+          if (d < bestDist) {
+            const id = el.dataset.videoId;
+            const idx = videos.findIndex((v) => v.id === id);
+            if (idx >= 0) {
+              bestDist = d;
+              bestIdx = idx;
+            }
+          }
+        });
+        if (bestIdx >= 0) {
+          setActiveIndex((cur) => (cur === bestIdx ? cur : bestIdx));
+        }
+      }, 150);
+    };
+    root.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      root.removeEventListener('scroll', onScroll);
+      if (timer) window.clearTimeout(timer);
+    };
   }, [videos]);
 
   // URL sync (replaceState — no remount)
@@ -59,6 +96,13 @@ export default function ClassVideoWatch() {
       window.history.replaceState({}, '', `/class-videos/${v.slug}`);
     }
   }, [activeIndex, videos, slug]);
+
+  // If comments sheet is open, follow the active video
+  useEffect(() => {
+    if (!commentsFor) return;
+    const v = videos[activeIndex];
+    if (v && v.id !== commentsFor) setCommentsFor(v.id);
+  }, [activeIndex, videos, commentsFor]);
 
   // Trigger loadMore when within last 2 of feed
   useEffect(() => {
