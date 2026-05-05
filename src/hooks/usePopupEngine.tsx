@@ -119,7 +119,7 @@ export function usePopupEngine() {
       const now = new Date().toISOString();
       const cache = (window as any).__popupCache as { at: number; data: PopupRow[] } | undefined;
       let data: PopupRow[] | null = null;
-      if (cache && Date.now() - cache.at < 30 * 60 * 1000) {
+      if (cache && Date.now() - cache.at < 5 * 60 * 1000) {
         data = cache.data;
       } else {
         const res = await supabase
