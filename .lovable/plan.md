@@ -1,88 +1,93 @@
-# Plan: Verify Double-Submit Guards & Live Data Refresh
+# Advanced Custom Fields Builder for Registration Purposes
+
+## Problem
+Currently `Custom Fields (JSON)` requires admins to hand-write JSON. There is no UI to add/edit/reorder fields, no field-type picker, no options editor, and limited types (text/select/number/date only).
 
 ## Goal
-1. Prove `QuizPlayer` cannot double-submit and `ReelSlot`/`ChatWidget` cannot double-count views/messages, via automated integration tests.
-2. Provide a repeatable way to verify every page is pulling fresh Supabase data (no hidden cache locks).
+Replace the raw JSON textarea in `AdminRegistrations.tsx` → `FormSettingsTab` → New/Edit Purpose dialog with a fully visual, dynamic, reorderable Custom Fields builder. Also extend the public form renderer to support all new field types.
 
 ---
 
-## Part 1 — Integration Tests (Vitest + React Testing Library)
+## 1. New Component: `CustomFieldsBuilder`
 
-Existing setup (`vitest.config.ts`, `src/test/setup.ts`) is ready. Add:
+**File:** `src/components/admin/CustomFieldsBuilder.tsx`
 
-### A. `src/pages/quiz/__tests__/QuizPlayer.test.tsx`
-Covers `submitRef` guard:
-- Mock `@/integrations/supabase/client` (quizzes, quiz_questions, quiz_attempts, attempts list).
-- Mock `useAuth` → fake user, `useParams` → quizId.
-- Render inside `QueryClientProvider` + `MemoryRouter`.
-- Answer questions, click **Submit Quiz** twice rapidly + trigger timer-zero submit.
-- Assert `supabase.from('quiz_attempts').insert` called **exactly once**.
-- Second test: anti-cheat auto-submit + manual submit → still 1 insert.
+Props:
+- `value: CustomField[]`
+- `onChange: (fields: CustomField[]) => void`
 
-### B. `src/components/class-videos/__tests__/ReelSlot.test.tsx`
-Covers `viewCounted` ref:
-- Mock IntersectionObserver, mock supabase RPC/insert for views.
-- Simulate the same video entering viewport 3 times.
-- Assert view-increment call fires once per video id.
+`CustomField` shape (extended):
+```ts
+{
+  key: string;            // auto-slug from label, editable
+  label: string;
+  type: 'text' | 'textarea' | 'number' | 'email' | 'phone' | 'url'
+       | 'date' | 'time' | 'datetime'
+       | 'select' | 'multiselect' | 'radio' | 'checkbox'
+       | 'file' | 'rating';
+  required: boolean;
+  placeholder?: string;
+  helpText?: string;
+  options?: string[];           // for select/multiselect/radio
+  min?: number; max?: number;   // for number/rating
+  defaultValue?: string;
+  width?: 'full' | 'half';      // grid span
+}
+```
 
-### C. `src/components/chat/__tests__/ChatWidget.test.tsx`
-Covers send-message guard + drag ref:
-- Mock supabase insert for chat messages and AI gateway call.
-- Click **Send** twice while first request pending → assert insert called once.
-- Simulate drag start/stop sequence → assert no spurious click handler fires (open/close not toggled).
+Features:
+- "Add Field" button appends a blank field card.
+- Each field rendered as a collapsible card showing: label, type badge, required star.
+- Inline edit: Label, Key (auto-generated from label, editable), Type (Select dropdown), Required (Switch), Placeholder, Help Text, Width (half/full).
+- When type ∈ {select, multiselect, radio}: show Options sub-editor (add/remove chips, drag to reorder).
+- When type = number/rating: show Min/Max inputs.
+- Reorder via up/down buttons (no extra deps) — array move helpers.
+- Duplicate field button.
+- Delete with confirm.
+- Empty state: friendly "No custom fields yet — add your first" CTA.
+- Live JSON preview (collapsible `<details>`) for power users + "Import JSON" / "Export JSON" buttons (keeps backward compatibility).
+- Validation: keys must be unique + match `^[a-z0-9_]+$`; show inline error.
 
-### D. Test utility
-Add `src/test/utils.tsx` with `renderWithProviders()` (QueryClient + MemoryRouter + minimal AuthProvider mock) to keep tests DRY.
+## 2. Wire into Admin Dialog
 
-Run via `bunx vitest run`.
+**File:** `src/pages/admin/AdminRegistrations.tsx`
 
----
+- Change `form.custom_fields` state from `string` (JSON) to `CustomField[]`.
+- Replace lines 150–155 (Textarea + JSON helper) with `<CustomFieldsBuilder value={form.custom_fields} onChange={...} />`.
+- Update `openNew`, `openEdit`, `save` to use the array directly (drop `JSON.parse`/`stringify` round-trip).
+- Make dialog wider (`max-w-3xl`) since the builder needs more room.
 
-## Part 2 — Live Data Refresh Audit
+## 3. Extend Public Renderer
 
-### B1. Static audit script (one-off, dev-only)
-Add `scripts/audit-query-cache.ts` (run with `bun scripts/audit-query-cache.ts`) that:
-- Greps `src/**/*.{ts,tsx}` for `useQuery(` blocks.
-- Reports any with `staleTime: Infinity`, `enabled: false` permanently, or `refetchOnMount: false` overrides.
-- Prints a table: file → query key → staleTime → refetchOnMount.
-- Flags hooks that override the safe global defaults set in `src/App.tsx`.
+**File:** `src/pages/registration/PublicRegistration.tsx` (lines 361–388)
 
-This is a developer tool (not shipped to users) — output goes to console.
+Add rendering branches for new types:
+- `textarea` → `<Textarea>`
+- `email` / `phone` / `url` → `<Input type=...>`
+- `time` / `datetime` → `<Input type="time" | "datetime-local">`
+- `multiselect` → multi-checkbox group, store as `string[]`
+- `radio` → RadioGroup
+- `checkbox` (single) → Switch / Checkbox boolean
+- `rating` → 1–5 star buttons
+- `file` → reuse photo upload pattern (Cloudinary via existing `useFileUpload`); store URL string
+- Apply `width: 'half'` via grid `md:col-span-1` vs `md:col-span-2`
+- Show `helpText` under input; use `placeholder`
+- Required validation respected via `required` prop / manual check before submit for non-native types
 
-### B2. Runtime "Freshness Probe" page (admin-only)
-Add `src/pages/admin/AdminDataFreshness.tsx` route `/admin/data-freshness`:
-- Lists every major data source (notifications, courses, ebooks, instructors, stats, hero slides, testimonials, sponsors, popups, forum posts, class videos, workshops, learning paths).
-- Each row shows: last fetch timestamp, row count, "Refetch now" button.
-- Uses `queryClient.getQueryCache()` to read live React Query state — no extra DB load unless user clicks refetch.
-- Confirms in real time which queries are stale/fresh and lets admin force-invalidate any of them.
+## 4. Backward Compatibility
 
-Add link in `AdminSidebar` under existing "System" section.
+- Existing rows in `registration_purposes.custom_fields` keep working (old shape is a subset).
+- Builder seeds missing optional props with sensible defaults when loading legacy data.
+- No DB migration needed — column is already `jsonb`.
 
-### B3. Notification realtime smoke test
-Add a "Test Notification" button on `/admin/data-freshness` that inserts a row into `notifications` for the current admin user → verifies the realtime subscription added in `useNotifications` fires within 2s (visible toast + bell badge increments without refresh).
+## 5. Files Touched
+- **New:** `src/components/admin/CustomFieldsBuilder.tsx`
+- **Edit:** `src/pages/admin/AdminRegistrations.tsx` (dialog body + form state)
+- **Edit:** `src/pages/registration/PublicRegistration.tsx` (custom-field rendering block)
 
----
+## Out of Scope
+- Drag-and-drop library (using up/down buttons to keep bundle small).
+- Conditional field visibility (can be a future iteration).
+- Per-field analytics.
 
-## Files to add/edit
-
-**New:**
-- `src/test/utils.tsx`
-- `src/pages/quiz/__tests__/QuizPlayer.test.tsx`
-- `src/components/class-videos/__tests__/ReelSlot.test.tsx`
-- `src/components/chat/__tests__/ChatWidget.test.tsx`
-- `scripts/audit-query-cache.ts`
-- `src/pages/admin/AdminDataFreshness.tsx`
-
-**Edited:**
-- `src/App.tsx` — register `/admin/data-freshness` route (lazy)
-- `src/components/layout/AdminSidebar.tsx` — add nav entry
-
----
-
-## Free-tier safety
-- Tests are local — zero Supabase calls (all mocked).
-- Freshness page reads cached React Query state by default; DB hits only on explicit "Refetch" click.
-- Audit script is grep-only, no network.
-- No changes to global staleTime / refetchOnMount — current "5 min stale + background refetch + notification realtime" balance preserved.
-
-Approve korle implement korbo.
+Approve korle implement kore debo.
