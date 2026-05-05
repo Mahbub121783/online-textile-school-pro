@@ -85,6 +85,7 @@ const CourseBuilder = () => {
         revenue_share_pct: String(course.revenue_share_pct ?? 70),
         review_status: course.review_status || 'draft',
         cert_template_id: course.cert_template_id || '',
+        instructor_id: course.instructor_id || '',
       });
     }
   }, [course]);
