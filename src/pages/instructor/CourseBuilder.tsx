@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useState, useEffect, useMemo } from 'react';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -20,12 +20,16 @@ const steps = ['Basics', 'Curriculum', 'Settings'];
 const CourseBuilder = () => {
   const { courseId } = useParams();
   const isNew = !courseId || courseId === 'new';
-  const { user } = useAuth();
+  const { user, roles } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const isAdminScope = location.pathname.startsWith('/admin');
+  const isAdmin = roles.includes('admin') || roles.includes('super_admin');
   const qc = useQueryClient();
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
   const [optionsTab, setOptionsTab] = useState('general');
+  const [instructorSearch, setInstructorSearch] = useState('');
 
   const [form, setForm] = useState({
     title: '', slug: '', short_description: '', description: '', difficulty_level: 'beginner',
@@ -34,6 +38,7 @@ const CourseBuilder = () => {
     max_students: '', is_public: true, content_drip_enabled: false,
     certificate_threshold_pct: '100', revenue_share_pct: '70',
     review_status: 'draft', cert_template_id: '',
+    instructor_id: '' as string,
   });
   const [certSearch, setCertSearch] = useState('');
 
@@ -44,6 +49,24 @@ const CourseBuilder = () => {
       return data ?? [];
     },
   });
+
+  const { data: instructorList = [] } = useQuery({
+    queryKey: ['course-builder-instructors'],
+    enabled: isAdmin,
+    queryFn: async () => {
+      const { data: roleRows } = await supabase.from('user_roles').select('user_id').in('role', ['instructor', 'admin', 'super_admin']);
+      const ids = Array.from(new Set((roleRows || []).map((r: any) => r.user_id)));
+      if (ids.length === 0) return [];
+      const { data } = await supabase.from('user_profiles').select('id, full_name, avatar_url').in('id', ids).order('full_name');
+      return data ?? [];
+    },
+  });
+
+  const filteredInstructors = useMemo(() => {
+    const q = instructorSearch.trim().toLowerCase();
+    if (!q) return instructorList;
+    return instructorList.filter((i: any) => (i.full_name || '').toLowerCase().includes(q));
+  }, [instructorList, instructorSearch]);
 
   const { data: certTemplates = [] } = useQuery({
     queryKey: ['cert-templates-for-builder'],
@@ -80,6 +103,7 @@ const CourseBuilder = () => {
         revenue_share_pct: String(course.revenue_share_pct ?? 70),
         review_status: course.review_status || 'draft',
         cert_template_id: course.cert_template_id || '',
+        instructor_id: course.instructor_id || '',
       });
     }
   }, [course]);
@@ -112,14 +136,15 @@ const CourseBuilder = () => {
       certificate_threshold_pct: Number(form.certificate_threshold_pct) || 100,
       revenue_share_pct: Number(form.revenue_share_pct) || 70,
       cert_template_id: form.cert_template_id || null,
-      instructor_id: course?.instructor_id || user!.id,
+      instructor_id: (isAdmin && form.instructor_id) ? form.instructor_id : (course?.instructor_id || user!.id),
     };
     if (status) payload.review_status = status;
     if (status === 'approved') payload.is_published = true;
 
+    const editBase = isAdminScope ? '/admin/cms/courses' : '/instructor/courses';
     if (isNew) {
       const { data, error } = await supabase.from('courses').insert(payload).select().single();
-      if (error) { toast.error(error.message); } else { toast.success('Course created!'); navigate(`/instructor/courses/${data.id}`, { replace: true }); }
+      if (error) { toast.error(error.message); } else { toast.success('Course created!'); navigate(`${editBase}/${data.id}`, { replace: true }); }
     } else {
       const { error } = await supabase.from('courses').update(payload).eq('id', courseId!);
       if (error) { toast.error(error.message); } else { toast.success('Course saved!'); qc.invalidateQueries({ queryKey: ['instructor-course', courseId] }); }
@@ -418,12 +443,42 @@ const CourseBuilder = () => {
               </div>
             </div>
             <div className="space-y-6">
+              {isAdmin && (
+                <div className="bg-card border rounded-xl p-6 space-y-3">
+                  <h4 className="font-heading font-semibold">Instructor</h4>
+                  <p className="text-xs text-muted-foreground">Assign this course to an instructor. Their revenue share will be paid out from sales.</p>
+                  <Input
+                    placeholder="Search by name..."
+                    value={instructorSearch}
+                    onChange={(e) => setInstructorSearch(e.target.value)}
+                    className="h-9 text-sm"
+                  />
+                  <div className="max-h-56 overflow-y-auto space-y-1 border rounded-lg p-2">
+                    <label className="flex items-center gap-2 text-sm cursor-pointer hover:bg-muted/50 rounded px-2 py-1.5">
+                      <input type="radio" checked={!form.instructor_id} onChange={() => update('instructor_id', '')} className="accent-primary" />
+                      <span className="text-muted-foreground">Self ({user?.email})</span>
+                    </label>
+                    {filteredInstructors.map((i: any) => (
+                      <label key={i.id} className={`flex items-center gap-3 text-sm cursor-pointer rounded px-2 py-1.5 transition-colors ${form.instructor_id === i.id ? 'bg-primary/10 border border-primary/30' : 'hover:bg-muted/50'}`}>
+                        <input type="radio" checked={form.instructor_id === i.id} onChange={() => update('instructor_id', i.id)} className="accent-primary" />
+                        <div className="w-7 h-7 rounded-full bg-muted overflow-hidden shrink-0 border">
+                          {i.avatar_url ? <img src={i.avatar_url} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-[10px] text-muted-foreground">{(i.full_name || '?').charAt(0)}</div>}
+                        </div>
+                        <span className="font-medium truncate">{i.full_name || 'Unnamed'}</span>
+                      </label>
+                    ))}
+                    {filteredInstructors.length === 0 && (
+                      <p className="text-xs text-muted-foreground text-center py-3">No instructors found.</p>
+                    )}
+                  </div>
+                </div>
+              )}
               <div className="bg-card border rounded-xl p-6 space-y-4">
                 <h4 className="font-heading font-semibold">Revenue</h4>
                 <div className="space-y-2">
-                  <Label>Revenue Share (%)</Label>
+                  <Label>{isAdminScope ? 'Instructor Revenue Share (%)' : 'Revenue Share (%)'}</Label>
                   <Input type="number" value={form.revenue_share_pct} onChange={(e) => update('revenue_share_pct', e.target.value)} min={0} max={100} />
-                  <p className="text-xs text-muted-foreground">Instructor's share of course revenue.</p>
+                  <p className="text-xs text-muted-foreground">{isAdminScope ? 'Percentage of revenue paid to the assigned instructor.' : "Instructor's share of course revenue."}</p>
                 </div>
               </div>
             </div>

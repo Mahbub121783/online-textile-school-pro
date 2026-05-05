@@ -38,7 +38,7 @@ const Header = () => {
   const navigate = useNavigate();
   const searchRef = useRef<HTMLDivElement>(null);
 
-  const isInstructor = roles.includes('instructor') || roles.includes('admin') || roles.includes('super_admin');
+  const isInstructor = roles.includes('instructor');
   const isAdmin = roles.includes('admin') || roles.includes('super_admin');
 
   const userInitials = profile?.full_name
