@@ -50,6 +50,24 @@ const CourseBuilder = () => {
     },
   });
 
+  const { data: instructorList = [] } = useQuery({
+    queryKey: ['course-builder-instructors'],
+    enabled: isAdmin,
+    queryFn: async () => {
+      const { data: roleRows } = await supabase.from('user_roles').select('user_id').in('role', ['instructor', 'admin', 'super_admin']);
+      const ids = Array.from(new Set((roleRows || []).map((r: any) => r.user_id)));
+      if (ids.length === 0) return [];
+      const { data } = await supabase.from('user_profiles').select('id, full_name, avatar_url').in('id', ids).order('full_name');
+      return data ?? [];
+    },
+  });
+
+  const filteredInstructors = useMemo(() => {
+    const q = instructorSearch.trim().toLowerCase();
+    if (!q) return instructorList;
+    return instructorList.filter((i: any) => (i.full_name || '').toLowerCase().includes(q));
+  }, [instructorList, instructorSearch]);
+
   const { data: certTemplates = [] } = useQuery({
     queryKey: ['cert-templates-for-builder'],
     queryFn: async () => {
