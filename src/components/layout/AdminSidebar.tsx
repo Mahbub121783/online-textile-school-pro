@@ -214,6 +214,7 @@ export function AdminSidebar() {
                   </SidebarMenuItem>
                   {renderNavItem({ title: 'Admin Management', url: '/admin/admin-management', icon: Shield })}
                   {renderNavItem({ title: 'System Controls', url: '/admin/system-controls', icon: Server })}
+                  {renderNavItem({ title: 'Data Freshness', url: '/admin/data-freshness', icon: Activity })}
                 </>
               )}
               {renderNavItem({ title: 'Wallets', url: '/admin/wallets', icon: Wallet })}

@@ -1,44 +1,88 @@
+# Plan: Verify Double-Submit Guards & Live Data Refresh
 
-# Optimization Audit — Ki Break Hoiche, Ki Hoy Nai
+## Goal
+1. Prove `QuizPlayer` cannot double-submit and `ReelSlot`/`ChatWidget` cannot double-count views/messages, via automated integration tests.
+2. Provide a repeatable way to verify every page is pulling fresh Supabase data (no hidden cache locks).
 
-Recent free-tier optimization (App.tsx defaults, useAuth, useEngagementTracking, useSettings, useCurrency, usePopupEngine, SponsorsSection, Index.tsx LazySection) — full system check korechi. **Major kono feature break hoy nai**, but kichu side-effect/trade-off ase ja addressing dorkar.
+---
 
-## ✅ Verified working (no break)
+## Part 1 — Integration Tests (Vitest + React Testing Library)
 
-1. **useAuth** — `INITIAL_SESSION` skip kora hoyeche karon `getSession()` already handle korche. `SIGNED_IN`/`SIGNED_OUT`/`TOKEN_REFRESHED` shob event ekhono process hocche. Profile/roles + realtime subscription intact.
-2. **useEngagementTracking** — no-op kora hoyeche. Hook signature same, call sites unaffected. PageView (Meta CAPI) ekhono `App.tsx` te route change e fire korche.
-3. **useCurrency** — `select('code, symbol, exchange_rate, is_default')` — `CurrencySelector` only `code` + `symbol` use kore, `useConvertPrice` `code` + `exchange_rate` use kore. `AdminCurrencies` ta separate query (`select('*')`) — admin CRUD intact.
-4. **useSettings** — `select('key, value')` only. `useSetting(key)` consumers shob ei 2 column e use kore. SEOHead, footer, branding shob fine.
-5. **SponsorsSection** — click tracking disable korechi but link open korar functionality intact.
-6. **Index.tsx LazySection** — `rootMargin: 200px` use korche, FeaturedCourses (first below-hero section) timely render hobe.
+Existing setup (`vitest.config.ts`, `src/test/setup.ts`) is ready. Add:
 
-## ⚠️ Trade-offs (UX impact, not break)
+### A. `src/pages/quiz/__tests__/QuizPlayer.test.tsx`
+Covers `submitRef` guard:
+- Mock `@/integrations/supabase/client` (quizzes, quiz_questions, quiz_attempts, attempts list).
+- Mock `useAuth` → fake user, `useParams` → quizId.
+- Render inside `QueryClientProvider` + `MemoryRouter`.
+- Answer questions, click **Submit Quiz** twice rapidly + trigger timer-zero submit.
+- Assert `supabase.from('quiz_attempts').insert` called **exactly once**.
+- Second test: anti-cheat auto-submit + manual submit → still 1 insert.
 
-| Area | Behavior | Impact |
-|---|---|---|
-| Global QueryClient `staleTime: 15min` + `refetchOnMount: false` | Page revisit e fresh data fetch hobe na | Admin-published new course/post 15 min loga te dekhabe (until manual invalidate) |
-| `usePopupEngine` 30-min `window.__popupCache` | Admin saved new popup ta same session e 30 min por dekhabe | Popup admin testing kora kothin |
-| `useSettings` 30-min cache | Admin settings change shoonge shoonge reflect hobe na | Logo/contact update 30 min late |
-| `retry: 0` global | Network timeout e retry hobe na | Free-tier 504/timeout e blank section dekhate pare (Supabase JS still retries internally) |
+### B. `src/components/class-videos/__tests__/ReelSlot.test.tsx`
+Covers `viewCounted` ref:
+- Mock IntersectionObserver, mock supabase RPC/insert for views.
+- Simulate the same video entering viewport 3 times.
+- Assert view-increment call fires once per video id.
 
-## 🛠 Recommended fixes
+### C. `src/components/chat/__tests__/ChatWidget.test.tsx`
+Covers send-message guard + drag ref:
+- Mock supabase insert for chat messages and AI gateway call.
+- Click **Send** twice while first request pending → assert insert called once.
+- Simulate drag start/stop sequence → assert no spurious click handler fires (open/close not toggled).
 
-1. **Admin pages exempt korbo** — admin queries (e.g. `AdminCurrencies`, `AdminSettings`, `AdminPopups`, `AdminUsers`) e per-query `staleTime: 0, refetchOnMount: 'always'` add korbo, jate admin live data dekhe.
-2. **Mutation invalidation flow tighten** — jekhane admin `update`/`insert` korche, `qc.invalidateQueries({ queryKey: [...] })` use kora — many places already kore, audit kore missing gulo add korbo.
-3. **Popup cache key reduce** — `30min → 5min`, ar admin save korle clear korar mechanism (window event or short staleTime) jog korbo.
-4. **`retry: 1`** global e — 0 theke 1 e nilo, jate transient network blip e empty UI na dekhay (1 retry minimal load).
-5. **Optional**: `useEngagementTracking` ke completely off na rakhe, only `TimeOnPage` + `PageScroll` off, ar `InternalClick` keep korbo (low frequency, useful analytics).
+### D. Test utility
+Add `src/test/utils.tsx` with `renderWithProviders()` (QueryClient + MemoryRouter + minimal AuthProvider mock) to keep tests DRY.
 
-## Files to touch
+Run via `bunx vitest run`.
 
-- `src/App.tsx` — `retry: 0 → 1`
-- `src/hooks/useSettings.ts` — admin path detect kore short stale, ba ekta `useSettingsLive()` variant
-- `src/hooks/usePopupEngine.tsx` — cache 5 min + admin invalidation
-- `src/pages/admin/AdminCurrencies.tsx`, `AdminSettings.tsx`, `AdminPopups.tsx` — per-query overrides
-- (Optional) `src/hooks/useEngagementTracking.ts` — re-enable InternalClick only
+---
 
-## Out of scope (alada msg e korte hobe)
+## Part 2 — Live Data Refresh Audit
 
-- Login intermittent failures — eta Supabase free-tier infrastructure pressure (504 timeout dekha gechilo). Code thik ase. Database upgrade ba off-peak retry chara solve korar moto kichu nai.
+### B1. Static audit script (one-off, dev-only)
+Add `scripts/audit-query-cache.ts` (run with `bun scripts/audit-query-cache.ts`) that:
+- Greps `src/**/*.{ts,tsx}` for `useQuery(` blocks.
+- Reports any with `staleTime: Infinity`, `enabled: false` permanently, or `refetchOnMount: false` overrides.
+- Prints a table: file → query key → staleTime → refetchOnMount.
+- Flags hooks that override the safe global defaults set in `src/App.tsx`.
 
-Approve korle ami implement korbo.
+This is a developer tool (not shipped to users) — output goes to console.
+
+### B2. Runtime "Freshness Probe" page (admin-only)
+Add `src/pages/admin/AdminDataFreshness.tsx` route `/admin/data-freshness`:
+- Lists every major data source (notifications, courses, ebooks, instructors, stats, hero slides, testimonials, sponsors, popups, forum posts, class videos, workshops, learning paths).
+- Each row shows: last fetch timestamp, row count, "Refetch now" button.
+- Uses `queryClient.getQueryCache()` to read live React Query state — no extra DB load unless user clicks refetch.
+- Confirms in real time which queries are stale/fresh and lets admin force-invalidate any of them.
+
+Add link in `AdminSidebar` under existing "System" section.
+
+### B3. Notification realtime smoke test
+Add a "Test Notification" button on `/admin/data-freshness` that inserts a row into `notifications` for the current admin user → verifies the realtime subscription added in `useNotifications` fires within 2s (visible toast + bell badge increments without refresh).
+
+---
+
+## Files to add/edit
+
+**New:**
+- `src/test/utils.tsx`
+- `src/pages/quiz/__tests__/QuizPlayer.test.tsx`
+- `src/components/class-videos/__tests__/ReelSlot.test.tsx`
+- `src/components/chat/__tests__/ChatWidget.test.tsx`
+- `scripts/audit-query-cache.ts`
+- `src/pages/admin/AdminDataFreshness.tsx`
+
+**Edited:**
+- `src/App.tsx` — register `/admin/data-freshness` route (lazy)
+- `src/components/layout/AdminSidebar.tsx` — add nav entry
+
+---
+
+## Free-tier safety
+- Tests are local — zero Supabase calls (all mocked).
+- Freshness page reads cached React Query state by default; DB hits only on explicit "Refetch" click.
+- Audit script is grep-only, no network.
+- No changes to global staleTime / refetchOnMount — current "5 min stale + background refetch + notification realtime" balance preserved.
+
+Approve korle implement korbo.
