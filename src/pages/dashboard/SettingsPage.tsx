@@ -420,14 +420,18 @@ const SettingsPage = () => {
             </Select>
           </div>
 
-          <div className="space-y-2">
-            <Label>Designation</Label>
-            <Input value={form.occupation} onChange={(e) => update('occupation', e.target.value)} placeholder="e.g. QC Manager" />
-          </div>
-          <div className="space-y-2">
-            <Label>Present Job</Label>
-            <Input value={form.current_job} onChange={(e) => update('current_job', e.target.value)} placeholder="e.g. Senior Merchandiser" />
-          </div>
+          {(form.professional_role === 'employee' || form.professional_role === 'businessman') && (
+            <>
+              <div className="space-y-2">
+                <Label>Designation</Label>
+                <Input value={form.occupation} onChange={(e) => update('occupation', e.target.value)} placeholder="e.g. QC Manager" />
+              </div>
+              <div className="space-y-2">
+                <Label>Present Job</Label>
+                <Input value={form.current_job} onChange={(e) => update('current_job', e.target.value)} placeholder="e.g. Senior Merchandiser" />
+              </div>
+            </>
+          )}
 
           {form.professional_role === 'employee' && (
             <div className="space-y-2">
