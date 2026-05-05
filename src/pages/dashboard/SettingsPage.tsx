@@ -256,7 +256,16 @@ const SettingsPage = () => {
           <div className="relative group">
             <div className="w-20 h-20 rounded-full bg-muted flex items-center justify-center overflow-hidden border-2 border-border">
               {profile?.avatar_url ? (
-                <img src={cldImg(profile.avatar_url, { w: 200, c: 'fill', g: 'face' })} alt="Avatar" className="w-full h-full object-cover" />
+                <img
+                  src={cldImg(profile.avatar_url, { w: 200, c: 'fill', g: 'auto' })}
+                  alt="Avatar"
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    const img = e.currentTarget;
+                    if (img.src !== profile.avatar_url) img.src = profile.avatar_url;
+                    else img.style.display = 'none';
+                  }}
+                />
               ) : (
                 <span className="text-2xl font-heading font-bold text-muted-foreground">
                   {profile?.full_name?.[0]?.toUpperCase() || 'U'}
