@@ -379,24 +379,13 @@ export default function PublicRegistration() {
                     <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider">Additional Information</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {customFields.map((cf: any) => (
-                        <div key={cf.key} className="space-y-2">
-                          <Label>{cf.label} {cf.required && '*'}</Label>
-                          {cf.type === 'select' ? (
-                            <Select value={extraFields[cf.key] || ''} onValueChange={v => setExtraFields(p => ({ ...p, [cf.key]: v }))}>
-                              <SelectTrigger><SelectValue placeholder="Select..." /></SelectTrigger>
-                              <SelectContent>
-                                {(cf.options || []).map((o: string) => <SelectItem key={o} value={o}>{o}</SelectItem>)}
-                              </SelectContent>
-                            </Select>
-                          ) : (
-                            <Input
-                              type={cf.type === 'number' ? 'number' : cf.type === 'date' ? 'date' : 'text'}
-                              value={extraFields[cf.key] || ''}
-                              onChange={e => setExtraFields(p => ({ ...p, [cf.key]: e.target.value }))}
-                              required={cf.required}
-                            />
-                          )}
-                        </div>
+                        <CustomFieldRenderer
+                          key={cf.key}
+                          field={cf}
+                          value={extraFields[cf.key]}
+                          onChange={(v) => setExtraFields(p => ({ ...p, [cf.key]: v }))}
+                          uploader={upload}
+                        />
                       ))}
                     </div>
                   </div>
