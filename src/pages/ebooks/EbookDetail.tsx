@@ -298,7 +298,7 @@ const EbookDetail = () => {
               {ebook.description && (
                 <div className="pt-4 border-t">
                   <h3 className="font-heading font-bold mb-2">Description</h3>
-                  <p className="text-muted-foreground leading-relaxed whitespace-pre-line">{ebook.description}</p>
+                  <div className="prose prose-sm dark:prose-invert max-w-none text-foreground/90" dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(ebook.description) }} />
                 </div>
               )}
             </div>
