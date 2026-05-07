@@ -46,7 +46,7 @@ const CertificatesPage = () => {
     },
   });
 
-  // Issued certificates
+  // Issued certificates (course-based only here)
   const { data: certificates = [], isLoading } = useQuery({
     queryKey: ['my-certificates', user?.id],
     enabled: !!user,
@@ -55,11 +55,27 @@ const CertificatesPage = () => {
         .from('certificates')
         .select('*')
         .eq('user_id', user!.id)
+        .is('workshop_id', null)
         .order('issued_at', { ascending: false });
       return data ?? [];
     },
   });
   const certMap = new Map(certificates.map((c: any) => [c.course_id, c]));
+
+  // Workshop certificates
+  const { data: workshopCerts = [] } = useQuery({
+    queryKey: ['my-workshop-certs-page', user?.id],
+    enabled: !!user,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('certificates')
+        .select('*, workshops!certificates_workshop_id_fkey(id, title, slug, thumbnail_url, instructor_name, instructor:user_profiles!workshops_instructor_id_fkey(full_name))')
+        .eq('user_id', user!.id)
+        .not('workshop_id', 'is', null)
+        .order('issued_at', { ascending: false });
+      return data ?? [];
+    },
+  });
 
   // Templates
   const templateIds = [...new Set(courses.map((c: any) => c.cert_template_id).filter(Boolean))];
