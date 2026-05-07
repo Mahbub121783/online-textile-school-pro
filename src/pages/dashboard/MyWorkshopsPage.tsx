@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -7,9 +7,11 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { CountdownTimer } from '@/components/workshop/CountdownTimer';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Calendar, Download, Video, ExternalLink, FileText, FileImage, FileArchive, File, Play } from 'lucide-react';
+import { Calendar, Download, Video, ExternalLink, FileText, FileImage, FileArchive, File, Play, Award } from 'lucide-react';
 import { format } from 'date-fns';
 import { Link } from 'react-router-dom';
+import { toast } from 'sonner';
+import { downloadCertificatePDF, type CertificateField, type CertificateData } from '@/lib/certificateRenderer';
 
 const fileIcon = (type: string) => {
   if (['pdf'].includes(type)) return <FileText className="h-4 w-4 text-red-500" />;
