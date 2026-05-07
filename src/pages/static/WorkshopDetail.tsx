@@ -1,4 +1,5 @@
 import { PageSkeleton } from '@/components/ui/loading-skeletons';
+import { sanitizeRichHtml } from '@/lib/htmlSanitize';
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
