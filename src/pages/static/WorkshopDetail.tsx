@@ -242,8 +242,11 @@ export default function WorkshopDetail() {
   const displayRegNumber = regNumber || myRegistration?.registration_number;
 
   const handleRegisterClick = () => {
+    if (registrationClosed) {
+      toast.error(closedReason || 'Registration is closed.');
+      return;
+    }
     if (!user) {
-      // Redirect to login with return URL
       const returnUrl = `/workshops/${slug}?register=true`;
       navigate(`/auth/login?redirect=${encodeURIComponent(returnUrl)}`);
       return;
