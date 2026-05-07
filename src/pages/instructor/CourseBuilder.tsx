@@ -459,20 +459,35 @@ const CourseBuilder = () => {
             <div className="space-y-6">
               {isAdmin && (
                 <div className="bg-card border rounded-xl p-6 space-y-3">
-                  <h4 className="font-heading font-semibold">Instructor</h4>
-                  <p className="text-xs text-muted-foreground">Assign this course to an instructor. Their revenue share will be paid out from sales.</p>
+                  <h4 className="font-heading font-semibold">Assigned Instructor</h4>
+                  <p className="text-xs text-muted-foreground">Pick any instructor / admin. Their revenue share will be paid out from sales. You can reassign at any time.</p>
+                  {(() => {
+                    const currentId = form.instructor_id || course?.instructor_id || user?.id;
+                    const current = instructorList.find((i: any) => i.id === currentId);
+                    return (
+                      <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/40 border">
+                        <div className="w-9 h-9 rounded-full bg-muted overflow-hidden shrink-0 border">
+                          {current?.avatar_url ? <img src={current.avatar_url} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-xs text-muted-foreground">{(current?.full_name || user?.email || '?').charAt(0).toUpperCase()}</div>}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium truncate">{current?.full_name || (currentId === user?.id ? `${user?.email} (you)` : 'Unknown')}</p>
+                          <p className="text-[11px] text-muted-foreground">Currently assigned</p>
+                        </div>
+                      </div>
+                    );
+                  })()}
                   <Input
-                    placeholder="Search by name..."
+                    placeholder="Search instructor by name..."
                     value={instructorSearch}
                     onChange={(e) => setInstructorSearch(e.target.value)}
                     className="h-9 text-sm"
                   />
                   <div className="max-h-56 overflow-y-auto space-y-1 border rounded-lg p-2">
                     <label className="flex items-center gap-2 text-sm cursor-pointer hover:bg-muted/50 rounded px-2 py-1.5">
-                      <input type="radio" checked={!form.instructor_id} onChange={() => update('instructor_id', '')} className="accent-primary" />
+                      <input type="radio" checked={!form.instructor_id || form.instructor_id === user?.id} onChange={() => update('instructor_id', user?.id || '')} className="accent-primary" />
                       <span className="text-muted-foreground">Self ({user?.email})</span>
                     </label>
-                    {filteredInstructors.map((i: any) => (
+                    {filteredInstructors.filter((i: any) => i.id !== user?.id).map((i: any) => (
                       <label key={i.id} className={`flex items-center gap-3 text-sm cursor-pointer rounded px-2 py-1.5 transition-colors ${form.instructor_id === i.id ? 'bg-primary/10 border border-primary/30' : 'hover:bg-muted/50'}`}>
                         <input type="radio" checked={form.instructor_id === i.id} onChange={() => update('instructor_id', i.id)} className="accent-primary" />
                         <div className="w-7 h-7 rounded-full bg-muted overflow-hidden shrink-0 border">
