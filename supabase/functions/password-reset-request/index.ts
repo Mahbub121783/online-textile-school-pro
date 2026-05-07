@@ -75,7 +75,7 @@ Deno.serve(async (req) => {
 
       // Send email via existing SMTP function
       try {
-        await supabase.functions.invoke('send-smtp-email', {
+        const { data: smtpData, error: smtpErr } = await supabase.functions.invoke('send-smtp-email', {
           body: {
             templateKey: 'password_reset',
             recipientEmail: emailRaw,
@@ -86,6 +86,7 @@ Deno.serve(async (req) => {
             },
           },
         });
+        console.log('password-reset-request: smtp', { ok: !smtpErr, err: smtpErr?.message, data: smtpData });
       } catch (e) {
         console.error('send-smtp-email failed', e);
       }
