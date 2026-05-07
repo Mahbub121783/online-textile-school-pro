@@ -495,6 +495,60 @@ export default function AdminWorkshops() {
                     </div>
                   </div>
 
+                  {/* Certificate Section */}
+                  <div className="border-t pt-3 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-sm font-semibold flex items-center gap-2">
+                        <CheckCircle className="h-4 w-4 text-primary" /> Certificate
+                      </Label>
+                      <div className="flex items-center gap-2">
+                        <Switch checked={!!editWs.certificate_enabled} onCheckedChange={(v) => setEditWs({ ...editWs, certificate_enabled: v })} />
+                        <span className="text-xs text-muted-foreground">{editWs.certificate_enabled ? 'Enabled' : 'Disabled'}</span>
+                      </div>
+                    </div>
+                    {editWs.certificate_enabled && (
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="col-span-2">
+                          <Label className="text-xs">Certificate Template</Label>
+                          <Select value={editWs.cert_template_id || ''} onValueChange={(v) => setEditWs({ ...editWs, cert_template_id: v || null })}>
+                            <SelectTrigger><SelectValue placeholder="Select template" /></SelectTrigger>
+                            <SelectContent>
+                              {certTemplates.map((t: any) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                          {certTemplates.length === 0 && (
+                            <p className="text-[11px] text-muted-foreground mt-1">No templates yet — create one in Admin → Certificates.</p>
+                          )}
+                        </div>
+                        <div>
+                          <Label className="text-xs">Min Attendance %</Label>
+                          <Input type="number" min={0} max={100} value={editWs.certificate_min_attendance_pct || 0}
+                            onChange={(e) => setEditWs({ ...editWs, certificate_min_attendance_pct: Number(e.target.value) })} />
+                          <p className="text-[11px] text-muted-foreground mt-1">0 = no requirement; check-in counts as attended.</p>
+                        </div>
+                        <div>
+                          <Label className="text-xs">Min Quiz Score %</Label>
+                          <Input type="number" min={0} max={100} value={editWs.certificate_min_quiz_pct || 0}
+                            onChange={(e) => setEditWs({ ...editWs, certificate_min_quiz_pct: Number(e.target.value) })} />
+                          <p className="text-[11px] text-muted-foreground mt-1">0 = no requirement.</p>
+                        </div>
+                        <div className="flex items-center gap-2 col-span-2">
+                          <Switch checked={!!editWs.certificate_auto_issue} onCheckedChange={(v) => setEditWs({ ...editWs, certificate_auto_issue: v })} />
+                          <Label className="text-xs">Auto-issue when workshop is marked completed</Label>
+                        </div>
+                        {editWs.id && editWs.status === 'completed' && (
+                          <div className="col-span-2">
+                            <Button type="button" variant="outline" size="sm" className="gap-1"
+                              disabled={bulkIssueMutation.isPending || !editWs.cert_template_id}
+                              onClick={() => bulkIssueMutation.mutate(editWs.id)}>
+                              <Award className="h-4 w-4" /> Issue certificates to all eligible registrants
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
                   {/* Instructor Search */}
                   <div className="border-t pt-3">
                     <Label className="text-sm font-semibold">Instructor</Label>
