@@ -514,7 +514,15 @@ export default function WorkshopDetail() {
                     )}
                   </CardContent>
                 </Card>
-              ) : workshop.status !== 'completed' && workshop.status !== 'cancelled' && !isFull ? (
+              ) : registrationClosed ? (
+                <Card className="border-destructive/30 bg-destructive/5">
+                  <CardContent className="p-5 text-center space-y-2">
+                    <AlertCircle className="h-8 w-8 text-destructive mx-auto" />
+                    <p className="font-heading font-semibold">Registration Closed</p>
+                    <p className="text-sm text-muted-foreground">{closedReason}</p>
+                  </CardContent>
+                </Card>
+              ) : (
                 <Card>
                   <CardHeader><CardTitle className="text-lg">Register Now</CardTitle></CardHeader>
                   <CardContent className="space-y-4">
@@ -530,7 +538,7 @@ export default function WorkshopDetail() {
                             <p className="text-xs text-muted-foreground truncate">{user.email}</p>
                           </div>
                         </div>
-                        <Button className="w-full" onClick={() => registerMutation.mutate()} disabled={registerMutation.isPending}>
+                        <Button className="w-full" onClick={handleRegisterClick} disabled={registerMutation.isPending}>
                           {registerMutation.isPending ? 'Registering...' : 'Register for Free'}
                         </Button>
                       </>
@@ -545,7 +553,7 @@ export default function WorkshopDetail() {
                     )}
                   </CardContent>
                 </Card>
-              ) : null}
+              )}
             </div>
           </div>
         </main>
