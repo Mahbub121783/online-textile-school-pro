@@ -21,6 +21,7 @@ import Footer from '@/components/layout/Footer';
 import BottomNav from '@/components/layout/BottomNav';
 import ContributorBadge from '@/components/shared/ContributorBadge';
 import { useContributors } from '@/hooks/useContributors';
+import { sanitizeRichHtml } from '@/lib/htmlSanitize';
 
 const CourseDetail = () => {
   const { slug } = useParams();
@@ -371,7 +372,10 @@ const CourseDetail = () => {
                   {course.description && (
                     <div>
                       <h2 className="font-heading text-xl font-bold mb-4">About This Course</h2>
-                      <div className="text-sm text-muted-foreground leading-relaxed whitespace-pre-line">{course.description}</div>
+                      <div
+                        className="prose prose-sm dark:prose-invert max-w-none text-foreground/90"
+                        dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(course.description) }}
+                      />
                     </div>
                   )}
                   {qaCount > 0 && (

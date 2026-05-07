@@ -1,4 +1,5 @@
 import { PageSkeleton } from '@/components/ui/loading-skeletons';
+import { sanitizeRichHtml } from '@/lib/htmlSanitize';
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -279,7 +280,7 @@ export default function WorkshopDetail() {
               {workshop.description && (
                 <Card>
                   <CardHeader><CardTitle className="text-lg">About This Workshop</CardTitle></CardHeader>
-                  <CardContent><div className="prose prose-sm max-w-none dark:prose-invert" dangerouslySetInnerHTML={{ __html: workshop.description }} /></CardContent>
+                  <CardContent><div className="prose prose-sm max-w-none dark:prose-invert" dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(workshop.description) }} /></CardContent>
                 </Card>
               )}
 
