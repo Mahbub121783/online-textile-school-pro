@@ -27,6 +27,11 @@ const emptyWs = {
   registration_deadline: '', instructor_id: null as string | null,
   prerequisites: '', what_you_learn: [] as string[], materials: [] as any[],
   fake_registration_count: 0 as any,
+  cert_template_id: null as string | null,
+  certificate_enabled: false,
+  certificate_min_attendance_pct: 0 as any,
+  certificate_min_quiz_pct: 0 as any,
+  certificate_auto_issue: true,
 };
 
 export default function AdminWorkshops() {
