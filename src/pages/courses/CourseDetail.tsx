@@ -21,6 +21,7 @@ import Footer from '@/components/layout/Footer';
 import BottomNav from '@/components/layout/BottomNav';
 import ContributorBadge from '@/components/shared/ContributorBadge';
 import { useContributors } from '@/hooks/useContributors';
+import { sanitizeRichHtml } from '@/lib/htmlSanitize';
 
 const CourseDetail = () => {
   const { slug } = useParams();
