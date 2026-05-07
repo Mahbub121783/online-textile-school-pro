@@ -678,7 +678,7 @@ export type Database = {
       certificates: {
         Row: {
           certificate_number: string
-          course_id: string
+          course_id: string | null
           download_count: number | null
           downloaded_at: string | null
           id: string
@@ -686,10 +686,11 @@ export type Database = {
           score_percentage: number | null
           template_snapshot: Json | null
           user_id: string
+          workshop_id: string | null
         }
         Insert: {
           certificate_number: string
-          course_id: string
+          course_id?: string | null
           download_count?: number | null
           downloaded_at?: string | null
           id?: string
@@ -697,10 +698,11 @@ export type Database = {
           score_percentage?: number | null
           template_snapshot?: Json | null
           user_id: string
+          workshop_id?: string | null
         }
         Update: {
           certificate_number?: string
-          course_id?: string
+          course_id?: string | null
           download_count?: number | null
           downloaded_at?: string | null
           id?: string
@@ -708,6 +710,7 @@ export type Database = {
           score_percentage?: number | null
           template_snapshot?: Json | null
           user_id?: string
+          workshop_id?: string | null
         }
         Relationships: [
           {
@@ -722,6 +725,13 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "certificates_workshop_id_fkey"
+            columns: ["workshop_id"]
+            isOneToOne: false
+            referencedRelation: "workshops"
             referencedColumns: ["id"]
           },
         ]
@@ -6148,6 +6158,11 @@ export type Database = {
       }
       workshops: {
         Row: {
+          cert_template_id: string | null
+          certificate_auto_issue: boolean
+          certificate_enabled: boolean
+          certificate_min_attendance_pct: number
+          certificate_min_quiz_pct: number
           created_at: string
           created_by: string | null
           description: string | null
@@ -6184,6 +6199,11 @@ export type Database = {
           workshop_type: Database["public"]["Enums"]["workshop_type"]
         }
         Insert: {
+          cert_template_id?: string | null
+          certificate_auto_issue?: boolean
+          certificate_enabled?: boolean
+          certificate_min_attendance_pct?: number
+          certificate_min_quiz_pct?: number
           created_at?: string
           created_by?: string | null
           description?: string | null
@@ -6220,6 +6240,11 @@ export type Database = {
           workshop_type?: Database["public"]["Enums"]["workshop_type"]
         }
         Update: {
+          cert_template_id?: string | null
+          certificate_auto_issue?: boolean
+          certificate_enabled?: boolean
+          certificate_min_attendance_pct?: number
+          certificate_min_quiz_pct?: number
           created_at?: string
           created_by?: string | null
           description?: string | null
@@ -6257,6 +6282,13 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "workshops_cert_template_id_fkey"
+            columns: ["cert_template_id"]
+            isOneToOne: false
+            referencedRelation: "certificate_templates"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "workshops_instructor_id_fkey"
             columns: ["instructor_id"]
             isOneToOne: false
@@ -6271,6 +6303,10 @@ export type Database = {
     }
     Functions: {
       auto_update_workshop_status: { Args: never; Returns: undefined }
+      bulk_issue_workshop_certificates: {
+        Args: { _workshop_id: string }
+        Returns: number
+      }
       can_manage_content_contributors: {
         Args: { _content_id: string; _content_type: string }
         Returns: boolean
@@ -6379,6 +6415,10 @@ export type Database = {
       increment_research_paper_view: {
         Args: { _paper_id: string }
         Returns: undefined
+      }
+      issue_workshop_certificate: {
+        Args: { _user_id: string; _workshop_id: string }
+        Returns: string
       }
       notify_admins: {
         Args: {
