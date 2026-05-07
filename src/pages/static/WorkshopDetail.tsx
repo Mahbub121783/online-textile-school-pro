@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { CountdownTimer } from '@/components/workshop/CountdownTimer';
-import { Calendar, Clock, Users, Download, CheckCircle, Video, BookOpen, FileText, FileImage, FileArchive, File, LogIn, Copy } from 'lucide-react';
+import { Calendar, Clock, Users, Download, CheckCircle, Video, BookOpen, FileText, FileImage, FileArchive, File, LogIn, Copy, AlertCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 import ContributorBadge from '@/components/shared/ContributorBadge';
@@ -126,9 +126,26 @@ export default function WorkshopDetail() {
     } catch { /* Email is non-critical */ }
   };
 
+  const isWorkshopClosed = (w: any): { closed: boolean; reason: string } => {
+    if (!w) return { closed: true, reason: 'Workshop unavailable' };
+    if (w.status === 'cancelled') return { closed: true, reason: 'This workshop has been cancelled.' };
+    if (w.status === 'completed') return { closed: true, reason: 'This workshop has already ended. Registration is closed.' };
+    const now = Date.now();
+    if (w.registration_deadline && now > new Date(w.registration_deadline).getTime()) {
+      return { closed: true, reason: 'Registration deadline has passed.' };
+    }
+    const eDt = w.end_at
+      ? new Date(w.end_at)
+      : new Date(`${w.end_date || w.start_date}T${w.end_time || w.start_time || '23:59'}:00`);
+    if (now > eDt.getTime()) return { closed: true, reason: 'This workshop has already ended. Registration is closed.' };
+    return { closed: false, reason: '' };
+  };
+
   const registerMutation = useMutation({
     mutationFn: async () => {
       if (!user || !profile) throw new Error('You must be signed in');
+      const gate = isWorkshopClosed(workshop);
+      if (gate.closed) throw new Error(gate.reason);
       const payload: any = {
         workshop_id: workshop!.id,
         user_id: user.id,
@@ -140,6 +157,11 @@ export default function WorkshopDetail() {
       const { data, error } = await supabase.from('workshop_registrations').insert(payload).select().single();
       if (error) {
         if (error.code === '23505') throw new Error('You are already registered for this workshop');
+        const m = (error.message || '').toLowerCase();
+        if (m.includes('deadline')) throw new Error('Registration deadline has passed.');
+        if (m.includes('ended')) throw new Error('This workshop has already ended. Registration is closed.');
+        if (m.includes('cancelled')) throw new Error('This workshop has been cancelled.');
+        if (m.includes('full')) throw new Error('Workshop is full. No seats available.');
         throw error;
       }
       return data;
@@ -166,16 +188,17 @@ export default function WorkshopDetail() {
       !authLoading &&
       !regLoading &&
       !myRegistration &&
-      !registered &&
-      workshop.status !== 'completed' &&
-      workshop.status !== 'cancelled'
+      !registered
     ) {
-      // Check if came from login redirect (has ?register=true)
       const params = new URLSearchParams(window.location.search);
       if (params.get('register') === 'true') {
         setAutoRegAttempted(true);
-        registerMutation.mutate();
-        // Clean URL
+        const gate = isWorkshopClosed(workshop);
+        if (gate.closed) {
+          toast.error(gate.reason);
+        } else {
+          registerMutation.mutate();
+        }
         window.history.replaceState({}, '', window.location.pathname);
       }
     }
@@ -199,14 +222,31 @@ export default function WorkshopDetail() {
   const slotsLeft = workshop.max_participants ? workshop.max_participants - regCount : null;
   const isFull = slotsLeft !== null && slotsLeft <= 0;
   const isRegistered = !!myRegistration || registered;
+  // Registration window
+  const deadlineDt = (workshop as any).registration_deadline ? new Date((workshop as any).registration_deadline) : null;
+  const deadlinePassed = !!deadlineDt && _now > deadlineDt.getTime();
+  const workshopEnded = _now > endDt.getTime() || workshop.status === 'completed';
+  const registrationClosed = deadlinePassed || workshopEnded || workshop.status === 'cancelled' || isFull;
+  const closedReason = workshop.status === 'cancelled'
+    ? 'This workshop has been cancelled.'
+    : workshopEnded
+      ? 'This workshop has already ended. Registration is closed.'
+      : deadlinePassed
+        ? `Registration deadline passed on ${format(deadlineDt!, 'MMM dd, yyyy h:mm a')}.`
+        : isFull
+          ? 'All seats are filled.'
+          : '';
   const materials = (workshop.materials as any[]) || [];
   const whatYouLearn = (workshop.what_you_learn as string[]) || [];
   const instructor = (workshop as any).instructor;
   const displayRegNumber = regNumber || myRegistration?.registration_number;
 
   const handleRegisterClick = () => {
+    if (registrationClosed) {
+      toast.error(closedReason || 'Registration is closed.');
+      return;
+    }
     if (!user) {
-      // Redirect to login with return URL
       const returnUrl = `/workshops/${slug}?register=true`;
       navigate(`/auth/login?redirect=${encodeURIComponent(returnUrl)}`);
       return;
@@ -474,7 +514,15 @@ export default function WorkshopDetail() {
                     )}
                   </CardContent>
                 </Card>
-              ) : workshop.status !== 'completed' && workshop.status !== 'cancelled' && !isFull ? (
+              ) : registrationClosed ? (
+                <Card className="border-destructive/30 bg-destructive/5">
+                  <CardContent className="p-5 text-center space-y-2">
+                    <AlertCircle className="h-8 w-8 text-destructive mx-auto" />
+                    <p className="font-heading font-semibold">Registration Closed</p>
+                    <p className="text-sm text-muted-foreground">{closedReason}</p>
+                  </CardContent>
+                </Card>
+              ) : (
                 <Card>
                   <CardHeader><CardTitle className="text-lg">Register Now</CardTitle></CardHeader>
                   <CardContent className="space-y-4">
@@ -490,7 +538,7 @@ export default function WorkshopDetail() {
                             <p className="text-xs text-muted-foreground truncate">{user.email}</p>
                           </div>
                         </div>
-                        <Button className="w-full" onClick={() => registerMutation.mutate()} disabled={registerMutation.isPending}>
+                        <Button className="w-full" onClick={handleRegisterClick} disabled={registerMutation.isPending}>
                           {registerMutation.isPending ? 'Registering...' : 'Register for Free'}
                         </Button>
                       </>
@@ -505,7 +553,7 @@ export default function WorkshopDetail() {
                     )}
                   </CardContent>
                 </Card>
-              ) : null}
+              )}
             </div>
           </div>
         </main>
