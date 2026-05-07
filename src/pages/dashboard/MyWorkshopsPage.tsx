@@ -39,6 +39,46 @@ export default function MyWorkshopsPage() {
     enabled: !!user?.id,
   });
 
+  const { data: workshopCerts = [] } = useQuery({
+    queryKey: ['my-workshop-certs', user?.id],
+    enabled: !!user?.id,
+    queryFn: async () => {
+      const { data } = await supabase.from('certificates').select('*').eq('user_id', user!.id).not('workshop_id', 'is', null);
+      return data ?? [];
+    },
+  });
+  const certByWs = new Map(workshopCerts.map((c: any) => [c.workshop_id, c]));
+
+  const downloadCert = async (cert: any, ws: any) => {
+    const tpl: any = cert.template_snapshot;
+    const fields: CertificateField[] = tpl?.fields_config || [];
+    const data: CertificateData = {
+      student_name: profile?.full_name || 'Student',
+      course_title: ws.title,
+      certificate_number: cert.certificate_number,
+      completion_date: cert.issued_at ? format(new Date(cert.issued_at), 'MMMM dd, yyyy') : '',
+      instructor_signature: ws.instructor?.full_name || ws.instructor_name || '',
+    };
+    await downloadCertificatePDF(tpl?.background_url || null, fields, data, `certificate-${cert.certificate_number}.pdf`);
+    await supabase.from('certificates').update({
+      download_count: (cert.download_count || 0) + 1,
+      downloaded_at: new Date().toISOString(),
+    } as any).eq('id', cert.id);
+    toast.success('Certificate downloaded');
+  };
+
+  const claimMutation = useMutation({
+    mutationFn: async (workshopId: string) => {
+      const { error } = await supabase.rpc('issue_workshop_certificate', { _workshop_id: workshopId, _user_id: user!.id });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success('Certificate issued! Click Download.');
+      queryClient.invalidateQueries({ queryKey: ['my-workshop-certs', user?.id] });
+    },
+    onError: (e: any) => toast.error(e.message || 'Not eligible yet'),
+  });
+
   if (isLoading) return <div className="p-6"><div className="animate-pulse h-32 bg-muted rounded-lg" /></div>;
 
   const materialsList = (materialsWs?.materials as any[]) || [];
