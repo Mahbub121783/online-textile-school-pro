@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { CountdownTimer } from '@/components/workshop/CountdownTimer';
-import { Calendar, Clock, Users, Download, CheckCircle, Video, BookOpen, FileText, FileImage, FileArchive, File, LogIn, Copy } from 'lucide-react';
+import { Calendar, Clock, Users, Download, CheckCircle, Video, BookOpen, FileText, FileImage, FileArchive, File, LogIn, Copy, AlertCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 import ContributorBadge from '@/components/shared/ContributorBadge';
