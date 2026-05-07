@@ -1,85 +1,84 @@
+# Forgot Password — OTP Code via Email (SMTP)
 
-# Workshop Certificate System
+Goal: User clicks "Forgot Password" → enters email → receives a **6-digit code** via your existing SMTP → enters code + new password → password reset. No Supabase magic link needed.
 
-Currently certificates only work for courses (`certificates.course_id` is NOT NULL). Workshops have no certificate flow at all. This plan extends the existing course-certificate engine to workshops without breaking it.
+## Why a custom flow
+Supabase's built-in `resetPasswordForEmail` sends a link (and uses Supabase's own SMTP/template). You want a **code emailed via your own `send-smtp-email` function**. So we build a small custom flow on top of your existing infra.
 
-## 1. Database changes (migration)
+---
 
-### `certificates` table — make it polymorphic
-- Drop `NOT NULL` on `course_id`; drop unique `(user_id, course_id)`.
-- Add `workshop_id uuid REFERENCES public.workshops(id) ON DELETE CASCADE`.
-- Add CHECK: exactly one of `course_id` / `workshop_id` is set.
-- Add unique partial indexes:
-  - `(user_id, course_id)` where `course_id IS NOT NULL`
-  - `(user_id, workshop_id)` where `workshop_id IS NOT NULL`
+## 1. Database (new table)
 
-### `workshops` table — certificate config
-- `cert_template_id uuid REFERENCES public.certificate_templates(id)` (nullable)
-- `certificate_enabled boolean DEFAULT false`
-- `certificate_min_attendance_pct int DEFAULT 0` (0 = no attendance requirement)
-- `certificate_min_quiz_pct int DEFAULT 0` (0 = no quiz requirement)
-- `certificate_auto_issue boolean DEFAULT true` (issue automatically when workshop completes)
+`password_reset_codes`
+- `id uuid pk`
+- `user_id uuid` (nullable — looked up from email)
+- `email text not null`
+- `code_hash text not null` (sha256 of 6-digit code, never plaintext)
+- `expires_at timestamptz not null` (10 minutes)
+- `used_at timestamptz`
+- `attempts int default 0` (max 5)
+- `created_at timestamptz default now()`
+- Index on `(email, created_at desc)`
+- RLS enabled, **no public policies** (only service role accesses it via edge functions)
 
-### Issuing function (security definer)
-`issue_workshop_certificate(_workshop_id uuid, _user_id uuid)`:
-1. Verify workshop is `completed` and `certificate_enabled=true` and has a template.
-2. Verify user has a `workshop_registrations` row.
-3. If `certificate_min_attendance_pct > 0`, require `checked_in_at IS NOT NULL` (single-session) or attendance rows ≥ pct (multi-day uses existing `workshop_attendance` if present; otherwise treat check-in as 100%).
-4. If `certificate_min_quiz_pct > 0`, look up best `workshop_quiz_attempts` percentage for this user's registration on any active quiz of the workshop and require ≥ threshold.
-5. Insert into `certificates` with auto-generated number `WS-YYYY-XXXXXX`, snapshot template, score from quiz if available. ON CONFLICT do nothing.
-6. Return certificate id.
+## 2. Two new edge functions
 
-### Auto-issue trigger
-`AFTER UPDATE` on `workshops` when `status` transitions to `completed` and `certificate_enabled=true` and `certificate_auto_issue=true`: loop over confirmed registrations and call `issue_workshop_certificate` (best-effort, swallow individual failures).
+### `password-reset-request`
+Input: `{ email }`
+- Rate limit: max 3 codes / 15 min per email (check recent rows)
+- Look up user in `auth.users` via admin API (don't reveal if user exists — always return success)
+- Generate 6-digit code, store sha256 hash + 10-min expiry
+- Call `send-smtp-email` with `templateKey: 'password_reset'`, placeholders `{ user_name, otp_code, expires_in: '10 minutes' }`
+- Always return `{ success: true }` (anti-enumeration)
 
-Also extend the existing `auto_update_workshop_status()` cron-friendly function so transition to `completed` fires the trigger.
+### `password-reset-verify`
+Input: `{ email, code, new_password }`
+- Find latest unused, non-expired code for email
+- Increment `attempts`; lock after 5
+- Compare sha256(code) vs stored hash
+- If valid: use admin API `auth.admin.updateUserById(userId, { password })`, mark code `used_at`, invalidate all other codes for that email
+- Return `{ success: true }` or precise error (`invalid_code`, `expired`, `too_many_attempts`)
 
-### RLS
-- Existing `certificates` RLS already keys on `user_id`; keep. Add policy `WITH CHECK` covering both course_id and workshop_id paths for admins/instructors.
-- Allow students to insert their own workshop cert via the SECURITY DEFINER function only (no direct insert).
+Both functions: `verify_jwt = false`, use `SUPABASE_SERVICE_ROLE_KEY`, validate input with zod.
 
-## 2. Admin UI — `AdminWorkshops.tsx`
+## 3. Email template update
 
-In the workshop create/edit form, add a **Certificate** section:
-- Toggle: Enable certificate
-- Select: Certificate template (dropdown of `certificate_templates`)
-- Number: Min attendance % (0 = none)
-- Number: Min quiz score % (0 = none)
-- Toggle: Auto-issue when workshop completes
-- Button: **Re-issue now** — calls an edge function or RPC `issue_workshop_certificate` for every registered user (admin only).
+Update `password_reset` default in `send-smtp-email/index.ts` to use OTP code instead of link:
 
-Show in the registrations table per workshop a column "Certificate" with status (Issued / Eligible / Locked) and a manual "Issue" button per row.
+> "Your password reset code is **{{otp_code}}**. It expires in {{expires_in}}. If you didn't request this, ignore this email."
 
-## 3. Student UI
+(Keeps the same `templateKey` so admin-customized templates in DB keep working — they just need to use `{{otp_code}}` placeholder. We'll keep `{{reset_link}}` working too as a fallback.)
 
-### `MyWorkshopsPage.tsx`
-For each registration card, after the workshop ends and a certificate exists, show a **Download Certificate** button. If eligible but not issued (rare race), show **Claim Certificate** that calls the RPC then downloads.
+## 4. Frontend changes
 
-### `CertificatesPage.tsx` (dashboard)
-Extend the page to list workshop certificates alongside course certs:
-- New query: workshop registrations with `workshops(*, certificate_templates(*))`.
-- Reuse `downloadCertificatePDF` with workshop-derived `CertificateData` (course_title := workshop title, instructor_signature := workshop instructor).
-- Show pending workshops the same way (with missing requirements: attendance, quiz score).
+### `src/pages/auth/ForgotPassword.tsx` — rewrite as 2-step wizard
+- **Step 1:** Email input → calls `password-reset-request` edge function → moves to step 2
+- **Step 2:** Shows InputOTP (6 digits) + new password + confirm password fields → calls `password-reset-verify` → on success, toast + redirect to `/auth/login`
+- "Resend code" button (disabled 60s after send)
+- "Change email" link to go back to step 1
 
-### Workshop detail (`WorkshopDetail.tsx`)
-For a logged-in registered user when workshop is completed, show a "Download your certificate" CTA in the existing registered card.
+Uses existing `<InputOTP>` component (already in `src/components/ui/input-otp.tsx`).
 
-## 4. Renderer
+### `src/pages/auth/Login.tsx`
+No change — "Forgot password?" link already points to `/auth/forgot-password`.
 
-`src/lib/certificateRenderer.ts` already handles arbitrary `CertificateData`. No code changes needed; just pass the workshop fields. Add a thin helper `buildWorkshopCertificateData(reg, workshop, profile, gradeConfigs)` next to the existing course one.
+### `src/pages/auth/ResetPassword.tsx`
+Leave as-is (still works for any old Supabase recovery links if used elsewhere).
 
-## 5. Verification
+---
 
-`/verify-certificate` already looks up by `certificate_number` from `certificates`; will work for workshop certs since they live in the same table. Update the page to display "Workshop: <title>" when `workshop_id` is set instead of "Course: …".
+## Security notes
+- Codes hashed (sha256) at rest, never stored plaintext
+- 10-minute expiry, 5-attempt lockout, 3 codes / 15 min per email
+- No user enumeration (always returns success on request step)
+- Password update done server-side via service role — never exposed to client
+- All other codes for that email invalidated on successful reset
 
-## 6. Notifications (small)
+## Files
+- New migration: `password_reset_codes` table + RLS
+- New: `supabase/functions/password-reset-request/index.ts`
+- New: `supabase/functions/password-reset-verify/index.ts`
+- Edit: `supabase/functions/send-smtp-email/index.ts` (update `password_reset` template body to include `{{otp_code}}`)
+- Edit: `src/pages/auth/ForgotPassword.tsx` (2-step OTP wizard)
 
-When a workshop certificate is issued, insert a `notifications` row for the user: "Your certificate for <workshop> is ready to download" linking to `/dashboard/certificates`.
-
-## Result
-
-- Admins assign a template + thresholds per workshop in one place.
-- When a workshop flips to `completed` (manual or via `auto_update_workshop_status`), every eligible registered user automatically gets a certificate with a unique number.
-- Students see and download a real PDF from My Workshops or My Certificates.
-- Works for past, current, and upcoming workshops (existing completed ones can be processed via the admin "Re-issue now" button).
-- No regression to course certificates — same table, same renderer, polymorphic via CHECK + partial unique indexes.
+After approval, the Google sign-in flow stays untouched, and any user with an email/password account can reset via the emailed 6-digit code.
