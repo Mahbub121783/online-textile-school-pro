@@ -180,6 +180,27 @@ export default function MyWorkshopsPage() {
                             <Download className="h-3 w-3" /> {materials.length} Material{materials.length > 1 ? 's' : ''}
                           </Button>
                         )}
+
+                        {/* Certificate */}
+                        {ws.status === 'completed' && ws.certificate_enabled && (
+                          (() => {
+                            const cert = certByWs.get(ws.id);
+                            if (cert) {
+                              return (
+                                <Button size="sm" variant="default" className="gap-1.5 text-xs" onClick={() => downloadCert(cert, ws)}>
+                                  <Award className="h-3.5 w-3.5" /> Download Certificate
+                                </Button>
+                              );
+                            }
+                            return (
+                              <Button size="sm" variant="outline" className="gap-1.5 text-xs"
+                                disabled={claimMutation.isPending}
+                                onClick={() => claimMutation.mutate(ws.id)}>
+                                <Award className="h-3.5 w-3.5" /> Claim Certificate
+                              </Button>
+                            );
+                          })()
+                        )}
                       </div>
                     </div>
                   </div>
