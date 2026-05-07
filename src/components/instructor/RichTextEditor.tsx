@@ -1,6 +1,7 @@
-import { useRef, useCallback } from 'react';
+import { useRef, useCallback, useEffect } from 'react';
 import { Bold, Italic, Underline, List, ListOrdered, Link, Image, Minus, Undo, Redo } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { sanitizeRichHtml } from '@/lib/htmlSanitize';
 
 interface RichTextEditorProps {
   value: string;
