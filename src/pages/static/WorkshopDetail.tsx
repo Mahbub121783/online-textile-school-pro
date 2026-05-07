@@ -199,6 +199,20 @@ export default function WorkshopDetail() {
   const slotsLeft = workshop.max_participants ? workshop.max_participants - regCount : null;
   const isFull = slotsLeft !== null && slotsLeft <= 0;
   const isRegistered = !!myRegistration || registered;
+  // Registration window
+  const deadlineDt = (workshop as any).registration_deadline ? new Date((workshop as any).registration_deadline) : null;
+  const deadlinePassed = !!deadlineDt && _now > deadlineDt.getTime();
+  const workshopEnded = _now > endDt.getTime() || workshop.status === 'completed';
+  const registrationClosed = deadlinePassed || workshopEnded || workshop.status === 'cancelled' || isFull;
+  const closedReason = workshop.status === 'cancelled'
+    ? 'This workshop has been cancelled.'
+    : workshopEnded
+      ? 'This workshop has already ended. Registration is closed.'
+      : deadlinePassed
+        ? `Registration deadline passed on ${format(deadlineDt!, 'MMM dd, yyyy h:mm a')}.`
+        : isFull
+          ? 'All seats are filled.'
+          : '';
   const materials = (workshop.materials as any[]) || [];
   const whatYouLearn = (workshop.what_you_learn as string[]) || [];
   const instructor = (workshop as any).instructor;
