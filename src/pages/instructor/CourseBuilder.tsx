@@ -122,6 +122,10 @@ const CourseBuilder = () => {
   const handleSave = async (status?: string) => {
     if (!form.title.trim()) { toast.error('Title is required'); return; }
     setSaving(true);
+    const resolvedInstructorId = isAdmin
+      ? (form.instructor_id || course?.instructor_id || user!.id)
+      : (course?.instructor_id || user!.id);
+    const reassigned = isAdmin && !isNew && course?.instructor_id && resolvedInstructorId !== course.instructor_id;
     const payload: any = {
       title: form.title, slug: form.slug || generateSlug(form.title),
       short_description: form.short_description || null, description: form.description || null,
@@ -136,7 +140,7 @@ const CourseBuilder = () => {
       certificate_threshold_pct: Number(form.certificate_threshold_pct) || 100,
       revenue_share_pct: Number(form.revenue_share_pct) || 70,
       cert_template_id: form.cert_template_id || null,
-      instructor_id: (isAdmin && form.instructor_id) ? form.instructor_id : (course?.instructor_id || user!.id),
+      instructor_id: resolvedInstructorId,
     };
     if (status) payload.review_status = status;
     if (status === 'approved') payload.is_published = true;
@@ -147,7 +151,17 @@ const CourseBuilder = () => {
       if (error) { toast.error(error.message); } else { toast.success('Course created!'); navigate(`${editBase}/${data.id}`, { replace: true }); }
     } else {
       const { error } = await supabase.from('courses').update(payload).eq('id', courseId!);
-      if (error) { toast.error(error.message); } else { toast.success('Course saved!'); qc.invalidateQueries({ queryKey: ['instructor-course', courseId] }); }
+      if (error) {
+        toast.error(error.message);
+      } else {
+        if (reassigned) {
+          const newInstr = instructorList.find((i: any) => i.id === resolvedInstructorId);
+          toast.success(`Course reassigned to ${newInstr?.full_name || 'selected instructor'}`);
+        } else {
+          toast.success('Course saved!');
+        }
+        qc.invalidateQueries({ queryKey: ['instructor-course', courseId] });
+      }
     }
     setSaving(false);
   };
