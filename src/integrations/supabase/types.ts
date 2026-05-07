@@ -6300,6 +6300,63 @@ export type Database = {
         Returns: string
       }
       generate_unique_username: { Args: { _base: string }; Returns: string }
+      get_my_profile: {
+        Args: never
+        Returns: {
+          avatar_url: string | null
+          batch: string | null
+          bio: string | null
+          blood_group: string | null
+          business_type: string | null
+          campus: string | null
+          company_name: string | null
+          country: string | null
+          created_at: string | null
+          current_job: string | null
+          date_of_birth: string | null
+          district: string | null
+          division: string | null
+          expertise: string[] | null
+          facebook_url: string | null
+          full_name: string | null
+          gender: string | null
+          github_url: string | null
+          graduation_year: number | null
+          headline: string | null
+          id: string
+          is_active: boolean | null
+          is_public_contributor: boolean
+          language_preference: string | null
+          last_login_at: string | null
+          latitude: number | null
+          linkedin_url: string | null
+          location_updated_at: string | null
+          longitude: number | null
+          name_last_changed_at: string | null
+          occupation: string | null
+          phone: string | null
+          preferred_language: string | null
+          professional_role: string | null
+          referral_code: string | null
+          referred_by: string | null
+          roll_id: string | null
+          social_links: Json | null
+          theme_preference: string | null
+          university: string | null
+          upazila: string | null
+          updated_at: string | null
+          username: string | null
+          vote_count: number
+          website_url: string | null
+          whatsapp_number: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "user_profiles"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
