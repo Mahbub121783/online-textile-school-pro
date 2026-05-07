@@ -122,7 +122,23 @@ export default function AdminWorkshops() {
     enabled: !!editWs?.id,
   });
 
-  // Instructor search query
+  const { data: certTemplates = [] } = useQuery({
+    queryKey: ['cert-templates-admin-workshops'],
+    queryFn: async () => {
+      const { data } = await supabase.from('certificate_templates').select('id, name').order('created_at', { ascending: false });
+      return data || [];
+    },
+  });
+
+  const bulkIssueMutation = useMutation({
+    mutationFn: async (workshopId: string) => {
+      const { data, error } = await supabase.rpc('bulk_issue_workshop_certificates', { _workshop_id: workshopId });
+      if (error) throw error;
+      return data as number;
+    },
+    onSuccess: (n) => toast.success(`Issued ${n} certificate(s)`),
+    onError: (e: any) => toast.error(e.message),
+  });
   const { data: instructorResults = [] } = useQuery({
     queryKey: ['instructor-search', instructorSearch],
     queryFn: async () => {
