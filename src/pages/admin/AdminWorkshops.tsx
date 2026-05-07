@@ -13,7 +13,7 @@ import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Plus, Edit, Trash2, Users, Calendar, Image, Upload, Search, X, GripVertical, BarChart3, TrendingUp, Clock, CheckCircle, Bell, Send, Video } from 'lucide-react';
+import { Plus, Edit, Trash2, Users, Calendar, Image, Upload, Search, X, GripVertical, BarChart3, TrendingUp, Clock, CheckCircle, Bell, Send, Video, Award } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -27,6 +27,11 @@ const emptyWs = {
   registration_deadline: '', instructor_id: null as string | null,
   prerequisites: '', what_you_learn: [] as string[], materials: [] as any[],
   fake_registration_count: 0 as any,
+  cert_template_id: null as string | null,
+  certificate_enabled: false,
+  certificate_min_attendance_pct: 0 as any,
+  certificate_min_quiz_pct: 0 as any,
+  certificate_auto_issue: true,
 };
 
 export default function AdminWorkshops() {
@@ -117,7 +122,23 @@ export default function AdminWorkshops() {
     enabled: !!editWs?.id,
   });
 
-  // Instructor search query
+  const { data: certTemplates = [] } = useQuery({
+    queryKey: ['cert-templates-admin-workshops'],
+    queryFn: async () => {
+      const { data } = await supabase.from('certificate_templates').select('id, name').order('created_at', { ascending: false });
+      return data || [];
+    },
+  });
+
+  const bulkIssueMutation = useMutation({
+    mutationFn: async (workshopId: string) => {
+      const { data, error } = await supabase.rpc('bulk_issue_workshop_certificates', { _workshop_id: workshopId });
+      if (error) throw error;
+      return data as number;
+    },
+    onSuccess: (n) => toast.success(`Issued ${n} certificate(s)`),
+    onError: (e: any) => toast.error(e.message),
+  });
   const { data: instructorResults = [] } = useQuery({
     queryKey: ['instructor-search', instructorSearch],
     queryFn: async () => {
@@ -163,6 +184,11 @@ export default function AdminWorkshops() {
         registration_deadline: ws.registration_deadline || null,
         end_date: ws.end_date || null,
         instructor_id: ws.instructor_id || null,
+        cert_template_id: ws.cert_template_id || null,
+        certificate_enabled: !!ws.certificate_enabled,
+        certificate_auto_issue: !!ws.certificate_auto_issue,
+        certificate_min_attendance_pct: Number(ws.certificate_min_attendance_pct) || 0,
+        certificate_min_quiz_pct: Number(ws.certificate_min_quiz_pct) || 0,
         created_by: user?.id,
       };
       // Remove fields not in DB
@@ -472,6 +498,60 @@ export default function AdminWorkshops() {
                       <Switch checked={editWs.is_featured} onCheckedChange={(v) => setEditWs({ ...editWs, is_featured: v })} />
                       <Label>Featured</Label>
                     </div>
+                  </div>
+
+                  {/* Certificate Section */}
+                  <div className="border-t pt-3 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-sm font-semibold flex items-center gap-2">
+                        <CheckCircle className="h-4 w-4 text-primary" /> Certificate
+                      </Label>
+                      <div className="flex items-center gap-2">
+                        <Switch checked={!!editWs.certificate_enabled} onCheckedChange={(v) => setEditWs({ ...editWs, certificate_enabled: v })} />
+                        <span className="text-xs text-muted-foreground">{editWs.certificate_enabled ? 'Enabled' : 'Disabled'}</span>
+                      </div>
+                    </div>
+                    {editWs.certificate_enabled && (
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="col-span-2">
+                          <Label className="text-xs">Certificate Template</Label>
+                          <Select value={editWs.cert_template_id || ''} onValueChange={(v) => setEditWs({ ...editWs, cert_template_id: v || null })}>
+                            <SelectTrigger><SelectValue placeholder="Select template" /></SelectTrigger>
+                            <SelectContent>
+                              {certTemplates.map((t: any) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                          {certTemplates.length === 0 && (
+                            <p className="text-[11px] text-muted-foreground mt-1">No templates yet — create one in Admin → Certificates.</p>
+                          )}
+                        </div>
+                        <div>
+                          <Label className="text-xs">Min Attendance %</Label>
+                          <Input type="number" min={0} max={100} value={editWs.certificate_min_attendance_pct || 0}
+                            onChange={(e) => setEditWs({ ...editWs, certificate_min_attendance_pct: Number(e.target.value) })} />
+                          <p className="text-[11px] text-muted-foreground mt-1">0 = no requirement; check-in counts as attended.</p>
+                        </div>
+                        <div>
+                          <Label className="text-xs">Min Quiz Score %</Label>
+                          <Input type="number" min={0} max={100} value={editWs.certificate_min_quiz_pct || 0}
+                            onChange={(e) => setEditWs({ ...editWs, certificate_min_quiz_pct: Number(e.target.value) })} />
+                          <p className="text-[11px] text-muted-foreground mt-1">0 = no requirement.</p>
+                        </div>
+                        <div className="flex items-center gap-2 col-span-2">
+                          <Switch checked={!!editWs.certificate_auto_issue} onCheckedChange={(v) => setEditWs({ ...editWs, certificate_auto_issue: v })} />
+                          <Label className="text-xs">Auto-issue when workshop is marked completed</Label>
+                        </div>
+                        {editWs.id && editWs.status === 'completed' && (
+                          <div className="col-span-2">
+                            <Button type="button" variant="outline" size="sm" className="gap-1"
+                              disabled={bulkIssueMutation.isPending || !editWs.cert_template_id}
+                              onClick={() => bulkIssueMutation.mutate(editWs.id)}>
+                              <Award className="h-4 w-4" /> Issue certificates to all eligible registrants
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   {/* Instructor Search */}

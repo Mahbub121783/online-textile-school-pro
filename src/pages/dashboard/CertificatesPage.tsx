@@ -46,7 +46,7 @@ const CertificatesPage = () => {
     },
   });
 
-  // Issued certificates
+  // Issued certificates (course-based only here)
   const { data: certificates = [], isLoading } = useQuery({
     queryKey: ['my-certificates', user?.id],
     enabled: !!user,
@@ -55,11 +55,27 @@ const CertificatesPage = () => {
         .from('certificates')
         .select('*')
         .eq('user_id', user!.id)
+        .is('workshop_id', null)
         .order('issued_at', { ascending: false });
       return data ?? [];
     },
   });
   const certMap = new Map(certificates.map((c: any) => [c.course_id, c]));
+
+  // Workshop certificates
+  const { data: workshopCerts = [] } = useQuery({
+    queryKey: ['my-workshop-certs-page', user?.id],
+    enabled: !!user,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('certificates')
+        .select('*, workshops!certificates_workshop_id_fkey(id, title, slug, thumbnail_url, instructor_name, instructor:user_profiles!workshops_instructor_id_fkey(full_name))')
+        .eq('user_id', user!.id)
+        .not('workshop_id', 'is', null)
+        .order('issued_at', { ascending: false });
+      return data ?? [];
+    },
+  });
 
   // Templates
   const templateIds = [...new Set(courses.map((c: any) => c.cert_template_id).filter(Boolean))];
@@ -263,7 +279,68 @@ const CertificatesPage = () => {
         </div>
       )}
 
-      {/* Pending Certificates */}
+      {/* Workshop Certificates */}
+      {workshopCerts.length > 0 && (
+        <div className="space-y-3">
+          <h3 className="font-heading font-bold text-lg flex items-center gap-2">
+            <Award className="h-5 w-5 text-primary" /> Workshop Certificates
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {workshopCerts.map((cert: any) => {
+              const ws = cert.workshops;
+              const eligible = isComplete;
+              const handleDownload = async () => {
+                const tpl: any = cert.template_snapshot;
+                const fields: CertificateField[] = tpl?.fields_config || [];
+                const data: CertificateData = {
+                  student_name: profile?.full_name || 'Student',
+                  course_title: ws?.title || 'Workshop',
+                  certificate_number: cert.certificate_number,
+                  completion_date: cert.issued_at ? format(new Date(cert.issued_at), 'MMMM dd, yyyy') : '',
+                  instructor_signature: ws?.instructor?.full_name || ws?.instructor_name || '',
+                };
+                try {
+                  await downloadCertificatePDF(tpl?.background_url || null, fields, data, `certificate-${cert.certificate_number}.pdf`);
+                  await supabase.from('certificates').update({
+                    download_count: (cert.download_count || 0) + 1,
+                    downloaded_at: new Date().toISOString(),
+                  } as any).eq('id', cert.id);
+                  toast.success('Certificate downloaded!');
+                } catch (e: any) {
+                  toast.error(e.message || 'Download failed');
+                }
+              };
+              return (
+                <Card key={cert.id} className="overflow-hidden hover:shadow-md transition-shadow">
+                  <div className="h-1 bg-gradient-to-r from-accent via-primary to-accent" />
+                  <CardContent className="p-4 space-y-3">
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-full bg-accent/10 flex items-center justify-center shrink-0">
+                        <Award className="h-5 w-5 text-accent" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="font-heading font-bold text-sm line-clamp-2">{ws?.title || 'Workshop'}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">#{cert.certificate_number}</p>
+                        <p className="text-xs text-muted-foreground">Issued: {cert.issued_at ? format(new Date(cert.issued_at), 'dd MMM yyyy') : '—'}</p>
+                      </div>
+                      <Badge variant="default" className="gap-1 shrink-0"><CheckCircle2 className="h-3 w-3" /> Workshop</Badge>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button size="sm" variant="outline" className="gap-1 flex-1" disabled={!eligible} onClick={handleDownload}>
+                        {eligible ? <><Download className="h-3.5 w-3.5" /> Download PDF</> : <><Lock className="h-3.5 w-3.5" /> Locked</>}
+                      </Button>
+                      <Button size="sm" variant="ghost" className="gap-1" onClick={() => window.open(`/verify-certificate?cert=${cert.certificate_number}`, '_blank')}>
+                        <ExternalLink className="h-3.5 w-3.5" /> Verify
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {pending.length > 0 && (
         <div className="space-y-3">
           <h3 className="font-heading font-bold text-lg flex items-center gap-2">
