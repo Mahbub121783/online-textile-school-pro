@@ -1,42 +1,67 @@
-# Course Builder: Instructor Picker + Admin/Instructor Routing Fix
+# Fix Course Description rendering + Admin Instructor Reassignment
 
-## Problems to fix
+## Problems observed (from screenshots)
 
-1. **No instructor picker in Course Settings** — currently `instructor_id` is hard-coded to the logged-in user. Admins/super_admins cannot assign a course to a specific instructor (Workshops already have this — Courses don't).
-2. **Admin gets redirected to instructor portal after create** — `CourseBuilder` saves and then runs `navigate('/instructor/courses/${id}')` regardless of where the admin started. Admins who entered via `/admin/cms/courses/new` are kicked into the instructor app.
-3. **Settings UI exposes instructor-centric copy to admins** — labels like "Instructor's share of course revenue" should adapt for admin context.
-4. **Redundant "Instructor Portal" exposure for admins** — admin/super_admin already have full power via Admin Panel; the Instructor Portal link in the user dropdown adds noise (currently `isInstructor = roles ∪ admin ∪ super_admin`, so admins see both).
-
----
+1. **Course Detail "About This Course"** is showing raw HTML markup (long `<span class="html-span ...">`, Facebook emoji `<img>` tags, inline `style="..."` blobs) instead of formatted text. Root cause: `CourseDetail.tsx` line 374 renders `course.description` as plain text inside a `whitespace-pre-line` div, but the value stored from `RichTextEditor` is HTML. When the admin pastes from Facebook/Word, the editor saves the entire pasted HTML payload (with `xexx8yu` FB classes and external emoji `<img>`s), and on the public page that HTML is shown verbatim as escaped text.
+2. **RichTextEditor has no paste sanitization** — anything copied from Facebook/Word/Docs gets stored with hostile inline styles, FB CSS class names, tracking-pixel emoji images, and `data-` attrs.
+3. **Admin cannot reassign the instructor of an existing course from the Settings tab** in some cases — the picker exists but only when `isAdmin` and the field becomes empty when `course.instructor_id` is the admin themself; we'll make it always editable + show the current instructor name clearly + allow change/save.
 
 ## Changes
 
-### A. `src/pages/instructor/CourseBuilder.tsx`
-- Detect scope from `useLocation().pathname`: `isAdminScope = pathname.startsWith('/admin')`.
-- Add `instructor_id` to form state (default = current user).
-- Load instructors list when `isAdminScope` (same query pattern as `AdminWorkshops`: users with role `instructor`/`admin`/`super_admin` joined with `user_profiles`).
-- In **Settings** step, add a new card **"Instructor"** (visible only when `isAdminScope`) with a searchable Select listing instructor name + avatar. Disabled for non-admin instructors (their own id is locked).
-- On save, use `form.instructor_id || course?.instructor_id || user.id`.
-- After insert, redirect respecting scope:
-  - admin → `/admin/cms/courses/${data.id}`
-  - instructor → `/instructor/courses/${data.id}`
+### 1. Render course description as sanitized HTML (`src/pages/courses/CourseDetail.tsx`)
+- Replace the plain-text `<div>{course.description}</div>` with a sanitized HTML render.
+- Add a tiny inline sanitizer (no new dep) that:
+  - Parses the HTML in a detached `DOMParser` document.
+  - Strips `<script>`, `<style>`, `<iframe>` (except YouTube/Vimeo), `<link>`, event handlers (`on*`), `style` attributes, `class` attributes, and `data-*` attributes.
+  - Removes `<img>` tags whose `src` points to `static.xx.fbcdn.net` / `emoji.php` (Facebook emoji pixels) — replaces them with their `alt` text so the actual emoji character survives.
+  - Unwraps empty `<span>`/`<font>` wrappers.
+  - Keeps safe tags: `p, br, strong, b, em, i, u, h1-h6, ul, ol, li, a, blockquote, hr, img, code, pre`.
+  - For `<a>`: forces `target="_blank" rel="noopener noreferrer"`.
+- Wrap output in `<div class="prose prose-sm dark:prose-invert max-w-none">` so Tailwind typography styles it nicely.
+- Apply the same renderer to other public surfaces that show course/workshop/ebook long descriptions to prevent the same issue (`WorkshopDetail.tsx`, `EbookDetail.tsx`).
 
-### B. `src/components/layout/Header.tsx`
-- Change `isInstructor` to `roles.includes('instructor')` only (admins no longer see the "Instructor Portal" item in the avatar dropdown — they have Admin Panel). Same change in the mobile menu (line 367).
-- Rationale: admins/super_admins manage all courses from the admin panel; the instructor portal is for instructor-role users only. If admin really wants to test the instructor view, they can be granted the instructor role explicitly.
+### 2. Clean paste in `RichTextEditor` (`src/components/instructor/RichTextEditor.tsx`)
+- Add an `onPaste` handler that:
+  - Calls `e.preventDefault()`.
+  - Reads `text/html` from clipboard, runs it through the same sanitizer (extracted to `src/lib/htmlSanitize.ts`), and inserts the clean HTML via `document.execCommand('insertHTML', false, clean)`.
+  - Falls back to `text/plain` when no HTML is available.
+- Also sanitize the existing value once on mount so old polluted descriptions get cleaned the next time the admin edits and saves.
+- New shared util: `src/lib/htmlSanitize.ts` exporting `sanitizeRichHtml(input: string): string` used by both the editor and the public renderers.
 
-### C. Settings copy
-- In the Revenue card, when `isAdminScope`, label reads "Instructor revenue share (%)" with help "Percentage of revenue paid to the assigned instructor."
+### 3. Admin can change the assigned instructor of any course (`src/pages/instructor/CourseBuilder.tsx`)
+- The instructor picker already exists for admins; harden it:
+  - In Settings tab, show a clear **"Assigned Instructor"** card with the current instructor's avatar + name + email, plus a "Change" button that opens the searchable list (current radio list) inline.
+  - The selection is **never auto-cleared** by reloads — initialize `form.instructor_id` from `course.instructor_id` and treat empty string as "unchanged".
+  - Save logic: when admin picks a different instructor, write `instructor_id = picked` (allow reassignment to any user with role `instructor`/`admin`/`super_admin`); when admin leaves it untouched, keep `course.instructor_id` (do not silently overwrite with the admin's own id).
+  - Show a toast: `"Course reassigned to {name}"` when `instructor_id` actually changes.
+  - Keep the picker hidden for non-admin instructors (they can't reassign their own courses).
 
----
+### 4. Minor: Featured Image preview alt
+- Ensure `MediaUploader` shows a proper broken-image fallback (placeholder svg) when `value` is set but URL fails to load — small `onError` swap to `/placeholder.svg`.
 
-## Out of scope
-- Workshop builder already has instructor picker — no change needed.
-- We do **not** strip the instructor role from existing admins; this is purely a UI-visibility change in the header.
-- No DB migration: `courses.instructor_id` already exists and accepts any user id.
+## Technical notes
 
-## Files touched
-- `src/pages/instructor/CourseBuilder.tsx` (instructor picker, scope-aware redirect, copy)
-- `src/components/layout/Header.tsx` (drop admin from `isInstructor` check)
+```text
+src/lib/htmlSanitize.ts            (new)  — sanitizeRichHtml()
+src/components/instructor/RichTextEditor.tsx
+   + onPaste handler -> sanitizeRichHtml -> insertHTML
+   + sanitize initial value once
+src/pages/courses/CourseDetail.tsx
+   - <div whitespace-pre-line>{description}</div>
+   + <div className="prose ..." dangerouslySetInnerHTML={{__html: sanitizeRichHtml(description)}} />
+src/pages/static/WorkshopDetail.tsx, src/pages/ebooks/EbookDetail.tsx
+   + same sanitized renderer for long description fields
+src/pages/instructor/CourseBuilder.tsx
+   + "Assigned Instructor" summary card in Settings
+   + reassignment-aware save logic + toast
+src/components/instructor/MediaUploader.tsx
+   + <img onError fallback to /placeholder.svg>
+```
 
-Approve korle implement kore debo.
+No new npm dependencies — sanitizer uses the built-in `DOMParser`. No DB schema changes.
+
+## Result
+
+- Public course/workshop/ebook pages render properly formatted descriptions (bold, lists, paragraphs, emojis), never raw HTML.
+- Pasting from Facebook/Word/Docs in the admin editor automatically strips junk classes, inline styles, FB emoji pixels, and scripts.
+- Admins can pick **any** instructor (not just themselves) when creating or editing a course, and can reassign existing courses from the Settings tab without losing the current value.
