@@ -1,92 +1,85 @@
-# Fix: Workshop registration stays open after end
 
-## Bug confirmed
+# Workshop Certificate System
 
-In `src/pages/static/WorkshopDetail.tsx` the "Register Now" card is rendered whenever:
+Currently certificates only work for courses (`certificates.course_id` is NOT NULL). Workshops have no certificate flow at all. This plan extends the existing course-certificate engine to workshops without breaking it.
 
-```ts
-workshop.status !== 'completed' && workshop.status !== 'cancelled' && !isFull
-```
+## 1. Database changes (migration)
 
-It does **not** check:
+### `certificates` table — make it polymorphic
+- Drop `NOT NULL` on `course_id`; drop unique `(user_id, course_id)`.
+- Add `workshop_id uuid REFERENCES public.workshops(id) ON DELETE CASCADE`.
+- Add CHECK: exactly one of `course_id` / `workshop_id` is set.
+- Add unique partial indexes:
+  - `(user_id, course_id)` where `course_id IS NOT NULL`
+  - `(user_id, workshop_id)` where `workshop_id IS NOT NULL`
 
-- `workshop.registration_deadline` (column exists on `workshops`, type `timestamptz`)
-- `endDt` (computed end time / `end_at`)
+### `workshops` table — certificate config
+- `cert_template_id uuid REFERENCES public.certificate_templates(id)` (nullable)
+- `certificate_enabled boolean DEFAULT false`
+- `certificate_min_attendance_pct int DEFAULT 0` (0 = no attendance requirement)
+- `certificate_min_quiz_pct int DEFAULT 0` (0 = no quiz requirement)
+- `certificate_auto_issue boolean DEFAULT true` (issue automatically when workshop completes)
 
-Result: if the admin forgets to flip `status` to `completed`, or the workshop date has already passed, users can still register and even auto-register via `?register=true`. The mutation also doesn't validate window server-side via the client check.
+### Issuing function (security definer)
+`issue_workshop_certificate(_workshop_id uuid, _user_id uuid)`:
+1. Verify workshop is `completed` and `certificate_enabled=true` and has a template.
+2. Verify user has a `workshop_registrations` row.
+3. If `certificate_min_attendance_pct > 0`, require `checked_in_at IS NOT NULL` (single-session) or attendance rows ≥ pct (multi-day uses existing `workshop_attendance` if present; otherwise treat check-in as 100%).
+4. If `certificate_min_quiz_pct > 0`, look up best `workshop_quiz_attempts` percentage for this user's registration on any active quiz of the workshop and require ≥ threshold.
+5. Insert into `certificates` with auto-generated number `WS-YYYY-XXXXXX`, snapshot template, score from quiz if available. ON CONFLICT do nothing.
+6. Return certificate id.
 
-The `registerMutation` (lines 129-156) and the auto-register effect (lines 158-182) have the same gap.
+### Auto-issue trigger
+`AFTER UPDATE` on `workshops` when `status` transitions to `completed` and `certificate_enabled=true` and `certificate_auto_issue=true`: loop over confirmed registrations and call `issue_workshop_certificate` (best-effort, swallow individual failures).
 
-## Changes
+Also extend the existing `auto_update_workshop_status()` cron-friendly function so transition to `completed` fires the trigger.
 
-### 1. `src/pages/static/WorkshopDetail.tsx`
+### RLS
+- Existing `certificates` RLS already keys on `user_id`; keep. Add policy `WITH CHECK` covering both course_id and workshop_id paths for admins/instructors.
+- Allow students to insert their own workshop cert via the SECURITY DEFINER function only (no direct insert).
 
-- Compute additional flags after `startDt` / `endDt`:
-  - `deadlineDt = workshop.registration_deadline ? new Date(...) : null`
-  - `deadlinePassed = deadlineDt && now > deadlineDt`
-  - `workshopEnded = now > endDt || status === 'completed'`
-  - `registrationClosed = deadlinePassed || workshopEnded || status === 'cancelled' || isFull`
-  - `closedReason` string explaining which condition closed it.
-- Replace the `Register Now` card condition: render it only when `!isRegistered && !registrationClosed`. When `registrationClosed && !isRegistered`, render a small read-only card with an `AlertCircle` icon and the `closedReason`.
-- Disable the `Register for Free` button if `registrationClosed`.
-- In `handleRegisterClick` and `registerMutation.mutationFn`, guard with `if (registrationClosed) { toast.error(closedReason); return; }` so even old cached UIs cannot submit.
-- In the auto-register `useEffect`, add `!registrationClosed` to the condition list so `?register=true` does nothing for ended workshops; show toast `"Registration is closed"` instead and clean URL.
+## 2. Admin UI — `AdminWorkshops.tsx`
 
-### 2. `src/pages/static/WorkshopsPage.tsx` (listing)
+In the workshop create/edit form, add a **Certificate** section:
+- Toggle: Enable certificate
+- Select: Certificate template (dropdown of `certificate_templates`)
+- Number: Min attendance % (0 = none)
+- Number: Min quiz score % (0 = none)
+- Toggle: Auto-issue when workshop completes
+- Button: **Re-issue now** — calls an edge function or RPC `issue_workshop_certificate` for every registered user (admin only).
 
-- On workshop cards, when `registration_deadline` passed or `end_at`/`end_date+end_time` is in the past, show a "Registration closed" badge instead of "Register" CTA. Also hide the card from the "Upcoming" filter.
+Show in the registrations table per workshop a column "Certificate" with status (Issued / Eligible / Locked) and a manual "Issue" button per row.
 
-### 3. Server-side guard (defense in depth)
+## 3. Student UI
 
-- Add a Postgres `BEFORE INSERT` trigger on `workshop_registrations` that raises if:
-  - `workshop.status IN ('completed','cancelled')`, OR
-  - `workshop.registration_deadline IS NOT NULL AND now() > workshop.registration_deadline`, OR
-  - `COALESCE(workshop.end_at, (workshop.end_date + COALESCE(workshop.end_time,'23:59'::time))::timestamptz) < now()`, OR
-  - `workshop.max_participants IS NOT NULL AND current_count >= max_participants`.
-- This protects against direct API calls bypassing the UI.
+### `MyWorkshopsPage.tsx`
+For each registration card, after the workshop ends and a certificate exists, show a **Download Certificate** button. If eligible but not issued (rare race), show **Claim Certificate** that calls the RPC then downloads.
 
-```sql
-CREATE OR REPLACE FUNCTION public.enforce_workshop_registration_window()
-RETURNS trigger LANGUAGE plpgsql AS $$
-DECLARE w public.workshops; cnt int; ends_at timestamptz;
-BEGIN
-  SELECT * INTO w FROM public.workshops WHERE id = NEW.workshop_id;
-  IF w.status IN ('completed','cancelled') THEN
-    RAISE EXCEPTION 'Registration closed: workshop is %', w.status USING ERRCODE='check_violation';
-  END IF;
-  IF w.registration_deadline IS NOT NULL AND now() > w.registration_deadline THEN
-    RAISE EXCEPTION 'Registration deadline has passed' USING ERRCODE='check_violation';
-  END IF;
-  ends_at := COALESCE(w.end_at,
-                      (w.end_date + COALESCE(w.end_time,'23:59'::time))::timestamp AT TIME ZONE 'UTC');
-  IF ends_at IS NOT NULL AND now() > ends_at THEN
-    RAISE EXCEPTION 'Workshop has already ended' USING ERRCODE='check_violation';
-  END IF;
-  IF w.max_participants IS NOT NULL THEN
-    SELECT count(*) INTO cnt FROM public.workshop_registrations
-      WHERE workshop_id = NEW.workshop_id AND status='registered';
-    IF cnt >= w.max_participants THEN
-      RAISE EXCEPTION 'Workshop is full' USING ERRCODE='check_violation';
-    END IF;
-  END IF;
-  RETURN NEW;
-END $$;
+### `CertificatesPage.tsx` (dashboard)
+Extend the page to list workshop certificates alongside course certs:
+- New query: workshop registrations with `workshops(*, certificate_templates(*))`.
+- Reuse `downloadCertificatePDF` with workshop-derived `CertificateData` (course_title := workshop title, instructor_signature := workshop instructor).
+- Show pending workshops the same way (with missing requirements: attendance, quiz score).
 
-DROP TRIGGER IF EXISTS trg_enforce_workshop_registration_window ON public.workshop_registrations;
-CREATE TRIGGER trg_enforce_workshop_registration_window
-BEFORE INSERT ON public.workshop_registrations
-FOR EACH ROW EXECUTE FUNCTION public.enforce_workshop_registration_window();
-```
+### Workshop detail (`WorkshopDetail.tsx`)
+For a logged-in registered user when workshop is completed, show a "Download your certificate" CTA in the existing registered card.
 
-### 4. Map error nicely in mutation
+## 4. Renderer
 
-- In `registerMutation.onError`, when message contains `"deadline"`, `"ended"`, `"full"`, or `"closed"`, show a friendly toast and set local `registered=false`.
+`src/lib/certificateRenderer.ts` already handles arbitrary `CertificateData`. No code changes needed; just pass the workshop fields. Add a thin helper `buildWorkshopCertificateData(reg, workshop, profile, gradeConfigs)` next to the existing course one.
+
+## 5. Verification
+
+`/verify-certificate` already looks up by `certificate_number` from `certificates`; will work for workshop certs since they live in the same table. Update the page to display "Workshop: <title>" when `workshop_id` is set instead of "Course: …".
+
+## 6. Notifications (small)
+
+When a workshop certificate is issued, insert a `notifications` row for the user: "Your certificate for <workshop> is ready to download" linking to `/dashboard/certificates`.
 
 ## Result
 
-- Past / cancelled / deadline-expired workshops show **"Registration closed"** with the exact reason instead of an active Register button.
-- `?register=true` from login redirect no longer silently registers a user into an ended workshop.
-- DB trigger blocks any direct API insert outside the window — protects scripted abuse and stale clients.
-- Workshops listing page reflects the same closed state.
-
-if this continue block the registratin when workshop date is closed , 
+- Admins assign a template + thresholds per workshop in one place.
+- When a workshop flips to `completed` (manual or via `auto_update_workshop_status`), every eligible registered user automatically gets a certificate with a unique number.
+- Students see and download a real PDF from My Workshops or My Certificates.
+- Works for past, current, and upcoming workshops (existing completed ones can be processed via the admin "Re-issue now" button).
+- No regression to course certificates — same table, same renderer, polymorphic via CHECK + partial unique indexes.
