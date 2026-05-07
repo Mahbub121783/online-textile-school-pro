@@ -126,9 +126,26 @@ export default function WorkshopDetail() {
     } catch { /* Email is non-critical */ }
   };
 
+  const isWorkshopClosed = (w: any): { closed: boolean; reason: string } => {
+    if (!w) return { closed: true, reason: 'Workshop unavailable' };
+    if (w.status === 'cancelled') return { closed: true, reason: 'This workshop has been cancelled.' };
+    if (w.status === 'completed') return { closed: true, reason: 'This workshop has already ended. Registration is closed.' };
+    const now = Date.now();
+    if (w.registration_deadline && now > new Date(w.registration_deadline).getTime()) {
+      return { closed: true, reason: 'Registration deadline has passed.' };
+    }
+    const eDt = w.end_at
+      ? new Date(w.end_at)
+      : new Date(`${w.end_date || w.start_date}T${w.end_time || w.start_time || '23:59'}:00`);
+    if (now > eDt.getTime()) return { closed: true, reason: 'This workshop has already ended. Registration is closed.' };
+    return { closed: false, reason: '' };
+  };
+
   const registerMutation = useMutation({
     mutationFn: async () => {
       if (!user || !profile) throw new Error('You must be signed in');
+      const gate = isWorkshopClosed(workshop);
+      if (gate.closed) throw new Error(gate.reason);
       const payload: any = {
         workshop_id: workshop!.id,
         user_id: user.id,
@@ -140,6 +157,11 @@ export default function WorkshopDetail() {
       const { data, error } = await supabase.from('workshop_registrations').insert(payload).select().single();
       if (error) {
         if (error.code === '23505') throw new Error('You are already registered for this workshop');
+        const m = (error.message || '').toLowerCase();
+        if (m.includes('deadline')) throw new Error('Registration deadline has passed.');
+        if (m.includes('ended')) throw new Error('This workshop has already ended. Registration is closed.');
+        if (m.includes('cancelled')) throw new Error('This workshop has been cancelled.');
+        if (m.includes('full')) throw new Error('Workshop is full. No seats available.');
         throw error;
       }
       return data;
