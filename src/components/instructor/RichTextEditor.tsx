@@ -82,8 +82,16 @@ const RichTextEditor = ({ value, onChange, placeholder = 'Start writing...', min
         contentEditable
         className="p-4 outline-none prose prose-sm max-w-none text-foreground"
         style={{ minHeight }}
-        dangerouslySetInnerHTML={{ __html: value }}
+        dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(value) }}
         onInput={() => {
+          if (editorRef.current) onChange(editorRef.current.innerHTML);
+        }}
+        onPaste={(e) => {
+          e.preventDefault();
+          const html = e.clipboardData.getData('text/html');
+          const text = e.clipboardData.getData('text/plain');
+          const clean = html ? sanitizeRichHtml(html) : (text || '').replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]!)).replace(/\n/g, '<br/>');
+          document.execCommand('insertHTML', false, clean);
           if (editorRef.current) onChange(editorRef.current.innerHTML);
         }}
         data-placeholder={placeholder}
