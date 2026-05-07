@@ -42,8 +42,8 @@ const DEFAULT_TEMPLATES: Record<string, { subject: string; body: string }> = {
     body: `<h2 style="margin:0 0 16px">Registration Update</h2><p>Dear {{user_name}}, we were unable to approve your registration at this time.</p><p><strong>Reason:</strong> {{reason}}</p><p>Please contact {{support_email}} if you have questions.</p>`,
   },
   password_reset: {
-    subject: "Reset Your Password",
-    body: `<h2 style="margin:0 0 16px">Password Reset Request</h2><p>Hi {{user_name}}, we received a request to reset your password.</p><p><a href="{{reset_link}}" style="display:inline-block;padding:12px 24px;background:#1a365d;color:#fff;border-radius:6px;text-decoration:none;font-weight:bold">Reset Password</a></p><p style="color:#888;font-size:13px">If you didn't request this, please ignore this email.</p>`,
+    subject: "Your Password Reset Code",
+    body: `<h2 style="margin:0 0 16px">Password Reset Code</h2><p>Hi {{user_name}}, we received a request to reset your password. Use the code below to set a new password:</p><div style="margin:24px 0;padding:20px;background:#f5f5f5;border-radius:8px;text-align:center"><div style="font-size:32px;letter-spacing:8px;font-weight:bold;color:#1a365d;font-family:monospace">{{otp_code}}</div></div><p>This code will expire in <strong>{{expires_in}}</strong>.</p><p style="color:#888;font-size:13px">If you didn't request this, please ignore this email — your password will not be changed.</p>`,
   },
   welcome_email: {
     subject: "Welcome to {{site_name}}!",
