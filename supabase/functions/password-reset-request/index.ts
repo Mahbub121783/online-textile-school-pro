@@ -41,17 +41,24 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Look up user by email
+    // Look up user by email — paginate (listUsers returns at most ~1000 per page)
     let userId: string | null = null;
     let userName: string | null = null;
     try {
-      const { data: list } = await supabase.auth.admin.listUsers({ page: 1, perPage: 200 });
-      const found = list?.users?.find((u: any) => (u.email ?? '').toLowerCase() === emailRaw);
-      if (found) {
-        userId = found.id;
-        userName = (found.user_metadata?.full_name as string) || (found.user_metadata?.name as string) || null;
+      for (let page = 1; page <= 20; page++) {
+        const { data: list, error: listErr } = await supabase.auth.admin.listUsers({ page, perPage: 1000 });
+        if (listErr) { console.error('listUsers error', listErr); break; }
+        const users = list?.users ?? [];
+        const found = users.find((u: any) => (u.email ?? '').toLowerCase() === emailRaw);
+        if (found) {
+          userId = found.id;
+          userName = (found.user_metadata?.full_name as string) || (found.user_metadata?.name as string) || null;
+          break;
+        }
+        if (users.length < 1000) break;
       }
-    } catch { /* ignore */ }
+    } catch (e) { console.error('user lookup failed', e); }
+    console.log('password-reset-request: lookup', { email: emailRaw, found: !!userId });
 
     if (userId) {
       // Generate 6-digit code
@@ -68,7 +75,7 @@ Deno.serve(async (req) => {
 
       // Send email via existing SMTP function
       try {
-        await supabase.functions.invoke('send-smtp-email', {
+        const { data: smtpData, error: smtpErr } = await supabase.functions.invoke('send-smtp-email', {
           body: {
             templateKey: 'password_reset',
             recipientEmail: emailRaw,
@@ -79,6 +86,7 @@ Deno.serve(async (req) => {
             },
           },
         });
+        console.log('password-reset-request: smtp', { ok: !smtpErr, err: smtpErr?.message, data: smtpData });
       } catch (e) {
         console.error('send-smtp-email failed', e);
       }
