@@ -22,7 +22,7 @@ const VerifyCertificate = () => {
     try {
       const { data } = await supabase
         .from('certificates')
-        .select('*, user_profiles!certificates_user_id_fkey(full_name), courses!certificates_course_id_fkey(title)')
+        .select('*, user_profiles!certificates_user_id_fkey(full_name), courses!certificates_course_id_fkey(title), workshops!certificates_workshop_id_fkey(title)')
         .eq('certificate_number', certNumber.trim())
         .maybeSingle();
       setResult(data);
