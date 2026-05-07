@@ -21,7 +21,8 @@ const fileIcon = (type: string) => {
 };
 
 export default function MyWorkshopsPage() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
+  const queryClient = useQueryClient();
   const [materialsWs, setMaterialsWs] = useState<any>(null);
 
   const { data: registrations = [], isLoading } = useQuery({
