@@ -184,6 +184,11 @@ export default function AdminWorkshops() {
         registration_deadline: ws.registration_deadline || null,
         end_date: ws.end_date || null,
         instructor_id: ws.instructor_id || null,
+        cert_template_id: ws.cert_template_id || null,
+        certificate_enabled: !!ws.certificate_enabled,
+        certificate_auto_issue: !!ws.certificate_auto_issue,
+        certificate_min_attendance_pct: Number(ws.certificate_min_attendance_pct) || 0,
+        certificate_min_quiz_pct: Number(ws.certificate_min_quiz_pct) || 0,
         created_by: user?.id,
       };
       // Remove fields not in DB
