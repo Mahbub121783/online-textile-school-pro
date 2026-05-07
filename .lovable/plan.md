@@ -1,67 +1,92 @@
-# Fix Course Description rendering + Admin Instructor Reassignment
+# Fix: Workshop registration stays open after end
 
-## Problems observed (from screenshots)
+## Bug confirmed
 
-1. **Course Detail "About This Course"** is showing raw HTML markup (long `<span class="html-span ...">`, Facebook emoji `<img>` tags, inline `style="..."` blobs) instead of formatted text. Root cause: `CourseDetail.tsx` line 374 renders `course.description` as plain text inside a `whitespace-pre-line` div, but the value stored from `RichTextEditor` is HTML. When the admin pastes from Facebook/Word, the editor saves the entire pasted HTML payload (with `xexx8yu` FB classes and external emoji `<img>`s), and on the public page that HTML is shown verbatim as escaped text.
-2. **RichTextEditor has no paste sanitization** — anything copied from Facebook/Word/Docs gets stored with hostile inline styles, FB CSS class names, tracking-pixel emoji images, and `data-` attrs.
-3. **Admin cannot reassign the instructor of an existing course from the Settings tab** in some cases — the picker exists but only when `isAdmin` and the field becomes empty when `course.instructor_id` is the admin themself; we'll make it always editable + show the current instructor name clearly + allow change/save.
+In `src/pages/static/WorkshopDetail.tsx` the "Register Now" card is rendered whenever:
+
+```ts
+workshop.status !== 'completed' && workshop.status !== 'cancelled' && !isFull
+```
+
+It does **not** check:
+
+- `workshop.registration_deadline` (column exists on `workshops`, type `timestamptz`)
+- `endDt` (computed end time / `end_at`)
+
+Result: if the admin forgets to flip `status` to `completed`, or the workshop date has already passed, users can still register and even auto-register via `?register=true`. The mutation also doesn't validate window server-side via the client check.
+
+The `registerMutation` (lines 129-156) and the auto-register effect (lines 158-182) have the same gap.
 
 ## Changes
 
-### 1. Render course description as sanitized HTML (`src/pages/courses/CourseDetail.tsx`)
-- Replace the plain-text `<div>{course.description}</div>` with a sanitized HTML render.
-- Add a tiny inline sanitizer (no new dep) that:
-  - Parses the HTML in a detached `DOMParser` document.
-  - Strips `<script>`, `<style>`, `<iframe>` (except YouTube/Vimeo), `<link>`, event handlers (`on*`), `style` attributes, `class` attributes, and `data-*` attributes.
-  - Removes `<img>` tags whose `src` points to `static.xx.fbcdn.net` / `emoji.php` (Facebook emoji pixels) — replaces them with their `alt` text so the actual emoji character survives.
-  - Unwraps empty `<span>`/`<font>` wrappers.
-  - Keeps safe tags: `p, br, strong, b, em, i, u, h1-h6, ul, ol, li, a, blockquote, hr, img, code, pre`.
-  - For `<a>`: forces `target="_blank" rel="noopener noreferrer"`.
-- Wrap output in `<div class="prose prose-sm dark:prose-invert max-w-none">` so Tailwind typography styles it nicely.
-- Apply the same renderer to other public surfaces that show course/workshop/ebook long descriptions to prevent the same issue (`WorkshopDetail.tsx`, `EbookDetail.tsx`).
+### 1. `src/pages/static/WorkshopDetail.tsx`
 
-### 2. Clean paste in `RichTextEditor` (`src/components/instructor/RichTextEditor.tsx`)
-- Add an `onPaste` handler that:
-  - Calls `e.preventDefault()`.
-  - Reads `text/html` from clipboard, runs it through the same sanitizer (extracted to `src/lib/htmlSanitize.ts`), and inserts the clean HTML via `document.execCommand('insertHTML', false, clean)`.
-  - Falls back to `text/plain` when no HTML is available.
-- Also sanitize the existing value once on mount so old polluted descriptions get cleaned the next time the admin edits and saves.
-- New shared util: `src/lib/htmlSanitize.ts` exporting `sanitizeRichHtml(input: string): string` used by both the editor and the public renderers.
+- Compute additional flags after `startDt` / `endDt`:
+  - `deadlineDt = workshop.registration_deadline ? new Date(...) : null`
+  - `deadlinePassed = deadlineDt && now > deadlineDt`
+  - `workshopEnded = now > endDt || status === 'completed'`
+  - `registrationClosed = deadlinePassed || workshopEnded || status === 'cancelled' || isFull`
+  - `closedReason` string explaining which condition closed it.
+- Replace the `Register Now` card condition: render it only when `!isRegistered && !registrationClosed`. When `registrationClosed && !isRegistered`, render a small read-only card with an `AlertCircle` icon and the `closedReason`.
+- Disable the `Register for Free` button if `registrationClosed`.
+- In `handleRegisterClick` and `registerMutation.mutationFn`, guard with `if (registrationClosed) { toast.error(closedReason); return; }` so even old cached UIs cannot submit.
+- In the auto-register `useEffect`, add `!registrationClosed` to the condition list so `?register=true` does nothing for ended workshops; show toast `"Registration is closed"` instead and clean URL.
 
-### 3. Admin can change the assigned instructor of any course (`src/pages/instructor/CourseBuilder.tsx`)
-- The instructor picker already exists for admins; harden it:
-  - In Settings tab, show a clear **"Assigned Instructor"** card with the current instructor's avatar + name + email, plus a "Change" button that opens the searchable list (current radio list) inline.
-  - The selection is **never auto-cleared** by reloads — initialize `form.instructor_id` from `course.instructor_id` and treat empty string as "unchanged".
-  - Save logic: when admin picks a different instructor, write `instructor_id = picked` (allow reassignment to any user with role `instructor`/`admin`/`super_admin`); when admin leaves it untouched, keep `course.instructor_id` (do not silently overwrite with the admin's own id).
-  - Show a toast: `"Course reassigned to {name}"` when `instructor_id` actually changes.
-  - Keep the picker hidden for non-admin instructors (they can't reassign their own courses).
+### 2. `src/pages/static/WorkshopsPage.tsx` (listing)
 
-### 4. Minor: Featured Image preview alt
-- Ensure `MediaUploader` shows a proper broken-image fallback (placeholder svg) when `value` is set but URL fails to load — small `onError` swap to `/placeholder.svg`.
+- On workshop cards, when `registration_deadline` passed or `end_at`/`end_date+end_time` is in the past, show a "Registration closed" badge instead of "Register" CTA. Also hide the card from the "Upcoming" filter.
 
-## Technical notes
+### 3. Server-side guard (defense in depth)
 
-```text
-src/lib/htmlSanitize.ts            (new)  — sanitizeRichHtml()
-src/components/instructor/RichTextEditor.tsx
-   + onPaste handler -> sanitizeRichHtml -> insertHTML
-   + sanitize initial value once
-src/pages/courses/CourseDetail.tsx
-   - <div whitespace-pre-line>{description}</div>
-   + <div className="prose ..." dangerouslySetInnerHTML={{__html: sanitizeRichHtml(description)}} />
-src/pages/static/WorkshopDetail.tsx, src/pages/ebooks/EbookDetail.tsx
-   + same sanitized renderer for long description fields
-src/pages/instructor/CourseBuilder.tsx
-   + "Assigned Instructor" summary card in Settings
-   + reassignment-aware save logic + toast
-src/components/instructor/MediaUploader.tsx
-   + <img onError fallback to /placeholder.svg>
+- Add a Postgres `BEFORE INSERT` trigger on `workshop_registrations` that raises if:
+  - `workshop.status IN ('completed','cancelled')`, OR
+  - `workshop.registration_deadline IS NOT NULL AND now() > workshop.registration_deadline`, OR
+  - `COALESCE(workshop.end_at, (workshop.end_date + COALESCE(workshop.end_time,'23:59'::time))::timestamptz) < now()`, OR
+  - `workshop.max_participants IS NOT NULL AND current_count >= max_participants`.
+- This protects against direct API calls bypassing the UI.
+
+```sql
+CREATE OR REPLACE FUNCTION public.enforce_workshop_registration_window()
+RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE w public.workshops; cnt int; ends_at timestamptz;
+BEGIN
+  SELECT * INTO w FROM public.workshops WHERE id = NEW.workshop_id;
+  IF w.status IN ('completed','cancelled') THEN
+    RAISE EXCEPTION 'Registration closed: workshop is %', w.status USING ERRCODE='check_violation';
+  END IF;
+  IF w.registration_deadline IS NOT NULL AND now() > w.registration_deadline THEN
+    RAISE EXCEPTION 'Registration deadline has passed' USING ERRCODE='check_violation';
+  END IF;
+  ends_at := COALESCE(w.end_at,
+                      (w.end_date + COALESCE(w.end_time,'23:59'::time))::timestamp AT TIME ZONE 'UTC');
+  IF ends_at IS NOT NULL AND now() > ends_at THEN
+    RAISE EXCEPTION 'Workshop has already ended' USING ERRCODE='check_violation';
+  END IF;
+  IF w.max_participants IS NOT NULL THEN
+    SELECT count(*) INTO cnt FROM public.workshop_registrations
+      WHERE workshop_id = NEW.workshop_id AND status='registered';
+    IF cnt >= w.max_participants THEN
+      RAISE EXCEPTION 'Workshop is full' USING ERRCODE='check_violation';
+    END IF;
+  END IF;
+  RETURN NEW;
+END $$;
+
+DROP TRIGGER IF EXISTS trg_enforce_workshop_registration_window ON public.workshop_registrations;
+CREATE TRIGGER trg_enforce_workshop_registration_window
+BEFORE INSERT ON public.workshop_registrations
+FOR EACH ROW EXECUTE FUNCTION public.enforce_workshop_registration_window();
 ```
 
-No new npm dependencies — sanitizer uses the built-in `DOMParser`. No DB schema changes.
+### 4. Map error nicely in mutation
+
+- In `registerMutation.onError`, when message contains `"deadline"`, `"ended"`, `"full"`, or `"closed"`, show a friendly toast and set local `registered=false`.
 
 ## Result
 
-- Public course/workshop/ebook pages render properly formatted descriptions (bold, lists, paragraphs, emojis), never raw HTML.
-- Pasting from Facebook/Word/Docs in the admin editor automatically strips junk classes, inline styles, FB emoji pixels, and scripts.
-- Admins can pick **any** instructor (not just themselves) when creating or editing a course, and can reassign existing courses from the Settings tab without losing the current value.
+- Past / cancelled / deadline-expired workshops show **"Registration closed"** with the exact reason instead of an active Register button.
+- `?register=true` from login redirect no longer silently registers a user into an ended workshop.
+- DB trigger blocks any direct API insert outside the window — protects scripted abuse and stale clients.
+- Workshops listing page reflects the same closed state.
+
+if this continue block the registratin when workshop date is closed , 
