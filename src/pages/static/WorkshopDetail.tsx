@@ -188,16 +188,17 @@ export default function WorkshopDetail() {
       !authLoading &&
       !regLoading &&
       !myRegistration &&
-      !registered &&
-      workshop.status !== 'completed' &&
-      workshop.status !== 'cancelled'
+      !registered
     ) {
-      // Check if came from login redirect (has ?register=true)
       const params = new URLSearchParams(window.location.search);
       if (params.get('register') === 'true') {
         setAutoRegAttempted(true);
-        registerMutation.mutate();
-        // Clean URL
+        const gate = isWorkshopClosed(workshop);
+        if (gate.closed) {
+          toast.error(gate.reason);
+        } else {
+          registerMutation.mutate();
+        }
         window.history.replaceState({}, '', window.location.pathname);
       }
     }
