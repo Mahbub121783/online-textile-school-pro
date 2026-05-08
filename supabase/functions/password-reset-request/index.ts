@@ -10,6 +10,15 @@ async function sha256(text: string): Promise<string> {
   return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
+function randomToken(len = 48): string {
+  const bytes = new Uint8Array(len);
+  crypto.getRandomValues(bytes);
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  let out = '';
+  for (let i = 0; i < bytes.length; i++) out += alphabet[bytes[i] % alphabet.length];
+  return out;
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
@@ -35,45 +44,46 @@ Deno.serve(async (req) => {
       .eq('email', emailRaw)
       .gte('created_at', fifteenMinAgo);
     if ((count ?? 0) >= 3) {
-      // Still return success (no enumeration) but do not send
       return new Response(JSON.stringify({ success: true }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    // Look up user by email — paginate (listUsers returns at most ~1000 per page)
+    // Reliable lookup via SECURITY DEFINER RPC (no pagination, indexed)
     let userId: string | null = null;
     let userName: string | null = null;
     try {
-      for (let page = 1; page <= 20; page++) {
-        const { data: list, error: listErr } = await supabase.auth.admin.listUsers({ page, perPage: 1000 });
-        if (listErr) { console.error('listUsers error', listErr); break; }
-        const users = list?.users ?? [];
-        const found = users.find((u: any) => (u.email ?? '').toLowerCase() === emailRaw);
-        if (found) {
-          userId = found.id;
-          userName = (found.user_metadata?.full_name as string) || (found.user_metadata?.name as string) || null;
-          break;
-        }
-        if (users.length < 1000) break;
+      const { data: lookup, error: lookupErr } = await supabase
+        .rpc('find_auth_user_by_email', { _email: emailRaw });
+      if (lookupErr) console.error('find_auth_user_by_email error', lookupErr);
+      const row = Array.isArray(lookup) ? lookup[0] : null;
+      if (row?.user_id) {
+        userId = row.user_id as string;
+        userName = (row.full_name as string) || null;
       }
-    } catch (e) { console.error('user lookup failed', e); }
+    } catch (e) {
+      console.error('rpc lookup failed', e);
+    }
     console.log('password-reset-request: lookup', { email: emailRaw, found: !!userId });
 
     if (userId) {
-      // Generate 6-digit code
       const code = String(Math.floor(100000 + Math.random() * 900000));
       const codeHash = await sha256(code);
-      const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+      const linkToken = randomToken(48);
+      const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
 
-      await supabase.from('password_reset_codes').insert({
+      const { error: insErr } = await supabase.from('password_reset_codes').insert({
         user_id: userId,
         email: emailRaw,
         code_hash: codeHash,
+        link_token: linkToken,
         expires_at: expiresAt,
       });
+      if (insErr) console.error('insert code failed', insErr);
 
-      // Send email via existing SMTP function
+      const siteUrl = (Deno.env.get('SITE_URL') || '').replace(/\/+$/, '') || '';
+      const resetLink = `${siteUrl}/reset-password?token=${encodeURIComponent(linkToken)}&email=${encodeURIComponent(emailRaw)}`;
+
       try {
         const { data: smtpData, error: smtpErr } = await supabase.functions.invoke('send-smtp-email', {
           body: {
@@ -82,7 +92,8 @@ Deno.serve(async (req) => {
             placeholders: {
               user_name: userName || 'there',
               otp_code: code,
-              expires_in: '10 minutes',
+              reset_link: resetLink,
+              expires_in: '15 minutes',
             },
           },
         });
@@ -92,7 +103,6 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Always return success to prevent user enumeration
     return new Response(JSON.stringify({ success: true }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

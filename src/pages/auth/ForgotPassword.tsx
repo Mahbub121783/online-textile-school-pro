@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Mail, ArrowLeft, Lock, KeyRound } from 'lucide-react';
+import { Mail, ArrowLeft, Lock, KeyRound, ShieldAlert, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -8,6 +8,14 @@ import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 import OTSLogo from '@/assets/OTS_LOGO.png';
+
+function maskEmail(email: string): string {
+  const [user, domain] = email.split('@');
+  if (!user || !domain) return email;
+  const visible = user.slice(0, Math.min(2, user.length));
+  const masked = '•'.repeat(Math.max(user.length - 2, 3));
+  return `${visible}${masked}@${domain}`;
+}
 
 const ForgotPassword = () => {
   const navigate = useNavigate();
@@ -18,6 +26,8 @@ const ForgotPassword = () => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [resendIn, setResendIn] = useState(0);
+  const [locked, setLocked] = useState(false);
+  const [serverError, setServerError] = useState<string | null>(null);
 
   useEffect(() => {
     if (resendIn <= 0) return;
@@ -27,6 +37,7 @@ const ForgotPassword = () => {
 
   const requestCode = async () => {
     setLoading(true);
+    setServerError(null);
     const { error } = await supabase.functions.invoke('password-reset-request', {
       body: { email: email.trim().toLowerCase() },
     });
@@ -37,9 +48,11 @@ const ForgotPassword = () => {
     }
     toast({
       title: 'Check your email',
-      description: `If an account exists for ${email}, a 6-digit code has been sent.`,
+      description: 'If an account exists, a 6-digit code and reset link have been sent.',
     });
     setStep(2);
+    setLocked(false);
+    setCode('');
     setResendIn(60);
   };
 
@@ -51,16 +64,17 @@ const ForgotPassword = () => {
 
   const handleStep2 = async (e: React.FormEvent) => {
     e.preventDefault();
+    setServerError(null);
     if (code.length !== 6) {
-      toast({ title: 'Enter the 6-digit code', variant: 'destructive' });
+      setServerError('Please enter the 6-digit code');
       return;
     }
     if (password.length < 6) {
-      toast({ title: 'Password too short', description: 'Use at least 6 characters', variant: 'destructive' });
+      setServerError('Password must be at least 6 characters');
       return;
     }
     if (password !== confirmPassword) {
-      toast({ title: 'Passwords do not match', variant: 'destructive' });
+      setServerError('Passwords do not match');
       return;
     }
     setLoading(true);
@@ -68,9 +82,11 @@ const ForgotPassword = () => {
       body: { email: email.trim().toLowerCase(), code, new_password: password },
     });
     setLoading(false);
-    if (error || (data && (data as any).error)) {
-      const msg = (data as any)?.message || error?.message || 'Could not verify code';
-      toast({ title: 'Failed', description: msg, variant: 'destructive' });
+    const result: any = data || {};
+    if (error || result?.error) {
+      const msg = result?.message || error?.message || 'Could not verify code';
+      setServerError(msg);
+      if (result?.error === 'too_many_attempts') setLocked(true);
       return;
     }
     toast({ title: 'Password updated!', description: 'You can now sign in with your new password.' });
@@ -83,12 +99,16 @@ const ForgotPassword = () => {
         <div className="text-center mb-6">
           <Link to="/"><img src={OTSLogo} alt="OTS" className="h-14 w-14 mx-auto mb-3 object-contain" /></Link>
           <h1 className="font-heading text-2xl font-bold text-foreground">
-            {step === 1 ? 'Reset Password' : 'Enter Verification Code'}
+            {step === 1 ? 'Reset Password' : 'Verify & Set New Password'}
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
             {step === 1
-              ? 'Enter your email and we\'ll send you a 6-digit code'
-              : `We sent a 6-digit code to ${email}`}
+              ? "Enter your email and we'll send you a 6-digit code and a secure reset link."
+              : (
+                <>
+                  Code & link sent to <span className="font-medium text-foreground">{maskEmail(email)}</span>
+                </>
+              )}
           </p>
         </div>
 
@@ -109,15 +129,20 @@ const ForgotPassword = () => {
               </div>
             </div>
             <Button type="submit" className="w-full bg-primary text-primary-foreground h-11" disabled={loading}>
-              {loading ? 'Sending...' : 'Send Code'}
+              {loading ? 'Sending...' : 'Send Code & Link'}
             </Button>
           </form>
         ) : (
           <form onSubmit={handleStep2} className="space-y-4">
+            <div className="rounded-lg border bg-muted/40 p-3 text-xs text-muted-foreground flex gap-2">
+              <CheckCircle2 className="h-4 w-4 mt-0.5 text-primary shrink-0" />
+              <span>Tip: You can also click the <strong>Reset My Password</strong> button in the email — no code needed.</span>
+            </div>
+
             <div className="space-y-2">
               <Label className="flex items-center gap-2"><KeyRound className="h-4 w-4" /> 6-digit Code</Label>
               <div className="flex justify-center">
-                <InputOTP maxLength={6} value={code} onChange={setCode}>
+                <InputOTP maxLength={6} value={code} onChange={setCode} disabled={locked}>
                   <InputOTPGroup>
                     {[0, 1, 2, 3, 4, 5].map((i) => <InputOTPSlot key={i} index={i} />)}
                   </InputOTPGroup>
@@ -137,6 +162,7 @@ const ForgotPassword = () => {
                   className="pl-10"
                   required
                   minLength={6}
+                  disabled={locked}
                 />
               </div>
             </div>
@@ -150,17 +176,29 @@ const ForgotPassword = () => {
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 required
                 minLength={6}
+                disabled={locked}
               />
             </div>
 
-            <Button type="submit" className="w-full bg-primary text-primary-foreground h-11" disabled={loading}>
-              {loading ? 'Resetting...' : 'Reset Password'}
+            {serverError && (
+              <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive flex gap-2">
+                <ShieldAlert className="h-4 w-4 mt-0.5 shrink-0" />
+                <span>{serverError}</span>
+              </div>
+            )}
+
+            <Button
+              type="submit"
+              className="w-full bg-primary text-primary-foreground h-11"
+              disabled={loading || locked}
+            >
+              {loading ? 'Resetting...' : locked ? 'Locked — Request a new code' : 'Reset Password'}
             </Button>
 
             <div className="flex items-center justify-between text-sm pt-2">
               <button
                 type="button"
-                onClick={() => { setStep(1); setCode(''); setPassword(''); setConfirmPassword(''); }}
+                onClick={() => { setStep(1); setCode(''); setPassword(''); setConfirmPassword(''); setLocked(false); setServerError(null); }}
                 className="text-muted-foreground hover:text-foreground"
               >
                 Change email
@@ -168,10 +206,10 @@ const ForgotPassword = () => {
               <button
                 type="button"
                 onClick={requestCode}
-                disabled={resendIn > 0 || loading}
+                disabled={(!locked && resendIn > 0) || loading}
                 className="text-primary hover:underline disabled:opacity-50 disabled:no-underline"
               >
-                {resendIn > 0 ? `Resend in ${resendIn}s` : 'Resend code'}
+                {!locked && resendIn > 0 ? `Resend in ${resendIn}s` : 'Resend code'}
               </button>
             </div>
           </form>

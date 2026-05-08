@@ -3715,6 +3715,8 @@ export type Database = {
           email: string
           expires_at: string
           id: string
+          link_token: string | null
+          locked_at: string | null
           used_at: string | null
           user_id: string | null
         }
@@ -3725,6 +3727,8 @@ export type Database = {
           email: string
           expires_at: string
           id?: string
+          link_token?: string | null
+          locked_at?: string | null
           used_at?: string | null
           user_id?: string | null
         }
@@ -3735,6 +3739,8 @@ export type Database = {
           email?: string
           expires_at?: string
           id?: string
+          link_token?: string | null
+          locked_at?: string | null
           used_at?: string | null
           user_id?: string | null
         }
@@ -6363,6 +6369,13 @@ export type Database = {
           _user_id: string
         }
         Returns: undefined
+      }
+      find_auth_user_by_email: {
+        Args: { _email: string }
+        Returns: {
+          full_name: string
+          user_id: string
+        }[]
       }
       generate_seo_slug: {
         Args: { _existing_id?: string; _table_name: string; _title: string }
