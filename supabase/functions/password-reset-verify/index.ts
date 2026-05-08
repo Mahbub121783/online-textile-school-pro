@@ -20,16 +20,11 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const email = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : '';
     const code = typeof body?.code === 'string' ? body.code.trim() : '';
+    const token = typeof body?.token === 'string' ? body.token.trim() : '';
     const newPassword = typeof body?.new_password === 'string' ? body.new_password : '';
 
-    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      return json(400, { error: 'Invalid email' });
-    }
-    if (!/^\d{6}$/.test(code)) {
-      return json(400, { error: 'Code must be 6 digits' });
-    }
     if (newPassword.length < 6 || newPassword.length > 200) {
-      return json(400, { error: 'Password must be at least 6 characters' });
+      return json(400, { error: 'weak_password', message: 'Password must be at least 6 characters' });
     }
 
     const supabase = createClient(
@@ -37,46 +32,76 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     );
 
-    // Latest unused code for this email
-    const { data: rows } = await supabase
-      .from('password_reset_codes')
-      .select('*')
-      .eq('email', email)
-      .is('used_at', null)
-      .order('created_at', { ascending: false })
-      .limit(1);
+    let row: any = null;
 
-    const row = rows?.[0];
-    if (!row) return json(400, { error: 'invalid_code', message: 'Invalid or expired code' });
+    if (token) {
+      // Magic link path
+      const { data } = await supabase
+        .from('password_reset_codes')
+        .select('*')
+        .eq('link_token', token)
+        .is('used_at', null)
+        .limit(1);
+      row = data?.[0] || null;
+      if (!row) return json(400, { error: 'invalid_token', message: 'This reset link is invalid or already used.' });
+    } else {
+      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        return json(400, { error: 'invalid_email', message: 'Invalid email' });
+      }
+      if (!/^\d{6}$/.test(code)) {
+        return json(400, { error: 'invalid_code', message: 'Code must be 6 digits' });
+      }
 
+      const { data } = await supabase
+        .from('password_reset_codes')
+        .select('*')
+        .eq('email', email)
+        .is('used_at', null)
+        .order('created_at', { ascending: false })
+        .limit(1);
+      row = data?.[0] || null;
+      if (!row) return json(400, { error: 'invalid_code', message: 'Invalid or expired code' });
+    }
+
+    if (row.locked_at) {
+      return json(400, { error: 'too_many_attempts', message: 'Too many attempts. Please request a new code.' });
+    }
     if (new Date(row.expires_at).getTime() < Date.now()) {
       return json(400, { error: 'expired', message: 'Code has expired. Please request a new one.' });
     }
     if ((row.attempts ?? 0) >= 5) {
+      await supabase.from('password_reset_codes').update({ locked_at: new Date().toISOString() }).eq('id', row.id);
       return json(400, { error: 'too_many_attempts', message: 'Too many attempts. Please request a new code.' });
     }
 
-    const codeHash = await sha256(code);
-    if (codeHash !== row.code_hash) {
-      await supabase.from('password_reset_codes').update({ attempts: (row.attempts ?? 0) + 1 }).eq('id', row.id);
-      return json(400, { error: 'invalid_code', message: 'Invalid code' });
+    // For code path, verify the hash
+    if (!token) {
+      const codeHash = await sha256(code);
+      if (codeHash !== row.code_hash) {
+        const nextAttempts = (row.attempts ?? 0) + 1;
+        const updates: any = { attempts: nextAttempts };
+        if (nextAttempts >= 5) updates.locked_at = new Date().toISOString();
+        await supabase.from('password_reset_codes').update(updates).eq('id', row.id);
+        if (nextAttempts >= 5) {
+          return json(400, { error: 'too_many_attempts', message: 'Too many attempts. Please request a new code.' });
+        }
+        return json(400, { error: 'invalid_code', message: `Invalid code. ${5 - nextAttempts} attempts left.` });
+      }
     }
 
     if (!row.user_id) return json(400, { error: 'invalid_code', message: 'Invalid code' });
 
-    // Update password via admin API
     const { error: upErr } = await supabase.auth.admin.updateUserById(row.user_id, { password: newPassword });
     if (upErr) {
       console.error('updateUserById failed', upErr);
       return json(500, { error: 'update_failed', message: upErr.message });
     }
 
-    // Mark this code used; invalidate all other codes for this email
     await supabase.from('password_reset_codes').update({ used_at: new Date().toISOString() }).eq('id', row.id);
     await supabase
       .from('password_reset_codes')
       .update({ used_at: new Date().toISOString() })
-      .eq('email', email)
+      .eq('email', row.email)
       .is('used_at', null);
 
     return json(200, { success: true });
