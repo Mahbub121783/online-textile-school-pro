@@ -3,7 +3,7 @@ import { SITE_CONFIG } from '@/lib/constants';
 
 const UtilityBar = () => {
   return (
-    <div className="hidden md:block w-full bg-primary text-primary-foreground">
+    <div className="pwa-hide hidden md:block w-full bg-primary text-primary-foreground">
       <div className="container flex items-center justify-between h-9 text-xs">
         <div className="flex items-center gap-4">
           <a href={`tel:${SITE_CONFIG.phone}`} className="flex items-center gap-1.5 hover:text-accent-light transition-colors">

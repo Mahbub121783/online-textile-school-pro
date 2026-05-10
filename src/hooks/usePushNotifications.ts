@@ -2,8 +2,9 @@ import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { isStandalone } from "@/hooks/useStandaloneMode";
 
-// VAPID public key — set after running supabase function `push-subscribe` first time, or via env
-const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undefined;
+// VAPID public key — public, safe to embed in client. Pairs with VAPID_PRIVATE_KEY secret in edge functions.
+const VAPID_PUBLIC_KEY =
+  "BK_3WnSi0YgfRqoi9F2xZ3f8NltbxsC7685HVb7JwQAgw_GVagA6zoF2EQaFyyn7WADsrT-gQd3SFdARBvyZ2JY";
 
 const urlBase64ToUint8Array = (base64: string) => {
   const padding = "=".repeat((4 - (base64.length % 4)) % 4);

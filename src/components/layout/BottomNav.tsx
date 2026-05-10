@@ -15,7 +15,7 @@ const BottomNav = () => {
   ];
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 bg-background border-t lg:hidden">
+    <nav className="bottom-nav fixed bottom-0 left-0 right-0 z-50 bg-background border-t lg:hidden">
       <div className="flex items-center justify-around h-14">
         {tabs.map((tab) => {
           const isActive = location.pathname === tab.href;
