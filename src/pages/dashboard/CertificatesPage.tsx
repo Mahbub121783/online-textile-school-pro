@@ -16,6 +16,7 @@ import { downloadCertificatePDF, type CertificateField, type CertificateData } f
 const CertificatesPage = () => {
   const { user, profile } = useAuth();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { percentage, isComplete, incomplete } = useProfileCompleteness(profile);
 
   // All enrolled courses
