@@ -13,6 +13,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/hooks/useAuth";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { useEngagementTracking } from "@/hooks/useEngagementTracking";
+import { useStandaloneMode } from "@/hooks/useStandaloneMode";
 import { trackMetaEvent } from "@/lib/metaPixel";
 import Index from "./pages/Index";
 
@@ -192,6 +193,9 @@ const PageLoader = () => (
 
 const AppRoutes = () => {
   const location = useLocation();
+
+  // Apply standalone-mode (PWA installed) class to <html>
+  useStandaloneMode();
 
   // Mount engagement tracking (TimeOnPage / PageScroll / InternalClick)
   useEngagementTracking();
