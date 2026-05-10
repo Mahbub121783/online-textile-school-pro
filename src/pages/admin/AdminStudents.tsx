@@ -196,7 +196,7 @@ export default function AdminStudents() {
       if (statusFilter === 'blocked' && s.is_active !== false) return false;
       if (!search) return true;
       const q = search.toLowerCase();
-      return [s.full_name, s.roll_id, s.phone, s.university, s.batch, s.district, s.division, s.occupation, s.company_name, s.username]
+      return [s.full_name, s.roll_id, s.phone, s.university, s.department, s.campus, s.batch, s.district, s.division, s.occupation, s.company_name, s.username]
         .some(f => f?.toLowerCase().includes(q));
     });
 
