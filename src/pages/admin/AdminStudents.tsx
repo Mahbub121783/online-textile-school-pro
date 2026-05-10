@@ -245,12 +245,12 @@ export default function AdminStudents() {
 
   const exportCSV = () => {
     const rows = filtered.map((s: any) => [
-      s.full_name || '', s.roll_id || '', s.phone || '', s.university || '',
+      s.full_name || '', s.roll_id || '', s.phone || '', s.university || '', (s.department || s.campus || ''),
       s.coursesCount, s.ebooksCount, s.totalSpend, s.certsCount, s.quizCount,
       s.is_active !== false ? 'Active' : 'Blocked',
       s.created_at ? new Date(s.created_at).toLocaleDateString() : ''
     ]);
-    const header = ['Name', 'Roll ID', 'Phone', 'University', 'Courses', 'Ebooks', 'Spend', 'Certs', 'Quizzes', 'Status', 'Joined'];
+    const header = ['Name', 'Roll ID', 'Phone', 'University', 'Department', 'Courses', 'Ebooks', 'Spend', 'Certs', 'Quizzes', 'Status', 'Joined'];
     const csv = [header, ...rows].map(r => r.map((c: any) => `"${c}"`).join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const a = document.createElement('a');
