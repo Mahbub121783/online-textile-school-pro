@@ -105,6 +105,16 @@ export default function WorkshopDetail() {
 
   const { data: workshopContributors = [] } = useContributors('workshop', workshop?.id);
 
+  const isRegisteredEarly = !!myRegistration && myRegistration.status === 'registered';
+  const { data: meetLink } = useQuery({
+    queryKey: ['workshop-meet-link', workshop?.id, user?.id],
+    queryFn: async () => {
+      const { data } = await supabase.rpc('get_workshop_meet_link', { _workshop_id: workshop!.id });
+      return (data as string) || null;
+    },
+    enabled: !!workshop?.id && !!user && isRegisteredEarly,
+  });
+
   const sendConfirmationEmail = async (regData: any, ws: any) => {
     try {
       const timeStr = ws.start_time
