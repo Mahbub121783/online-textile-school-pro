@@ -30,7 +30,7 @@ export const useProfileCompleteness = (profile: any) => {
       { key: 'district', label: 'District', weight: 4, completed: !!profile.district },
       { key: 'upazila', label: 'Upazila', weight: 4, completed: !!profile.upazila },
       { key: 'university', label: 'University/Institution', weight: 6, completed: !!profile.university },
-      { key: 'campus', label: 'Campus', weight: 4, completed: !!profile.campus },
+      { key: 'department', label: 'Department', weight: 4, completed: !!((profile as any).department || profile.campus) },
       { key: 'batch', label: 'Batch', weight: 6, completed: !!profile.batch },
       { key: 'professional_role', label: 'Current Role', weight: 6, completed: !!role },
     ];
