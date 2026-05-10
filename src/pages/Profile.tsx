@@ -9,6 +9,8 @@ import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import BottomNav from '@/components/layout/BottomNav';
 import PublicProfileEditor from '@/components/shared/PublicProfileEditor';
+import InstallAppButton from '@/components/InstallAppButton';
+import { Smartphone } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 const Profile = () => {
@@ -98,6 +100,19 @@ const Profile = () => {
           {/* Student ID Card */}
           <div className="mt-6">
             <StudentIdCard />
+
+          {/* Install App */}
+          <div className="mt-6 rounded-xl border bg-gradient-to-br from-primary/5 via-background to-accent/5 p-5 flex items-center gap-4">
+            <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+              <Smartphone className="h-6 w-6 text-primary" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h3 className="font-heading font-bold">Get the OTS App</h3>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Install for offline access, faster loading and live class reminders.
+              </p>
+            </div>
+            <InstallAppButton />
           </div>
 
           <div className="bg-card border rounded-xl p-6 mt-6">
