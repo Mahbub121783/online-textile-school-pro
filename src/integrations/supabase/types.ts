@@ -6443,6 +6443,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      get_workshop_meet_link: {
+        Args: { _workshop_id: string }
+        Returns: string
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
