@@ -37,7 +37,7 @@ const SettingsPage = () => {
     phone: '',
     district: '',
     upazila: '',
-    campus: '',
+    department: '',
     university: '',
     blood_group: '',
     gender: '',
