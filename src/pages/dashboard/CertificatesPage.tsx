@@ -372,6 +372,68 @@ const CertificatesPage = () => {
         </div>
       )}
 
+      {/* Pending Workshop Certificates */}
+      {pendingWorkshopRegs.length > 0 && (
+        <div className="space-y-3">
+          <h3 className="font-heading font-bold text-lg flex items-center gap-2">
+            <Clock className="h-5 w-5 text-accent" /> Pending Workshop Certificates
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {pendingWorkshopRegs.map((reg: any) => {
+              const ws = reg.workshops;
+              const completed = ws?.status === 'completed';
+              const attendanceReq = (ws?.certificate_min_attendance_pct || 0) > 0;
+              const attended = !attendanceReq || !!reg.checked_in_at;
+              const reqs: { ok: boolean; label: string }[] = [
+                { ok: completed, label: completed ? 'Workshop completed' : `Workshop status: ${ws?.status || 'pending'}` },
+                { ok: isComplete, label: isComplete ? 'Profile 100% complete' : `Profile ${percentage}% complete (need 100%)` },
+              ];
+              if (attendanceReq) reqs.push({ ok: attended, label: attended ? 'Attendance confirmed' : 'Attendance not marked' });
+              const canClaim = completed && isComplete && attended;
+              return (
+                <Card key={reg.id} className="overflow-hidden">
+                  <div className="h-1 bg-gradient-to-r from-accent/40 via-primary/40 to-accent/40" />
+                  <CardContent className="p-4 space-y-3">
+                    <div className="flex items-start gap-3">
+                      {ws?.thumbnail_url ? (
+                        <img src={ws.thumbnail_url} alt="" className="w-10 h-10 rounded object-cover shrink-0" />
+                      ) : (
+                        <div className="w-10 h-10 rounded bg-muted flex items-center justify-center shrink-0">
+                          <Award className="h-5 w-5 text-muted-foreground" />
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className="font-heading font-bold text-sm line-clamp-2">{ws?.title || 'Workshop'}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">Workshop certificate</p>
+                      </div>
+                      <Badge variant={completed ? 'secondary' : 'outline'} className="gap-1 shrink-0">
+                        {completed ? <><Clock className="h-3 w-3" /> Ready to claim</> : <><Clock className="h-3 w-3" /> Awaiting</>}
+                      </Badge>
+                    </div>
+                    <div className="space-y-1">
+                      {reqs.map((r, i) => (
+                        <div key={i} className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                          {r.ok ? <CheckCircle2 className="h-3 w-3 text-primary shrink-0" /> : <XCircle className="h-3 w-3 text-destructive shrink-0" />}
+                          <span>{r.label}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <Button
+                      size="sm"
+                      className="w-full gap-1"
+                      disabled={!canClaim || claimWorkshopMutation.isPending}
+                      onClick={() => claimWorkshopMutation.mutate(reg.workshop_id)}
+                    >
+                      {canClaim ? <><Award className="h-3.5 w-3.5" /> Claim Certificate</> : <><Lock className="h-3.5 w-3.5" /> Locked</>}
+                    </Button>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {pending.length > 0 && (
         <div className="space-y-3">
           <h3 className="font-heading font-bold text-lg flex items-center gap-2">
