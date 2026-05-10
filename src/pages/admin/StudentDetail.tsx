@@ -567,7 +567,6 @@ export default function StudentDetail() {
               <CardContent className="grid grid-cols-2 gap-4">
                 <ProfileField label="District" value={profile.district} />
                 <ProfileField label="Upazila" value={profile.upazila} />
-                <ProfileField label="Campus" value={profile.campus} />
                 <ProfileField label="Country" value={profile.country} />
                 <ProfileField label="Username" value={profile.username} />
                 <ProfileField label="Gender" value={profile.gender} />
