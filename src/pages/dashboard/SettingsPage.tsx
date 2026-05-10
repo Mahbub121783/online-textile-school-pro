@@ -70,7 +70,7 @@ const SettingsPage = () => {
         phone: profile.phone || '',
         district: profile.district || '',
         upazila: profile.upazila || '',
-        campus: profile.campus || '',
+        department: (profile as any).department || profile.campus || '',
         university: profile.university || '',
         blood_group: profile.blood_group || '',
         gender: profile.gender || '',
