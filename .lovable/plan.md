@@ -1,131 +1,70 @@
 ## Goal
 
-Turn OTS into a polished installable app using the uploaded hexagon logo, add proper push-notification + reminder system that only activates after install, and place a clear "Install / Download App" button on every user profile.
+1. "Use my current location" button should reliably auto-fill District + Upazila for Bangladesh users.
+2. Replace the "Campus" field with "Department" everywhere it appears (since University/Institution already covers the institution name).
+3. Make sure Department is shown/editable in the admin Student Detail page and any other admin views, and in the student profile area.
 
 ---
 
-## 1. New app icons from uploaded logo
+## Part 1 — Deep fix for "Use my current location"
 
-- Copy `user-uploads://OTS_LOGO.png` → `src/assets/ots-app-logo.png` (source of truth).
-- Generate all required PWA icons (placed in `public/`):
-  - `logo-192.png` (192×192, padded white background, "any")
-  - `logo-512.png` (512×512, padded white background, "any")
-  - `logo-maskable-512.png` (512×512, safe zone padding for Android adaptive icons, "maskable")
-  - `apple-touch-icon.png` (180×180, padded for iOS home-screen)
-  - `favicon-32.png`, `favicon.ico`
-- Update `index.html` favicon + apple-touch links and `vite.config.ts` PWA manifest icons (separate `any` and `maskable` entries — required so Android does not crop the hexagon).
+Current behavior uses Nominatim with `zoom=10` and a thin address fallback chain. In Bangladesh this often returns empty `state_district` / `county`, so District never auto-fills (matches the user's screenshot where Gazipur was selected manually but no auto-update happened).
 
-> Note: "harmful app" warnings only appear for sideloaded APKs. PWAs installed from the browser never show this. Using a separate `maskable` icon and a clean manifest also prevents Chrome's "site missing icon/installability" warning.
+Fix in `src/components/LocationCapture.tsx`:
 
----
+- Increase `zoom` to `14` and add `accept-language=en` so we get a richer English address breakdown.
+- Build a Bangladesh-aware mapping:
+  - **District** ← first match of: `state_district`, `county`, `district`, `city_district`, then a normalized lookup against the existing `BD_DISTRICTS` list (strip "District", "Zila", trailing whitespace, case-insensitive). If still empty, fall back to `city`.
+  - **Upazila** ← first match of: `subdistrict`, `suburb`, `town`, `municipality`, `village`, `city_district`, `neighbourhood`, `hamlet`.
+- Normalize the district string so the `<Select>` value matches one of `BD_DISTRICTS` exactly (e.g. "Gazipur District" → "Gazipur"). This is the key reason the dropdown wasn't updating.
+- If the browser denies permission or times out, surface a clearer toast with a "Try again" hint.
+- Add a secondary fallback to BigDataCloud's free reverse geocoder when Nominatim returns no usable district (no key required, better Bangladesh coverage).
 
-## 2. Manifest polish (no scary install dialog)
-
-Update VitePWA manifest:
-- `name`: "Online Textile School"
-- `short_name`: "OTS"
-- `id`: "/?source=pwa"
-- `scope`: "/"
-- `start_url`: "/?source=pwa"
-- `display`: "standalone", `display_override`: ["standalone", "minimal-ui"]
-- `orientation`: "portrait"
-- `theme_color`: matches header (Dark Teal token from project)
-- `background_color`: matches splash
-- `categories`: ["education"]
-- `screenshots`: 2 entries (mobile + wide form factors) so Chrome shows the "rich install UI" instead of the basic prompt
-- `shortcuts`: My Courses, Workshops, Notifications (long-press app icon menu)
+In `src/pages/dashboard/SettingsPage.tsx` `handleLocation`:
+- Always overwrite `district` and `upazila` when a value is returned (not only when previously empty), so the user sees the change immediately.
+- Trigger a visible re-render of the Select by writing the normalized value.
 
 ---
 
-## 3. Better in-app layout/interface when running as installed app
+## Part 2 — Replace "Campus" with "Department"
 
-Detect standalone mode (`display-mode: standalone` OR `navigator.standalone`) and apply an `app-mode` class on `<html>`:
-- Hide the marketing UtilityBar + top promo strip
-- Hide the install banner
-- Use compact Header with safe-area insets (`env(safe-area-inset-top/bottom)`)
-- Promote `BottomNav` as primary navigation on mobile
-- Add iOS status-bar meta tags: `apple-mobile-web-app-capable`, `apple-mobile-web-app-status-bar-style=black-translucent`, `apple-mobile-web-app-title=OTS`
-- Tasteful splash screen: use theme color + logo while React boots (extends existing critical CSS in `index.html`)
+### Database
+Add a `department text` column to `public.user_profiles` and backfill it from the existing `campus` column for any existing rows. Keep `campus` in the DB for now (no destructive drop) but stop using it in the UI.
 
----
+### Frontend label + field swap (Department instead of Campus)
+- `src/pages/dashboard/SettingsPage.tsx` — rename the Campus field to **Department**, bind it to `form.department`, placeholder e.g. "e.g. Textile Engineering". Load/save `profile.department`.
+- `src/hooks/useProfileCompleteness.ts` — replace the `campus` completeness item with `department`.
+- `src/pages/admin/StudentDetail.tsx` — replace the "Campus" ProfileField with **Department** (`profile.department`), and also surface it in any summary/header where Campus appears.
+- `src/pages/admin/AdminStudents.tsx` and `src/pages/admin/AdminUsers.tsx` — add a Department column / filter so admins can see and filter students by department (currently neither shows it).
+- `src/pages/Profile.tsx` and `src/pages/contributor/ContributorProfile.tsx` — show Department under the University line on public profile cards.
 
-## 4. Advanced notification system — install-only
+### TypeScript types
+Regenerate `src/integrations/supabase/types.ts` after the migration so `user_profiles.department` is typed.
 
-Client side (only registers when running standalone):
-- New hook `usePushNotifications.ts`:
-  - Gate on `isStandalone()` — never asks permission in browser tab
-  - Requests Notification permission with a clean in-app prompt card (not the raw browser dialog cold-start)
-  - Subscribes to `pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: VAPID_PUBLIC_KEY })`
-  - POSTs subscription to edge function `push-subscribe`
-- Service worker additions (custom `sw.ts` injected into VitePWA via `injectManifest` strategy):
-  - `push` event → shows notification with title, body, icon (logo-192), badge, tag, actions, `vibrate`, `renotify`
-  - `notificationclick` → focuses or opens deep link (`event.notification.data.url`)
-  - `pushsubscriptionchange` → re-subscribes and syncs to server
-- New settings page section "App Notifications" (visible only when installed) with toggles: Class reminders, Workshop reminders, Assignments due, Live class starting, New messages, Marketing.
-
-Backend (Supabase):
-- New table `push_subscriptions` (user_id, endpoint UNIQUE, p256dh, auth, user_agent, platform, last_seen_at).
-- New table `notification_preferences` (per-category toggles).
-- Edge functions:
-  - `push-subscribe` — upsert subscription
-  - `push-unsubscribe` — remove
-  - `push-send` — sends a Web Push (VAPID) to one user / cohort, used by other functions
-- Reminder triggers (reuse existing pg_cron pattern from `workshop-reminder-cron`):
-  - Workshop start (T-24h, T-1h, T-10m)
-  - Live class starting (T-15m, T-1m)
-  - Assignment due (T-24h, T-2h)
-  - Unread messages digest
-- Secrets to add: `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` (mailto:).
-
-> If the user has the app installed on multiple devices, every active subscription receives the push. Web Push works on Android, desktop Chrome/Edge/Firefox, and iOS 16.4+ (only after Add-to-Home-Screen — matches the "install-only" requirement).
+### Admin "students" view consistency
+The user noted "user students oikhaneo thik koro" — make sure the new Department field is wired into:
+- AdminStudents list (column + optional filter dropdown)
+- StudentDetail header + Academic section
+- Any export / CSV download of students (if present in AdminStudents) — include Department.
 
 ---
 
-## 5. "Install / Download App" button on every profile
+## Out of scope
 
-- Reusable component `InstallAppButton.tsx` (built on existing `InstallAppCard` logic):
-  - If already installed → renders nothing (or "App installed ✓" badge)
-  - If `beforeinstallprompt` available → "Install App" button that triggers native prompt
-  - On iOS Safari → opens an instruction sheet (Share → Add to Home Screen)
-  - On desktop browsers without prompt → "Open in mobile to install" tooltip + QR code to current URL
-- Place the button on:
-  - `Profile.tsx` (own profile, prominent)
-  - `ContributorProfile.tsx` (public profile, near share/endorse actions)
-  - Dashboard sidebar footer (small variant)
+- We are NOT renaming/removing the existing faculty/internship `department` columns — those are already correct.
+- We are NOT dropping the `campus` column in this pass (kept as a safety net; can be removed in a later cleanup migration once we confirm nothing else reads it).
 
 ---
 
-## 6. Files
+## Files to change
 
-**New**
-- `src/assets/ots-app-logo.png`
-- `public/logo-192.png`, `logo-512.png`, `logo-maskable-512.png`, `apple-touch-icon.png`, `favicon-32.png`, `favicon.ico` (regenerated)
-- `public/screenshots/mobile.png`, `public/screenshots/wide.png`
-- `src/components/InstallAppButton.tsx`
-- `src/hooks/usePushNotifications.ts`
-- `src/hooks/useStandaloneMode.ts`
-- `src/sw.ts` (custom service worker)
-- `supabase/functions/push-subscribe/index.ts`
-- `supabase/functions/push-unsubscribe/index.ts`
-- `supabase/functions/push-send/index.ts`
-- `supabase/functions/push-reminders-cron/index.ts`
-
-**Edited**
-- `vite.config.ts` (manifest, switch to `injectManifest`)
-- `index.html` (icons, iOS meta, theme color)
-- `src/main.tsx` (register custom SW outside preview)
-- `src/components/layout/Header.tsx`, `UtilityBar.tsx`, `BottomNav.tsx` (standalone-mode trims + safe-area)
-- `src/index.css` (`.app-mode` rules, safe-area utilities)
-- `src/pages/Profile.tsx`, `src/pages/contributor/ContributorProfile.tsx`, `src/components/layout/DashboardSidebar.tsx` (place button)
-- `src/pages/dashboard/SettingsPage.tsx` (notification preference toggles)
-
-**DB migration**
-- `push_subscriptions`, `notification_preferences` with RLS (user owns rows; service role for cron).
-
----
-
-## Confirmation needed before I start
-
-1. OK to add Web Push (requires generating a VAPID keypair and storing it in Lovable Cloud secrets)?
-2. Replace the current sky-blue favicon/manifest icons with the new hexagon logo across the whole site, or keep them only for the installed app?
-3. Show the Install button publicly on **contributor profiles** too, or only on the logged-in user's own profile + dashboard?
+- `src/components/LocationCapture.tsx` (rewrite reverse-geocode logic)
+- `src/pages/dashboard/SettingsPage.tsx` (Department field + handleLocation overwrite)
+- `src/hooks/useProfileCompleteness.ts`
+- `src/pages/admin/StudentDetail.tsx`
+- `src/pages/admin/AdminStudents.tsx`
+- `src/pages/admin/AdminUsers.tsx`
+- `src/pages/Profile.tsx`
+- `src/pages/contributor/ContributorProfile.tsx`
+- New migration: add `department` column to `user_profiles`, backfill from `campus`.
+- `src/integrations/supabase/types.ts` (auto-regenerated after migration approval).
