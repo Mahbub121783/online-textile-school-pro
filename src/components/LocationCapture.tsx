@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { MapPin, Loader2 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
+import { BD_DISTRICTS } from '@/lib/constants';
 
 interface LocationData {
   latitude: number;
@@ -16,40 +17,133 @@ interface Props {
   lastUpdated?: string | null;
 }
 
+// Normalize a raw district string to match exactly one of BD_DISTRICTS
+const normalizeDistrict = (raw?: string): string => {
+  if (!raw) return '';
+  const cleaned = raw
+    .replace(/\b(district|zila|division|বিভাগ|জেলা)\b/gi, '')
+    .replace(/[,]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!cleaned) return '';
+  const match = BD_DISTRICTS.find(
+    (d) => d.toLowerCase() === cleaned.toLowerCase()
+  );
+  if (match) return match;
+  // partial — first BD district whose name appears in the cleaned string
+  const partial = BD_DISTRICTS.find((d) =>
+    cleaned.toLowerCase().includes(d.toLowerCase())
+  );
+  return partial || cleaned;
+};
+
+const reverseNominatim = async (lat: number, lon: number) => {
+  const res = await fetch(
+    `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}&zoom=14&addressdetails=1&accept-language=en`,
+    { headers: { Accept: 'application/json' } }
+  );
+  if (!res.ok) throw new Error('Nominatim failed');
+  const data = await res.json();
+  const a = data?.address || {};
+  const districtRaw =
+    a.state_district || a.county || a.district || a.city_district || a.region || a.city || '';
+  const upazila =
+    a.subdistrict ||
+    a.suburb ||
+    a.town ||
+    a.municipality ||
+    a.village ||
+    a.neighbourhood ||
+    a.hamlet ||
+    a.city_district ||
+    '';
+  return { district: districtRaw, upazila, country: a.country || '' };
+};
+
+const reverseBigDataCloud = async (lat: number, lon: number) => {
+  const res = await fetch(
+    `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=en`
+  );
+  if (!res.ok) throw new Error('BigDataCloud failed');
+  const data = await res.json();
+  const districtRaw =
+    data?.principalSubdivision || data?.localityInfo?.administrative?.[2]?.name || '';
+  const upazila = data?.city || data?.locality || data?.localityInfo?.administrative?.[3]?.name || '';
+  return { district: districtRaw, upazila, country: data?.countryName || '' };
+};
+
 const LocationCapture = ({ onLocation, lastUpdated }: Props) => {
   const [loading, setLoading] = useState(false);
 
   const handleCapture = () => {
     if (!('geolocation' in navigator)) {
-      toast({ title: 'Not supported', description: 'Geolocation is not supported by your browser.', variant: 'destructive' });
+      toast({
+        title: 'Not supported',
+        description: 'Geolocation is not supported by your browser.',
+        variant: 'destructive',
+      });
       return;
     }
     setLoading(true);
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
         const { latitude, longitude } = pos.coords;
+        let district = '';
+        let upazila = '';
+        let country = '';
+
         try {
-          const res = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=10&addressdetails=1`,
-            { headers: { 'Accept': 'application/json' } }
-          );
-          const data = await res.json();
-          const addr = data?.address || {};
-          const district = addr.state_district || addr.county || addr.city_district || addr.district || '';
-          const upazila = addr.suburb || addr.town || addr.village || addr.municipality || addr.city || '';
-          const country = addr.country || '';
-          onLocation({ latitude, longitude, district, upazila, country });
-          toast({ title: 'Location captured', description: `${upazila || ''}${upazila && district ? ', ' : ''}${district || ''}` });
+          const r = await reverseNominatim(latitude, longitude);
+          district = r.district;
+          upazila = r.upazila;
+          country = r.country;
         } catch {
-          onLocation({ latitude, longitude });
-          toast({ title: 'Location saved', description: 'Coordinates saved (address lookup failed).' });
-        } finally {
-          setLoading(false);
+          // primary failed — fall through to fallback
         }
+
+        // Fallback if no usable district yet
+        if (!district || !normalizeDistrict(district)) {
+          try {
+            const r2 = await reverseBigDataCloud(latitude, longitude);
+            district = district || r2.district;
+            upazila = upazila || r2.upazila;
+            country = country || r2.country;
+          } catch {
+            /* ignore */
+          }
+        }
+
+        const normalizedDistrict = normalizeDistrict(district);
+        const finalUpazila = (upazila || '').trim();
+
+        onLocation({
+          latitude,
+          longitude,
+          district: normalizedDistrict,
+          upazila: finalUpazila,
+          country,
+        });
+
+        if (normalizedDistrict || finalUpazila) {
+          toast({
+            title: 'Location captured',
+            description: [finalUpazila, normalizedDistrict].filter(Boolean).join(', '),
+          });
+        } else {
+          toast({
+            title: 'Location saved',
+            description: 'Coordinates saved, but address lookup returned no district. Please pick manually.',
+          });
+        }
+        setLoading(false);
       },
       (err) => {
         setLoading(false);
-        toast({ title: 'Location denied', description: err.message, variant: 'destructive' });
+        toast({
+          title: 'Location denied',
+          description: `${err.message}. Please allow location access and try again.`,
+          variant: 'destructive',
+        });
       },
       { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 }
     );
