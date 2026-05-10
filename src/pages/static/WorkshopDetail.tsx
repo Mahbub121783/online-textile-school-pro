@@ -304,7 +304,7 @@ export default function WorkshopDetail() {
               </div>
 
               {/* Start Workshop — Big CTA for live workshops */}
-              {isRegistered && isLive && workshop.meet_link && (
+              {isRegistered && isLive && meetLink && (
                 <Card className="border-green-500/40 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20">
                   <CardContent className="p-5 flex flex-col sm:flex-row items-center justify-between gap-4">
                     <div className="flex items-center gap-3">
@@ -316,7 +316,7 @@ export default function WorkshopDetail() {
                         <p className="text-sm text-muted-foreground">Click to join the Google Meet session</p>
                       </div>
                     </div>
-                    <a href={workshop.meet_link} target="_blank" rel="noopener noreferrer">
+                    <a href={meetLink} target="_blank" rel="noopener noreferrer">
                       <Button size="lg" className="gap-2 bg-green-600 hover:bg-green-700 text-white shadow-lg">
                         <Video className="h-5 w-5" /> Start Workshop
                       </Button>
@@ -496,8 +496,8 @@ export default function WorkshopDetail() {
               </Card>
 
               {/* Start Workshop sidebar CTA */}
-              {isRegistered && isLive && workshop.meet_link && (
-                <a href={workshop.meet_link} target="_blank" rel="noopener noreferrer" className="block">
+              {isRegistered && isLive && meetLink && (
+                <a href={meetLink} target="_blank" rel="noopener noreferrer" className="block">
                   <Button className="w-full gap-2 bg-green-600 hover:bg-green-700 text-white" size="lg">
                     <Video className="h-5 w-5" /> Start Workshop
                   </Button>
