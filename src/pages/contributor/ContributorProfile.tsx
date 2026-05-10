@@ -182,8 +182,10 @@ const ContributorProfile = () => {
                   <div className="flex flex-wrap gap-2">
                     {profile.expertise.slice(0, 6).map((e: string, i: number) => (
                       <Badge key={i} variant="secondary">{e}</Badge>
-                    ))}
-                  </div>
+                  ))}
+
+                  <InstallAppButton variant="outline" size="sm" />
+                </div>
                 )}
 
                 <div className="flex flex-wrap items-center gap-3 pt-2">
