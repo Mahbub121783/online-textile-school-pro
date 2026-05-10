@@ -403,6 +403,7 @@ export default function AdminStudents() {
                         </div>
                       </TableCell>
                       <TableCell><Badge variant="outline" className="font-mono text-xs">{s.roll_id || '—'}</Badge></TableCell>
+                      <TableCell className="hidden lg:table-cell text-xs text-muted-foreground max-w-[160px] truncate" title={s.department || s.campus || ''}>{s.department || s.campus || '—'}</TableCell>
                       <TableCell className="text-center">{s.coursesCount}</TableCell>
                       <TableCell className="text-center">{s.ebooksCount}</TableCell>
                       <TableCell className="text-center">{s.quizCount}</TableCell>
