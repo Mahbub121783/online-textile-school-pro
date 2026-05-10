@@ -364,6 +364,7 @@ export default function AdminStudents() {
                       </Button>
                     </TableHead>
                     <TableHead>Roll ID</TableHead>
+                    <TableHead className="hidden lg:table-cell">Department</TableHead>
                     <TableHead className="text-center">Courses</TableHead>
                     <TableHead className="text-center">Ebooks</TableHead>
                     <TableHead className="text-center">Quizzes</TableHead>
