@@ -185,8 +185,8 @@ const SettingsPage = () => {
       ...prev,
       latitude: data.latitude,
       longitude: data.longitude,
-      district: data.district || prev.district,
-      upazila: data.upazila || prev.upazila,
+      district: data.district ?? prev.district,
+      upazila: data.upazila ?? prev.upazila,
       location_updated_at: new Date().toISOString(),
     }));
     toast({ title: 'Don\'t forget to save', description: 'Click Save Changes to persist your location.' });
