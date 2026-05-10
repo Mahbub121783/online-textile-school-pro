@@ -100,6 +100,8 @@ const Profile = () => {
           {/* Student ID Card */}
           <div className="mt-6">
             <StudentIdCard />
+          </div>
+
 
           {/* Install App */}
           <div className="mt-6 rounded-xl border bg-gradient-to-br from-primary/5 via-background to-accent/5 p-5 flex items-center gap-4">
