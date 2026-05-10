@@ -9,6 +9,7 @@ import { BD_DISTRICTS, BLOOD_GROUPS } from '@/lib/constants';
 import { toast } from '@/hooks/use-toast';
 import { Save, Sun, Moon, Monitor, Camera, CheckCircle2, AlertCircle, Lock } from 'lucide-react';
 import InstitutionalEmailWidget from '@/components/InstitutionalEmailWidget';
+import NotificationSettingsCard from '@/components/NotificationSettingsCard';
 import InstallAppCard from '@/components/InstallAppCard';
 import { useTheme } from '@/components/ThemeProvider';
 import { Progress } from '@/components/ui/progress';
