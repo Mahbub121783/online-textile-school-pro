@@ -545,6 +545,7 @@ export default function StudentDetail() {
               <CardHeader className="pb-3"><CardTitle className="text-sm flex items-center gap-2"><GraduationCap className="h-4 w-4" /> Education</CardTitle></CardHeader>
               <CardContent className="grid grid-cols-2 gap-4">
                 <ProfileField label="University" value={profile.university} />
+                <ProfileField label="Department" value={(profile as any).department || profile.campus} />
                 <ProfileField label="Batch" value={profile.batch} />
                 <ProfileField label="Graduation Year" value={profile.graduation_year?.toString()} />
               </CardContent>
@@ -566,7 +567,6 @@ export default function StudentDetail() {
               <CardContent className="grid grid-cols-2 gap-4">
                 <ProfileField label="District" value={profile.district} />
                 <ProfileField label="Upazila" value={profile.upazila} />
-                <ProfileField label="Campus" value={profile.campus} />
                 <ProfileField label="Country" value={profile.country} />
                 <ProfileField label="Username" value={profile.username} />
                 <ProfileField label="Gender" value={profile.gender} />

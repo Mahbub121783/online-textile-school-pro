@@ -142,7 +142,7 @@ const AdminUsers = () => {
                       {(() => {
                         const fields = [
                           !!u.avatar_url, !!u.full_name, !!u.phone, !!u.blood_group,
-                          !!u.university, !!u.batch, !!u.district, !!u.professional_role, !!u.date_of_birth,
+                          !!u.university, !!(u.department || u.campus), !!u.batch, !!u.district, !!u.professional_role, !!u.date_of_birth,
                         ];
                         const pct = Math.round((fields.filter(Boolean).length / fields.length) * 100);
                         return (

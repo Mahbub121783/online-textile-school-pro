@@ -196,7 +196,7 @@ export default function AdminStudents() {
       if (statusFilter === 'blocked' && s.is_active !== false) return false;
       if (!search) return true;
       const q = search.toLowerCase();
-      return [s.full_name, s.roll_id, s.phone, s.university, s.batch, s.district, s.division, s.occupation, s.company_name, s.username]
+      return [s.full_name, s.roll_id, s.phone, s.university, s.department, s.campus, s.batch, s.district, s.division, s.occupation, s.company_name, s.username]
         .some(f => f?.toLowerCase().includes(q));
     });
 
@@ -245,12 +245,12 @@ export default function AdminStudents() {
 
   const exportCSV = () => {
     const rows = filtered.map((s: any) => [
-      s.full_name || '', s.roll_id || '', s.phone || '', s.university || '',
+      s.full_name || '', s.roll_id || '', s.phone || '', s.university || '', (s.department || s.campus || ''),
       s.coursesCount, s.ebooksCount, s.totalSpend, s.certsCount, s.quizCount,
       s.is_active !== false ? 'Active' : 'Blocked',
       s.created_at ? new Date(s.created_at).toLocaleDateString() : ''
     ]);
-    const header = ['Name', 'Roll ID', 'Phone', 'University', 'Courses', 'Ebooks', 'Spend', 'Certs', 'Quizzes', 'Status', 'Joined'];
+    const header = ['Name', 'Roll ID', 'Phone', 'University', 'Department', 'Courses', 'Ebooks', 'Spend', 'Certs', 'Quizzes', 'Status', 'Joined'];
     const csv = [header, ...rows].map(r => r.map((c: any) => `"${c}"`).join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const a = document.createElement('a');
@@ -279,7 +279,7 @@ export default function AdminStudents() {
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative w-full sm:w-64">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input placeholder="Search name, phone, university..." value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} className="pl-9" />
+            <Input placeholder="Search name, phone, university, department..." value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} className="pl-9" />
           </div>
           <Select value={statusFilter} onValueChange={v => { setStatusFilter(v); setPage(1); }}>
             <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
@@ -364,6 +364,7 @@ export default function AdminStudents() {
                       </Button>
                     </TableHead>
                     <TableHead>Roll ID</TableHead>
+                    <TableHead className="hidden lg:table-cell">Department</TableHead>
                     <TableHead className="text-center">Courses</TableHead>
                     <TableHead className="text-center">Ebooks</TableHead>
                     <TableHead className="text-center">Quizzes</TableHead>
@@ -402,6 +403,7 @@ export default function AdminStudents() {
                         </div>
                       </TableCell>
                       <TableCell><Badge variant="outline" className="font-mono text-xs">{s.roll_id || '—'}</Badge></TableCell>
+                      <TableCell className="hidden lg:table-cell text-xs text-muted-foreground max-w-[160px] truncate" title={s.department || s.campus || ''}>{s.department || s.campus || '—'}</TableCell>
                       <TableCell className="text-center">{s.coursesCount}</TableCell>
                       <TableCell className="text-center">{s.ebooksCount}</TableCell>
                       <TableCell className="text-center">{s.quizCount}</TableCell>
@@ -448,7 +450,7 @@ export default function AdminStudents() {
                     </TableRow>
                   ))}
                   {paginated.length === 0 && (
-                    <TableRow><TableCell colSpan={12} className="text-center py-8 text-muted-foreground">No students found</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={13} className="text-center py-8 text-muted-foreground">No students found</TableCell></TableRow>
                   )}
                 </TableBody>
               </Table>

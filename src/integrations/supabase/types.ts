@@ -5603,6 +5603,7 @@ export type Database = {
           created_at: string | null
           current_job: string | null
           date_of_birth: string | null
+          department: string | null
           district: string | null
           division: string | null
           expertise: string[] | null
@@ -5651,6 +5652,7 @@ export type Database = {
           created_at?: string | null
           current_job?: string | null
           date_of_birth?: string | null
+          department?: string | null
           district?: string | null
           division?: string | null
           expertise?: string[] | null
@@ -5699,6 +5701,7 @@ export type Database = {
           created_at?: string | null
           current_job?: string | null
           date_of_birth?: string | null
+          department?: string | null
           district?: string | null
           division?: string | null
           expertise?: string[] | null
@@ -6475,6 +6478,7 @@ export type Database = {
           created_at: string | null
           current_job: string | null
           date_of_birth: string | null
+          department: string | null
           district: string | null
           division: string | null
           expertise: string[] | null

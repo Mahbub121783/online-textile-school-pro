@@ -37,7 +37,7 @@ const SettingsPage = () => {
     phone: '',
     district: '',
     upazila: '',
-    campus: '',
+    department: '',
     university: '',
     blood_group: '',
     gender: '',
@@ -70,7 +70,7 @@ const SettingsPage = () => {
         phone: profile.phone || '',
         district: profile.district || '',
         upazila: profile.upazila || '',
-        campus: profile.campus || '',
+        department: (profile as any).department || profile.campus || '',
         university: profile.university || '',
         blood_group: profile.blood_group || '',
         gender: profile.gender || '',
@@ -185,8 +185,8 @@ const SettingsPage = () => {
       ...prev,
       latitude: data.latitude,
       longitude: data.longitude,
-      district: data.district || prev.district,
-      upazila: data.upazila || prev.upazila,
+      district: data.district ?? prev.district,
+      upazila: data.upazila ?? prev.upazila,
       location_updated_at: new Date().toISOString(),
     }));
     toast({ title: 'Don\'t forget to save', description: 'Click Save Changes to persist your location.' });
@@ -195,7 +195,7 @@ const SettingsPage = () => {
   const handleSave = async () => {
     if (!user) return;
     setSaving(true);
-    const updateData: any = { ...form };
+    const updateData: any = { ...form, campus: form.department || null };
 
     // Skip name update entirely if locked (defense in depth — DB trigger also enforces)
     if (nameLockInfo.locked) {
@@ -404,8 +404,8 @@ const SettingsPage = () => {
             )}
           </div>
           <div className="space-y-2">
-            <Label>Campus</Label>
-            <Input value={form.campus} onChange={(e) => update('campus', e.target.value)} placeholder="e.g. Main Campus, Dhaka" />
+            <Label>Department</Label>
+            <Input value={form.department} onChange={(e) => update('department', e.target.value)} placeholder="e.g. Textile Engineering" />
           </div>
           <div className="space-y-2">
             <Label>Batch</Label>
