@@ -6351,6 +6351,10 @@ export type Database = {
         Returns: boolean
       }
       can_manage_course: { Args: { _course_id: string }; Returns: boolean }
+      claim_my_workshop_certificate: {
+        Args: { _workshop_id: string }
+        Returns: string
+      }
       cleanup_old_ai_chats: { Args: never; Returns: undefined }
       credit_wallet: {
         Args: {
