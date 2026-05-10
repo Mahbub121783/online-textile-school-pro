@@ -78,6 +78,36 @@ const CertificatesPage = () => {
     },
   });
 
+  // Workshop registrations (for pending certificates)
+  const { data: workshopRegs = [] } = useQuery({
+    queryKey: ['my-workshop-regs-cert', user?.id],
+    enabled: !!user,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('workshop_registrations')
+        .select('id, workshop_id, status, checked_in_at, workshops!workshop_registrations_workshop_id_fkey(id, title, slug, thumbnail_url, status, certificate_enabled, cert_template_id, certificate_min_attendance_pct)')
+        .eq('user_id', user!.id);
+      return (data ?? []).filter((r: any) => r.workshops?.certificate_enabled && r.workshops?.cert_template_id);
+    },
+  });
+
+  const issuedWorkshopIds = new Set(workshopCerts.map((c: any) => c.workshop_id));
+  const pendingWorkshopRegs = workshopRegs.filter((r: any) => !issuedWorkshopIds.has(r.workshop_id));
+
+  const claimWorkshopMutation = useMutation({
+    mutationFn: async (workshopId: string) => {
+      const { data, error } = await supabase.rpc('claim_my_workshop_certificate', { _workshop_id: workshopId });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      toast.success('Certificate claimed! 🎓');
+      queryClient.invalidateQueries({ queryKey: ['my-workshop-certs-page', user?.id] });
+      queryClient.invalidateQueries({ queryKey: ['my-workshop-regs-cert', user?.id] });
+    },
+    onError: (e: any) => toast.error(e.message || 'Could not claim certificate'),
+  });
+
   // Templates
   const templateIds = [...new Set(courses.map((c: any) => c.cert_template_id).filter(Boolean))];
   const { data: templates = [] } = useQuery({
