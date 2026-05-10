@@ -525,6 +525,8 @@ const SettingsPage = () => {
 
       <InstitutionalEmailWidget />
 
+      <NotificationSettingsCard />
+
       {/* Account Info */}
       <div className="bg-card border rounded-xl p-6">
         <h3 className="font-heading font-bold mb-2">Account Info</h3>
