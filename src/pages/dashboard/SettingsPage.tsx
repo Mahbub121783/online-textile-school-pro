@@ -404,8 +404,8 @@ const SettingsPage = () => {
             )}
           </div>
           <div className="space-y-2">
-            <Label>Campus</Label>
-            <Input value={form.campus} onChange={(e) => update('campus', e.target.value)} placeholder="e.g. Main Campus, Dhaka" />
+            <Label>Department</Label>
+            <Input value={form.department} onChange={(e) => update('department', e.target.value)} placeholder="e.g. Textile Engineering" />
           </div>
           <div className="space-y-2">
             <Label>Batch</Label>
