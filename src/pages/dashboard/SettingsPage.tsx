@@ -195,7 +195,7 @@ const SettingsPage = () => {
   const handleSave = async () => {
     if (!user) return;
     setSaving(true);
-    const updateData: any = { ...form };
+    const updateData: any = { ...form, campus: form.department || null };
 
     // Skip name update entirely if locked (defense in depth — DB trigger also enforces)
     if (nameLockInfo.locked) {
