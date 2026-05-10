@@ -493,7 +493,7 @@ const CertificatesPage = () => {
         </div>
       )}
 
-      {courses.length === 0 && certificates.length === 0 && (
+      {courses.length === 0 && certificates.length === 0 && workshopCerts.length === 0 && workshopRegs.length === 0 && (
         <div className="text-center py-16 text-muted-foreground">
           <Award className="h-16 w-16 mx-auto mb-4 text-muted" />
           <h3 className="font-heading font-bold text-lg mb-2">No certificates yet</h3>
