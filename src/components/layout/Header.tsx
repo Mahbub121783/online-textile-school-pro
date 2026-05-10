@@ -71,7 +71,7 @@ const Header = () => {
   };
 
   return (
-    <header className={`sticky top-0 z-50 w-full transition-all duration-300 ${scrolled ? 'bg-background/95 backdrop-blur-md shadow-md' : 'bg-background border-b'}`}>
+    <header className={`site-header sticky top-0 z-50 w-full transition-all duration-300 ${scrolled ? 'bg-background/95 backdrop-blur-md shadow-md' : 'bg-background border-b'}`}>
       {/* ===== DESKTOP HEADER ===== */}
       <div className="hidden md:block">
         <div className="container flex items-center gap-6 h-16">
