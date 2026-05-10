@@ -136,3 +136,26 @@
     @apply font-heading;
   }
 }
+
+/* ============== Installed-app (PWA standalone) tweaks ============== */
+@layer utilities {
+  .safe-top { padding-top: env(safe-area-inset-top); }
+  .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+  .safe-x { padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
+}
+
+html.app-mode body {
+  /* prevent rubber-band white flash on iOS */
+  overscroll-behavior-y: none;
+}
+
+html.app-mode .pwa-hide { display: none !important; }
+html.app-mode header.site-header { padding-top: env(safe-area-inset-top); }
+html.app-mode .bottom-nav { padding-bottom: env(safe-area-inset-bottom); }
+
+/* Splash-style background while React boots inside the installed app */
+html.app-mode #root:empty::before {
+  content: "";
+  position: fixed; inset: 0;
+  background: hsl(var(--background)) url('/logo-192.png') center/96px no-repeat;
+}
