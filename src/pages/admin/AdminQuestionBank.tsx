@@ -145,23 +145,62 @@ const AdminQuestionBank = () => {
   const [aiTopic, setAiTopic] = useState('');
   const [aiDiff, setAiDiff] = useState<Diff>('basic');
   const [aiCount, setAiCount] = useState(10);
+  const [aiLang, setAiLang] = useState<'en' | 'bn'>('en');
   const [aiBusy, setAiBusy] = useState(false);
   const [aiDrafts, setAiDrafts] = useState<any[]>([]);
 
-  const generateAI = async () => {
-    if (!aiSubject || !aiTopic) { toast({ title: 'Subject & topic required', variant: 'destructive' }); return; }
+  const generateAI = async (testMode = false) => {
+    if (!aiSubject) { toast({ title: 'Subject required', variant: 'destructive' }); return; }
     setAiBusy(true);
     try {
       const { data, error } = await supabase.functions.invoke('qb-ai-generate', {
-        body: { subject_id: aiSubject, topic: aiTopic, difficulty: aiDiff, count: aiCount },
+        body: { subject_id: aiSubject, topic: aiTopic || undefined, difficulty: aiDiff, count: aiCount, language: aiLang, test: testMode },
       });
       if (error) throw error;
+      if (data?.error) throw new Error(data.error);
       setAiDrafts(data?.questions || []);
-      toast({ title: `Generated ${data?.questions?.length || 0} drafts` });
+      const provNote = data?.fallback_used ? ` (fallback: ${data.provider_used})` : ` via ${data?.provider_used}`;
+      toast({ title: `Generated ${data?.questions?.length || 0} drafts${provNote}` });
     } catch (e: any) {
       toast({ title: 'AI generation failed', description: e.message, variant: 'destructive' });
     }
     setAiBusy(false);
+  };
+
+  // ---- AI settings ----
+  const { data: aiSettings, refetch: refetchSettings } = useQuery({
+    queryKey: ['qb-ai-settings'],
+    queryFn: async () => (await supabase.from('qb_ai_settings').select('*').limit(1).maybeSingle()).data,
+  });
+  const [settingsForm, setSettingsForm] = useState<any>(null);
+  const currentSettings = settingsForm ?? aiSettings ?? { provider: 'groq', model: 'llama-3.3-70b-versatile', temperature: 0.7, fallback_enabled: true, fallback_provider: 'lovable', fallback_model: 'google/gemini-2.5-flash', max_questions_per_run: 25, system_prompt_override: '' };
+
+  const saveSettings = async () => {
+    const payload = {
+      provider: currentSettings.provider,
+      model: currentSettings.model,
+      temperature: Number(currentSettings.temperature) || 0.7,
+      fallback_enabled: !!currentSettings.fallback_enabled,
+      fallback_provider: currentSettings.fallback_provider,
+      fallback_model: currentSettings.fallback_model,
+      max_questions_per_run: Number(currentSettings.max_questions_per_run) || 25,
+      system_prompt_override: currentSettings.system_prompt_override || null,
+    };
+    const { error } = aiSettings?.id
+      ? await supabase.from('qb_ai_settings').update(payload).eq('id', aiSettings.id)
+      : await supabase.from('qb_ai_settings').insert(payload);
+    if (error) { toast({ title: 'Save failed', description: error.message, variant: 'destructive' }); return; }
+    toast({ title: 'AI settings saved' });
+    setSettingsForm(null);
+    refetchSettings();
+  };
+
+  const PROVIDER_HINTS: Record<string, string> = {
+    groq: 'llama-3.3-70b-versatile (free, fast)',
+    mistral: 'mistral-small-latest (free tier)',
+    openrouter: 'google/gemini-2.0-flash-exp:free or meta-llama/llama-3.3-70b-instruct:free',
+    openai: 'gpt-4o-mini',
+    lovable: 'google/gemini-2.5-flash',
   };
 
   const approveAllDrafts = async () => {
@@ -183,11 +222,12 @@ const AdminQuestionBank = () => {
       <h2 className="font-heading text-2xl font-bold flex items-center gap-2"><Brain className="h-6 w-6" /> Question Bank</h2>
 
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList>
+        <TabsList className="flex-wrap h-auto">
           <TabsTrigger value="subjects">Subjects</TabsTrigger>
           <TabsTrigger value="questions">Questions ({questions.length})</TabsTrigger>
           <TabsTrigger value="bulk">Bulk Import</TabsTrigger>
           <TabsTrigger value="ai">AI Generate</TabsTrigger>
+          <TabsTrigger value="ai-settings">AI Settings</TabsTrigger>
         </TabsList>
 
         {/* SUBJECTS */}
@@ -307,9 +347,21 @@ const AdminQuestionBank = () => {
                 <Input type="number" value={aiCount} onChange={(e) => setAiCount(parseInt(e.target.value) || 5)} min={1} max={50} />
               </div>
             </div>
-            <Button onClick={generateAI} disabled={aiBusy}>
-              {aiBusy ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Sparkles className="h-4 w-4 mr-1" />} Generate Drafts
-            </Button>
+            <div className="flex gap-2 items-end">
+              <div className="w-40">
+                <Label>Language</Label>
+                <Select value={aiLang} onValueChange={(v) => setAiLang(v as 'en' | 'bn')}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="en">English</SelectItem>
+                    <SelectItem value="bn">Bengali</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button onClick={() => generateAI(false)} disabled={aiBusy}>
+                {aiBusy ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Sparkles className="h-4 w-4 mr-1" />} Generate Drafts
+              </Button>
+            </div>
 
             {aiDrafts.length > 0 && (
               <>
@@ -332,6 +384,101 @@ const AdminQuestionBank = () => {
                 </div>
               </>
             )}
+          </CardContent></Card>
+        </TabsContent>
+
+        {/* AI SETTINGS */}
+        <TabsContent value="ai-settings" className="space-y-3">
+          <Card><CardContent className="p-4 space-y-4">
+            <div>
+              <h3 className="font-bold text-lg">AI Provider Configuration</h3>
+              <p className="text-xs text-muted-foreground">Choose your own AI API key as primary. Lovable AI is optional fallback. API keys are added via Supabase secrets, never stored in the database.</p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <Label>Primary Provider</Label>
+                <Select value={currentSettings.provider} onValueChange={(v) => setSettingsForm({ ...currentSettings, provider: v, model: PROVIDER_HINTS[v]?.split(' ')[0] || currentSettings.model })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="groq">Groq (free, recommended)</SelectItem>
+                    <SelectItem value="mistral">Mistral</SelectItem>
+                    <SelectItem value="openrouter">OpenRouter</SelectItem>
+                    <SelectItem value="openai">OpenAI</SelectItem>
+                    <SelectItem value="lovable">Lovable AI</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground mt-1">Suggested: {PROVIDER_HINTS[currentSettings.provider]}</p>
+              </div>
+              <div>
+                <Label>Primary Model</Label>
+                <Input value={currentSettings.model} onChange={(e) => setSettingsForm({ ...currentSettings, model: e.target.value })} />
+              </div>
+              <div>
+                <Label>Temperature ({currentSettings.temperature})</Label>
+                <Input type="number" step="0.1" min={0} max={2} value={currentSettings.temperature} onChange={(e) => setSettingsForm({ ...currentSettings, temperature: e.target.value })} />
+              </div>
+              <div>
+                <Label>Max questions per run</Label>
+                <Input type="number" min={1} max={50} value={currentSettings.max_questions_per_run} onChange={(e) => setSettingsForm({ ...currentSettings, max_questions_per_run: e.target.value })} />
+              </div>
+            </div>
+
+            <div className="border-t pt-3 space-y-3">
+              <div className="flex items-center gap-2">
+                <Switch checked={!!currentSettings.fallback_enabled} onCheckedChange={(v) => setSettingsForm({ ...currentSettings, fallback_enabled: v })} />
+                <Label>Enable fallback if primary fails</Label>
+              </div>
+              {currentSettings.fallback_enabled && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <Label>Fallback Provider</Label>
+                    <Select value={currentSettings.fallback_provider} onValueChange={(v) => setSettingsForm({ ...currentSettings, fallback_provider: v })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="lovable">Lovable AI</SelectItem>
+                        <SelectItem value="groq">Groq</SelectItem>
+                        <SelectItem value="mistral">Mistral</SelectItem>
+                        <SelectItem value="openrouter">OpenRouter</SelectItem>
+                        <SelectItem value="openai">OpenAI</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>Fallback Model</Label>
+                    <Input value={currentSettings.fallback_model} onChange={(e) => setSettingsForm({ ...currentSettings, fallback_model: e.target.value })} />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div>
+              <Label>Custom System Prompt (optional)</Label>
+              <Textarea rows={4} value={currentSettings.system_prompt_override || ''} onChange={(e) => setSettingsForm({ ...currentSettings, system_prompt_override: e.target.value })} placeholder="Leave empty to use default prompt" />
+            </div>
+
+            <div className="flex flex-wrap gap-2 pt-2 border-t">
+              <Button onClick={saveSettings} disabled={!settingsForm}>Save Settings</Button>
+              <Button variant="outline" onClick={() => setSettingsForm(null)} disabled={!settingsForm}>Reset</Button>
+              <div className="flex-1" />
+              <Button variant="secondary" onClick={async () => {
+                if (!aiSubject) { toast({ title: 'Pick a subject in AI Generate tab first', variant: 'destructive' }); return; }
+                await generateAI(true);
+              }} disabled={aiBusy}>
+                {aiBusy ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null} Test Connection (1 question)
+              </Button>
+            </div>
+
+            <div className="rounded-lg bg-muted/40 p-3 text-xs space-y-1">
+              <p className="font-bold">Required secrets per provider (add via Supabase → Edge Function secrets):</p>
+              <ul className="list-disc ml-5 space-y-0.5">
+                <li><code>GROQ_API_KEY</code> — get from console.groq.com/keys (free)</li>
+                <li><code>MISTRAL_API_KEY</code> — get from console.mistral.ai</li>
+                <li><code>OPENROUTER_API_KEY</code> — get from openrouter.ai/keys (free models available)</li>
+                <li><code>OPENAI_API_KEY</code> — get from platform.openai.com/api-keys</li>
+                <li><code>LOVABLE_API_KEY</code> — already configured (used as fallback)</li>
+              </ul>
+            </div>
           </CardContent></Card>
         </TabsContent>
       </Tabs>
