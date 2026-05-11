@@ -248,7 +248,17 @@ const AdminQuestionBank = () => {
 
   return (
     <div className="space-y-4">
-      <h2 className="font-heading text-2xl font-bold flex items-center gap-2"><Brain className="h-6 w-6" /> Question Bank</h2>
+      <div>
+        <h2 className="font-heading text-2xl font-bold flex items-center gap-2"><Brain className="h-6 w-6 text-primary" /> Brain Test — Question Bank</h2>
+        <p className="text-xs text-muted-foreground">Manage subjects, questions, AI generation, live exams, integrity & gamification.</p>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Total questions</p><p className="text-2xl font-heading font-bold">{kpi?.questions ?? '—'}</p></CardContent></Card>
+        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Exams (7d)</p><p className="text-2xl font-heading font-bold">{kpi?.exams7d ?? '—'}</p></CardContent></Card>
+        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Live now</p><p className="text-2xl font-heading font-bold text-emerald-600">{kpi?.live ?? '—'}</p></CardContent></Card>
+        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Violations (24h)</p><p className={`text-2xl font-heading font-bold ${(kpi?.violations24h ?? 0) > 0 ? 'text-destructive' : ''}`}>{kpi?.violations24h ?? '—'}</p></CardContent></Card>
+      </div>
 
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="flex-wrap h-auto">
@@ -256,8 +266,17 @@ const AdminQuestionBank = () => {
           <TabsTrigger value="questions">Questions ({questions.length})</TabsTrigger>
           <TabsTrigger value="bulk">Bulk Import</TabsTrigger>
           <TabsTrigger value="ai">AI Generate</TabsTrigger>
+          <TabsTrigger value="sessions">Live Sessions</TabsTrigger>
+          <TabsTrigger value="violations">Violations</TabsTrigger>
+          <TabsTrigger value="badges">Badges</TabsTrigger>
+          <TabsTrigger value="analytics">Analytics</TabsTrigger>
           <TabsTrigger value="ai-settings">AI Settings</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="sessions"><LiveSessionsTab /></TabsContent>
+        <TabsContent value="violations"><ViolationsTab /></TabsContent>
+        <TabsContent value="badges"><BadgesTab /></TabsContent>
+        <TabsContent value="analytics"><AnalyticsTab /></TabsContent>
 
         {/* SUBJECTS */}
         <TabsContent value="subjects" className="space-y-3">
