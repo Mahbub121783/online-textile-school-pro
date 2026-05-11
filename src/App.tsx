@@ -392,6 +392,13 @@ const AppRoutes = () => {
           <Route path="/forum" element={<ForumHome />} />
           <Route path="/forum/new" element={<CreateForumPost />} />
           <Route path="/forum/:postId" element={<ForumPost />} />
+          {/* Practice / Brain Test */}
+          <Route path="/practice" element={<PracticeHome />} />
+          <Route path="/practice/exam/:sessionId" element={<PracticeExam />} />
+          <Route path="/practice/result/:sessionId" element={<PracticeResult />} />
+          <Route path="/practice/history" element={<PracticeHistory />} />
+          <Route path="/practice/leaderboard" element={<PracticeLeaderboard />} />
+          <Route path="/practice/:slug" element={<PracticeSubject />} />
           {/* Dynamic CMS pages - must be before 404 */}
           <Route path="/:slug" element={<DynamicPage />} />
           <Route path="*" element={<NotFound />} />
