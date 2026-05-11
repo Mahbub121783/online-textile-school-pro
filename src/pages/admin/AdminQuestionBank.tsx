@@ -222,11 +222,12 @@ const AdminQuestionBank = () => {
       <h2 className="font-heading text-2xl font-bold flex items-center gap-2"><Brain className="h-6 w-6" /> Question Bank</h2>
 
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList>
+        <TabsList className="flex-wrap h-auto">
           <TabsTrigger value="subjects">Subjects</TabsTrigger>
           <TabsTrigger value="questions">Questions ({questions.length})</TabsTrigger>
           <TabsTrigger value="bulk">Bulk Import</TabsTrigger>
           <TabsTrigger value="ai">AI Generate</TabsTrigger>
+          <TabsTrigger value="ai-settings">AI Settings</TabsTrigger>
         </TabsList>
 
         {/* SUBJECTS */}
