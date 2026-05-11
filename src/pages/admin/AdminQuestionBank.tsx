@@ -177,24 +177,44 @@ const AdminQuestionBank = () => {
   const [aiLang, setAiLang] = useState<'en' | 'bn'>('en');
   const [aiBusy, setAiBusy] = useState(false);
   const [aiDrafts, setAiDrafts] = useState<any[]>([]);
+  const [aiSelected, setAiSelected] = useState<Set<number>>(new Set());
+  const [aiProviderUsed, setAiProviderUsed] = useState<string>('');
+  const [aiLastError, setAiLastError] = useState<string>('');
 
   const generateAI = async (testMode = false) => {
     if (!aiSubject) { toast({ title: 'Subject required', variant: 'destructive' }); return; }
     setAiBusy(true);
+    setAiLastError('');
     try {
       const { data, error } = await supabase.functions.invoke('qb-ai-generate', {
         body: { subject_id: aiSubject, topic: aiTopic || undefined, difficulty: aiDiff, count: aiCount, language: aiLang, test: testMode },
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
-      setAiDrafts(data?.questions || []);
+      const drafts = (data?.questions || []).map((d: any) => ({ ...d, _approved: true }));
+      setAiDrafts(drafts);
+      setAiSelected(new Set(drafts.map((_: any, i: number) => i)));
+      setAiProviderUsed(data?.provider_used || '');
       const provNote = data?.fallback_used ? ` (fallback: ${data.provider_used})` : ` via ${data?.provider_used}`;
-      toast({ title: `Generated ${data?.questions?.length || 0} drafts${provNote}` });
+      toast({ title: `Generated ${drafts.length} drafts${provNote}` });
     } catch (e: any) {
-      toast({ title: 'AI generation failed', description: e.message, variant: 'destructive' });
+      const msg = e?.message || 'Unknown error';
+      setAiLastError(msg);
+      toast({ title: 'AI generation failed', description: msg, variant: 'destructive' });
     }
     setAiBusy(false);
   };
+
+  const updateDraft = (i: number, patch: any) => setAiDrafts((p) => p.map((d, j) => j === i ? { ...d, ...patch } : d));
+  const updateDraftOption = (i: number, oi: number, val: string) => setAiDrafts((p) => p.map((d, j) => {
+    if (j !== i) return d;
+    const opts = [...d.options]; const oldVal = opts[oi]; opts[oi] = val;
+    return { ...d, options: opts, correct_answer: d.correct_answer === oldVal ? val : d.correct_answer };
+  }));
+  const toggleSelect = (i: number) => setAiSelected((p) => { const n = new Set(p); n.has(i) ? n.delete(i) : n.add(i); return n; });
+  const selectAll = () => setAiSelected(new Set(aiDrafts.map((_, i) => i)));
+  const selectNone = () => setAiSelected(new Set());
+  const removeDraft = (i: number) => { setAiDrafts((p) => p.filter((_, j) => j !== i)); setAiSelected(new Set()); };
 
   // ---- AI settings ----
   const { data: aiSettings, refetch: refetchSettings } = useQuery({
@@ -233,17 +253,22 @@ const AdminQuestionBank = () => {
   };
 
   const approveAllDrafts = async () => {
-    if (aiDrafts.length === 0) return;
-    const rows = aiDrafts.map((d) => ({
+    const picked = aiDrafts.filter((_, i) => aiSelected.has(i));
+    if (picked.length === 0) { toast({ title: 'No drafts selected', variant: 'destructive' }); return; }
+    // Validate
+    const bad = picked.find((d) => !d.question_text?.trim() || !Array.isArray(d.options) || d.options.length < 2 || !d.correct_answer || !d.options.includes(d.correct_answer));
+    if (bad) { toast({ title: 'Some drafts are invalid', description: 'Each must have text, ≥2 options and a correct answer matching one option.', variant: 'destructive' }); return; }
+    const rows = picked.map((d) => ({
       subject_id: aiSubject, difficulty: aiDiff, question_type: 'multiple_choice' as QType,
-      question_text: d.question_text, options: d.options, correct_answer: d.correct_answer,
-      explanation: d.explanation, points: 1, source: 'ai' as const,
+      question_text: d.question_text.trim(), options: d.options.map((o: string) => o.trim()), correct_answer: d.correct_answer.trim(),
+      explanation: d.explanation || '', points: 1, source: 'ai' as const,
     }));
     const { error } = await supabase.from('qb_questions').insert(rows);
     if (error) { toast({ title: 'Failed', description: error.message, variant: 'destructive' }); return; }
-    toast({ title: `Added ${rows.length} questions` });
-    setAiDrafts([]);
+    toast({ title: `Added ${rows.length} questions to bank` });
+    setAiDrafts([]); setAiSelected(new Set());
     qc.invalidateQueries({ queryKey: ['admin-qb-questions'] });
+    qc.invalidateQueries({ queryKey: ['admin-qb-kpi'] });
   };
 
   return (
@@ -366,10 +391,18 @@ const AdminQuestionBank = () => {
 
         {/* AI GENERATE */}
         <TabsContent value="ai" className="space-y-3">
-          <Card><CardContent className="p-4 space-y-3">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <Card><CardContent className="p-4 space-y-4">
+            <div className="flex items-start gap-2 p-3 rounded-lg bg-primary/5 border border-primary/20">
+              <Sparkles className="h-4 w-4 text-primary mt-0.5 shrink-0" />
+              <div className="text-xs">
+                <p className="font-bold">AI Question Generator</p>
+                <p className="text-muted-foreground">Drafts are reviewed before saving. Edit any field, deselect bad ones, and approve the rest. Configure provider in <button className="underline text-primary" onClick={() => setTab('ai-settings')}>AI Settings</button>.</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               <div>
-                <Label>Subject</Label>
+                <Label>Subject *</Label>
                 <Select value={aiSubject} onValueChange={setAiSubject}>
                   <SelectTrigger><SelectValue placeholder="Pick subject" /></SelectTrigger>
                   <SelectContent>{subjects.map((s: any) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent>
@@ -391,12 +424,12 @@ const AdminQuestionBank = () => {
                 </Select>
               </div>
               <div>
-                <Label>Count</Label>
-                <Input type="number" value={aiCount} onChange={(e) => setAiCount(parseInt(e.target.value) || 5)} min={1} max={50} />
+                <Label>Count (1-50)</Label>
+                <Input type="number" value={aiCount} onChange={(e) => setAiCount(Math.max(1, Math.min(50, parseInt(e.target.value) || 1)))} min={1} max={50} />
               </div>
             </div>
-            <div className="flex gap-2 items-end">
-              <div className="w-40">
+            <div className="flex flex-wrap gap-2 items-end">
+              <div className="w-full sm:w-40">
                 <Label>Language</Label>
                 <Select value={aiLang} onValueChange={(v) => setAiLang(v as 'en' | 'bn')}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
@@ -406,29 +439,71 @@ const AdminQuestionBank = () => {
                   </SelectContent>
                 </Select>
               </div>
-              <Button onClick={() => generateAI(false)} disabled={aiBusy}>
+              <Button onClick={() => generateAI(false)} disabled={aiBusy || !aiSubject}>
                 {aiBusy ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Sparkles className="h-4 w-4 mr-1" />} Generate Drafts
               </Button>
+              <Button variant="outline" onClick={() => generateAI(true)} disabled={aiBusy || !aiSubject}>
+                Test (1 question)
+              </Button>
+              {aiProviderUsed && !aiLastError && (
+                <Badge variant="secondary" className="ml-auto">Last run: {aiProviderUsed}</Badge>
+              )}
             </div>
+
+            {aiLastError && (
+              <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/30 text-xs">
+                <p className="font-bold text-destructive">Generation failed</p>
+                <p className="text-destructive/90 break-words">{aiLastError}</p>
+                <p className="mt-1 text-muted-foreground">Check that the selected provider's API key is set in Supabase secrets, then retry.</p>
+              </div>
+            )}
 
             {aiDrafts.length > 0 && (
               <>
-                <div className="flex items-center justify-between pt-3 border-t">
-                  <p className="font-bold">{aiDrafts.length} drafts ready</p>
-                  <Button onClick={approveAllDrafts}><Plus className="h-4 w-4 mr-1" /> Add All to Bank</Button>
+                <div className="flex items-center justify-between pt-3 border-t flex-wrap gap-2">
+                  <div>
+                    <p className="font-bold">{aiSelected.size} of {aiDrafts.length} selected</p>
+                    <div className="flex gap-2 text-xs mt-1">
+                      <button className="underline text-primary" onClick={selectAll}>Select all</button>
+                      <button className="underline text-muted-foreground" onClick={selectNone}>Select none</button>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button variant="outline" onClick={() => { setAiDrafts([]); setAiSelected(new Set()); }}>Discard</Button>
+                    <Button onClick={approveAllDrafts} disabled={aiSelected.size === 0}>
+                      <Plus className="h-4 w-4 mr-1" /> Approve {aiSelected.size} & Save
+                    </Button>
+                  </div>
                 </div>
-                <div className="space-y-2 max-h-[500px] overflow-y-auto">
-                  {aiDrafts.map((d, i) => (
-                    <Card key={i}><CardContent className="p-3 text-sm space-y-1">
-                      <p className="font-medium">{i + 1}. {d.question_text}</p>
-                      <ul className="text-xs text-muted-foreground ml-4 list-disc">
-                        {d.options?.map((o: string, j: number) => (
-                          <li key={j} className={o === d.correct_answer ? 'text-emerald-600 font-bold' : ''}>{o}</li>
-                        ))}
-                      </ul>
-                      {d.explanation && <p className="text-xs italic text-muted-foreground">💡 {d.explanation}</p>}
-                    </CardContent></Card>
-                  ))}
+                <div className="space-y-2 max-h-[600px] overflow-y-auto pr-1">
+                  {aiDrafts.map((d, i) => {
+                    const isSel = aiSelected.has(i);
+                    const valid = d.question_text?.trim() && Array.isArray(d.options) && d.options.length >= 2 && d.correct_answer && d.options.includes(d.correct_answer);
+                    return (
+                      <Card key={i} className={`${isSel ? 'border-primary/40' : 'opacity-60'} ${!valid ? 'border-destructive/40' : ''}`}>
+                        <CardContent className="p-3 space-y-2">
+                          <div className="flex items-start gap-2">
+                            <input type="checkbox" checked={isSel} onChange={() => toggleSelect(i)} className="mt-1.5 accent-primary" />
+                            <span className="text-xs font-bold text-muted-foreground mt-1.5 w-6">#{i + 1}</span>
+                            <Textarea rows={2} value={d.question_text || ''} onChange={(e) => updateDraft(i, { question_text: e.target.value })} className="flex-1 text-sm" />
+                            <Button size="icon" variant="ghost" onClick={() => removeDraft(i)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 ml-9">
+                            {(d.options || []).map((o: string, j: number) => (
+                              <div key={j} className="flex items-center gap-2">
+                                <input type="radio" name={`correct-${i}`} checked={d.correct_answer === o && o !== ''} onChange={() => updateDraft(i, { correct_answer: o })} className="accent-emerald-600" />
+                                <Input value={o} onChange={(e) => updateDraftOption(i, j, e.target.value)} className="h-8 text-xs" placeholder={`Option ${String.fromCharCode(65 + j)}`} />
+                              </div>
+                            ))}
+                          </div>
+                          <div className="ml-9">
+                            <Input value={d.explanation || ''} onChange={(e) => updateDraft(i, { explanation: e.target.value })} className="h-8 text-xs" placeholder="💡 Explanation (optional)" />
+                          </div>
+                          {!valid && <p className="text-xs text-destructive ml-9">⚠ Correct answer must match one of the options</p>}
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
                 </div>
               </>
             )}
