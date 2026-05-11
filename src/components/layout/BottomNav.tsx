@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { Home, BookOpen, ShoppingCart, ClipboardList, User } from 'lucide-react';
+import { Home, BookOpen, Brain, ShoppingCart, User } from 'lucide-react';
 import { useCartStore } from '@/stores/cartStore';
 
 const BottomNav = () => {
@@ -9,7 +9,7 @@ const BottomNav = () => {
   const tabs = [
     { label: 'Home', icon: Home, href: '/' },
     { label: 'Courses', icon: BookOpen, href: '/courses' },
-    { label: 'Register', icon: ClipboardList, href: '/register' },
+    { label: 'Practice', icon: Brain, href: '/practice' },
     { label: 'Cart', icon: ShoppingCart, href: '/cart', badge: itemCount },
     { label: 'Profile', icon: User, href: '/dashboard' },
   ];

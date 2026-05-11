@@ -16,6 +16,7 @@ const UpcomingEvents = lazy(() => import('@/components/features/home/UpcomingEve
 const LearningPathsPreview = lazy(() => import('@/components/features/home/LearningPathsPreview'));
 const SponsorsSection = lazy(() => import('@/components/features/home/SponsorsSection'));
 const ClassVideosShowcase = lazy(() => import('@/components/features/home/ClassVideosShowcase'));
+const PracticeArenaCTA = lazy(() => import('@/components/features/home/PracticeArenaCTA'));
 
 const SectionFallback = () => (
   <div className="py-12 min-h-[320px] flex items-center justify-center">
@@ -68,6 +69,7 @@ const Index = () => {
       <main className="flex-1 pb-14 lg:pb-0">
         <HeroSlider />
         <LazySection><FeaturedCourses /></LazySection>
+        <LazySection><PracticeArenaCTA /></LazySection>
         <LazySection><StatsSection /></LazySection>
         <LazySection><LearningPathsPreview /></LazySection>
         <LazySection><EbookShowcase /></LazySection>
