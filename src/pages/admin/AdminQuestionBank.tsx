@@ -26,9 +26,33 @@ const emptyQ = { subject_id: '', topic_id: '', difficulty: 'basic' as Diff, ques
 
 const AdminQuestionBank = () => {
   const qc = useQueryClient();
-  const [tab, setTab] = useState('subjects');
+  const navigate = useNavigate();
+  const { tab: tabParam } = useParams<{ tab?: string }>();
+  const VALID = ['subjects', 'questions', 'bulk', 'ai', 'sessions', 'violations', 'badges', 'analytics', 'ai-settings'];
+  const tab = tabParam && VALID.includes(tabParam) ? tabParam : 'subjects';
+  const setTab = (v: string) => navigate(`/admin/question-bank/${v}`);
 
-  // ---- Subjects ----
+  // ---- KPI strip ----
+  const { data: kpi } = useQuery({
+    queryKey: ['admin-qb-kpi'],
+    queryFn: async () => {
+      const since24h = new Date(Date.now() - 86400_000).toISOString();
+      const since7d = new Date(Date.now() - 7 * 86400_000).toISOString();
+      const [qs, exams7d, viol24h, live] = await Promise.all([
+        supabase.from('qb_questions').select('id', { count: 'exact', head: true }),
+        supabase.from('qb_exam_sessions').select('id', { count: 'exact', head: true }).gte('started_at', since7d),
+        supabase.from('qb_exam_violations').select('id', { count: 'exact', head: true }).gte('occurred_at', since24h),
+        supabase.from('qb_exam_sessions').select('id', { count: 'exact', head: true }).eq('status', 'in_progress'),
+      ]);
+      return {
+        questions: qs.count ?? 0,
+        exams7d: exams7d.count ?? 0,
+        violations24h: viol24h.count ?? 0,
+        live: live.count ?? 0,
+      };
+    },
+    refetchInterval: 30_000,
+  });
   const { data: subjects = [] } = useQuery({
     queryKey: ['admin-qb-subjects'],
     queryFn: async () => (await supabase.from('qb_subjects').select('*').order('sort_order')).data ?? [],
