@@ -31,7 +31,7 @@ const PracticeLeaderboard = () => {
       const { data } = await q;
       const userIds = (data ?? []).map((r: any) => r.user_id);
       if (userIds.length === 0) return [];
-      const { data: profiles } = await supabase.from('profiles').select('id, full_name, avatar_url, roll_id').in('id', userIds);
+      const { data: profiles } = await supabase.from('user_profiles').select('id, full_name, avatar_url, roll_id').in('id', userIds);
       const pmap = new Map((profiles ?? []).map((p: any) => [p.id, p]));
       return (data ?? []).map((r: any) => ({ ...r, profile: pmap.get(r.user_id) }));
     },
