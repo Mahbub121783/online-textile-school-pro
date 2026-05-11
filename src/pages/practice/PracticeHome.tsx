@@ -1,12 +1,16 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Brain, Trophy, History, ArrowRight, Sparkles } from 'lucide-react';
+import { Brain, Trophy, History, ArrowRight, Sparkles, Zap, Flame, Award, Users } from 'lucide-react';
 import SEOHead from '@/components/SEOHead';
+import Header from '@/components/layout/Header';
+import Footer from '@/components/layout/Footer';
+import BottomNav from '@/components/layout/BottomNav';
 
 const PracticeHome = () => {
   const { user } = useAuth();
