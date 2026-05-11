@@ -1,108 +1,135 @@
-## Goal
 
-Question Bank-er AI question generation **admin-er nijer API key** theke chalano, Lovable AI shudhu optional fallback. AI shudhu admin-er kaaj-e use hobe (bulk generate kore DB-te store), end user-er upor kono AI call hobe na.
+# Practice Exam — Student-Friendly + Competitive Upgrade
 
-## Architecture
+Goal: Students sohoje pabe, exam ta competitive feel dibe (JEE/Olympiad style), timer & state churi-proof but friendly (warning only, resume allowed), result page e gamification.
 
-```text
-Admin clicks "Generate"
-        ↓
-Edge Function: qb-ai-generate
-        ↓
-Read provider config from `qb_ai_settings` table
-        ↓
-   ┌────────────────┬───────────────┐
-   │  Primary: Groq │  Mistral      │  OpenRouter  (admin choice)
-   │  /Custom       │               │
-   └────────┬───────┴───────┬───────┘
-            ↓ (on failure)
-        Lovable AI (optional fallback if enabled)
-            ↓
-   Validate JSON → Insert into qb_questions (source='ai')
-```
+---
 
-## 1. Database — new admin settings table
+## 1. Discoverability — Students kothay pabe
 
-`qb_ai_settings` (single-row config, admin-only RLS):
+**A. Dedicated landing page** `/practice` (already exists as `PracticeHome.tsx`) — upgrade to a hero-styled competitive landing:
+- Boro hero: "Practice Arena — Test Your Edge"
+- Live stats strip: total questions, students online, top scorer today
+- Subject grid cards (icon + question count + difficulty badge)
+- "Quick Start" CTA (random 10-question sprint)
+- Recent attempts + leaderboard preview
 
-| column | type | purpose |
-|---|---|---|
-| `id` | uuid PK | always single row |
-| `provider` | text | `'groq' \| 'mistral' \| 'openrouter' \| 'openai' \| 'lovable'` |
-| `model` | text | e.g. `llama-3.3-70b-versatile`, `mistral-large-latest`, `google/gemini-2.0-flash-exp:free` |
-| `fallback_enabled` | boolean | true → fallback to Lovable AI |
-| `fallback_provider` | text | default `'lovable'` |
-| `fallback_model` | text | default `'google/gemini-2.5-flash'` |
-| `temperature` | numeric | default `0.7` |
-| `max_questions_per_run` | int | default `25` (safety cap) |
-| `system_prompt_override` | text nullable | optional custom prompt |
+**B. Homepage Hero CTA**
+- `src/components/features/home/` e notun `PracticeArenaCTA.tsx` section — boro gradient banner with "Start Practicing → /practice"
+- Mount kora hobe `src/pages/Index.tsx` e (Featured Courses er por)
 
-RLS: SELECT/UPDATE only for `admin` + `super_admin`. API keys **never stored here** — only provider name + model. Actual keys are in Supabase secrets.
+**C. Header nav e "Practice" link** add (optional but recommended for visibility) — `Header.tsx` desktop nav + `BottomNav.tsx` mobile.
 
-## 2. Secrets to add
+---
 
-Admin will add **only** the keys for the provider(s) they want:
-- `GROQ_API_KEY` (recommended — free tier, fast)
-- `MISTRAL_API_KEY` (free tier available)
-- `OPENROUTER_API_KEY` (multi-model, has free models)
-- `OPENAI_API_KEY` (optional)
+## 2. Secure Resumable Timer (Churi-proof)
 
-`LOVABLE_API_KEY` already set → fallback automatically works.
+Already server-side `started_at` based — bhalo. Upgrade:
 
-## 3. Edge Function — `qb-ai-generate`
+- **Server is source of truth**: timer always recomputed from `started_at + time_limit_seconds - now()` on every mount. Local clock manipulate korle kichu hobe na.
+- **Heartbeat ping** every 20s → updates `qb_exam_sessions.last_heartbeat_at` (new column). Server-side: jodi heartbeat `time_limit + 60s` peruye jay tobe `qb_submit_exam` auto-trigger via cron OR lazy-submit on next access.
+- **Tab close / refresh / browser crash**: re-open korle session resume hobe with correct remaining time, but warning count +1 (see §3).
+- **localStorage backup of answers** (per session) — accidental refresh hole answers hariye jabe na.
 
-Single function, provider-agnostic:
+---
 
-- Auth: requires logged-in user with `admin`/`super_admin`/`instructor` role (validated via `getClaims` + `qb_is_staff` RPC)
-- Input (Zod validated): `{ subject_id, topic_id?, difficulty, count (1–25), language ('en'|'bn'), question_type }`
-- Reads `qb_ai_settings` for provider config
-- Builds OpenAI-compatible chat completion request:
-  - **Groq**: `https://api.groq.com/openai/v1/chat/completions`
-  - **Mistral**: `https://api.mistral.ai/v1/chat/completions`
-  - **OpenRouter**: `https://openrouter.ai/api/v1/chat/completions`
-  - **OpenAI**: `https://api.openai.com/v1/chat/completions`
-  - **Lovable**: `https://ai.gateway.lovable.dev/v1/chat/completions`
-- Uses **structured tool-calling** (JSON schema) so output is always valid
-- Schema enforces: `question_text`, `options[]`, `correct_answer`, `explanation`, `difficulty`, `points`
-- On any provider failure → if `fallback_enabled`, retry with Lovable AI; else return error
-- Returns draft questions (NOT auto-inserted) → admin reviews → bulk approves
+## 3. Soft Anti-Cheat (Warnings Only)
 
-## 4. Admin UI changes (`AdminQuestionBank.tsx`)
+New table `qb_exam_violations` (session_id, type, occurred_at, metadata).
 
-Add new tab **"AI Settings"**:
-- Provider dropdown (Groq / Mistral / OpenRouter / OpenAI / Lovable)
-- Model name input (free text — placeholder shows recommended free models per provider)
-- Temperature slider
-- Fallback toggle + fallback model
-- Status indicator: shows which API keys are configured (✓/✗) by checking edge function endpoint
-- "Test Connection" button → calls function with `count=1`
+Detect & log these events client-side, push to server:
+- `tab_blur` / `visibility_hidden` (tab switch, minimize)
+- `window_blur` (alt-tab)
+- `fullscreen_exit` (if fullscreen mode active)
+- `copy` / `paste` / `right_click` attempts (blocked + logged)
+- `session_resumed` (after refresh/crash)
+- `devtools_opened` (best-effort heuristic)
 
-Existing **"AI Generator"** tab:
-- Generate → Review draft list → admin can edit each question → "Approve & Save" → inserts into `qb_questions` with `source='ai'`
-- No AI runs anywhere else in the app (no student-facing AI for the question bank)
+UI behavior (friendly, not punishing):
+- Top of exam shows **"Integrity: ⚠ 0 warnings"** counter
+- On each violation: toast banner "Warning #N — please stay on this tab. Your activity is being recorded."
+- **No auto-submit ever** (per user choice) — exam continues
+- Result page shows full integrity report ("3 tab switches, 1 paste attempt") — visible to admin too
+- Admin dashboard violation analytics
 
-## 5. Client safety
+---
 
-- AI generation route is admin-only (sidebar link gated by role)
-- No frontend code calls AI providers directly — always through edge function
-- Generated questions go to `qb_questions` table → from then on, exam runner just reads from DB (zero AI calls during student exam)
+## 4. Fullscreen Focused Exam UI
 
-## 6. Free model recommendations (shown in UI as hints)
+Upgrade `PracticeExam.tsx`:
 
-| Provider | Free model |
-|---|---|
-| Groq | `llama-3.3-70b-versatile` |
-| Mistral | `mistral-small-latest` |
-| OpenRouter | `google/gemini-2.0-flash-exp:free`, `meta-llama/llama-3.3-70b-instruct:free` |
-| Lovable (fallback) | `google/gemini-2.5-flash` |
+- **"Enter Focus Mode" button on start** → `requestFullscreen()`, hides all chrome (header, footer, sidebar)
+- Distraction-free shell: only question + options + timer + palette
+- Large, bold timer (top-right), color shifts: green → amber (<5min) → red pulse (<1min)
+- Smooth question transitions (framer-motion fade + slide)
+- Keyboard shortcuts: `1-9` select option, `→/←` next/prev, `F` flag, `Enter` submit
+- Progress ring instead of bar
+- Auto-save indicator ("Saved ✓" subtle)
+- Mobile: sticky bottom action bar (Prev / Flag / Next), palette in bottom sheet
+- Dark exam theme (always dark inside exam regardless of site theme) — pure focus
 
-## What I need from you before building
+---
 
-1. **Confirm provider** — Groq/Mistral/OpenRouter/OpenAI? (Groq + OpenRouter are best for free tier)
-2. After plan approval, I will trigger `add_secret` for the chosen provider's API key. Tumi tokhon key paste korbe (Groq: https://console.groq.com/keys, OpenRouter: https://openrouter.ai/keys).
+## 5. Gamified Result Page
+
+Upgrade `PracticeResult.tsx`:
+
+- **Hero score reveal animation** (count-up animation, framer-motion)
+- Big circular score ring with grade badge (S/A/B/C/D)
+- **XP earned** card: `+score × 10 XP` with streak bonus
+- **Rank reveal**: "You're #12 out of 547 today" (animated)
+- **Streak counter**: "🔥 5-day streak"
+- **Badges unlocked** (e.g. "Speed Demon" — finished in <50% time, "Perfectionist" — 100%, "Warrior" — 10 exams done)
+- Time-per-question chart (recharts)
+- Subject mastery progress bar update animation
+- Question-by-question review accordion (correct/wrong/explanation)
+- **Confetti** on >80% score
+- Share card generator (download as PNG: "I scored 92% on Physics Practice")
+- CTAs: "Try Again" / "Next Subject" / "View Leaderboard"
+
+XP & badge tables (new):
+- `qb_user_stats` (user_id, total_xp, current_streak, longest_streak, last_practice_date, exams_taken)
+- `qb_badges` (key, name, description, icon, criteria_jsonb)
+- `qb_user_badges` (user_id, badge_key, earned_at)
+
+XP awarded inside `qb_submit_exam` RPC (atomic update).
+
+---
+
+## 6. Admin Visibility
+
+- AdminQuestionBank → notun "Live Sessions" tab: ongoing exams + violation feed
+- Per-attempt detail modal showing violation timeline
+- Aggregate analytics: avg violations per subject, suspicious users (>10 violations)
+
+---
+
+## Technical Sections
+
+### DB migrations
+1. Alter `qb_exam_sessions`: add `last_heartbeat_at TIMESTAMPTZ`, `violation_count INT DEFAULT 0`, `focus_mode_used BOOLEAN DEFAULT false`
+2. Create `qb_exam_violations` table + RLS (student insert own, admin read all)
+3. Create `qb_user_stats`, `qb_badges`, `qb_user_badges` + RLS
+4. RPC `qb_log_violation(_session_id, _type, _metadata)`
+5. RPC `qb_heartbeat(_session_id)`
+6. Update `qb_submit_exam`: award XP, update streak, evaluate badges
+7. Seed default badges (8-10 starter badges)
+
+### Frontend files
+- **New**: `src/components/practice/FocusModeShell.tsx`, `IntegrityBanner.tsx`, `ResultHeroReveal.tsx`, `BadgeUnlockModal.tsx`, `ShareScoreCard.tsx`, `useExamIntegrity.ts` hook, `useExamHeartbeat.ts` hook
+- **New**: `src/components/features/home/PracticeArenaCTA.tsx`
+- **Edit**: `PracticeHome.tsx` (hero+stats+grid), `PracticeExam.tsx` (focus mode, integrity, keyboard, animations, localStorage backup), `PracticeResult.tsx` (full gamification), `Index.tsx` (mount CTA), `Header.tsx` + `BottomNav.tsx` (Practice link), `AdminQuestionBank.tsx` (Live Sessions tab)
+
+### Libraries (already installed): framer-motion, recharts, canvas-confetti (verify) , html-to-image (for share card — may need install)
+
+### Mobile responsiveness
+- Focus mode adapts: full-screen, swipe between questions, bottom sheet palette
+- Result page stacks vertically, share card uses native Web Share API on mobile
+
+---
 
 ## Out of scope (this iteration)
+- Hard-mode auto-submit (per your choice)
+- Proctoring with camera/AI
+- Paid premium exams
 
-- Per-question AI explanations on result page (purely DB-driven)
-- AI-based question difficulty auto-tagging
-- Per-user AI tutor chat in Question Bank
