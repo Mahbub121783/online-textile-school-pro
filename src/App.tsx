@@ -170,6 +170,13 @@ const AdminPopups = lazy(() => import("./pages/admin/AdminPopups"));
 const PopupAnalytics = lazy(() => import("./pages/admin/popups/PopupAnalytics"));
 const ContributorProfile = lazy(() => import("./pages/contributor/ContributorProfile"));
 const AdminDataFreshness = lazy(() => import("./pages/admin/AdminDataFreshness"));
+const PracticeHome = lazy(() => import("./pages/practice/PracticeHome"));
+const PracticeSubject = lazy(() => import("./pages/practice/PracticeSubject"));
+const PracticeExam = lazy(() => import("./pages/practice/PracticeExam"));
+const PracticeResult = lazy(() => import("./pages/practice/PracticeResult"));
+const PracticeHistory = lazy(() => import("./pages/practice/PracticeHistory"));
+const PracticeLeaderboard = lazy(() => import("./pages/practice/PracticeLeaderboard"));
+const AdminQuestionBank = lazy(() => import("./pages/admin/AdminQuestionBank"));
 
 // Optimized QueryClient with aggressive caching
 const queryClient = new QueryClient({
