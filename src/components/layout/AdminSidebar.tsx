@@ -96,6 +96,8 @@ const brainTestSubItems = [
   { title: 'Analytics', url: '/admin/question-bank/analytics', icon: BarChart3 },
   { title: 'AI Settings', url: '/admin/question-bank/ai-settings', icon: Settings },
 ];
+
+const bottomItems = [
   { title: 'EduMail', url: '/admin/email-requests', icon: Mail },
   { title: 'Admin Mail', url: '/admin/mail', icon: Send },
   { title: 'E-Books', url: '/admin/ebooks', icon: BookOpen },
