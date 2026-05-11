@@ -4445,6 +4445,51 @@ export type Database = {
         }
         Relationships: []
       }
+      qb_ai_settings: {
+        Row: {
+          created_at: string
+          fallback_enabled: boolean
+          fallback_model: string
+          fallback_provider: string
+          id: string
+          max_questions_per_run: number
+          model: string
+          provider: string
+          singleton: boolean
+          system_prompt_override: string | null
+          temperature: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          fallback_enabled?: boolean
+          fallback_model?: string
+          fallback_provider?: string
+          id?: string
+          max_questions_per_run?: number
+          model?: string
+          provider?: string
+          singleton?: boolean
+          system_prompt_override?: string | null
+          temperature?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          fallback_enabled?: boolean
+          fallback_model?: string
+          fallback_provider?: string
+          id?: string
+          max_questions_per_run?: number
+          model?: string
+          provider?: string
+          singleton?: boolean
+          system_prompt_override?: string | null
+          temperature?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       qb_exam_answers: {
         Row: {
           created_at: string
