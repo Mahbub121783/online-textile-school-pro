@@ -4490,6 +4490,39 @@ export type Database = {
         }
         Relationships: []
       }
+      qb_badges: {
+        Row: {
+          criteria: Json
+          description: string
+          icon: string
+          is_active: boolean
+          key: string
+          name: string
+          sort_order: number
+          tier: string
+        }
+        Insert: {
+          criteria?: Json
+          description: string
+          icon: string
+          is_active?: boolean
+          key: string
+          name: string
+          sort_order?: number
+          tier?: string
+        }
+        Update: {
+          criteria?: Json
+          description?: string
+          icon?: string
+          is_active?: boolean
+          key?: string
+          name?: string
+          sort_order?: number
+          tier?: string
+        }
+        Relationships: []
+      }
       qb_exam_answers: {
         Row: {
           created_at: string
@@ -4539,11 +4572,14 @@ export type Database = {
         Row: {
           created_at: string
           difficulty: Database["public"]["Enums"]["qb_difficulty"]
+          focus_mode_used: boolean
           id: string
+          last_heartbeat_at: string | null
           pass_percentage: number
           passed: boolean
           percentage: number
           question_ids: string[]
+          resume_count: number
           score: number
           started_at: string
           status: string
@@ -4555,15 +4591,20 @@ export type Database = {
           total_points: number
           total_questions: number
           user_id: string
+          violation_count: number
+          xp_earned: number
         }
         Insert: {
           created_at?: string
           difficulty: Database["public"]["Enums"]["qb_difficulty"]
+          focus_mode_used?: boolean
           id?: string
+          last_heartbeat_at?: string | null
           pass_percentage?: number
           passed?: boolean
           percentage?: number
           question_ids: string[]
+          resume_count?: number
           score?: number
           started_at?: string
           status?: string
@@ -4575,15 +4616,20 @@ export type Database = {
           total_points?: number
           total_questions?: number
           user_id: string
+          violation_count?: number
+          xp_earned?: number
         }
         Update: {
           created_at?: string
           difficulty?: Database["public"]["Enums"]["qb_difficulty"]
+          focus_mode_used?: boolean
           id?: string
+          last_heartbeat_at?: string | null
           pass_percentage?: number
           passed?: boolean
           percentage?: number
           question_ids?: string[]
+          resume_count?: number
           score?: number
           started_at?: string
           status?: string
@@ -4595,6 +4641,8 @@ export type Database = {
           total_points?: number
           total_questions?: number
           user_id?: string
+          violation_count?: number
+          xp_earned?: number
         }
         Relationships: [
           {
@@ -4609,6 +4657,41 @@ export type Database = {
             columns: ["topic_id"]
             isOneToOne: false
             referencedRelation: "qb_topics"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      qb_exam_violations: {
+        Row: {
+          id: string
+          metadata: Json | null
+          occurred_at: string
+          session_id: string
+          type: string
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          metadata?: Json | null
+          occurred_at?: string
+          session_id: string
+          type: string
+          user_id: string
+        }
+        Update: {
+          id?: string
+          metadata?: Json | null
+          occurred_at?: string
+          session_id?: string
+          type?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "qb_exam_violations_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "qb_exam_sessions"
             referencedColumns: ["id"]
           },
         ]
@@ -4823,6 +4906,81 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      qb_user_badges: {
+        Row: {
+          badge_key: string
+          earned_at: string
+          id: string
+          session_id: string | null
+          user_id: string
+        }
+        Insert: {
+          badge_key: string
+          earned_at?: string
+          id?: string
+          session_id?: string | null
+          user_id: string
+        }
+        Update: {
+          badge_key?: string
+          earned_at?: string
+          id?: string
+          session_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "qb_user_badges_badge_key_fkey"
+            columns: ["badge_key"]
+            isOneToOne: false
+            referencedRelation: "qb_badges"
+            referencedColumns: ["key"]
+          },
+          {
+            foreignKeyName: "qb_user_badges_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "qb_exam_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      qb_user_stats: {
+        Row: {
+          current_streak: number
+          exams_passed: number
+          exams_taken: number
+          last_practice_date: string | null
+          longest_streak: number
+          perfect_scores: number
+          total_xp: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          current_streak?: number
+          exams_passed?: number
+          exams_taken?: number
+          last_practice_date?: string | null
+          longest_streak?: number
+          perfect_scores?: number
+          total_xp?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          current_streak?: number
+          exams_passed?: number
+          exams_taken?: number
+          last_practice_date?: string | null
+          longest_streak?: number
+          perfect_scores?: number
+          total_xp?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       quiz_attempts: {
         Row: {
@@ -6942,7 +7100,12 @@ export type Database = {
         Returns: undefined
       }
       qb_get_session_result: { Args: { _session_id: string }; Returns: Json }
+      qb_heartbeat: { Args: { _session_id: string }; Returns: undefined }
       qb_is_staff: { Args: { _uid: string }; Returns: boolean }
+      qb_log_violation: {
+        Args: { _metadata?: Json; _session_id: string; _type: string }
+        Returns: undefined
+      }
       qb_refresh_leaderboard: { Args: never; Returns: undefined }
       qb_start_exam: {
         Args: {
