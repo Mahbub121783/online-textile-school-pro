@@ -1,70 +1,92 @@
-## Goal
 
-1. "Use my current location" button should reliably auto-fill District + Upazila for Bangladesh users.
-2. Replace the "Campus" field with "Department" everywhere it appears (since University/Institution already covers the institution name).
-3. Make sure Department is shown/editable in the admin Student Detail page and any other admin views, and in the student profile area.
+# Question Bank & Practice Exam System
+
+A standalone "Brain Test" module — fully separate from course quizzes. Logged-in students subject + level select korbe, system random 25 Q diye exam toiri korbe, instant result + explanation + leaderboard + full attempt history.
+
+## 1. Database (new tables)
+
+- **qb_subjects** — name, slug, icon, description, sort_order, is_active
+- **qb_topics** — subject_id, name, slug, description, sort_order (lesson-equivalent grouping)
+- **qb_questions**
+  - subject_id, topic_id (nullable)
+  - difficulty: enum `basic | intermediate | advanced`
+  - question_type: `multiple_choice | true_false | short_answer`
+  - question_text, options (jsonb), correct_answer, explanation
+  - points (default 1), tags (text[]), source ('manual' | 'bulk' | 'ai')
+  - created_by, is_active, times_used, correct_rate
+- **qb_exam_sessions** — user_id, subject_id, topic_id (nullable), difficulty, question_ids (uuid[]), started_at, submitted_at, time_taken_seconds, score, total, percentage, passed
+- **qb_exam_answers** — session_id, question_id, selected_answer, is_correct, time_spent_seconds
+- **qb_leaderboard_cache** — user_id, period ('all_time'|'monthly'|'weekly'), subject_id (nullable), total_exams, avg_percentage, total_points, rank (refreshed via pg_cron)
+
+RLS:
+- Students: read active subjects/topics/questions (correct_answer/explanation hidden until submission via SECURITY DEFINER fn), full CRUD on own sessions/answers
+- Admin/instructor: full CRUD on subjects/topics/questions
+- Leaderboard cache: public read
+
+DB function `start_exam(subject, topic?, difficulty)` → server-side picks 25 random active questions, creates session, returns sanitized questions (no answers). `submit_exam(session_id, answers[])` → grades, updates session + question stats.
+
+## 2. Student-facing UI (`/practice`)
+
+```
+/practice                  → Subject grid (icons, question counts, "Your best %")
+/practice/:subject         → Topic list + 3 difficulty cards (Basic/Intermediate/Advanced) with available Q count and "Start Exam" CTA
+/practice/exam/:sessionId  → Exam runner (25 Q, optional timer, progress bar, prev/next, flag, auto-save)
+/practice/result/:sessionId→ Score breakdown, per-Q correct/wrong with explanation, retry CTA
+/practice/history          → User's all attempts with filters (subject, difficulty, date)
+/practice/leaderboard      → Tabs: All-time / Monthly / Weekly • filter by subject • top 100 + own rank
+```
+
+Dashboard sidebar gets a "Practice / Brain Test" link. Profile shows total practice exams + avg score badge.
+
+## 3. Admin/Instructor UI
+
+New admin route `Admin → Question Bank` with tabs:
+- **Subjects & Topics** — CRUD tree
+- **Questions** — table with filters (subject, topic, difficulty, type, source), inline edit, bulk delete, activate/deactivate
+- **Add Question** — single-form modal (reuses `QuizBuilderModal` patterns)
+- **Bulk Import** — CSV/Excel uploader with template download, server-side validation, preview before commit, per-row error report
+- **AI Generator** — Choose subject/topic/difficulty/count → calls `qb-ai-generate` edge function (Lovable AI Gateway, Gemini Flash) → review screen → bulk approve into bank
+- **Analytics** — most-missed questions, low-quality flags (correct_rate <20% or >95%)
+
+Same UI exposed to instructors with RLS scoping (only their own contributed questions editable).
+
+## 4. Edge Functions
+
+- `qb-bulk-import` — parses uploaded CSV/XLSX (already have parser deps), validates, inserts in batches of 500
+- `qb-ai-generate` — input {subject, topic, difficulty, count, language} → returns draft question array (JSON schema enforced)
+- `qb-leaderboard-refresh` — pg_cron hourly refresh of `qb_leaderboard_cache`
+
+## 5. Mechanics
+
+- 25 Q per session (configurable per-difficulty in admin settings)
+- Optional timer (default: Basic 20m, Intermediate 25m, Advanced 30m)
+- Pass mark 60% (configurable)
+- Anti-cheat lite: questions order shuffled per session, options shuffled per render, no answer key sent until submit
+- Streak tracking (consecutive days with ≥1 exam) shown on history page
+- React Query keys: `qb-subjects`, `qb-topics-{subject}`, `qb-question-counts`, `qb-session-{id}`, `qb-leaderboard-{period}-{subject}`
+
+## 6. Bulk-import CSV format
+
+```
+subject_slug,topic_slug,difficulty,question_type,question_text,option_a,option_b,option_c,option_d,correct_answer,explanation,points,tags
+```
+
+Downloadable template button + sample rows.
+
+## 7. Out of scope (future)
+
+- Adaptive difficulty
+- Paid subscription gating
+- Per-question discussion thread
+- Mock exam mode (mixed subjects, longer)
 
 ---
 
-## Part 1 — Deep fix for "Use my current location"
+## Technical notes
 
-Current behavior uses Nominatim with `zoom=10` and a thin address fallback chain. In Bangladesh this often returns empty `state_district` / `county`, so District never auto-fills (matches the user's screenshot where Gazipur was selected manually but no auto-update happened).
-
-Fix in `src/components/LocationCapture.tsx`:
-
-- Increase `zoom` to `14` and add `accept-language=en` so we get a richer English address breakdown.
-- Build a Bangladesh-aware mapping:
-  - **District** ← first match of: `state_district`, `county`, `district`, `city_district`, then a normalized lookup against the existing `BD_DISTRICTS` list (strip "District", "Zila", trailing whitespace, case-insensitive). If still empty, fall back to `city`.
-  - **Upazila** ← first match of: `subdistrict`, `suburb`, `town`, `municipality`, `village`, `city_district`, `neighbourhood`, `hamlet`.
-- Normalize the district string so the `<Select>` value matches one of `BD_DISTRICTS` exactly (e.g. "Gazipur District" → "Gazipur"). This is the key reason the dropdown wasn't updating.
-- If the browser denies permission or times out, surface a clearer toast with a "Try again" hint.
-- Add a secondary fallback to BigDataCloud's free reverse geocoder when Nominatim returns no usable district (no key required, better Bangladesh coverage).
-
-In `src/pages/dashboard/SettingsPage.tsx` `handleLocation`:
-- Always overwrite `district` and `upazila` when a value is returned (not only when previously empty), so the user sees the change immediately.
-- Trigger a visible re-render of the Select by writing the normalized value.
-
----
-
-## Part 2 — Replace "Campus" with "Department"
-
-### Database
-Add a `department text` column to `public.user_profiles` and backfill it from the existing `campus` column for any existing rows. Keep `campus` in the DB for now (no destructive drop) but stop using it in the UI.
-
-### Frontend label + field swap (Department instead of Campus)
-- `src/pages/dashboard/SettingsPage.tsx` — rename the Campus field to **Department**, bind it to `form.department`, placeholder e.g. "e.g. Textile Engineering". Load/save `profile.department`.
-- `src/hooks/useProfileCompleteness.ts` — replace the `campus` completeness item with `department`.
-- `src/pages/admin/StudentDetail.tsx` — replace the "Campus" ProfileField with **Department** (`profile.department`), and also surface it in any summary/header where Campus appears.
-- `src/pages/admin/AdminStudents.tsx` and `src/pages/admin/AdminUsers.tsx` — add a Department column / filter so admins can see and filter students by department (currently neither shows it).
-- `src/pages/Profile.tsx` and `src/pages/contributor/ContributorProfile.tsx` — show Department under the University line on public profile cards.
-
-### TypeScript types
-Regenerate `src/integrations/supabase/types.ts` after the migration so `user_profiles.department` is typed.
-
-### Admin "students" view consistency
-The user noted "user students oikhaneo thik koro" — make sure the new Department field is wired into:
-- AdminStudents list (column + optional filter dropdown)
-- StudentDetail header + Academic section
-- Any export / CSV download of students (if present in AdminStudents) — include Department.
-
----
-
-## Out of scope
-
-- We are NOT renaming/removing the existing faculty/internship `department` columns — those are already correct.
-- We are NOT dropping the `campus` column in this pass (kept as a safety net; can be removed in a later cleanup migration once we confirm nothing else reads it).
-
----
-
-## Files to change
-
-- `src/components/LocationCapture.tsx` (rewrite reverse-geocode logic)
-- `src/pages/dashboard/SettingsPage.tsx` (Department field + handleLocation overwrite)
-- `src/hooks/useProfileCompleteness.ts`
-- `src/pages/admin/StudentDetail.tsx`
-- `src/pages/admin/AdminStudents.tsx`
-- `src/pages/admin/AdminUsers.tsx`
-- `src/pages/Profile.tsx`
-- `src/pages/contributor/ContributorProfile.tsx`
-- New migration: add `department` column to `user_profiles`, backfill from `campus`.
-- `src/integrations/supabase/types.ts` (auto-regenerated after migration approval).
+- All new tables `qb_*` namespaced to avoid collision with existing `quizzes` (course-tied)
+- `start_exam`/`submit_exam` SECURITY DEFINER Postgres functions to keep correct_answer server-side
+- AI generation uses `LOVABLE_API_KEY` (already provisioned), structured output via tool calling
+- Bulk import uses streaming parse to handle 5–6k rows safely
+- Leaderboard cache + indexes: `(subject_id, difficulty, percentage desc)` on sessions, `(period, total_points desc)` on cache
+- Reuses existing shadcn primitives, Dark Teal & Terracotta theme tokens, `useAuth`, React Query defaults
