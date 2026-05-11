@@ -47,7 +47,8 @@ const LiveSessionsTab = () => {
 
   const forceSubmit = async (sessionId: string) => {
     if (!confirm('Force-submit this session now?')) return;
-    const { error } = await supabase.rpc('qb_submit_exam' as any, { p_session_id: sessionId });
+    // Pass empty answers — server-side will use whatever is already in qb_exam_answers
+    const { error } = await supabase.rpc('qb_submit_exam', { _session_id: sessionId, _answers: [] as never });
     if (error) { toast({ title: 'Failed', description: error.message, variant: 'destructive' }); return; }
     toast({ title: 'Submitted' });
     qc.invalidateQueries({ queryKey: ['admin-qb-live-sessions'] });
