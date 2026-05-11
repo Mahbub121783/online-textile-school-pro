@@ -253,17 +253,22 @@ const AdminQuestionBank = () => {
   };
 
   const approveAllDrafts = async () => {
-    if (aiDrafts.length === 0) return;
-    const rows = aiDrafts.map((d) => ({
+    const picked = aiDrafts.filter((_, i) => aiSelected.has(i));
+    if (picked.length === 0) { toast({ title: 'No drafts selected', variant: 'destructive' }); return; }
+    // Validate
+    const bad = picked.find((d) => !d.question_text?.trim() || !Array.isArray(d.options) || d.options.length < 2 || !d.correct_answer || !d.options.includes(d.correct_answer));
+    if (bad) { toast({ title: 'Some drafts are invalid', description: 'Each must have text, ≥2 options and a correct answer matching one option.', variant: 'destructive' }); return; }
+    const rows = picked.map((d) => ({
       subject_id: aiSubject, difficulty: aiDiff, question_type: 'multiple_choice' as QType,
-      question_text: d.question_text, options: d.options, correct_answer: d.correct_answer,
-      explanation: d.explanation, points: 1, source: 'ai' as const,
+      question_text: d.question_text.trim(), options: d.options.map((o: string) => o.trim()), correct_answer: d.correct_answer.trim(),
+      explanation: d.explanation || '', points: 1, source: 'ai' as const,
     }));
     const { error } = await supabase.from('qb_questions').insert(rows);
     if (error) { toast({ title: 'Failed', description: error.message, variant: 'destructive' }); return; }
-    toast({ title: `Added ${rows.length} questions` });
-    setAiDrafts([]);
+    toast({ title: `Added ${rows.length} questions to bank` });
+    setAiDrafts([]); setAiSelected(new Set());
     qc.invalidateQueries({ queryKey: ['admin-qb-questions'] });
+    qc.invalidateQueries({ queryKey: ['admin-qb-kpi'] });
   };
 
   return (
