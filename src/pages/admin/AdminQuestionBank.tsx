@@ -1,8 +1,13 @@
 import { useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent } from '@/components/ui/card';
+import LiveSessionsTab from './question-bank/LiveSessionsTab';
+import ViolationsTab from './question-bank/ViolationsTab';
+import BadgesTab from './question-bank/BadgesTab';
+import AnalyticsTab from './question-bank/AnalyticsTab';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
