@@ -177,24 +177,44 @@ const AdminQuestionBank = () => {
   const [aiLang, setAiLang] = useState<'en' | 'bn'>('en');
   const [aiBusy, setAiBusy] = useState(false);
   const [aiDrafts, setAiDrafts] = useState<any[]>([]);
+  const [aiSelected, setAiSelected] = useState<Set<number>>(new Set());
+  const [aiProviderUsed, setAiProviderUsed] = useState<string>('');
+  const [aiLastError, setAiLastError] = useState<string>('');
 
   const generateAI = async (testMode = false) => {
     if (!aiSubject) { toast({ title: 'Subject required', variant: 'destructive' }); return; }
     setAiBusy(true);
+    setAiLastError('');
     try {
       const { data, error } = await supabase.functions.invoke('qb-ai-generate', {
         body: { subject_id: aiSubject, topic: aiTopic || undefined, difficulty: aiDiff, count: aiCount, language: aiLang, test: testMode },
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
-      setAiDrafts(data?.questions || []);
+      const drafts = (data?.questions || []).map((d: any) => ({ ...d, _approved: true }));
+      setAiDrafts(drafts);
+      setAiSelected(new Set(drafts.map((_: any, i: number) => i)));
+      setAiProviderUsed(data?.provider_used || '');
       const provNote = data?.fallback_used ? ` (fallback: ${data.provider_used})` : ` via ${data?.provider_used}`;
-      toast({ title: `Generated ${data?.questions?.length || 0} drafts${provNote}` });
+      toast({ title: `Generated ${drafts.length} drafts${provNote}` });
     } catch (e: any) {
-      toast({ title: 'AI generation failed', description: e.message, variant: 'destructive' });
+      const msg = e?.message || 'Unknown error';
+      setAiLastError(msg);
+      toast({ title: 'AI generation failed', description: msg, variant: 'destructive' });
     }
     setAiBusy(false);
   };
+
+  const updateDraft = (i: number, patch: any) => setAiDrafts((p) => p.map((d, j) => j === i ? { ...d, ...patch } : d));
+  const updateDraftOption = (i: number, oi: number, val: string) => setAiDrafts((p) => p.map((d, j) => {
+    if (j !== i) return d;
+    const opts = [...d.options]; const oldVal = opts[oi]; opts[oi] = val;
+    return { ...d, options: opts, correct_answer: d.correct_answer === oldVal ? val : d.correct_answer };
+  }));
+  const toggleSelect = (i: number) => setAiSelected((p) => { const n = new Set(p); n.has(i) ? n.delete(i) : n.add(i); return n; });
+  const selectAll = () => setAiSelected(new Set(aiDrafts.map((_, i) => i)));
+  const selectNone = () => setAiSelected(new Set());
+  const removeDraft = (i: number) => { setAiDrafts((p) => p.filter((_, j) => j !== i)); setAiSelected(new Set()); };
 
   // ---- AI settings ----
   const { data: aiSettings, refetch: refetchSettings } = useQuery({
