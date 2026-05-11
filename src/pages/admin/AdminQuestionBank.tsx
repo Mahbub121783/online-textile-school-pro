@@ -145,23 +145,62 @@ const AdminQuestionBank = () => {
   const [aiTopic, setAiTopic] = useState('');
   const [aiDiff, setAiDiff] = useState<Diff>('basic');
   const [aiCount, setAiCount] = useState(10);
+  const [aiLang, setAiLang] = useState<'en' | 'bn'>('en');
   const [aiBusy, setAiBusy] = useState(false);
   const [aiDrafts, setAiDrafts] = useState<any[]>([]);
 
-  const generateAI = async () => {
-    if (!aiSubject || !aiTopic) { toast({ title: 'Subject & topic required', variant: 'destructive' }); return; }
+  const generateAI = async (testMode = false) => {
+    if (!aiSubject) { toast({ title: 'Subject required', variant: 'destructive' }); return; }
     setAiBusy(true);
     try {
       const { data, error } = await supabase.functions.invoke('qb-ai-generate', {
-        body: { subject_id: aiSubject, topic: aiTopic, difficulty: aiDiff, count: aiCount },
+        body: { subject_id: aiSubject, topic: aiTopic || undefined, difficulty: aiDiff, count: aiCount, language: aiLang, test: testMode },
       });
       if (error) throw error;
+      if (data?.error) throw new Error(data.error);
       setAiDrafts(data?.questions || []);
-      toast({ title: `Generated ${data?.questions?.length || 0} drafts` });
+      const provNote = data?.fallback_used ? ` (fallback: ${data.provider_used})` : ` via ${data?.provider_used}`;
+      toast({ title: `Generated ${data?.questions?.length || 0} drafts${provNote}` });
     } catch (e: any) {
       toast({ title: 'AI generation failed', description: e.message, variant: 'destructive' });
     }
     setAiBusy(false);
+  };
+
+  // ---- AI settings ----
+  const { data: aiSettings, refetch: refetchSettings } = useQuery({
+    queryKey: ['qb-ai-settings'],
+    queryFn: async () => (await supabase.from('qb_ai_settings').select('*').limit(1).maybeSingle()).data,
+  });
+  const [settingsForm, setSettingsForm] = useState<any>(null);
+  const currentSettings = settingsForm ?? aiSettings ?? { provider: 'groq', model: 'llama-3.3-70b-versatile', temperature: 0.7, fallback_enabled: true, fallback_provider: 'lovable', fallback_model: 'google/gemini-2.5-flash', max_questions_per_run: 25, system_prompt_override: '' };
+
+  const saveSettings = async () => {
+    const payload = {
+      provider: currentSettings.provider,
+      model: currentSettings.model,
+      temperature: Number(currentSettings.temperature) || 0.7,
+      fallback_enabled: !!currentSettings.fallback_enabled,
+      fallback_provider: currentSettings.fallback_provider,
+      fallback_model: currentSettings.fallback_model,
+      max_questions_per_run: Number(currentSettings.max_questions_per_run) || 25,
+      system_prompt_override: currentSettings.system_prompt_override || null,
+    };
+    const { error } = aiSettings?.id
+      ? await supabase.from('qb_ai_settings').update(payload).eq('id', aiSettings.id)
+      : await supabase.from('qb_ai_settings').insert(payload);
+    if (error) { toast({ title: 'Save failed', description: error.message, variant: 'destructive' }); return; }
+    toast({ title: 'AI settings saved' });
+    setSettingsForm(null);
+    refetchSettings();
+  };
+
+  const PROVIDER_HINTS: Record<string, string> = {
+    groq: 'llama-3.3-70b-versatile (free, fast)',
+    mistral: 'mistral-small-latest (free tier)',
+    openrouter: 'google/gemini-2.0-flash-exp:free or meta-llama/llama-3.3-70b-instruct:free',
+    openai: 'gpt-4o-mini',
+    lovable: 'google/gemini-2.5-flash',
   };
 
   const approveAllDrafts = async () => {
