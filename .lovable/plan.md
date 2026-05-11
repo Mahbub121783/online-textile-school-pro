@@ -1,92 +1,108 @@
+## Goal
 
-# Question Bank & Practice Exam System
+Question Bank-er AI question generation **admin-er nijer API key** theke chalano, Lovable AI shudhu optional fallback. AI shudhu admin-er kaaj-e use hobe (bulk generate kore DB-te store), end user-er upor kono AI call hobe na.
 
-A standalone "Brain Test" module — fully separate from course quizzes. Logged-in students subject + level select korbe, system random 25 Q diye exam toiri korbe, instant result + explanation + leaderboard + full attempt history.
+## Architecture
 
-## 1. Database (new tables)
-
-- **qb_subjects** — name, slug, icon, description, sort_order, is_active
-- **qb_topics** — subject_id, name, slug, description, sort_order (lesson-equivalent grouping)
-- **qb_questions**
-  - subject_id, topic_id (nullable)
-  - difficulty: enum `basic | intermediate | advanced`
-  - question_type: `multiple_choice | true_false | short_answer`
-  - question_text, options (jsonb), correct_answer, explanation
-  - points (default 1), tags (text[]), source ('manual' | 'bulk' | 'ai')
-  - created_by, is_active, times_used, correct_rate
-- **qb_exam_sessions** — user_id, subject_id, topic_id (nullable), difficulty, question_ids (uuid[]), started_at, submitted_at, time_taken_seconds, score, total, percentage, passed
-- **qb_exam_answers** — session_id, question_id, selected_answer, is_correct, time_spent_seconds
-- **qb_leaderboard_cache** — user_id, period ('all_time'|'monthly'|'weekly'), subject_id (nullable), total_exams, avg_percentage, total_points, rank (refreshed via pg_cron)
-
-RLS:
-- Students: read active subjects/topics/questions (correct_answer/explanation hidden until submission via SECURITY DEFINER fn), full CRUD on own sessions/answers
-- Admin/instructor: full CRUD on subjects/topics/questions
-- Leaderboard cache: public read
-
-DB function `start_exam(subject, topic?, difficulty)` → server-side picks 25 random active questions, creates session, returns sanitized questions (no answers). `submit_exam(session_id, answers[])` → grades, updates session + question stats.
-
-## 2. Student-facing UI (`/practice`)
-
-```
-/practice                  → Subject grid (icons, question counts, "Your best %")
-/practice/:subject         → Topic list + 3 difficulty cards (Basic/Intermediate/Advanced) with available Q count and "Start Exam" CTA
-/practice/exam/:sessionId  → Exam runner (25 Q, optional timer, progress bar, prev/next, flag, auto-save)
-/practice/result/:sessionId→ Score breakdown, per-Q correct/wrong with explanation, retry CTA
-/practice/history          → User's all attempts with filters (subject, difficulty, date)
-/practice/leaderboard      → Tabs: All-time / Monthly / Weekly • filter by subject • top 100 + own rank
+```text
+Admin clicks "Generate"
+        ↓
+Edge Function: qb-ai-generate
+        ↓
+Read provider config from `qb_ai_settings` table
+        ↓
+   ┌────────────────┬───────────────┐
+   │  Primary: Groq │  Mistral      │  OpenRouter  (admin choice)
+   │  /Custom       │               │
+   └────────┬───────┴───────┬───────┘
+            ↓ (on failure)
+        Lovable AI (optional fallback if enabled)
+            ↓
+   Validate JSON → Insert into qb_questions (source='ai')
 ```
 
-Dashboard sidebar gets a "Practice / Brain Test" link. Profile shows total practice exams + avg score badge.
+## 1. Database — new admin settings table
 
-## 3. Admin/Instructor UI
+`qb_ai_settings` (single-row config, admin-only RLS):
 
-New admin route `Admin → Question Bank` with tabs:
-- **Subjects & Topics** — CRUD tree
-- **Questions** — table with filters (subject, topic, difficulty, type, source), inline edit, bulk delete, activate/deactivate
-- **Add Question** — single-form modal (reuses `QuizBuilderModal` patterns)
-- **Bulk Import** — CSV/Excel uploader with template download, server-side validation, preview before commit, per-row error report
-- **AI Generator** — Choose subject/topic/difficulty/count → calls `qb-ai-generate` edge function (Lovable AI Gateway, Gemini Flash) → review screen → bulk approve into bank
-- **Analytics** — most-missed questions, low-quality flags (correct_rate <20% or >95%)
+| column | type | purpose |
+|---|---|---|
+| `id` | uuid PK | always single row |
+| `provider` | text | `'groq' \| 'mistral' \| 'openrouter' \| 'openai' \| 'lovable'` |
+| `model` | text | e.g. `llama-3.3-70b-versatile`, `mistral-large-latest`, `google/gemini-2.0-flash-exp:free` |
+| `fallback_enabled` | boolean | true → fallback to Lovable AI |
+| `fallback_provider` | text | default `'lovable'` |
+| `fallback_model` | text | default `'google/gemini-2.5-flash'` |
+| `temperature` | numeric | default `0.7` |
+| `max_questions_per_run` | int | default `25` (safety cap) |
+| `system_prompt_override` | text nullable | optional custom prompt |
 
-Same UI exposed to instructors with RLS scoping (only their own contributed questions editable).
+RLS: SELECT/UPDATE only for `admin` + `super_admin`. API keys **never stored here** — only provider name + model. Actual keys are in Supabase secrets.
 
-## 4. Edge Functions
+## 2. Secrets to add
 
-- `qb-bulk-import` — parses uploaded CSV/XLSX (already have parser deps), validates, inserts in batches of 500
-- `qb-ai-generate` — input {subject, topic, difficulty, count, language} → returns draft question array (JSON schema enforced)
-- `qb-leaderboard-refresh` — pg_cron hourly refresh of `qb_leaderboard_cache`
+Admin will add **only** the keys for the provider(s) they want:
+- `GROQ_API_KEY` (recommended — free tier, fast)
+- `MISTRAL_API_KEY` (free tier available)
+- `OPENROUTER_API_KEY` (multi-model, has free models)
+- `OPENAI_API_KEY` (optional)
 
-## 5. Mechanics
+`LOVABLE_API_KEY` already set → fallback automatically works.
 
-- 25 Q per session (configurable per-difficulty in admin settings)
-- Optional timer (default: Basic 20m, Intermediate 25m, Advanced 30m)
-- Pass mark 60% (configurable)
-- Anti-cheat lite: questions order shuffled per session, options shuffled per render, no answer key sent until submit
-- Streak tracking (consecutive days with ≥1 exam) shown on history page
-- React Query keys: `qb-subjects`, `qb-topics-{subject}`, `qb-question-counts`, `qb-session-{id}`, `qb-leaderboard-{period}-{subject}`
+## 3. Edge Function — `qb-ai-generate`
 
-## 6. Bulk-import CSV format
+Single function, provider-agnostic:
 
-```
-subject_slug,topic_slug,difficulty,question_type,question_text,option_a,option_b,option_c,option_d,correct_answer,explanation,points,tags
-```
+- Auth: requires logged-in user with `admin`/`super_admin`/`instructor` role (validated via `getClaims` + `qb_is_staff` RPC)
+- Input (Zod validated): `{ subject_id, topic_id?, difficulty, count (1–25), language ('en'|'bn'), question_type }`
+- Reads `qb_ai_settings` for provider config
+- Builds OpenAI-compatible chat completion request:
+  - **Groq**: `https://api.groq.com/openai/v1/chat/completions`
+  - **Mistral**: `https://api.mistral.ai/v1/chat/completions`
+  - **OpenRouter**: `https://openrouter.ai/api/v1/chat/completions`
+  - **OpenAI**: `https://api.openai.com/v1/chat/completions`
+  - **Lovable**: `https://ai.gateway.lovable.dev/v1/chat/completions`
+- Uses **structured tool-calling** (JSON schema) so output is always valid
+- Schema enforces: `question_text`, `options[]`, `correct_answer`, `explanation`, `difficulty`, `points`
+- On any provider failure → if `fallback_enabled`, retry with Lovable AI; else return error
+- Returns draft questions (NOT auto-inserted) → admin reviews → bulk approves
 
-Downloadable template button + sample rows.
+## 4. Admin UI changes (`AdminQuestionBank.tsx`)
 
-## 7. Out of scope (future)
+Add new tab **"AI Settings"**:
+- Provider dropdown (Groq / Mistral / OpenRouter / OpenAI / Lovable)
+- Model name input (free text — placeholder shows recommended free models per provider)
+- Temperature slider
+- Fallback toggle + fallback model
+- Status indicator: shows which API keys are configured (✓/✗) by checking edge function endpoint
+- "Test Connection" button → calls function with `count=1`
 
-- Adaptive difficulty
-- Paid subscription gating
-- Per-question discussion thread
-- Mock exam mode (mixed subjects, longer)
+Existing **"AI Generator"** tab:
+- Generate → Review draft list → admin can edit each question → "Approve & Save" → inserts into `qb_questions` with `source='ai'`
+- No AI runs anywhere else in the app (no student-facing AI for the question bank)
 
----
+## 5. Client safety
 
-## Technical notes
+- AI generation route is admin-only (sidebar link gated by role)
+- No frontend code calls AI providers directly — always through edge function
+- Generated questions go to `qb_questions` table → from then on, exam runner just reads from DB (zero AI calls during student exam)
 
-- All new tables `qb_*` namespaced to avoid collision with existing `quizzes` (course-tied)
-- `start_exam`/`submit_exam` SECURITY DEFINER Postgres functions to keep correct_answer server-side
-- AI generation uses `LOVABLE_API_KEY` (already provisioned), structured output via tool calling
-- Bulk import uses streaming parse to handle 5–6k rows safely
-- Leaderboard cache + indexes: `(subject_id, difficulty, percentage desc)` on sessions, `(period, total_points desc)` on cache
-- Reuses existing shadcn primitives, Dark Teal & Terracotta theme tokens, `useAuth`, React Query defaults
+## 6. Free model recommendations (shown in UI as hints)
+
+| Provider | Free model |
+|---|---|
+| Groq | `llama-3.3-70b-versatile` |
+| Mistral | `mistral-small-latest` |
+| OpenRouter | `google/gemini-2.0-flash-exp:free`, `meta-llama/llama-3.3-70b-instruct:free` |
+| Lovable (fallback) | `google/gemini-2.5-flash` |
+
+## What I need from you before building
+
+1. **Confirm provider** — Groq/Mistral/OpenRouter/OpenAI? (Groq + OpenRouter are best for free tier)
+2. After plan approval, I will trigger `add_secret` for the chosen provider's API key. Tumi tokhon key paste korbe (Groq: https://console.groq.com/keys, OpenRouter: https://openrouter.ai/keys).
+
+## Out of scope (this iteration)
+
+- Per-question AI explanations on result page (purely DB-driven)
+- AI-based question difficulty auto-tagging
+- Per-user AI tutor chat in Question Bank
