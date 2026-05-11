@@ -346,9 +346,21 @@ const AdminQuestionBank = () => {
                 <Input type="number" value={aiCount} onChange={(e) => setAiCount(parseInt(e.target.value) || 5)} min={1} max={50} />
               </div>
             </div>
-            <Button onClick={generateAI} disabled={aiBusy}>
-              {aiBusy ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Sparkles className="h-4 w-4 mr-1" />} Generate Drafts
-            </Button>
+            <div className="flex gap-2 items-end">
+              <div className="w-40">
+                <Label>Language</Label>
+                <Select value={aiLang} onValueChange={(v) => setAiLang(v as 'en' | 'bn')}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="en">English</SelectItem>
+                    <SelectItem value="bn">Bengali</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button onClick={() => generateAI(false)} disabled={aiBusy}>
+                {aiBusy ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Sparkles className="h-4 w-4 mr-1" />} Generate Drafts
+              </Button>
+            </div>
 
             {aiDrafts.length > 0 && (
               <>
