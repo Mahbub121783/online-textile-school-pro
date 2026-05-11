@@ -210,6 +210,7 @@ export function AdminSidebar() {
               {topItems.map(renderNavItem)}
               <CollapsibleMenu label="Instructor Mgmt" icon={UserCog} items={instructorSubItems} basePath="/admin/instructors" collapsed={collapsed} groupClass="group/collapsible-inst" />
               <CollapsibleMenu label="Academic" icon={GraduationCap} items={academicSubItems} basePath="/admin/batches" collapsed={collapsed} groupClass="group/collapsible-acad" />
+              <CollapsibleMenu label="Brain Test" icon={Brain} items={brainTestSubItems} basePath="/admin/question-bank" collapsed={collapsed} groupClass="group/collapsible-qb" />
               <CollapsibleMenu label="CMS" icon={BookOpen} items={cmsSubItems} basePath="/admin/cms" collapsed={collapsed} groupClass="group/collapsible-cms" />
               <CollapsibleMenu label="Setup" icon={Wrench} items={setupSubItems} basePath="/admin/setup" collapsed={collapsed} groupClass="group/collapsible-setup" />
               <CollapsibleMenu label="Payment" icon={CreditCard} items={paymentSubItems} basePath="/admin/payment" collapsed={collapsed} groupClass="group/collapsible-pay" />
