@@ -85,7 +85,17 @@ const careerSubItems = [
   { title: 'Virtual Labs', url: '/admin/virtual-labs', icon: FlaskConical },
 ];
 
-const bottomItems = [
+const brainTestSubItems = [
+  { title: 'Subjects', url: '/admin/question-bank/subjects', icon: Layers },
+  { title: 'Questions', url: '/admin/question-bank/questions', icon: HelpCircle },
+  { title: 'AI Generate', url: '/admin/question-bank/ai', icon: Sparkles },
+  { title: 'Bulk Import', url: '/admin/question-bank/bulk', icon: ClipboardList },
+  { title: 'Live Sessions', url: '/admin/question-bank/sessions', icon: Radio },
+  { title: 'Violations', url: '/admin/question-bank/violations', icon: AlertTriangle },
+  { title: 'Badges', url: '/admin/question-bank/badges', icon: Trophy },
+  { title: 'Analytics', url: '/admin/question-bank/analytics', icon: BarChart3 },
+  { title: 'AI Settings', url: '/admin/question-bank/ai-settings', icon: Settings },
+];
   { title: 'EduMail', url: '/admin/email-requests', icon: Mail },
   { title: 'Admin Mail', url: '/admin/mail', icon: Send },
   { title: 'E-Books', url: '/admin/ebooks', icon: BookOpen },
