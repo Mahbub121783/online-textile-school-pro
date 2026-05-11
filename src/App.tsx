@@ -361,6 +361,8 @@ const AppRoutes = () => {
             <Route path="popups" element={<AdminPopups />} />
             <Route path="popups/:id/analytics" element={<PopupAnalytics />} />
             <Route path="data-freshness" element={<AdminDataFreshness />} />
+            <Route path="question-bank" element={<AdminQuestionBank />} />
+            <Route path="question-bank/:tab" element={<AdminQuestionBank />} />
           </Route>
           <Route path="/learn/:courseSlug/:lessonId" element={<LessonPlayer />} />
           <Route path="/quiz/:quizId" element={<QuizPlayer />} />

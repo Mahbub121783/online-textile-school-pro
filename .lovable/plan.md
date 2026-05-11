@@ -1,135 +1,67 @@
+## Problem
 
-# Practice Exam — Student-Friendly + Competitive Upgrade
+`AdminQuestionBank` page exists and is lazy-imported in `App.tsx` but:
+1. **No `<Route>` is registered** → opening any URL 404s.
+2. **No entry in `AdminSidebar.tsx`** → admin can't discover it.
+3. The page only has 5 basic tabs (Subjects, Questions, Bulk, AI, AI Settings). After the gamification + integrity migration we now have rich data (`qb_exam_sessions`, `qb_exam_violations`, `qb_user_stats`, `qb_badges`, `qb_user_badges`) with **no admin UI**, so it doesn't feel "advanced".
 
-Goal: Students sohoje pabe, exam ta competitive feel dibe (JEE/Olympiad style), timer & state churi-proof but friendly (warning only, resume allowed), result page e gamification.
+## Plan
 
----
+### 1. Make it accessible
+- Add route in `src/App.tsx` under the admin layout: `/admin/question-bank` and `/admin/question-bank/:tab` → `AdminQuestionBank`.
+- Add a new **collapsible sidebar group "Brain Test"** in `AdminSidebar.tsx` (icon: `Brain`) with sub-items:
+  - Subjects → `/admin/question-bank/subjects`
+  - Questions → `/admin/question-bank/questions`
+  - AI Generate → `/admin/question-bank/ai`
+  - Live Sessions → `/admin/question-bank/sessions`
+  - Violations → `/admin/question-bank/violations`
+  - Badges → `/admin/question-bank/badges`
+  - Analytics → `/admin/question-bank/analytics`
+  - Settings → `/admin/question-bank/ai-settings`
+- Insert the group right after "Academic" so it sits with the learning tools.
 
-## 1. Discoverability — Students kothay pabe
+### 2. Refactor `AdminQuestionBank.tsx` for advanced UX
+- Convert the page to read the active tab from `useParams().tab` (like `AdminInstructors.tsx`) so each sub-item deep-links cleanly and is bookmarkable.
+- Add a sticky page header with KPI strip: total questions, total exams taken (today / 7d), avg score, integrity violations (24h), active live sessions. All from cheap `count: 'exact', head: true` queries.
+- Restyle existing tabs (cleaner cards, search bar for Questions, CSV export of selected questions, multi-select bulk delete / activate).
 
-**A. Dedicated landing page** `/practice` (already exists as `PracticeHome.tsx`) — upgrade to a hero-styled competitive landing:
-- Boro hero: "Practice Arena — Test Your Edge"
-- Live stats strip: total questions, students online, top scorer today
-- Subject grid cards (icon + question count + difficulty badge)
-- "Quick Start" CTA (random 10-question sprint)
-- Recent attempts + leaderboard preview
+### 3. New advanced tabs (frontend only, reading existing tables)
 
-**B. Homepage Hero CTA**
-- `src/components/features/home/` e notun `PracticeArenaCTA.tsx` section — boro gradient banner with "Start Practicing → /practice"
-- Mount kora hobe `src/pages/Index.tsx` e (Featured Courses er por)
+**Live Sessions** (`qb_exam_sessions` where `status='in_progress'`)
+- Auto-refreshing table (10s) showing student, subject, started_at, time elapsed, last heartbeat age, violation count, focus mode flag, resume count.
+- Row turns amber if heartbeat > 60s, red if > 120s.
+- Action buttons: View details (modal with answers so far + violations), Force-submit (calls existing `qb_submit_exam` RPC).
 
-**C. Header nav e "Practice" link** add (optional but recommended for visibility) — `Header.tsx` desktop nav + `BottomNav.tsx` mobile.
+**Violations** (`qb_exam_violations`)
+- Filterable list by violation type, date range, student.
+- Aggregated chart: violations per type (last 30 days) using simple bars.
+- Click row → drawer with full session context.
 
----
+**Badges** (`qb_badges` + `qb_user_badges`)
+- Catalog grid with icon, name, criteria JSON, earned-count.
+- Add/Edit badge modal (name, description, icon emoji, criteria JSON, xp_reward, is_active toggle).
+- "Top earners" mini-leaderboard per badge.
 
-## 2. Secure Resumable Timer (Churi-proof)
+**Analytics**
+- Cards: exams per day (sparkline), pass rate %, avg time-to-complete, hardest questions (lowest correct-rate), most-attempted subjects.
+- Top 10 students by total XP (`qb_user_stats`).
+- All charts use lightweight inline SVG / recharts already installed.
 
-Already server-side `started_at` based — bhalo. Upgrade:
+### 4. Polish
+- Consistent breadcrumb at top: Admin → Brain Test → {tab label}.
+- Mobile: tabs collapse into a Select dropdown (already a project pattern).
+- Respect existing dark teal / terracotta theme tokens — no hard-coded colors.
 
-- **Server is source of truth**: timer always recomputed from `started_at + time_limit_seconds - now()` on every mount. Local clock manipulate korle kichu hobe na.
-- **Heartbeat ping** every 20s → updates `qb_exam_sessions.last_heartbeat_at` (new column). Server-side: jodi heartbeat `time_limit + 60s` peruye jay tobe `qb_submit_exam` auto-trigger via cron OR lazy-submit on next access.
-- **Tab close / refresh / browser crash**: re-open korle session resume hobe with correct remaining time, but warning count +1 (see §3).
-- **localStorage backup of answers** (per session) — accidental refresh hole answers hariye jabe na.
+## Out of scope
+- New DB tables or RPCs (everything reads tables created in the previous migration).
+- Editing the student-facing exam UI.
+- Email/SMS alerts for violations (can come later).
 
----
-
-## 3. Soft Anti-Cheat (Warnings Only)
-
-New table `qb_exam_violations` (session_id, type, occurred_at, metadata).
-
-Detect & log these events client-side, push to server:
-- `tab_blur` / `visibility_hidden` (tab switch, minimize)
-- `window_blur` (alt-tab)
-- `fullscreen_exit` (if fullscreen mode active)
-- `copy` / `paste` / `right_click` attempts (blocked + logged)
-- `session_resumed` (after refresh/crash)
-- `devtools_opened` (best-effort heuristic)
-
-UI behavior (friendly, not punishing):
-- Top of exam shows **"Integrity: ⚠ 0 warnings"** counter
-- On each violation: toast banner "Warning #N — please stay on this tab. Your activity is being recorded."
-- **No auto-submit ever** (per user choice) — exam continues
-- Result page shows full integrity report ("3 tab switches, 1 paste attempt") — visible to admin too
-- Admin dashboard violation analytics
-
----
-
-## 4. Fullscreen Focused Exam UI
-
-Upgrade `PracticeExam.tsx`:
-
-- **"Enter Focus Mode" button on start** → `requestFullscreen()`, hides all chrome (header, footer, sidebar)
-- Distraction-free shell: only question + options + timer + palette
-- Large, bold timer (top-right), color shifts: green → amber (<5min) → red pulse (<1min)
-- Smooth question transitions (framer-motion fade + slide)
-- Keyboard shortcuts: `1-9` select option, `→/←` next/prev, `F` flag, `Enter` submit
-- Progress ring instead of bar
-- Auto-save indicator ("Saved ✓" subtle)
-- Mobile: sticky bottom action bar (Prev / Flag / Next), palette in bottom sheet
-- Dark exam theme (always dark inside exam regardless of site theme) — pure focus
-
----
-
-## 5. Gamified Result Page
-
-Upgrade `PracticeResult.tsx`:
-
-- **Hero score reveal animation** (count-up animation, framer-motion)
-- Big circular score ring with grade badge (S/A/B/C/D)
-- **XP earned** card: `+score × 10 XP` with streak bonus
-- **Rank reveal**: "You're #12 out of 547 today" (animated)
-- **Streak counter**: "🔥 5-day streak"
-- **Badges unlocked** (e.g. "Speed Demon" — finished in <50% time, "Perfectionist" — 100%, "Warrior" — 10 exams done)
-- Time-per-question chart (recharts)
-- Subject mastery progress bar update animation
-- Question-by-question review accordion (correct/wrong/explanation)
-- **Confetti** on >80% score
-- Share card generator (download as PNG: "I scored 92% on Physics Practice")
-- CTAs: "Try Again" / "Next Subject" / "View Leaderboard"
-
-XP & badge tables (new):
-- `qb_user_stats` (user_id, total_xp, current_streak, longest_streak, last_practice_date, exams_taken)
-- `qb_badges` (key, name, description, icon, criteria_jsonb)
-- `qb_user_badges` (user_id, badge_key, earned_at)
-
-XP awarded inside `qb_submit_exam` RPC (atomic update).
-
----
-
-## 6. Admin Visibility
-
-- AdminQuestionBank → notun "Live Sessions" tab: ongoing exams + violation feed
-- Per-attempt detail modal showing violation timeline
-- Aggregate analytics: avg violations per subject, suspicious users (>10 violations)
-
----
-
-## Technical Sections
-
-### DB migrations
-1. Alter `qb_exam_sessions`: add `last_heartbeat_at TIMESTAMPTZ`, `violation_count INT DEFAULT 0`, `focus_mode_used BOOLEAN DEFAULT false`
-2. Create `qb_exam_violations` table + RLS (student insert own, admin read all)
-3. Create `qb_user_stats`, `qb_badges`, `qb_user_badges` + RLS
-4. RPC `qb_log_violation(_session_id, _type, _metadata)`
-5. RPC `qb_heartbeat(_session_id)`
-6. Update `qb_submit_exam`: award XP, update streak, evaluate badges
-7. Seed default badges (8-10 starter badges)
-
-### Frontend files
-- **New**: `src/components/practice/FocusModeShell.tsx`, `IntegrityBanner.tsx`, `ResultHeroReveal.tsx`, `BadgeUnlockModal.tsx`, `ShareScoreCard.tsx`, `useExamIntegrity.ts` hook, `useExamHeartbeat.ts` hook
-- **New**: `src/components/features/home/PracticeArenaCTA.tsx`
-- **Edit**: `PracticeHome.tsx` (hero+stats+grid), `PracticeExam.tsx` (focus mode, integrity, keyboard, animations, localStorage backup), `PracticeResult.tsx` (full gamification), `Index.tsx` (mount CTA), `Header.tsx` + `BottomNav.tsx` (Practice link), `AdminQuestionBank.tsx` (Live Sessions tab)
-
-### Libraries (already installed): framer-motion, recharts, canvas-confetti (verify) , html-to-image (for share card — may need install)
-
-### Mobile responsiveness
-- Focus mode adapts: full-screen, swipe between questions, bottom sheet palette
-- Result page stacks vertically, share card uses native Web Share API on mobile
-
----
-
-## Out of scope (this iteration)
-- Hard-mode auto-submit (per your choice)
-- Proctoring with camera/AI
-- Paid premium exams
-
+## Files to change
+- `src/App.tsx` — register `/admin/question-bank/:tab?` route.
+- `src/components/layout/AdminSidebar.tsx` — add "Brain Test" collapsible group.
+- `src/pages/admin/AdminQuestionBank.tsx` — switch to `useParams` tab, add KPI header, refactor existing tabs.
+- New: `src/pages/admin/question-bank/LiveSessionsTab.tsx`
+- New: `src/pages/admin/question-bank/ViolationsTab.tsx`
+- New: `src/pages/admin/question-bank/BadgesTab.tsx`
+- New: `src/pages/admin/question-bank/AnalyticsTab.tsx`

@@ -1,4 +1,4 @@
-import { LayoutDashboard, Users, BookOpen, Image, Activity, LogOut, GraduationCap, Tag, Wallet, FileText, PenTool, ImageIcon, Menu, Palette, Video, HelpCircle, ClipboardList, Award, Settings, ChevronDown, BarChart3, UserCog, CheckSquare, DollarSign, Shield, MessageSquare, Wrench, Mail, CreditCard, ReceiptText, Cloud, Bell, ShoppingCart, HardDrive, Crown, Server, ClipboardEdit, Send, Calendar, Layers, Star, AlertTriangle, FolderKanban, Briefcase, FlaskConical, Presentation } from 'lucide-react';
+import { LayoutDashboard, Users, BookOpen, Image, Activity, LogOut, GraduationCap, Tag, Wallet, FileText, PenTool, ImageIcon, Menu, Palette, Video, HelpCircle, ClipboardList, Award, Settings, ChevronDown, BarChart3, UserCog, CheckSquare, DollarSign, Shield, MessageSquare, Wrench, Mail, CreditCard, ReceiptText, Cloud, Bell, ShoppingCart, HardDrive, Crown, Server, ClipboardEdit, Send, Calendar, Layers, Star, AlertTriangle, FolderKanban, Briefcase, FlaskConical, Presentation, Brain, Sparkles, Trophy, Radio } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
@@ -83,6 +83,18 @@ const careerSubItems = [
   { title: 'Internships', url: '/admin/internships', icon: Briefcase },
   { title: 'Research Papers', url: '/admin/research-papers', icon: FileText },
   { title: 'Virtual Labs', url: '/admin/virtual-labs', icon: FlaskConical },
+];
+
+const brainTestSubItems = [
+  { title: 'Subjects', url: '/admin/question-bank/subjects', icon: Layers },
+  { title: 'Questions', url: '/admin/question-bank/questions', icon: HelpCircle },
+  { title: 'AI Generate', url: '/admin/question-bank/ai', icon: Sparkles },
+  { title: 'Bulk Import', url: '/admin/question-bank/bulk', icon: ClipboardList },
+  { title: 'Live Sessions', url: '/admin/question-bank/sessions', icon: Radio },
+  { title: 'Violations', url: '/admin/question-bank/violations', icon: AlertTriangle },
+  { title: 'Badges', url: '/admin/question-bank/badges', icon: Trophy },
+  { title: 'Analytics', url: '/admin/question-bank/analytics', icon: BarChart3 },
+  { title: 'AI Settings', url: '/admin/question-bank/ai-settings', icon: Settings },
 ];
 
 const bottomItems = [
@@ -198,6 +210,7 @@ export function AdminSidebar() {
               {topItems.map(renderNavItem)}
               <CollapsibleMenu label="Instructor Mgmt" icon={UserCog} items={instructorSubItems} basePath="/admin/instructors" collapsed={collapsed} groupClass="group/collapsible-inst" />
               <CollapsibleMenu label="Academic" icon={GraduationCap} items={academicSubItems} basePath="/admin/batches" collapsed={collapsed} groupClass="group/collapsible-acad" />
+              <CollapsibleMenu label="Brain Test" icon={Brain} items={brainTestSubItems} basePath="/admin/question-bank" collapsed={collapsed} groupClass="group/collapsible-qb" />
               <CollapsibleMenu label="CMS" icon={BookOpen} items={cmsSubItems} basePath="/admin/cms" collapsed={collapsed} groupClass="group/collapsible-cms" />
               <CollapsibleMenu label="Setup" icon={Wrench} items={setupSubItems} basePath="/admin/setup" collapsed={collapsed} groupClass="group/collapsible-setup" />
               <CollapsibleMenu label="Payment" icon={CreditCard} items={paymentSubItems} basePath="/admin/payment" collapsed={collapsed} groupClass="group/collapsible-pay" />

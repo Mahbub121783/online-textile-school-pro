@@ -1,8 +1,13 @@
 import { useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent } from '@/components/ui/card';
+import LiveSessionsTab from './question-bank/LiveSessionsTab';
+import ViolationsTab from './question-bank/ViolationsTab';
+import BadgesTab from './question-bank/BadgesTab';
+import AnalyticsTab from './question-bank/AnalyticsTab';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -21,9 +26,33 @@ const emptyQ = { subject_id: '', topic_id: '', difficulty: 'basic' as Diff, ques
 
 const AdminQuestionBank = () => {
   const qc = useQueryClient();
-  const [tab, setTab] = useState('subjects');
+  const navigate = useNavigate();
+  const { tab: tabParam } = useParams<{ tab?: string }>();
+  const VALID = ['subjects', 'questions', 'bulk', 'ai', 'sessions', 'violations', 'badges', 'analytics', 'ai-settings'];
+  const tab = tabParam && VALID.includes(tabParam) ? tabParam : 'subjects';
+  const setTab = (v: string) => navigate(`/admin/question-bank/${v}`);
 
-  // ---- Subjects ----
+  // ---- KPI strip ----
+  const { data: kpi } = useQuery({
+    queryKey: ['admin-qb-kpi'],
+    queryFn: async () => {
+      const since24h = new Date(Date.now() - 86400_000).toISOString();
+      const since7d = new Date(Date.now() - 7 * 86400_000).toISOString();
+      const [qs, exams7d, viol24h, live] = await Promise.all([
+        supabase.from('qb_questions').select('id', { count: 'exact', head: true }),
+        supabase.from('qb_exam_sessions').select('id', { count: 'exact', head: true }).gte('started_at', since7d),
+        supabase.from('qb_exam_violations').select('id', { count: 'exact', head: true }).gte('occurred_at', since24h),
+        supabase.from('qb_exam_sessions').select('id', { count: 'exact', head: true }).eq('status', 'in_progress'),
+      ]);
+      return {
+        questions: qs.count ?? 0,
+        exams7d: exams7d.count ?? 0,
+        violations24h: viol24h.count ?? 0,
+        live: live.count ?? 0,
+      };
+    },
+    refetchInterval: 30_000,
+  });
   const { data: subjects = [] } = useQuery({
     queryKey: ['admin-qb-subjects'],
     queryFn: async () => (await supabase.from('qb_subjects').select('*').order('sort_order')).data ?? [],
@@ -219,7 +248,17 @@ const AdminQuestionBank = () => {
 
   return (
     <div className="space-y-4">
-      <h2 className="font-heading text-2xl font-bold flex items-center gap-2"><Brain className="h-6 w-6" /> Question Bank</h2>
+      <div>
+        <h2 className="font-heading text-2xl font-bold flex items-center gap-2"><Brain className="h-6 w-6 text-primary" /> Brain Test — Question Bank</h2>
+        <p className="text-xs text-muted-foreground">Manage subjects, questions, AI generation, live exams, integrity & gamification.</p>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Total questions</p><p className="text-2xl font-heading font-bold">{kpi?.questions ?? '—'}</p></CardContent></Card>
+        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Exams (7d)</p><p className="text-2xl font-heading font-bold">{kpi?.exams7d ?? '—'}</p></CardContent></Card>
+        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Live now</p><p className="text-2xl font-heading font-bold text-emerald-600">{kpi?.live ?? '—'}</p></CardContent></Card>
+        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Violations (24h)</p><p className={`text-2xl font-heading font-bold ${(kpi?.violations24h ?? 0) > 0 ? 'text-destructive' : ''}`}>{kpi?.violations24h ?? '—'}</p></CardContent></Card>
+      </div>
 
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="flex-wrap h-auto">
@@ -227,8 +266,17 @@ const AdminQuestionBank = () => {
           <TabsTrigger value="questions">Questions ({questions.length})</TabsTrigger>
           <TabsTrigger value="bulk">Bulk Import</TabsTrigger>
           <TabsTrigger value="ai">AI Generate</TabsTrigger>
+          <TabsTrigger value="sessions">Live Sessions</TabsTrigger>
+          <TabsTrigger value="violations">Violations</TabsTrigger>
+          <TabsTrigger value="badges">Badges</TabsTrigger>
+          <TabsTrigger value="analytics">Analytics</TabsTrigger>
           <TabsTrigger value="ai-settings">AI Settings</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="sessions"><LiveSessionsTab /></TabsContent>
+        <TabsContent value="violations"><ViolationsTab /></TabsContent>
+        <TabsContent value="badges"><BadgesTab /></TabsContent>
+        <TabsContent value="analytics"><AnalyticsTab /></TabsContent>
 
         {/* SUBJECTS */}
         <TabsContent value="subjects" className="space-y-3">
