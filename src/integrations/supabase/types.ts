@@ -4445,6 +4445,340 @@ export type Database = {
         }
         Relationships: []
       }
+      qb_exam_answers: {
+        Row: {
+          created_at: string
+          id: string
+          is_correct: boolean
+          question_id: string
+          selected_answer: string | null
+          session_id: string
+          time_spent_seconds: number | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_correct?: boolean
+          question_id: string
+          selected_answer?: string | null
+          session_id: string
+          time_spent_seconds?: number | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_correct?: boolean
+          question_id?: string
+          selected_answer?: string | null
+          session_id?: string
+          time_spent_seconds?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "qb_exam_answers_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "qb_questions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "qb_exam_answers_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "qb_exam_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      qb_exam_sessions: {
+        Row: {
+          created_at: string
+          difficulty: Database["public"]["Enums"]["qb_difficulty"]
+          id: string
+          pass_percentage: number
+          passed: boolean
+          percentage: number
+          question_ids: string[]
+          score: number
+          started_at: string
+          status: string
+          subject_id: string
+          submitted_at: string | null
+          time_limit_seconds: number | null
+          time_taken_seconds: number | null
+          topic_id: string | null
+          total_points: number
+          total_questions: number
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          difficulty: Database["public"]["Enums"]["qb_difficulty"]
+          id?: string
+          pass_percentage?: number
+          passed?: boolean
+          percentage?: number
+          question_ids: string[]
+          score?: number
+          started_at?: string
+          status?: string
+          subject_id: string
+          submitted_at?: string | null
+          time_limit_seconds?: number | null
+          time_taken_seconds?: number | null
+          topic_id?: string | null
+          total_points?: number
+          total_questions?: number
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          difficulty?: Database["public"]["Enums"]["qb_difficulty"]
+          id?: string
+          pass_percentage?: number
+          passed?: boolean
+          percentage?: number
+          question_ids?: string[]
+          score?: number
+          started_at?: string
+          status?: string
+          subject_id?: string
+          submitted_at?: string | null
+          time_limit_seconds?: number | null
+          time_taken_seconds?: number | null
+          topic_id?: string | null
+          total_points?: number
+          total_questions?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "qb_exam_sessions_subject_id_fkey"
+            columns: ["subject_id"]
+            isOneToOne: false
+            referencedRelation: "qb_subjects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "qb_exam_sessions_topic_id_fkey"
+            columns: ["topic_id"]
+            isOneToOne: false
+            referencedRelation: "qb_topics"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      qb_leaderboard_cache: {
+        Row: {
+          avg_percentage: number
+          computed_at: string
+          id: string
+          period: Database["public"]["Enums"]["qb_leaderboard_period"]
+          rank: number | null
+          subject_id: string | null
+          total_exams: number
+          total_passed: number
+          total_points: number
+          user_id: string
+        }
+        Insert: {
+          avg_percentage?: number
+          computed_at?: string
+          id?: string
+          period: Database["public"]["Enums"]["qb_leaderboard_period"]
+          rank?: number | null
+          subject_id?: string | null
+          total_exams?: number
+          total_passed?: number
+          total_points?: number
+          user_id: string
+        }
+        Update: {
+          avg_percentage?: number
+          computed_at?: string
+          id?: string
+          period?: Database["public"]["Enums"]["qb_leaderboard_period"]
+          rank?: number | null
+          subject_id?: string | null
+          total_exams?: number
+          total_passed?: number
+          total_points?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "qb_leaderboard_cache_subject_id_fkey"
+            columns: ["subject_id"]
+            isOneToOne: false
+            referencedRelation: "qb_subjects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      qb_questions: {
+        Row: {
+          correct_answer: string
+          correct_rate: number
+          created_at: string
+          created_by: string | null
+          difficulty: Database["public"]["Enums"]["qb_difficulty"]
+          explanation: string | null
+          id: string
+          is_active: boolean
+          options: Json
+          points: number
+          question_text: string
+          question_type: Database["public"]["Enums"]["qb_question_type"]
+          source: Database["public"]["Enums"]["qb_question_source"]
+          subject_id: string
+          tags: string[]
+          times_correct: number
+          times_used: number
+          topic_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          correct_answer: string
+          correct_rate?: number
+          created_at?: string
+          created_by?: string | null
+          difficulty?: Database["public"]["Enums"]["qb_difficulty"]
+          explanation?: string | null
+          id?: string
+          is_active?: boolean
+          options?: Json
+          points?: number
+          question_text: string
+          question_type?: Database["public"]["Enums"]["qb_question_type"]
+          source?: Database["public"]["Enums"]["qb_question_source"]
+          subject_id: string
+          tags?: string[]
+          times_correct?: number
+          times_used?: number
+          topic_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          correct_answer?: string
+          correct_rate?: number
+          created_at?: string
+          created_by?: string | null
+          difficulty?: Database["public"]["Enums"]["qb_difficulty"]
+          explanation?: string | null
+          id?: string
+          is_active?: boolean
+          options?: Json
+          points?: number
+          question_text?: string
+          question_type?: Database["public"]["Enums"]["qb_question_type"]
+          source?: Database["public"]["Enums"]["qb_question_source"]
+          subject_id?: string
+          tags?: string[]
+          times_correct?: number
+          times_used?: number
+          topic_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "qb_questions_subject_id_fkey"
+            columns: ["subject_id"]
+            isOneToOne: false
+            referencedRelation: "qb_subjects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "qb_questions_topic_id_fkey"
+            columns: ["topic_id"]
+            isOneToOne: false
+            referencedRelation: "qb_topics"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      qb_subjects: {
+        Row: {
+          color: string | null
+          created_at: string
+          description: string | null
+          icon: string | null
+          id: string
+          is_active: boolean
+          name: string
+          slug: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string
+          description?: string | null
+          icon?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          slug: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          color?: string | null
+          created_at?: string
+          description?: string | null
+          icon?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          slug?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      qb_topics: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          is_active: boolean
+          name: string
+          slug: string
+          sort_order: number
+          subject_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          slug: string
+          sort_order?: number
+          subject_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          slug?: string
+          sort_order?: number
+          subject_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "qb_topics_subject_id_fkey"
+            columns: ["subject_id"]
+            isOneToOne: false
+            referencedRelation: "qb_subjects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       quiz_attempts: {
         Row: {
           admin_feedback: string | null
@@ -6562,6 +6896,22 @@ export type Database = {
         }
         Returns: undefined
       }
+      qb_get_session_result: { Args: { _session_id: string }; Returns: Json }
+      qb_is_staff: { Args: { _uid: string }; Returns: boolean }
+      qb_refresh_leaderboard: { Args: never; Returns: undefined }
+      qb_start_exam: {
+        Args: {
+          _difficulty: Database["public"]["Enums"]["qb_difficulty"]
+          _question_count?: number
+          _subject_id: string
+          _topic_id?: string
+        }
+        Returns: Json
+      }
+      qb_submit_exam: {
+        Args: { _answers: Json; _session_id: string }
+        Returns: Json
+      }
       search_forum: {
         Args: { search_query: string }
         Returns: {
@@ -6603,6 +6953,10 @@ export type Database = {
         | "student"
       class_video_platform: "upload" | "drive" | "youtube"
       class_video_visibility: "public" | "logged_in" | "paid"
+      qb_difficulty: "basic" | "intermediate" | "advanced"
+      qb_leaderboard_period: "all_time" | "monthly" | "weekly"
+      qb_question_source: "manual" | "bulk" | "ai"
+      qb_question_type: "multiple_choice" | "true_false" | "short_answer"
       workshop_registration_status:
         | "registered"
         | "attended"
@@ -6752,6 +7106,10 @@ export const Constants = {
       ],
       class_video_platform: ["upload", "drive", "youtube"],
       class_video_visibility: ["public", "logged_in", "paid"],
+      qb_difficulty: ["basic", "intermediate", "advanced"],
+      qb_leaderboard_period: ["all_time", "monthly", "weekly"],
+      qb_question_source: ["manual", "bulk", "ai"],
+      qb_question_type: ["multiple_choice", "true_false", "short_answer"],
       workshop_registration_status: [
         "registered",
         "attended",
