@@ -31,6 +31,8 @@ const AdminQuestionBank = () => {
   const VALID = ['subjects', 'questions', 'bulk', 'ai', 'sessions', 'violations', 'badges', 'analytics', 'ai-settings'];
   const tab = tabParam && VALID.includes(tabParam) ? tabParam : 'subjects';
   const setTab = (v: string) => navigate(`/admin/question-bank/${v}`);
+  const isQuestionsTab = tab === 'questions';
+  const isAiSettingsTab = tab === 'ai-settings';
 
   // ---- KPI strip ----
   const { data: kpi } = useQuery({
@@ -82,17 +84,20 @@ const AdminQuestionBank = () => {
   // ---- Questions ----
   const [filterSubject, setFilterSubject] = useState<string>('all');
   const [filterDiff, setFilterDiff] = useState<string>('all');
+  const [questionSearch, setQuestionSearch] = useState('');
   const [questionModal, setQuestionModal] = useState<any>(null);
 
   const { data: questions = [], isLoading: qLoading } = useQuery({
-    queryKey: ['admin-qb-questions', filterSubject, filterDiff],
+    queryKey: ['admin-qb-questions', filterSubject, filterDiff, questionSearch],
     queryFn: async () => {
-      let q = supabase.from('qb_questions').select('*, qb_subjects(name)').order('created_at', { ascending: false }).limit(500);
+      let q = supabase.from('qb_questions').select('*, qb_subjects(name)').order('created_at', { ascending: false }).limit(100);
       if (filterSubject !== 'all') q = q.eq('subject_id', filterSubject);
       if (filterDiff !== 'all') q = q.eq('difficulty', filterDiff as Diff);
+      if (questionSearch.trim()) q = q.ilike('question_text', `%${questionSearch.trim()}%`);
       const { data } = await q;
       return data ?? [];
     },
+    enabled: isQuestionsTab,
   });
 
   const saveQuestion = useMutation({
@@ -220,6 +225,7 @@ const AdminQuestionBank = () => {
   const { data: aiSettings, refetch: refetchSettings } = useQuery({
     queryKey: ['qb-ai-settings'],
     queryFn: async () => (await supabase.from('qb_ai_settings').select('*').limit(1).maybeSingle()).data,
+    enabled: isAiSettingsTab,
   });
   const [settingsForm, setSettingsForm] = useState<any>(null);
   const currentSettings = settingsForm ?? aiSettings ?? { provider: 'groq', model: 'llama-3.3-70b-versatile', temperature: 0.7, fallback_enabled: true, fallback_provider: 'lovable', fallback_model: 'google/gemini-2.5-flash', max_questions_per_run: 25, system_prompt_override: '' };
