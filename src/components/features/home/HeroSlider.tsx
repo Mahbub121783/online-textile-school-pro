@@ -4,6 +4,20 @@ import { Button } from '@/components/ui/button';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
+const isPreviewOrEmbedded = (() => {
+  if (typeof window === 'undefined') return false;
+  try {
+    return (
+      window.self !== window.top ||
+      window.location.hostname.includes('id-preview--') ||
+      window.location.hostname.includes('lovable.app') ||
+      window.location.hostname.includes('lovableproject.com')
+    );
+  } catch {
+    return true;
+  }
+})();
+
 const FALLBACK_SLIDES = [
   { id: 'f1', title: 'Master Textile Engineering Online', subtitle: 'Join thousands of learners building careers in the textile industry with expert-led courses.', cta_text: 'Explore Courses', cta_link: '/courses', secondary_cta_text: 'Free Demo Class', secondary_cta_link: '#demo', image_url: '', gradient_from: 'primary', gradient_to: 'primary-dark', gradient_direction: 'br', overlay_opacity: 5, text_alignment: 'left', title_color: null, subtitle_color: null, countdown_target: null },
   { id: 'f2', title: 'Learn from Industry Experts', subtitle: 'Spinning, Weaving, Dyeing, Knitting — comprehensive courses from professionals.', cta_text: 'Browse Categories', cta_link: '/courses', secondary_cta_text: 'Become an Instructor', secondary_cta_link: '/become-instructor', image_url: '', gradient_from: 'primary-dark', gradient_to: 'primary', gradient_direction: 'br', overlay_opacity: 5, text_alignment: 'left', title_color: null, subtitle_color: null, countdown_target: null },
@@ -151,8 +165,12 @@ const HeroSlider = () => {
       const { data } = await supabase.from('hero_slides').select('*').eq('is_active', true).order('sort_order', { ascending: true });
       return data ?? [];
     },
-    staleTime: 30000,
+    staleTime: 10 * 60 * 1000,
+    retry: 0,
+    refetchOnMount: false,
+    refetchOnReconnect: false,
     placeholderData: [],
+    enabled: !isPreviewOrEmbedded,
   });
 
   // Auto-fetch the latest upcoming published workshop to feature on the hero
@@ -169,7 +187,11 @@ const HeroSlider = () => {
         .maybeSingle();
       return data;
     },
-    staleTime: 60_000,
+    staleTime: 10 * 60 * 1000,
+    retry: 0,
+    refetchOnMount: false,
+    refetchOnReconnect: false,
+    enabled: !isPreviewOrEmbedded,
   });
 
   const slides = useMemo(() => {
