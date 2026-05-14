@@ -9,6 +9,20 @@ import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { CountdownTimer } from '@/components/workshop/CountdownTimer';
 
+const isPreviewOrEmbedded = (() => {
+  if (typeof window === 'undefined') return false;
+  try {
+    return (
+      window.self !== window.top ||
+      window.location.hostname.includes('id-preview--') ||
+      window.location.hostname.includes('lovable.app') ||
+      window.location.hostname.includes('lovableproject.com')
+    );
+  } catch {
+    return true;
+  }
+})();
+
 const statusConfig: Record<string, { label: string; className: string }> = {
   published: { label: 'Upcoming', className: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20' },
   ongoing: { label: 'Live Now', className: 'bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20' },
@@ -31,6 +45,11 @@ export default function FeaturedWorkshops() {
       if (error) throw error;
       return data || [];
     },
+    staleTime: 10 * 60 * 1000,
+    retry: 0,
+    refetchOnMount: false,
+    refetchOnReconnect: false,
+    enabled: !isPreviewOrEmbedded,
   });
 
   const { data: regCounts = {} } = useQuery({
@@ -50,6 +69,10 @@ export default function FeaturedWorkshops() {
       return counts;
     },
     enabled: workshops.length > 0,
+    staleTime: 10 * 60 * 1000,
+    retry: 0,
+    refetchOnMount: false,
+    refetchOnReconnect: false,
   });
 
   if (isLoading) {
