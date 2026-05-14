@@ -3,6 +3,20 @@ import { useLocation } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 
+const isPreviewOrEmbedded = (() => {
+  if (typeof window === 'undefined') return false;
+  try {
+    return (
+      window.self !== window.top ||
+      window.location.hostname.includes('id-preview--') ||
+      window.location.hostname.includes('lovable.app') ||
+      window.location.hostname.includes('lovableproject.com')
+    );
+  } catch {
+    return true;
+  }
+})();
+
 export interface PopupRow {
   id: string;
   name: string;
@@ -114,6 +128,10 @@ export function usePopupEngine() {
   // Cache popup config in module scope so we only hit Supabase once per session
   // (popup config changes are rare; reduces free-tier load significantly).
   useEffect(() => {
+    if (isPreviewOrEmbedded) {
+      setEligible([]);
+      return;
+    }
     let cancelled = false;
     const fetchPopups = async () => {
       const now = new Date().toISOString();
