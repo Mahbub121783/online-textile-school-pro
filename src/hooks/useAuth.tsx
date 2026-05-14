@@ -3,6 +3,8 @@ import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 
 const avatarNormalizationInFlight = new Set<string>();
+const profileCache = new Map<string, { at: number; data: { profile: any | null; roles: string[] } }>();
+const PROFILE_CACHE_MS = 2 * 60 * 1000;
 
 const isCloudinaryUrl = (url?: string | null) =>
   !!url && (url.includes('res.cloudinary.com') || url.includes('cloudinary.com'));
@@ -79,14 +81,21 @@ const AuthContext = createContext<AuthContextType>({
 });
 
 const fetchUserData = async (userId: string) => {
+  const cached = profileCache.get(userId);
+  if (cached && Date.now() - cached.at < PROFILE_CACHE_MS) {
+    return cached.data;
+  }
+
   const [profileRes, rolesRes] = await Promise.all([
     supabase.from('user_profiles').select('*').eq('id', userId).single(),
     supabase.from('user_roles').select('role').eq('user_id', userId),
   ]);
-  return {
+  const data = {
     profile: profileRes.data,
     roles: rolesRes.data?.map((r: any) => r.role) ?? [],
   };
+  profileCache.set(userId, { at: Date.now(), data });
+  return data;
 };
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
@@ -150,6 +159,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         if (session?.user) {
           const uid = session.user.id;
           if (event === 'SIGNED_IN') recordLogin(uid);
+          if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
+            profileCache.delete(uid);
+          }
           loadProfileAndRoles(uid);
         } else {
           setProfile(null);
@@ -171,7 +183,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         { event: '*', schema: 'public', table: 'user_roles', filter: `user_id=eq.${user.id}` },
         async () => {
           const { data } = await supabase.from('user_roles').select('role').eq('user_id', user.id);
-          setRoles(data?.map((r: any) => r.role) ?? []);
+          const nextRoles = data?.map((r: any) => r.role) ?? [];
+          setRoles(nextRoles);
+          const cached = profileCache.get(user.id);
+          if (cached) profileCache.set(user.id, { at: Date.now(), data: { ...cached.data, roles: nextRoles } });
         }
       )
       .subscribe();
