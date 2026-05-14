@@ -424,6 +424,31 @@ const AppRoutes = () => {
   );
 };
 
+const GlobalOverlays = () => {
+  const location = useLocation();
+  const path = location.pathname;
+  const skipHeavyOverlays =
+    path.startsWith('/auth') ||
+    path.startsWith('/reset-password') ||
+    path.startsWith('/admin') ||
+    path.startsWith('/dashboard') ||
+    path.startsWith('/instructor') ||
+    path.startsWith('/practice/exam') ||
+    path.startsWith('/learn/') ||
+    path.startsWith('/quiz/') ||
+    path.startsWith('/assignment/');
+
+  if (skipHeavyOverlays) return <CookieConsentBanner />;
+
+  return (
+    <>
+      <PopupRenderer />
+      {!isPreviewOrEmbedded && <ChatWidget />}
+      <CookieConsentBanner />
+    </>
+  );
+};
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <ThemeProvider>
@@ -434,9 +459,7 @@ const App = () => (
             <Sonner />
             <BrowserRouter future={{ v7_relativeSplatPath: true }}>
               <AppRoutes />
-              <PopupRenderer />
-              {!isPreviewOrEmbedded && <ChatWidget />}
-              <CookieConsentBanner />
+              <GlobalOverlays />
             </BrowserRouter>
           </TooltipProvider>
         </CookieConsentProvider>
