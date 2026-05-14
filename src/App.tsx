@@ -178,16 +178,30 @@ const PracticeHistory = lazy(() => import("./pages/practice/PracticeHistory"));
 const PracticeLeaderboard = lazy(() => import("./pages/practice/PracticeLeaderboard"));
 const AdminQuestionBank = lazy(() => import("./pages/admin/AdminQuestionBank"));
 
+const isPreviewOrEmbedded = (() => {
+  if (typeof window === 'undefined') return false;
+  try {
+    return (
+      window.self !== window.top ||
+      window.location.hostname.includes('id-preview--') ||
+      window.location.hostname.includes('lovable.app') ||
+      window.location.hostname.includes('lovableproject.com')
+    );
+  } catch {
+    return true;
+  }
+})();
+
 // Optimized QueryClient with aggressive caching
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 5 * 60 * 1000,        // 5 min default — fresh feel
+      staleTime: 2 * 60 * 1000,
       gcTime: 30 * 60 * 1000,          // 30 min garbage collection
       refetchOnWindowFocus: false,
-      refetchOnReconnect: true,        // Reconnect = refresh
-      retry: 1,
-      refetchOnMount: true,            // Background refetch if stale
+      refetchOnReconnect: false,
+      retry: isPreviewOrEmbedded ? 0 : 1,
+      refetchOnMount: false,
     },
   },
 });
@@ -421,7 +435,7 @@ const App = () => (
             <BrowserRouter future={{ v7_relativeSplatPath: true }}>
               <AppRoutes />
               <PopupRenderer />
-              <ChatWidget />
+              {!isPreviewOrEmbedded && <ChatWidget />}
               <CookieConsentBanner />
             </BrowserRouter>
           </TooltipProvider>
