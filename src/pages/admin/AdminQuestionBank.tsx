@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -185,16 +185,48 @@ const AdminQuestionBank = () => {
   const [aiSelected, setAiSelected] = useState<Set<number>>(new Set());
   const [aiProviderUsed, setAiProviderUsed] = useState<string>('');
   const [aiLastError, setAiLastError] = useState<string>('');
+  const [aiController, setAiController] = useState<AbortController | null>(null);
+
+  const aiSubjectName = useMemo(
+    () => subjects.find((s: any) => s.id === aiSubject)?.name || 'Selected subject',
+    [subjects, aiSubject]
+  );
 
   const generateAI = async (testMode = false) => {
     if (!aiSubject) { toast({ title: 'Subject required', variant: 'destructive' }); return; }
+    aiController?.abort();
+    const controller = new AbortController();
+    setAiController(controller);
     setAiBusy(true);
     setAiLastError('');
     try {
-      const { data, error } = await supabase.functions.invoke('qb-ai-generate', {
-        body: { subject_id: aiSubject, topic: aiTopic || undefined, difficulty: aiDiff, count: aiCount, language: aiLang, test: testMode },
+      const tokenRes = await supabase.auth.getSession();
+      const accessToken = tokenRes.data.session?.access_token;
+      if (!accessToken) throw new Error('Admin session expired. Please sign in again.');
+
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/qb-ai-generate`, {
+        method: 'POST',
+        signal: controller.signal,
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          subject_id: aiSubject,
+          subject_name: aiSubjectName,
+          topic: aiTopic || undefined,
+          difficulty: aiDiff,
+          count: aiCount,
+          language: aiLang,
+          test: testMode,
+        }),
       });
-      if (error) throw error;
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data?.error || `HTTP ${response.status}`);
+      }
       if (data?.error) throw new Error(data.error);
       const drafts = (data?.questions || []).map((d: any) => ({ ...d, _approved: true }));
       setAiDrafts(drafts);
@@ -203,11 +235,13 @@ const AdminQuestionBank = () => {
       const provNote = data?.fallback_used ? ` (fallback: ${data.provider_used})` : ` via ${data?.provider_used}`;
       toast({ title: `Generated ${drafts.length} drafts${provNote}` });
     } catch (e: any) {
-      const msg = e?.message || 'Unknown error';
+      const msg = e?.name === 'AbortError' ? 'Previous generation canceled.' : (e?.message || 'Unknown error');
       setAiLastError(msg);
       toast({ title: 'AI generation failed', description: msg, variant: 'destructive' });
+    } finally {
+      setAiController(null);
+      setAiBusy(false);
     }
-    setAiBusy(false);
   };
 
   const updateDraft = (i: number, patch: any) => setAiDrafts((p) => p.map((d, j) => j === i ? { ...d, ...patch } : d));
@@ -219,7 +253,17 @@ const AdminQuestionBank = () => {
   const toggleSelect = (i: number) => setAiSelected((p) => { const n = new Set(p); n.has(i) ? n.delete(i) : n.add(i); return n; });
   const selectAll = () => setAiSelected(new Set(aiDrafts.map((_, i) => i)));
   const selectNone = () => setAiSelected(new Set());
-  const removeDraft = (i: number) => { setAiDrafts((p) => p.filter((_, j) => j !== i)); setAiSelected(new Set()); };
+   const removeDraft = (i: number) => {
+     setAiDrafts((p) => p.filter((_, j) => j !== i));
+     setAiSelected((prev) => {
+       const next = new Set<number>();
+       prev.forEach((index) => {
+         if (index === i) return;
+         next.add(index > i ? index - 1 : index);
+       });
+       return next;
+     });
+   };
 
   // ---- AI settings ----
   const { data: aiSettings, refetch: refetchSettings } = useQuery({
