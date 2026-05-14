@@ -68,7 +68,7 @@ export default function FeaturedWorkshops() {
       });
       return counts;
     },
-    enabled: workshops.length > 0,
+    enabled: workshops.length > 0 && !isPreviewOrEmbedded,
     staleTime: 10 * 60 * 1000,
     retry: 0,
     refetchOnMount: false,
