@@ -37,8 +37,19 @@ const RichTextEditor = ({ value, onChange, placeholder = 'Start writing...', min
   };
 
   const insertImage = () => {
-    const url = prompt('Enter image URL:');
-    if (url) exec('insertImage', url);
+    const url = prompt('Enter image URL (https://...). Base64/data URLs are not allowed — upload via Media Library.');
+    if (!url) return;
+    if (/^data:/i.test(url.trim())) {
+      alert('Inline base64 images are blocked. Please upload the image first and paste the URL.');
+      return;
+    }
+    exec('insertImage', url);
+  };
+
+  const stripBase64Images = (html: string): string => {
+    return html
+      .replace(/<img[^>]+src=["']data:[^"']+["'][^>]*>/gi, '')
+      .replace(/background(-image)?\s*:\s*url\(\s*["']?data:[^)]+\)\s*;?/gi, '');
   };
 
   return (
