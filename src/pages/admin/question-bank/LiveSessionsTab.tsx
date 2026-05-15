@@ -29,7 +29,10 @@ const LiveSessionsTab = () => {
       const pmap = new Map((profiles ?? []).map((p: any) => [p.id, p]));
       return (data ?? []).map((s: any) => ({ ...s, profile: pmap.get(s.user_id) }));
     },
-    refetchInterval: 10000,
+    refetchInterval: 60_000, // was 10s — too aggressive on a small DB
+    staleTime: 30_000,
+    retry: 0,
+    refetchOnWindowFocus: false,
   });
 
   const { data: detail } = useQuery({

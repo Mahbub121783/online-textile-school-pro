@@ -29,33 +29,24 @@ const PracticeHome = () => {
     },
   });
 
-  const { data: counts = {} } = useQuery({
-    queryKey: ['qb-question-counts', subjects.map((s) => s.id)],
-    enabled: subjects.length > 0,
-    queryFn: async () => {
-      const { data } = await supabase
-        .from('qb_questions')
-        .select('subject_id, difficulty')
-        .eq('is_active', true);
-      const map: Record<string, { basic: number; intermediate: number; advanced: number; total: number }> = {};
-      (data ?? []).forEach((q: any) => {
-        if (!map[q.subject_id]) map[q.subject_id] = { basic: 0, intermediate: 0, advanced: 0, total: 0 };
-        map[q.subject_id][q.difficulty as 'basic' | 'intermediate' | 'advanced']++;
-        map[q.subject_id].total++;
-      });
-      return map;
-    },
-  });
+  // Disabled: previously scanned full qb_questions table on every PracticeHome load.
+  // Counts are now shown only when user opens a subject (PracticeSubject uses cheap head counts).
+  const counts: Record<string, { basic: number; intermediate: number; advanced: number; total: number }> = {};
 
   const { data: myStats } = useQuery({
     queryKey: ['qb-my-stats', user?.id],
     enabled: !!user,
+    staleTime: 10 * 60 * 1000,
+    retry: 0,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
     queryFn: async () => {
       const { data } = await supabase
         .from('qb_exam_sessions')
         .select('subject_id, percentage, passed')
         .eq('user_id', user!.id)
-        .not('submitted_at', 'is', null);
+        .not('submitted_at', 'is', null)
+        .limit(200);
       const bySubject: Record<string, { best: number; attempts: number }> = {};
       let totalAttempts = 0;
       let totalPassed = 0;
@@ -81,8 +72,14 @@ const PracticeHome = () => {
     },
   });
 
+  // Heavy global stats — cache aggressively to avoid repeated count queries
   const { data: globalStats } = useQuery({
     queryKey: ['qb-global-stats'],
+    staleTime: 60 * 60 * 1000,
+    gcTime: 2 * 60 * 60 * 1000,
+    retry: 0,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
     queryFn: async () => {
       const [{ count: qCount }, { count: examCount }, { count: studentCount }] = await Promise.all([
         supabase.from('qb_questions').select('*', { count: 'exact', head: true }).eq('is_active', true),

@@ -209,25 +209,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => { mounted = false; subscription.unsubscribe(); };
   }, []);
 
-  // 3. Realtime: keep roles in sync when admin changes them — propagates instantly
-  useEffect(() => {
-    if (!user?.id) return;
-    const channel = supabase
-      .channel(`user-roles-${user.id}-${Date.now()}`)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'user_roles', filter: `user_id=eq.${user.id}` },
-        async () => {
-          const { data } = await supabase.from('user_roles').select('role').eq('user_id', user.id);
-          const nextRoles = data?.map((r: any) => r.role) ?? [];
-          setRoles(nextRoles);
-          const cached = profileCache.get(user.id);
-          if (cached) profileCache.set(user.id, { at: Date.now(), data: { ...cached.data, roles: nextRoles } });
-        }
-      )
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [user?.id]);
+  // EMERGENCY MODE: removed live user_roles subscription. Roles refresh on
+  // next sign-in / token-refresh / page reload, which is enough while the
+  // database is recovering from saturation.
 
   const signOut = async () => {
     await supabase.auth.signOut();

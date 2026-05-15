@@ -18,22 +18,39 @@ export const useCurrencyStore = create<CurrencyState>()(
   )
 );
 
+const CURR_LS_KEY = 'ots-currencies-cache';
+const readCurrCache = (): any[] | null => {
+  try { const raw = localStorage.getItem(CURR_LS_KEY); return raw ? JSON.parse(raw) : null; } catch { return null; }
+};
+const writeCurrCache = (data: any[]) => { try { localStorage.setItem(CURR_LS_KEY, JSON.stringify(data)); } catch { /* */ } };
+
 export const useCurrencies = () => {
   return useQuery({
     queryKey: ['active-currencies'],
+    initialData: () => readCurrCache() ?? undefined,
     queryFn: async () => {
-      const { data } = await supabase
-        .from('currencies')
-        .select('code, symbol, exchange_rate, is_default')
-        .eq('is_active', true)
-        .order('is_default', { ascending: false });
-      return data ?? [];
+      try {
+        const { data, error } = await supabase
+          .from('currencies')
+          .select('code, symbol, exchange_rate, is_default')
+          .eq('is_active', true)
+          .order('is_default', { ascending: false });
+        if (error) throw error;
+        const rows = data ?? [];
+        writeCurrCache(rows);
+        return rows;
+      } catch (err) {
+        const cached = readCurrCache();
+        if (cached) return cached;
+        throw err;
+      }
     },
-    staleTime: 60 * 60 * 1000, // 1h — rarely changes
-    gcTime: 2 * 60 * 60 * 1000,
+    staleTime: 2 * 60 * 60 * 1000, // 2h — rarely changes
+    gcTime: 4 * 60 * 60 * 1000,
     retry: 0,
     refetchOnMount: false,
     refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
 };
 

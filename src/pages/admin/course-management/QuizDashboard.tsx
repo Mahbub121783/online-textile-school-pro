@@ -59,25 +59,10 @@ const QuizDashboard = ({ onCreateNew, onEdit, onResults }: Props) => {
   const totalCount = quizResult?.total ?? 0;
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
 
-  const { data: questionCounts = {} } = useQuery({
-    queryKey: ['quiz-question-counts'],
-    queryFn: async () => {
-      const { data } = await supabase.from('quiz_questions').select('quiz_id').eq('is_instruction', false).limit(5000);
-      const counts: Record<string, number> = {};
-      (data ?? []).forEach((r: any) => { counts[r.quiz_id] = (counts[r.quiz_id] || 0) + 1; });
-      return counts;
-    },
-  });
-
-  const { data: attemptCounts = {} } = useQuery({
-    queryKey: ['quiz-attempt-counts'],
-    queryFn: async () => {
-      const { data } = await supabase.from('quiz_attempts').select('quiz_id').limit(5000);
-      const counts: Record<string, number> = {};
-      (data ?? []).forEach((r: any) => { counts[r.quiz_id] = (counts[r.quiz_id] || 0) + 1; });
-      return counts;
-    },
-  });
+  // Disabled: previously scanned 5000 rows of quiz_questions and quiz_attempts
+  // every time the dashboard opened. Counts are visible inside per-quiz Results.
+  const questionCounts: Record<string, number> = {};
+  const attemptCounts: Record<string, number> = {};
 
   const statusColor = (s: string) => {
     if (s === 'live') return 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400';

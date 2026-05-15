@@ -34,9 +34,15 @@ const AdminQuestionBank = () => {
   const isQuestionsTab = tab === 'questions';
   const isAiSettingsTab = tab === 'ai-settings';
 
-  // ---- KPI strip ----
+  // ---- KPI strip (heavy: 4 count queries) — cached long, no auto-poll ----
   const { data: kpi } = useQuery({
     queryKey: ['admin-qb-kpi'],
+    staleTime: 10 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
+    retry: 0,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchInterval: false,
     queryFn: async () => {
       const since24h = new Date(Date.now() - 86400_000).toISOString();
       const since7d = new Date(Date.now() - 7 * 86400_000).toISOString();
@@ -53,7 +59,6 @@ const AdminQuestionBank = () => {
         live: live.count ?? 0,
       };
     },
-    refetchInterval: 30_000,
   });
   const { data: subjects = [] } = useQuery({
     queryKey: ['admin-qb-subjects'],
