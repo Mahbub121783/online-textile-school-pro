@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * Free-tier load audit. Scans src/**/*.{ts,tsx} and reports:
+ * Free-tier load audit. Scans src TS/TSX files and reports:
  *  - supabase.from('X').select(...) calls (flags select('*'))
  *  - useQuery option overrides (staleTime / refetchInterval / refetchOnMount)
  *  - realtime channel subscriptions
