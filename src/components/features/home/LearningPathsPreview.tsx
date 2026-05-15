@@ -11,7 +11,7 @@ const LearningPathsPreview = () => {
     queryFn: async () => {
       const { data } = await supabase
         .from('learning_paths')
-        .select('*')
+        .select('id, title, slug, description, thumbnail_url, course_ids')
         .eq('is_published', true)
         .order('created_at', { ascending: false })
         .limit(3);

@@ -12,7 +12,7 @@ const UpcomingEvents = () => {
     queryFn: async () => {
       const { data } = await supabase
         .from('events')
-        .select('*')
+        .select('id, title, description, event_date, image_url')
         .gte('event_date', new Date().toISOString())
         .order('event_date', { ascending: true })
         .limit(3);

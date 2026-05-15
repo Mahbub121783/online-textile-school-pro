@@ -162,7 +162,12 @@ const HeroSlider = () => {
   const { data: dbSlides } = useQuery({
     queryKey: ['hero-slides-public'],
     queryFn: async () => {
-      const { data } = await supabase.from('hero_slides').select('*').eq('is_active', true).order('sort_order', { ascending: true });
+      const { data } = await supabase
+        .from('hero_slides')
+        .select('id, title, subtitle, description, badge_text, image_url, video_url, cta_label, cta_url, secondary_cta_label, secondary_cta_url, countdown_target, sort_order, theme, text_align')
+        .eq('is_active', true)
+        .order('sort_order', { ascending: true })
+        .limit(20);
       return data ?? [];
     },
     staleTime: 10 * 60 * 1000,

@@ -18,7 +18,7 @@ const TestimonialsSection = () => {
     queryFn: async () => {
       const { data } = await supabase
         .from('success_stories')
-        .select('*')
+        .select('id, name, job_title, story, photo_url')
         .eq('is_featured', true)
         .order('created_at', { ascending: false })
         .limit(6);
