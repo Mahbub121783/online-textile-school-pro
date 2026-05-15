@@ -22,9 +22,10 @@ const InvoicesPage = () => {
     queryFn: async () => {
       const { data } = await supabase
         .from('invoices')
-        .select('*')
+        .select('id, user_id, order_id, invoice_number, total_amount, status, currency, created_at')
         .eq('user_id', user!.id)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(100);
       return data ?? [];
     },
     enabled: !!user,
@@ -38,8 +39,9 @@ const InvoicesPage = () => {
     queryFn: async () => {
       const { data } = await supabase
         .from('order_items')
-        .select('*')
-        .in('order_id', orderIds);
+        .select('id, order_id, item_type, item_id, quantity, price')
+        .in('order_id', orderIds)
+        .limit(500);
       return data ?? [];
     },
   });

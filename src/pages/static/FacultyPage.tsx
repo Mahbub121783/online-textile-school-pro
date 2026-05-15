@@ -23,10 +23,11 @@ const FacultyPage = () => {
     queryFn: async () => {
       const { data } = await supabase
         .from('faculty_members')
-        .select('*')
+        .select('id, name, title, department, photo_url, email, bio, expertise, sort_order')
         .eq('is_active', true)
         .order('sort_order')
-        .order('name');
+        .order('name')
+        .limit(200);
       return data ?? [];
     },
   });
