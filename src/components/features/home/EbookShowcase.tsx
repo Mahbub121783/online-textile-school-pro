@@ -5,7 +5,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useCartStore } from '@/stores/cartStore';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { isPreviewOrEmbedded } from '@/lib/previewMode';
 
 const EbookShowcase = () => {
   const addItem = useCartStore((s) => s.addItem);
@@ -25,7 +24,6 @@ const EbookShowcase = () => {
     retry: 0,
     refetchOnMount: false,
     refetchOnReconnect: false,
-    enabled: !isPreviewOrEmbedded,
   });
 
   if (!isLoading && ebooks.length === 0) return null;

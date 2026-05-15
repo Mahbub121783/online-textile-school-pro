@@ -4,7 +4,6 @@ import { Link } from 'react-router-dom';
 import { Calendar, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { format } from 'date-fns';
-import { isPreviewOrEmbedded } from '@/lib/previewMode';
 
 const UpcomingEvents = () => {
   const { data: events = [] } = useQuery({
@@ -22,7 +21,6 @@ const UpcomingEvents = () => {
     retry: 0,
     refetchOnMount: false,
     refetchOnReconnect: false,
-    enabled: !isPreviewOrEmbedded,
   });
 
   if (events.length === 0) return null;
