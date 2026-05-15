@@ -100,8 +100,13 @@ export default function MailRichTextEditor({ content, onChange, placeholder = 'W
   };
 
   const addImage = () => {
-    const url = prompt('Image URL:');
-    if (url) editor.chain().focus().setImage({ src: url }).run();
+    const url = prompt('Image URL (https://...). Base64/data URLs are not allowed.');
+    if (!url) return;
+    if (/^data:/i.test(url.trim())) {
+      alert('Inline base64 images are blocked. Please host the image and paste the URL.');
+      return;
+    }
+    editor.chain().focus().setImage({ src: url }).run();
   };
 
   return (
