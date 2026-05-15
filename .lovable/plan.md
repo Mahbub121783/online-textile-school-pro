@@ -1,125 +1,123 @@
+## Direct answers
 
-## Brief report — what is causing the heavy load
+**1. Database এখন কত?**
+- **56 MB / 500 MB** (11% used). 262 users, 184 notifications, 50 AI chats, 315 email logs. বড় টেবিলগুলোও সব <360 KB. অনেক জায়গা আছে।
 
-From the prior audit (Phase A/B/C already shipped) plus a fresh sweep of the 179 files using `supabase.from()` / `useQuery`, the residual load on a Free Tier instance will come from these classes of issues:
+**2. 500 concurrent user হলে Free Tier hit করবে?**
+Free Tier limit আর আমাদের actual usage:
 
-1. **Wide `select('*')` queries** — most hooks (e.g. `useNotifications`, `useSiteContent`, dashboard pages, instructor pages) use `select('*')`. On wide tables (`courses`, `user_profiles`, `posts`, `ebooks`, `notifications`) this multiplies bandwidth 5–20×.
-2. **Unbounded list reads** — many catalog/listing pages (CourseCatalog, EbookCatalog, ForumHome, InstructorCourses, AdminUsers, etc.) fetch up to the 1000-row Supabase default with no `.range()` pagination.
-3. **Realtime channels still open in non-critical surfaces** — `useNotifications` keeps a per-user realtime channel always-on; `useStudentRealtime`/`useInstructorRealtime`/`useAdminRealtime` all open notification channels on every dashboard mount. On Free Tier the concurrent realtime client cap is 200; this burns connections.
-4. **Search inputs with no debounce** — admin tables, course catalog, forum search, contributor picker fire a query per keystroke.
-5. **DB bloat risks** — `popup_analytics`, `ai_chat_history`, `ai_chat_sessions`, `admin_activity_log`, `chat_messages`, `qb_exam_violations`, `notifications`, `engagement_events` (if present) grow forever. `cleanup_old_ai_chats()` exists but is not scheduled. No retention on the others.
-6. **Base64/large JSON in DB** — risk in `template_snapshot` (certificates), `site_content.content`, `posts.content_blocks` (Gutenberg JSONB), and any rich text editors that paste images as `data:` URIs instead of uploading to the `media` bucket.
-7. **React Query defaults are good** (2-min stale, no refetch on focus/mount) but per-query overrides still bypass them in ~40 files (`refetchOnMount: 'always'`, short `staleTime`).
-8. **Heartbeats / cron-like loops** — `useExamHeartbeat` (20s RPC) and `useEngagementTracking` write rows continuously while a tab is open.
+| Limit | Free cap | আমাদের estimate (500 active user) | ঝুঁকি |
+|---|---|---|---|
+| DB size | 500 MB | ~80–150 MB (retention জব দিলে) | ✅ safe |
+| Direct DB conn | 60 (pooler) | API per request, normally OK | ✅ safe |
+| Realtime concurrent | **200** | 500 logged-in tab × 1 channel = 500 | 🔴 **fail করবে** |
+| Egress | **5 GB/mo** | `select('*')` থাকলে ~10–20 GB | 🔴 **fail করবে** |
+| Edge fn calls | 500K/mo | sitemap+payment+ai = ঠিকঠাক | ✅ ok |
+| Auth MAU | 50K | 500 → কোনো সমস্যা না | ✅ safe |
+| Compute | Nano (~512MB) | unbounded select হলে timeout | 🟡 risk |
 
-Phase A/B/C from the prior round already eliminated the worst polling (chat, stats, notifications). What remains is structural: payload size, retention, and pagination.
+মূল bottleneck **disk না** — bottleneck হবে **Realtime connection cap (200)** আর **Egress bandwidth (5 GB)**. তাই plan সেই দুটোতে focus করতে হবে।
 
-## Plan
+**3. DB compress / restructure করা যাবে?**
+হ্যাঁ — কিন্তু কোনো feature/data নষ্ট না করে। নিচের সব non-destructive:
+- `VACUUM FULL` + `REINDEX` — dead row reclaim, কোনো data যাবে না
+- বড় JSONB কলাম (`certificates.template_snapshot`, `posts.content_blocks`) → snapshot-only রাখব, image base64 থাকলে storage bucket-এ সরাব
+- Retention জব = পুরোনো log/analytics auto-delete (data না, log)
+- Index audit — duplicate/unused index drop (data unaffected)
 
-### Phase 1 — Audit deliverable (no code changes)
-Generate a single machine-readable report `.lovable/free-tier-audit.json` produced by a script that scans `src/**/*.{ts,tsx}` and lists, per file:
-- every `supabase.from('X').select(...)` with the column list (or `*`)
-- every `useQuery` with its `staleTime`, `refetchInterval`, `enabled`
-- every realtime `.channel(...).on('postgres_changes', ...)`
-- every `.range()`/`.limit()` (or absence thereof on list reads)
-- every `<Input onChange>` that calls a query without `useDebounce`
+---
 
-Output: prioritized markdown report in `.lovable/free-tier-audit.md`.
+## Plan — "500 user free tier safe" (zero data loss, zero feature loss)
 
-### Phase 2 — Payload diet (`select('*')` → explicit columns)
-Touch the ~30 highest-traffic hooks/pages first:
-- `useNotifications`, `useSiteContent`, `useEnrollments`, `useWishlist`, `useContributors`, `useCouponValidation`
-- `CourseCatalog`, `EbookCatalog`, `ForumHome`, `BlogList`, `LearningPaths`, `WorkshopsPage`
-- `DashboardOverview`, `MyCourses`, `MyEbooks`, `CertificatesPage`
-- `InstructorCourses`, `InstructorStudents`, `InstructorAnalytics`
-- All `pages/admin/*` list pages
+### Phase 1 — Realtime triage (সবচেয়ে important, 200 cap)
+Goal: প্রত্যেক logged-in tab → 0 বা 1 channel only.
 
-Rule: never select more than the columns the JSX actually reads. Detail pages keep wider selects.
+- `useNotifications` hook থেকে realtime channel **conditional** করব: শুধু `<NotificationBell>` mount হলে subscribe হবে, পুরো app-wide না।
+- `useStudentRealtime`/`useInstructorRealtime`/`useAdminRealtime` — currently প্রতিটা page-এ mount হয়, এদেরকে শুধুমাত্র `DashboardLayout` / `InstructorLayout` / `AdminLayout`-এ একবার করে mount করব (page-level নয়)।
+- ChatWidget channel → শুধু widget open থাকলে। Closed হলে disconnect (এখনই গেট আছে, double-check)।
+- Result: 500 user × 1 channel max = 500 → **আরও কমাতে হবে**, তাই notification channel-কে also gated করব শুধু `unreadCount > 0` check-এর সময়—এর বদলে **30s polling fallback** দেব যদি `shouldSkipRealtime` true থাকে।
+- Final: realtime শুধু যাদের সত্যি দরকার (chat open, bell hovered) → typically 50–100 concurrent channels।
 
-### Phase 3 — Pagination on every list
-Add `.range(from, from+19)` (page size 20) + "Load more"/cursor pagination using React Query's `useInfiniteQuery` for:
-- Course / Ebook / Workshop / Learning-path catalogs
-- Forum, Blog, Class Videos feeds
-- Admin users / orders / enrollments / payments / notifications tables
-- Instructor students, assignments, quizzes, gradebook
+### Phase 2 — Egress cut (5 GB/mo cap)
+Goal: প্রতিটা list/detail query থেকে শুধু দরকারি column।
 
-For admin tables: server-side sort + filter + 20/page.
+- Top 30 traffic-heavy file-এ `select('*')` → explicit column list (audit report থেকে priority list)।
+- প্রত্যেক list catalog-এ `useInfiniteQuery` + `.range(0, 19)` (page size 20)।
+- Detail page-এ `select('*')` thik ache (single row)।
+- Estimated egress drop: 25 KB/req → 3 KB/req (~8× reduction)।
 
-### Phase 4 — Realtime triage
-Keep realtime ONLY where the UX truly needs sub-second updates:
-- KEEP: `chat_messages` (already merged), `notifications` for the bell badge
-- REMOVE: `useStudentRealtime`/`useInstructorRealtime`/`useAdminRealtime` notification channels — replace with a single shared bell channel mounted ONCE in `DashboardLayout` / `InstructorLayout` / `AdminLayout` (not per page)
-- REMOVE: any realtime in admin tables; rely on React Query refetch-on-window-focus (off) + manual refresh button + 2-min `staleTime`
+### Phase 3 — Caching aggressive করা (request count কমানো)
+- React Query global stale time **2 min → 5 min** (lists), 30 min (CMS/static)
+- `localStorage` persistence layer (already done in StatsSection) extend করব homepage → courses catalog, ebooks catalog
+- Service worker (already exists `sw.ts`) — GET request cache 1h
 
-### Phase 5 — Debounce search inputs
-Add a tiny `useDebouncedValue(value, 500)` hook and wire it into every search input that drives a query:
-- AdminUsers search, CourseCatalog search, ForumHome search, ContributorPickerModal, MediaPickerModal, ItemPickerModal, InstructorStudents search, instructor course/lesson pickers.
+### Phase 4 — DB retention (jodi free tier-e abar nameo, disk safe)
+এক migration যা auto-cleanup add করে — কোনো user data delete করবে না, শুধু log/analytics:
+- `popup_analytics` — 30 দিনের পুরোনো delete
+- `admin_activity_log` — 90 দিন
+- `email_logs` — 60 দিন
+- `notifications` (read=true) — 30 দিন
+- `qb_exam_violations` — 60 দিন
+- `ai_chat_history` — already function ace, schedule দেব
+- `engagement_events` (যদি থাকে) — 14 দিন
+- পাশাপাশি `pg_cron` দিয়ে nightly schedule
+- প্রতি migration-এ clear English summary দেব approval-এর সময়
+- Estimated steady-state: 80–150 MB (বর্তমান 56 MB থেকে সামান্য বাড়বে কিন্তু explode করবে না)
 
-### Phase 6 — DB retention & storage hygiene (one migration)
-One SQL migration adds:
-- `pg_cron` jobs (or scheduled via Supabase cron) calling cleanup functions:
-  - `cleanup_old_ai_chats()` — daily (already exists, just schedule it)
-  - `cleanup_old_popup_analytics()` — keep 30 days
-  - `cleanup_old_admin_activity_log()` — keep 90 days
-  - `cleanup_old_chat_messages()` — keep 180 days for read threads
-  - `cleanup_old_qb_exam_violations()` — keep 60 days
-  - `cleanup_old_notifications()` — delete read notifications older than 30 days
-  - `cleanup_old_engagement_events()` — keep 14 worth aggregated; drop raw
-- Indexes on `(created_at)` for the cleanup tables
-- A `db_size_report()` function returning per-table size — surface in Admin → System Health
+### Phase 5 — DB compress (one-time cleanup)
+- `VACUUM FULL` সব hot table-এ — dead tuple reclaim (data unchanged)
+- `REINDEX` — bloated index ছোট হবে
+- Unused index detect (`pg_stat_user_indexes WHERE idx_scan=0`) → drop suggestion list দেব approval-এর জন্য
+- Estimated reclaim: 10–20 MB
 
-### Phase 7 — Frontend storage hygiene
-- Audit RichTextEditor / MailRichTextEditor / blog block editor — block paste of `data:image/...` and force upload to the `media` bucket via existing `useFileUpload`.
-- Strip base64 from any existing rows by an admin tool (one-off migration, opt-in).
+### Phase 6 — Storage hygiene (frontend)
+- `RichTextEditor` / `MailRichTextEditor` / blog block editor-এ paste করলে যদি base64 image থাকে → auto upload to `media` bucket, DB তে শুধু URL
+- One-off admin tool: existing rows scan করে base64 detect → manual approval-এ migrate
+- কোনো existing data delete হবে না, শুধু URL replace
 
-### Phase 8 — React Query defaults sweep
-- Walk every `useQuery` whose options override the safe defaults; remove `refetchOnMount: 'always'` unless justified.
-- Adopt project-wide convention: lists use `staleTime: 60_000`, detail pages `staleTime: 5 * 60_000`, static/CMS `staleTime: 30 * 60_000`.
+### Phase 7 — Debounce + heartbeat (already partly done)
+- `useDebouncedValue` hook (already shipped) — search input-গুলোয় wire করব
+- `useExamHeartbeat` (already 60s + visibility-gated)
+- `useEngagementTracking` — per-event INSERT → 30s batched flush
 
-### Phase 9 — Heartbeat & engagement throttle
-- `useExamHeartbeat`: 20s → 60s, only ping when `document.visibilityState === 'visible'`.
-- `useEngagementTracking`: batch events client-side, flush every 30s or on `visibilitychange`/`beforeunload` instead of per-event INSERT.
+### Phase 8 — Edge function offload
+500K free invocations enough, কিন্তু:
+- `sitemap` edge function → CDN cache header `Cache-Control: public, max-age=3600`
+- `og-meta` → একই
+- Heavy aggregations (admin dashboard stats) → RPC একবার, frontend cache 5 min
 
-## Technical details
+---
+
+## Safety guarantee
+
+প্রতিটা phase-এ:
+1. কোনো table drop করব না, কোনো column delete করব না
+2. কোনো user-generated content delete করব না (শুধু log/analytics auto-prune)
+3. প্রতি DB change-এ migration tool দিয়ে approval নেব
+4. Realtime → polling fallback রাখব, তাই কেউ disconnect হলেও data refresh হবে (just 30s slower)
+5. প্রত্যেক phase-এর পরে একটা smoke check list — homepage load, login, course detail, checkout, chat, notification bell
+6. Rollback plan: প্রতিটা migration-এর সাথে reverse SQL document করব
+
+---
+
+## Rollout order (recommended)
 
 ```text
-Pagination contract used everywhere:
-  const PAGE = 20;
-  useInfiniteQuery({
-    queryKey: ['courses', filters],
-    queryFn: ({ pageParam = 0 }) =>
-      supabase.from('courses')
-        .select('id,slug,title,thumbnail_url,price,avg_rating,review_count')
-        .order('created_at', { ascending: false })
-        .range(pageParam, pageParam + PAGE - 1),
-    getNextPageParam: (last, all) =>
-      last.length < PAGE ? undefined : all.length * PAGE,
-    staleTime: 60_000,
-  });
-
-Debounce hook (~10 lines, no dep):
-  export function useDebouncedValue<T>(v: T, ms = 500) {
-    const [d, setD] = useState(v);
-    useEffect(() => { const t = setTimeout(() => setD(v), ms); return () => clearTimeout(t); }, [v, ms]);
-    return d;
-  }
-
-Retention example:
-  CREATE OR REPLACE FUNCTION public.cleanup_old_popup_analytics()
-  RETURNS void LANGUAGE sql SECURITY DEFINER SET search_path=public AS $$
-    DELETE FROM popup_analytics WHERE created_at < now() - interval '30 days';
-  $$;
-  SELECT cron.schedule('popup-analytics-cleanup','0 3 * * *',
-    $$SELECT public.cleanup_old_popup_analytics()$$);
+Today  → Phase 1 (realtime triage) — সবচেয়ে বড় unlock
+Day 2  → Phase 2 (egress / select trim) — 30 file batch
+Day 3  → Phase 3 (caching) + Phase 7 (debounce wire-up)
+Day 4  → Phase 4 (retention migration) — 1 migration, approval needed
+Day 5  → Phase 5 (vacuum/reindex) + Phase 6 (storage hygiene)
+Day 6  → Phase 8 (edge cache) + final QA
 ```
 
-Estimated impact on Free Tier:
-- DB requests/user/min: ~1 idle, ~5 active (down from ~15 today even after Phase A/B/C).
-- Avg payload per list query: ~3 KB (down from ~25 KB) after `select(*)` removal + pagination.
-- DB size growth: bounded by retention jobs — projected steady-state 80–150 MB even at 10× current users.
-- Realtime concurrent channels: 1 per signed-in tab (notifications) + 1 if chat open. Well under 200.
+---
 
-## Rollout order
-Ship Phase 1 first (audit, no risk). Then Phase 5 + 8 (small, safe). Then Phase 2 + 3 (highest payload savings). Then Phase 4 (realtime triage). Then Phase 6 + 7 + 9 (DB-side, needs migration approval).
+## Approval needed
 
-Approve and I will start with Phase 1 (the audit script + report) so we have hard numbers before the refactor.
+বলো কোনটা দিয়ে শুরু করব:
+- **A** — Phase 1 (realtime, সবচেয়ে urgent for 500-user goal)
+- **B** — পুরো 8 phase একসাথে (3-4 batch-এ)
+- **C** — শুধু DB-side (Phase 4 + 5) — frontend touch করব না
+
+Approve করলে শুরু করি।
