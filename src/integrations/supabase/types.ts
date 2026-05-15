@@ -7099,6 +7099,7 @@ export type Database = {
         }
         Returns: undefined
       }
+      prune_free_tier_data: { Args: never; Returns: undefined }
       qb_get_session_result: { Args: { _session_id: string }; Returns: Json }
       qb_heartbeat: { Args: { _session_id: string }; Returns: undefined }
       qb_is_staff: { Args: { _uid: string }; Returns: boolean }
