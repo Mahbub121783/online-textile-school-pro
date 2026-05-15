@@ -175,7 +175,6 @@ const HeroSlider = () => {
     refetchOnMount: false,
     refetchOnReconnect: false,
     placeholderData: [],
-    enabled: !isPreviewOrEmbedded,
   });
 
   // Auto-fetch the latest upcoming published workshop to feature on the hero
@@ -196,7 +195,6 @@ const HeroSlider = () => {
     retry: 0,
     refetchOnMount: false,
     refetchOnReconnect: false,
-    enabled: !isPreviewOrEmbedded,
   });
 
   const slides = useMemo(() => {

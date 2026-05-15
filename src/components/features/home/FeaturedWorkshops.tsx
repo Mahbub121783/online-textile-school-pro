@@ -49,7 +49,6 @@ export default function FeaturedWorkshops() {
     retry: 0,
     refetchOnMount: false,
     refetchOnReconnect: false,
-    enabled: !isPreviewOrEmbedded,
   });
 
   const { data: regCounts = {} } = useQuery({
