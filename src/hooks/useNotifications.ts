@@ -1,8 +1,7 @@
-import { useEffect } from 'react';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { shouldSkipHeavyQueries, shouldSkipRealtime } from '@/lib/maintenanceMode';
+import { shouldSkipHeavyQueries } from '@/lib/maintenanceMode';
 
 interface Notification {
   id: string;
@@ -16,10 +15,12 @@ interface Notification {
   created_at: string;
 }
 
-// Module-level realtime channel registry: ensures only ONE channel per user
-// even when multiple components (Header desktop, Header mobile, layout bell, etc.)
-// mount NotificationBell simultaneously.
-const realtimeRefCount = new Map<string, { channel: any; count: number }>();
+// Phase 1 (Free Tier 200-channel cap): notifications use 60s polling instead of
+// a persistent realtime channel. With 500 active users this means up to 500
+// req/min spread across the polling pool (~8 req/s) and ZERO realtime channels
+// for notifications, freeing the realtime quota for chat (the only feature that
+// truly needs sub-second freshness).
+const NOTIFICATIONS_POLL_MS = 60_000;
 
 export function useNotifications() {
   const { user } = useAuth();
@@ -27,17 +28,19 @@ export function useNotifications() {
 
   const { data: notifications = [], isLoading } = useQuery<Notification[]>({
     queryKey: ['notifications', user?.id],
-    staleTime: 5 * 60 * 1000,
+    staleTime: 30 * 1000,
+    gcTime: 10 * 60 * 1000,
     refetchOnMount: false,
-    refetchInterval: false, // realtime channel handles freshness; no polling
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
+    refetchInterval: NOTIFICATIONS_POLL_MS,
+    refetchIntervalInBackground: false, // pause polling on hidden tabs
+    refetchOnWindowFocus: true,         // catch up immediately when user returns
+    refetchOnReconnect: true,
     retry: 0,
     queryFn: async () => {
       if (!user) return [];
       const { data, error } = await supabase
         .from('notifications' as any)
-        .select('*')
+        .select('id,user_id,type,title,message,link,is_read,metadata,created_at')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
         .limit(50);
@@ -48,38 +51,6 @@ export function useNotifications() {
   });
 
   const unreadCount = notifications.filter(n => !n.is_read).length;
-
-  // Shared per-user realtime channel — refcounted so duplicate mounts don't spawn extra channels.
-  useEffect(() => {
-    if (!user?.id || shouldSkipRealtime) return;
-    const uid = user.id;
-    const existing = realtimeRefCount.get(uid);
-    if (existing) {
-      existing.count += 1;
-    } else {
-      const channel = supabase
-        .channel(`notifications:${uid}:${Date.now()}`)
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${uid}` },
-          () => {
-            queryClient.invalidateQueries({ queryKey: ['notifications', uid] });
-          }
-        )
-        .subscribe();
-      realtimeRefCount.set(uid, { channel, count: 1 });
-    }
-
-    return () => {
-      const entry = realtimeRefCount.get(uid);
-      if (!entry) return;
-      entry.count -= 1;
-      if (entry.count <= 0) {
-        supabase.removeChannel(entry.channel);
-        realtimeRefCount.delete(uid);
-      }
-    };
-  }, [user?.id, queryClient]);
 
   const markAsRead = useMutation({
     mutationFn: async (id: string) => {
