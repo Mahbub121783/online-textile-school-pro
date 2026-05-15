@@ -21,21 +21,29 @@ const DashboardOverview = () => {
   const { data: wallet, isLoading: loadingW } = useWallet();
   const navigate = useNavigate();
 
-  const { data: certificates = [] } = useQuery({
+  const { data: certCount = 0 } = useQuery({
     queryKey: ['cert-count', user?.id],
     enabled: !!user,
+    staleTime: 5 * 60 * 1000,
     queryFn: async () => {
-      const { data } = await supabase.from('certificates').select('id').eq('user_id', user!.id);
-      return data ?? [];
+      const { count } = await supabase
+        .from('certificates')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', user!.id);
+      return count ?? 0;
     },
   });
 
-  const { data: referrals = [] } = useQuery({
+  const { data: referralCount = 0 } = useQuery({
     queryKey: ['referral-count', user?.id],
     enabled: !!user,
+    staleTime: 5 * 60 * 1000,
     queryFn: async () => {
-      const { data } = await supabase.from('referral_rewards').select('id').eq('referrer_id', user!.id);
-      return data ?? [];
+      const { count } = await supabase
+        .from('referral_rewards')
+        .select('id', { count: 'exact', head: true })
+        .eq('referrer_id', user!.id);
+      return count ?? 0;
     },
   });
 
@@ -88,10 +96,10 @@ const DashboardOverview = () => {
 
   const stats = [
     { label: 'Enrolled Courses', value: enrollments.length, icon: BookOpen, color: 'text-primary', link: '/dashboard/courses' },
-    { label: 'Certificates', value: certificates.length, icon: Award, color: 'text-accent', link: '/dashboard/certificates' },
+    { label: 'Certificates', value: certCount, icon: Award, color: 'text-accent', link: '/dashboard/certificates' },
     { label: 'Avg. Progress', value: `${avgProgress}%`, icon: TrendingUp, color: 'text-primary', link: '/dashboard/courses' },
     { label: 'Wallet Balance', value: `৳${wallet?.balance ?? 0}`, icon: Wallet, color: 'text-primary', link: '/dashboard/wallet' },
-    { label: 'Referrals', value: referrals.length, icon: Users, color: 'text-primary', link: '/dashboard/referrals' },
+    { label: 'Referrals', value: referralCount, icon: Users, color: 'text-primary', link: '/dashboard/referrals' },
     { label: 'Completed', value: completedCount, icon: FileQuestion, color: 'text-accent', link: '/dashboard/courses' },
   ];
 
