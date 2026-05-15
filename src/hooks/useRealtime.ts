@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { shouldSkipRealtime } from '@/lib/maintenanceMode';
 
 /**
  * EMERGENCY MODE: realtime subscriptions trimmed to the bare minimum
@@ -14,6 +15,7 @@ import { supabase } from '@/integrations/supabase/client';
 function useNotificationsRealtime() {
   const queryClient = useQueryClient();
   useEffect(() => {
+    if (shouldSkipRealtime) return;
     const channel = supabase
       .channel(`notifications-broadcast-${Date.now()}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, () => {

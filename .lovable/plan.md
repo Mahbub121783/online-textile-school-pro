@@ -1,76 +1,105 @@
-## Goal
-Recover login and data loading without a Supabase upgrade by cutting the new quiz/practice load that is overwhelming the database and by making the app survive temporary DB timeouts.
+# Disk IO Budget Exhausted — Recovery Plan (No Upgrade)
 
-## What I found
-- The database is still timing out at the infrastructure layer: even `select now()` fails with `544 Connection terminated due to connection timeout`.
-- The quiz/practice rollout added several heavy client-side query patterns that can easily amplify a weak Supabase instance:
-  - `PracticeHome` loads all active `qb_questions` rows just to count by subject/difficulty.
-  - `PracticeSubject` loads question rows to compute difficulty counts instead of doing cheap counts.
-  - `AdminQuestionBank` runs 4 KPI count queries on mount and some tabs poll/live-refresh aggressively.
-  - `LiveSessionsTab` polls every 10 seconds.
-  - `AnalyticsTab` pulls up to 2000 submitted sessions plus more quiz tables client-side.
-  - `QuizDashboard` scans up to 5000 `quiz_questions` and `quiz_attempts` rows just to compute counts.
-  - Admin/Instructor realtime listeners still invalidate a very wide set of queries globally.
-- So this is not “only Supabase is broken”; the current app is also over-requesting after the quiz system changes.
+## Problem
+Supabase Nano instance er **Disk IO Budget 100% used**. Ekhon baseline 43 Mbps e cholche, tai query gulo timeout (544) hocche. Budget refill hote **24 ghonta** lage. Quiz system add korar por se database e onek beshi read/write hocche, jeta budget druto khachey.
 
-## Plan
-### 1) Stop the quiz-system query storm
-Refactor the heaviest quiz/practice/admin screens so they do not scan large tables on page load.
-- `PracticeHome`
-  - remove full-table `qb_questions` fetch for counts
-  - temporarily replace global stats and per-subject counts with lighter/fallback values when DB is stressed
-- `PracticeSubject`
-  - replace difficulty-row fetch with cheaper count strategy and stricter query enabling
-- `AdminQuestionBank`
-  - make only the active tab fetch data
-  - disable KPI auto-refresh during emergency mode
-  - stop background queries for tabs the user is not viewing
-- `LiveSessionsTab`
-  - remove 10s polling and switch to manual refresh or much slower refresh only when the tab is open
-- `AnalyticsTab`
-  - stop pulling large result sets during normal admin navigation; use a degraded summary mode for now
-- `QuizDashboard`
-  - remove 5000-row scans for question/attempt counts and fall back to on-demand or per-quiz detail loading
+## Strategy
+Duita layer e kaj korte hobe:
+1. **Immediate recovery** — database ke breathe korte dewa, jate budget refill hoy
+2. **Long-term reduction** — query volume kombano, jate abar same somossa na hoy
 
-### 2) Reduce global realtime pressure
-Narrow global subscriptions so non-quiz pages are not constantly invalidating caches.
-- `useAdminRealtime`
-  - stop subscribing to broad quiz/forum/order tables all at once
-  - keep only the most essential invalidations for current route groups or disable emergency-unnecessary subscriptions
-- `useInstructorRealtime`
-  - trim to the minimal set needed for instructor UI
-- keep notification dedupe, but avoid extra invalidations during saturation
+---
 
-### 3) Make auth and shared data resilient during DB timeouts
-Ensure users can still enter the app shell even if profile/settings queries fail.
-- `useAuth`
-  - remove any non-essential role/profile sync that can block recovery
-  - prefer cached profile/roles first and refresh lazily in background
-  - avoid extra realtime role subscription during emergency mode
-- `useSettings` and `useCurrency`
-  - add local fallback cache so header/footer/public pages can render even when Supabase fails
-- prevent repeated retries from hammering the DB while it is already degraded
+## Phase 1: Immediate Recovery (0–24 ghonta)
 
-### 4) Add an emergency load-shedding switch for quiz/practice features
-Create a small central emergency mode helper used by the heavy quiz/practice/admin modules.
-- when enabled, expensive counts, polling, analytics, and broad refreshes are disabled automatically
-- keep core flows usable: login, dashboard shell, basic admin access, question CRUD, quiz attempt submission
-- show safe fallback UI states instead of infinite loading or repeated error loops
+### 1.1 App ke "Maintenance Mode" e rakha
+- Ekta global flag (`VITE_MAINTENANCE_MODE`) toiri kora
+- On thaakle homepage e ekta friendly notice dekhabo: "We're optimizing our systems, back in a few hours"
+- Sob non-essential query (analytics, stats, counts, realtime, polling) **complete bondho**
+- Sudhu login + critical course access kaj korbe
+- 6–12 ghonta por off kore dewa hobe
 
-### 5) Validate the recovery path
-After the code changes, verify that:
-- login no longer hangs waiting on profile/settings/currency queries
-- homepage/public shell does not spam failed requests
-- admin and instructor layouts do not subscribe broadly on every page
-- quiz/practice pages fetch only what they need when opened
-- no new console/runtime errors are introduced
+### 1.2 Realtime + Polling fully disable
+- `useRealtime`, `useNotifications`, `useAdminRealtime` — sob channel temporarily off
+- Sob `refetchInterval` remove
+- Edge function gulo j cron e cholche (pg_cron jobs) — temporarily pause kora
 
-## Technical notes
-- I will keep this as a code-hardening pass first, without requiring a paid Supabase upgrade.
-- I will avoid database schema changes unless they become strictly necessary after the app-side load shedding.
-- If the database remains fully saturated immediately after the hardening, the app still may need a little time for the IO budget to recover, but the new code will stop re-burning it.
+### 1.3 Edge Functions audit
+- Background jobs (email reminders, notifications, scheduled tasks) check kore dekha kon gulo IO khacche
+- Non-critical ones temporarily disable
 
-## Expected result
-- Data loading should start recovering once the current timeout state clears.
-- The app should stop self-amplifying the outage.
-- Quiz/practice/admin features will remain usable in a reduced but stable mode instead of taking the whole app down.
+---
+
+## Phase 2: Quiz System Optimization (root cause)
+
+Quiz system e jegulo IO khacche:
+
+### 2.1 Database Indexes add kora
+Quiz tables e proper index nai hoyto. Add korbo:
+- `qb_questions(subject_id, difficulty)` composite index
+- `qb_questions(is_active, created_at)` 
+- `quiz_attempts(user_id, quiz_id, created_at)`
+- `quiz_attempts(quiz_id, status)`
+- Index thakle full-table scan hobe na, IO 10x kome jabe
+
+### 2.2 Materialized counts table
+Count query (kotogulo question, kotogulo attempt) bar bar chalano bondho:
+- Notun table: `qb_stats_cache` (subject_id, difficulty, question_count, updated_at)
+- Trigger diye auto-update korbo jokhon question add/delete hoy
+- Frontend ei cache theke porbe — full scan ar dorkar nai
+
+### 2.3 Aggregate functions DB side e
+Client side e count korar bodole, ekta SQL function banabo:
+- `get_practice_overview()` — ek call e shob subject/difficulty count return korbe
+- Multiple round-trip ekta call e nemey ashbe
+
+---
+
+## Phase 3: Application-wide Hardening
+
+### 3.1 Query budget enforcement
+- Ekta wrapper `useBudgetedQuery` toiri kora — jeita check korbe last 1 min e koto query gelo
+- Threshold cross korle automatic skip/cache fallback
+
+### 3.2 Aggressive caching
+- React Query staleTime: critical data 10min, semi-critical 1hr, static (settings, currencies) 24hr
+- localStorage persistence sob shared data e (already partially done)
+
+### 3.3 Pagination limits
+- Sob list query e `.limit()` mandatory (max 50)
+- Admin tables e infinite scroll, eki shathe 1000 row na
+
+### 3.4 Realtime — shudhu jekhane needed
+- Notifications: yes
+- Live class participants: yes  
+- Onno shob (course updates, quiz updates, etc.): polling on-demand, realtime na
+
+---
+
+## Phase 4: Monitoring
+
+- Supabase dashboard e **Reports → Database** check korar habit
+- Disk IO graph e spike dekhle agei kaj kora
+- Slow query log enable kora — kon query beshi time nicche
+
+---
+
+## Technical Files Affected
+- **New**: `src/lib/maintenanceMode.ts`, `src/components/MaintenanceBanner.tsx`, `src/hooks/useBudgetedQuery.ts`
+- **Migration**: indexes on `qb_questions`, `quiz_attempts`; new `qb_stats_cache` table + trigger; `get_practice_overview()` SQL function
+- **Modify**: `useRealtime.ts`, `useNotifications.ts`, `PracticeHome.tsx`, `PracticeSubject.tsx`, `QuizDashboard.tsx`, `AdminQuestionBank.tsx`
+- **Pause**: pg_cron jobs (notification triggers, email scheduling)
+
+---
+
+## Expected Result
+- **24 ghontar moddhe**: Disk IO budget refill, app abar normal
+- **Long-term**: Quiz system ~70% kom IO khabe, similar crash ar hobe na
+- **No upgrade lage na** — Nano instance e bhalo cholbe
+
+## Trade-offs
+- Maintenance mode chalakale users full feature pabe na 6-12 ghonta
+- Realtime kichu jaygay polling diye replace hobe — kichu UI 30s-1min late update hote pare
+- Admin analytics dashboard kichu data on-demand load hobe (button click korte hobe)
+
+Phase 1 immediately apply korbo (recovery), tarpor Phase 2-3 step-by-step. Approve korle suru kori.
