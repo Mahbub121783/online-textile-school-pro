@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Star, ChevronLeft, ChevronRight, Quote } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { isPreviewOrEmbedded } from '@/lib/previewMode';
 
 const FALLBACK = [
   { name: 'Md. Rakibul Hasan', institution: 'BUTEX', rating: 5, quote: 'Online Textile School helped me understand spinning technology deeply. The course quality is exceptional and the instructors are very responsive.' },
@@ -30,7 +31,11 @@ const TestimonialsSection = () => {
         photo: s.photo_url,
       }));
     },
-    staleTime: 10 * 60 * 1000,
+    staleTime: 30 * 60 * 1000,
+    retry: 0,
+    refetchOnMount: false,
+    refetchOnReconnect: false,
+    enabled: !isPreviewOrEmbedded,
   });
 
   const t = testimonials[current];

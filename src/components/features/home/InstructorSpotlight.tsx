@@ -4,10 +4,16 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Link } from 'react-router-dom';
+import { isPreviewOrEmbedded } from '@/lib/previewMode';
 
 const InstructorSpotlight = () => {
   const { data: instructors = [], isLoading } = useQuery({
     queryKey: ['home-instructors'],
+    staleTime: 30 * 60 * 1000,
+    retry: 0,
+    refetchOnMount: false,
+    refetchOnReconnect: false,
+    enabled: !isPreviewOrEmbedded,
     queryFn: async () => {
       const { data: roleData } = await supabase
         .from('user_roles')
