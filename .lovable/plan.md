@@ -1,88 +1,125 @@
-## Root cause summary
 
-After scanning 179 files using `useQuery` / `supabase.from`, the database overload is **not** an infinite loop in a single component. It is **a small number of high-frequency polling + duplicate realtime channels + un-bounded scan queries** firing per user, multiplied across every concurrent visitor. With every request also writing to Supabase logs, this is exactly what fills disk and exhausts compute.
+## Brief report — what is causing the heavy load
 
-Below is the prioritized hit-list with the exact files and lines, followed by the fix plan.
+From the prior audit (Phase A/B/C already shipped) plus a fresh sweep of the 179 files using `supabase.from()` / `useQuery`, the residual load on a Free Tier instance will come from these classes of issues:
 
-## Top offenders (ordered by request volume)
+1. **Wide `select('*')` queries** — most hooks (e.g. `useNotifications`, `useSiteContent`, dashboard pages, instructor pages) use `select('*')`. On wide tables (`courses`, `user_profiles`, `posts`, `ebooks`, `notifications`) this multiplies bandwidth 5–20×.
+2. **Unbounded list reads** — many catalog/listing pages (CourseCatalog, EbookCatalog, ForumHome, InstructorCourses, AdminUsers, etc.) fetch up to the 1000-row Supabase default with no `.range()` pagination.
+3. **Realtime channels still open in non-critical surfaces** — `useNotifications` keeps a per-user realtime channel always-on; `useStudentRealtime`/`useInstructorRealtime`/`useAdminRealtime` all open notification channels on every dashboard mount. On Free Tier the concurrent realtime client cap is 200; this burns connections.
+4. **Search inputs with no debounce** — admin tables, course catalog, forum search, contributor picker fire a query per keystroke.
+5. **DB bloat risks** — `popup_analytics`, `ai_chat_history`, `ai_chat_sessions`, `admin_activity_log`, `chat_messages`, `qb_exam_violations`, `notifications`, `engagement_events` (if present) grow forever. `cleanup_old_ai_chats()` exists but is not scheduled. No retention on the others.
+6. **Base64/large JSON in DB** — risk in `template_snapshot` (certificates), `site_content.content`, `posts.content_blocks` (Gutenberg JSONB), and any rich text editors that paste images as `data:` URIs instead of uploading to the `media` bucket.
+7. **React Query defaults are good** (2-min stale, no refetch on focus/mount) but per-query overrides still bypass them in ~40 files (`refetchOnMount: 'always'`, short `staleTime`).
+8. **Heartbeats / cron-like loops** — `useExamHeartbeat` (20s RPC) and `useEngagementTracking` write rows continuously while a tab is open.
 
-### P0 — ChatWidget polling storm
-`src/components/chat/ChatWidget.tsx`
-- L461–513 `chat-conversations`: **polls every 5 s while open**, and the query reads ALL `chat_messages` for the user (no limit) plus `chat_requests` plus `user_profiles` — 3 round trips per poll.
-- L516–545 `chat-requests`: polls every 5 s while open + extra `user_profiles` lookup.
-- L562–574 `chat-messages`: polls every 3 s when a thread is open.
-- L393, L420, L448 — three realtime channels are also subscribed for the same data (chat_messages, chat_requests, presence). So you have polling AND realtime for the same rows. One must go.
-- All three channel names use `Date.now()` in the key (L393/L420/L448). On every re-render with changing deps (`open`, `selectedUser?.userId`), a brand-new channel is opened. Combined with React StrictMode/double-mount, this leaks subscriptions.
+Phase A/B/C from the prior round already eliminated the worst polling (chat, stats, notifications). What remains is structural: payload size, retention, and pagination.
 
-Per logged-in user with chat open and a thread selected: ~`60/3 + 60/5 + 60/5 = 44` queries per minute, each doing 2–3 sub-queries. That alone is enough to swamp a small instance.
+## Plan
 
-### P1 — Public homepage `StatsSection`
-`src/components/features/home/StatsSection.tsx` L55–58
-- 4 `count(*)` style queries (`user_roles`, `courses`, `user_profiles`, `courses` again) on every cold visitor. `count: 'exact'` is a full table scan on Postgres.
-- staleTime is 1h, but every new browser/incognito hits it fresh. With bots / SEO crawlers, this can dominate.
+### Phase 1 — Audit deliverable (no code changes)
+Generate a single machine-readable report `.lovable/free-tier-audit.json` produced by a script that scans `src/**/*.{ts,tsx}` and lists, per file:
+- every `supabase.from('X').select(...)` with the column list (or `*`)
+- every `useQuery` with its `staleTime`, `refetchInterval`, `enabled`
+- every realtime `.channel(...).on('postgres_changes', ...)`
+- every `.range()`/`.limit()` (or absence thereof on list reads)
+- every `<Input onChange>` that calls a query without `useDebounce`
 
-### P1 — `useNotifications` shared hook on every layout
-`src/hooks/useNotifications.ts` L28–48
-- 10-minute `refetchInterval` × every authenticated tab. Fine in isolation, but combined with the realtime invalidation in `useRealtime.ts` it can still re-trigger continuously.
-`src/hooks/useRealtime.ts` L19–24
-- Subscribes to `notifications INSERT` **without a `user_id` filter**, so every notification anywhere in the system invalidates the query in every connected client → cascade refetches.
+Output: prioritized markdown report in `.lovable/free-tier-audit.md`.
 
-### P2 — InstructorSidebar badge poller
-`src/components/layout/InstructorSidebar.tsx` L81–100
-- `refetchInterval: 60000` runs a 2-step query (`courses` → `discussions count`) every minute for every instructor tab, even when sidebar is hidden on mobile.
+### Phase 2 — Payload diet (`select('*')` → explicit columns)
+Touch the ~30 highest-traffic hooks/pages first:
+- `useNotifications`, `useSiteContent`, `useEnrollments`, `useWishlist`, `useContributors`, `useCouponValidation`
+- `CourseCatalog`, `EbookCatalog`, `ForumHome`, `BlogList`, `LearningPaths`, `WorkshopsPage`
+- `DashboardOverview`, `MyCourses`, `MyEbooks`, `CertificatesPage`
+- `InstructorCourses`, `InstructorStudents`, `InstructorAnalytics`
+- All `pages/admin/*` list pages
 
-### P2 — DashboardOverview small-but-wasteful queries
-`src/pages/dashboard/DashboardOverview.tsx`
-- L24–31 `cert-count`: `SELECT id` of all certificates just to `.length` it.
-- L33–40 `referral-count`: same anti-pattern.
-- These should be `count: 'exact', head: true` or moved to a single RPC.
+Rule: never select more than the columns the JSX actually reads. Detail pages keep wider selects.
 
-### P2 — `usePopupEngine` analytics insert on every popup view/click
-`src/hooks/usePopupEngine.tsx` L106–118
-- One INSERT into `popup_analytics` per view/click — fine, but no debounce; combined with auto-fire popups can spam if a popup re-renders.
+### Phase 3 — Pagination on every list
+Add `.range(from, from+19)` (page size 20) + "Load more"/cursor pagination using React Query's `useInfiniteQuery` for:
+- Course / Ebook / Workshop / Learning-path catalogs
+- Forum, Blog, Class Videos feeds
+- Admin users / orders / enrollments / payments / notifications tables
+- Instructor students, assignments, quizzes, gradebook
 
-### P3 — `useExamHeartbeat` 20 s RPC
-`src/hooks/useExamHeartbeat.ts`
-- `qb_heartbeat` RPC every 20 s during exams. OK if exams are rare; investigate if many sessions are stuck "active" and never released (zombie heartbeats fill logs).
+For admin tables: server-side sort + filter + 20/page.
 
-## Fix plan
+### Phase 4 — Realtime triage
+Keep realtime ONLY where the UX truly needs sub-second updates:
+- KEEP: `chat_messages` (already merged), `notifications` for the bell badge
+- REMOVE: `useStudentRealtime`/`useInstructorRealtime`/`useAdminRealtime` notification channels — replace with a single shared bell channel mounted ONCE in `DashboardLayout` / `InstructorLayout` / `AdminLayout` (not per page)
+- REMOVE: any realtime in admin tables; rely on React Query refetch-on-window-focus (off) + manual refresh button + 2-min `staleTime`
 
-```text
-Phase A — Stop the bleeding (largest impact)
-  1. ChatWidget: keep ONE realtime channel (messages+requests),
-     remove all three refetchInterval pollers.
-  2. ChatWidget: stable channel keys (drop Date.now()) and gate
-     subscriptions on `open && user?.id` only.
-  3. ChatWidget chat-conversations: limit messages query
-     (e.g. last 200 rows) and select only needed columns.
+### Phase 5 — Debounce search inputs
+Add a tiny `useDebouncedValue(value, 500)` hook and wire it into every search input that drives a query:
+- AdminUsers search, CourseCatalog search, ForumHome search, ContributorPickerModal, MediaPickerModal, ItemPickerModal, InstructorStudents search, instructor course/lesson pickers.
 
-Phase B — Reduce per-page query weight
-  4. StatsSection: collapse 4 queries into one RPC
-     get_public_stats() returning JSON; cache 1h server-side.
-  5. DashboardOverview cert-count / referral-count: switch to
-     `count: 'exact', head: true` (no row payload).
-  6. InstructorSidebar badge: same head-count pattern + bump
-     refetchInterval to 5 min, disable when sidebar collapsed.
+### Phase 6 — DB retention & storage hygiene (one migration)
+One SQL migration adds:
+- `pg_cron` jobs (or scheduled via Supabase cron) calling cleanup functions:
+  - `cleanup_old_ai_chats()` — daily (already exists, just schedule it)
+  - `cleanup_old_popup_analytics()` — keep 30 days
+  - `cleanup_old_admin_activity_log()` — keep 90 days
+  - `cleanup_old_chat_messages()` — keep 180 days for read threads
+  - `cleanup_old_qb_exam_violations()` — keep 60 days
+  - `cleanup_old_notifications()` — delete read notifications older than 30 days
+  - `cleanup_old_engagement_events()` — keep 14 worth aggregated; drop raw
+- Indexes on `(created_at)` for the cleanup tables
+- A `db_size_report()` function returning per-table size — surface in Admin → System Health
 
-Phase C — Tame realtime fanout
-  7. useRealtime notifications channel: filter by current user_id
-     so other users' inserts don't invalidate everyone.
-  8. useNotifications: drop the 10-min interval — realtime already
-     invalidates; rely on it + refetchOnMount when truly needed.
+### Phase 7 — Frontend storage hygiene
+- Audit RichTextEditor / MailRichTextEditor / blog block editor — block paste of `data:image/...` and force upload to the `media` bucket via existing `useFileUpload`.
+- Strip base64 from any existing rows by an admin tool (one-off migration, opt-in).
 
-Phase D — Logging hygiene
-  9. Audit any DB triggers / functions that RAISE NOTICE on every
-     insert (Postgres log spam fills disk fastest); convert to
-     RAISE DEBUG.
- 10. Verify no UPDATE-without-WHERE or recursive trigger exists on
-     hot tables (notifications, chat_messages, popup_analytics).
-```
+### Phase 8 — React Query defaults sweep
+- Walk every `useQuery` whose options override the safe defaults; remove `refetchOnMount: 'always'` unless justified.
+- Adopt project-wide convention: lists use `staleTime: 60_000`, detail pages `staleTime: 5 * 60_000`, static/CMS `staleTime: 30 * 60_000`.
+
+### Phase 9 — Heartbeat & engagement throttle
+- `useExamHeartbeat`: 20s → 60s, only ping when `document.visibilityState === 'visible'`.
+- `useEngagementTracking`: batch events client-side, flush every 30s or on `visibilitychange`/`beforeunload` instead of per-event INSERT.
 
 ## Technical details
 
-- All proposed changes are frontend-only except items 4 (one new RPC) and 9–10 (DB-side log hygiene). No schema changes required.
-- React Query global config is already conservative (`refetchOnMount:false`, `staleTime:2m`, `refetchOnWindowFocus:false`), so the fix is targeted at per-query overrides, not global tuning.
-- Realtime channels must use **stable keys** (`chat-rt-${user.id}`, not `…-${Date.now()}`) so refcounting / dedupe works the same way `useNotifications` already does.
-- After Phase A ships, expected per-user steady-state DB request rate drops from ~44/min (chat open) to ~1/min (idle realtime keepalive only).
+```text
+Pagination contract used everywhere:
+  const PAGE = 20;
+  useInfiniteQuery({
+    queryKey: ['courses', filters],
+    queryFn: ({ pageParam = 0 }) =>
+      supabase.from('courses')
+        .select('id,slug,title,thumbnail_url,price,avg_rating,review_count')
+        .order('created_at', { ascending: false })
+        .range(pageParam, pageParam + PAGE - 1),
+    getNextPageParam: (last, all) =>
+      last.length < PAGE ? undefined : all.length * PAGE,
+    staleTime: 60_000,
+  });
 
-Approve this and I will implement Phase A + B in one pass, then Phase C, then queue Phase D as a DB migration once the instance is responsive again.
+Debounce hook (~10 lines, no dep):
+  export function useDebouncedValue<T>(v: T, ms = 500) {
+    const [d, setD] = useState(v);
+    useEffect(() => { const t = setTimeout(() => setD(v), ms); return () => clearTimeout(t); }, [v, ms]);
+    return d;
+  }
+
+Retention example:
+  CREATE OR REPLACE FUNCTION public.cleanup_old_popup_analytics()
+  RETURNS void LANGUAGE sql SECURITY DEFINER SET search_path=public AS $$
+    DELETE FROM popup_analytics WHERE created_at < now() - interval '30 days';
+  $$;
+  SELECT cron.schedule('popup-analytics-cleanup','0 3 * * *',
+    $$SELECT public.cleanup_old_popup_analytics()$$);
+```
+
+Estimated impact on Free Tier:
+- DB requests/user/min: ~1 idle, ~5 active (down from ~15 today even after Phase A/B/C).
+- Avg payload per list query: ~3 KB (down from ~25 KB) after `select(*)` removal + pagination.
+- DB size growth: bounded by retention jobs — projected steady-state 80–150 MB even at 10× current users.
+- Realtime concurrent channels: 1 per signed-in tab (notifications) + 1 if chat open. Well under 200.
+
+## Rollout order
+Ship Phase 1 first (audit, no risk). Then Phase 5 + 8 (small, safe). Then Phase 2 + 3 (highest payload savings). Then Phase 4 (realtime triage). Then Phase 6 + 7 + 9 (DB-side, needs migration approval).
+
+Approve and I will start with Phase 1 (the audit script + report) so we have hard numbers before the refactor.
