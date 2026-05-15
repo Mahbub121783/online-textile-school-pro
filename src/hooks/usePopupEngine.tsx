@@ -3,19 +3,7 @@ import { useLocation } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 
-const isPreviewOrEmbedded = (() => {
-  if (typeof window === 'undefined') return false;
-  try {
-    return (
-      window.self !== window.top ||
-      window.location.hostname.includes('id-preview--') ||
-      window.location.hostname.includes('lovable.app') ||
-      window.location.hostname.includes('lovableproject.com')
-    );
-  } catch {
-    return true;
-  }
-})();
+import { isPreviewOrEmbedded } from '@/lib/previewMode';
 
 export interface PopupRow {
   id: string;

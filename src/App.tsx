@@ -180,19 +180,7 @@ const PracticeHistory = lazy(() => import("./pages/practice/PracticeHistory"));
 const PracticeLeaderboard = lazy(() => import("./pages/practice/PracticeLeaderboard"));
 const AdminQuestionBank = lazy(() => import("./pages/admin/AdminQuestionBank"));
 
-const isPreviewOrEmbedded = (() => {
-  if (typeof window === 'undefined') return false;
-  try {
-    return (
-      window.self !== window.top ||
-      window.location.hostname.includes('id-preview--') ||
-      window.location.hostname.includes('lovable.app') ||
-      window.location.hostname.includes('lovableproject.com')
-    );
-  } catch {
-    return true;
-  }
-})();
+import { isPreviewOrEmbedded } from '@/lib/previewMode';
 
 // Free-tier optimized QueryClient: aggressive in-memory caching + cross-reload persistence
 const ONE_MIN = 60 * 1000;
