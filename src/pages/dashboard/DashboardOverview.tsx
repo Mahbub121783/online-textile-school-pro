@@ -21,21 +21,29 @@ const DashboardOverview = () => {
   const { data: wallet, isLoading: loadingW } = useWallet();
   const navigate = useNavigate();
 
-  const { data: certificates = [] } = useQuery({
+  const { data: certCount = 0 } = useQuery({
     queryKey: ['cert-count', user?.id],
     enabled: !!user,
+    staleTime: 5 * 60 * 1000,
     queryFn: async () => {
-      const { data } = await supabase.from('certificates').select('id').eq('user_id', user!.id);
-      return data ?? [];
+      const { count } = await supabase
+        .from('certificates')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', user!.id);
+      return count ?? 0;
     },
   });
 
-  const { data: referrals = [] } = useQuery({
+  const { data: referralCount = 0 } = useQuery({
     queryKey: ['referral-count', user?.id],
     enabled: !!user,
+    staleTime: 5 * 60 * 1000,
     queryFn: async () => {
-      const { data } = await supabase.from('referral_rewards').select('id').eq('referrer_id', user!.id);
-      return data ?? [];
+      const { count } = await supabase
+        .from('referral_rewards')
+        .select('id', { count: 'exact', head: true })
+        .eq('referrer_id', user!.id);
+      return count ?? 0;
     },
   });
 
