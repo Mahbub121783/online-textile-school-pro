@@ -50,6 +50,30 @@ export default function MailRichTextEditor({ content, onChange, placeholder = 'W
     ],
     content,
     onUpdate: ({ editor }) => onChange(editor.getHTML()),
+    editorProps: {
+      transformPastedHTML: (html) => {
+        const stripped = html
+          .replace(/<img[^>]+src=["']data:[^"']+["'][^>]*>/gi, '')
+          .replace(/background(-image)?\s*:\s*url\(\s*["']?data:[^)]+\)\s*;?/gi, '');
+        if (stripped !== html) {
+          console.warn('[MailRichTextEditor] Inline base64 image paste blocked.');
+        }
+        return stripped;
+      },
+      handlePaste: (_view, event) => {
+        const items = event.clipboardData?.items;
+        if (items) {
+          for (const item of Array.from(items)) {
+            if (item.type.startsWith('image/')) {
+              event.preventDefault();
+              alert('Pasting images directly is blocked. Use the Image button to insert a URL.');
+              return true;
+            }
+          }
+        }
+        return false;
+      },
+    },
   });
 
   useEffect(() => {
@@ -76,8 +100,13 @@ export default function MailRichTextEditor({ content, onChange, placeholder = 'W
   };
 
   const addImage = () => {
-    const url = prompt('Image URL:');
-    if (url) editor.chain().focus().setImage({ src: url }).run();
+    const url = prompt('Image URL (https://...). Base64/data URLs are not allowed.');
+    if (!url) return;
+    if (/^data:/i.test(url.trim())) {
+      alert('Inline base64 images are blocked. Please host the image and paste the URL.');
+      return;
+    }
+    editor.chain().focus().setImage({ src: url }).run();
   };
 
   return (

@@ -37,8 +37,19 @@ const RichTextEditor = ({ value, onChange, placeholder = 'Start writing...', min
   };
 
   const insertImage = () => {
-    const url = prompt('Enter image URL:');
-    if (url) exec('insertImage', url);
+    const url = prompt('Enter image URL (https://...). Base64/data URLs are not allowed — upload via Media Library.');
+    if (!url) return;
+    if (/^data:/i.test(url.trim())) {
+      alert('Inline base64 images are blocked. Please upload the image first and paste the URL.');
+      return;
+    }
+    exec('insertImage', url);
+  };
+
+  const stripBase64Images = (html: string): string => {
+    return html
+      .replace(/<img[^>]+src=["']data:[^"']+["'][^>]*>/gi, '')
+      .replace(/background(-image)?\s*:\s*url\(\s*["']?data:[^)]+\)\s*;?/gi, '');
   };
 
   return (
@@ -90,7 +101,12 @@ const RichTextEditor = ({ value, onChange, placeholder = 'Start writing...', min
           e.preventDefault();
           const html = e.clipboardData.getData('text/html');
           const text = e.clipboardData.getData('text/plain');
-          const clean = html ? sanitizeRichHtml(html) : (text || '').replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]!)).replace(/\n/g, '<br/>');
+          let clean = html ? sanitizeRichHtml(html) : (text || '').replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]!)).replace(/\n/g, '<br/>');
+          const hadBase64 = /data:image\//i.test(clean);
+          clean = stripBase64Images(clean);
+          if (hadBase64) {
+            console.warn('[RichTextEditor] Inline base64 image paste blocked. Upload via Media Library instead.');
+          }
           document.execCommand('insertHTML', false, clean);
           if (editorRef.current) onChange(editorRef.current.innerHTML);
         }}
