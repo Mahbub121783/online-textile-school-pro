@@ -56,7 +56,7 @@ const ForumPost = () => {
     queryKey: ['forum-comments', postId],
     enabled: !!postId,
     queryFn: async () => {
-      const { data } = await supabase.from('forum_comments').select('id, post_id, user_id, parent_id, content, created_at, updated_at').eq('post_id', postId!).order('created_at').limit(200);
+      const { data } = await supabase.from('forum_comments').select('id, post_id, user_id, parent_id, content, created_at').eq('post_id', postId!).order('created_at').limit(200);
       return data || [];
     },
   });
@@ -78,7 +78,7 @@ const ForumPost = () => {
     enabled: !!postId,
     queryFn: async () => {
       const ids = [postId!, ...comments.map((c: any) => c.id)];
-      const { data } = await supabase.from('forum_reactions').select('id, target_id, target_type, user_id, reaction').in('target_id', ids).limit(2000);
+      const { data } = await supabase.from('forum_reactions').select('id, target_id, target_type, user_id, emoji').in('target_id', ids).limit(2000);
       return data || [];
     },
   });

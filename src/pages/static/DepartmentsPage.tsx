@@ -29,7 +29,7 @@ const DepartmentsPage = () => {
   const { data: categories = [] } = useQuery({
     queryKey: ['categories'],
     queryFn: async () => {
-      const { data } = await supabase.from('categories').select('id, name, slug, icon, sort_order').order('sort_order').limit(100);
+      const { data } = await supabase.from('categories').select('id, name, slug, icon_url, sort_order').order('sort_order').limit(100);
       return data ?? [];
     },
   });
