@@ -305,9 +305,10 @@ export function useWalletTransactions() {
 
       const { data, error } = await supabase
         .from('wallet_transactions')
-        .select('*')
+        .select('id, wallet_id, amount, type, description, reference_id, created_at')
         .eq('wallet_id', wallet.id)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(100);
       if (error) throw error;
       return data ?? [];
     },

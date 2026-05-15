@@ -14,7 +14,7 @@ const AlumniPage = () => {
   const { data: stories = [], isLoading } = useQuery({
     queryKey: ['success-stories-public'],
     queryFn: async () => {
-      const { data } = await supabase.from('success_stories').select('*').order('created_at', { ascending: false });
+      const { data } = await supabase.from('success_stories').select('id, name, photo_url, story, course_title, graduation_year, job_title, is_featured, created_at').order('created_at', { ascending: false }).limit(60);
       return data ?? [];
     },
   });

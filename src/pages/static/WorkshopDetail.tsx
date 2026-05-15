@@ -69,7 +69,7 @@ export default function WorkshopDetail() {
   const { data: sessions = [] } = useQuery({
     queryKey: ['workshop-sessions', workshop?.id],
     queryFn: async () => {
-      const { data } = await supabase.from('workshop_sessions').select('*').eq('workshop_id', workshop!.id).order('sort_order');
+      const { data } = await supabase.from('workshop_sessions').select('*').eq('workshop_id', workshop!.id).order('sort_order').limit(50);
       return data || [];
     },
     enabled: !!workshop?.id && workshop?.workshop_type === 'multi_day',
@@ -78,7 +78,7 @@ export default function WorkshopDetail() {
   const { data: lessons = [] } = useQuery({
     queryKey: ['workshop-lessons', workshop?.id],
     queryFn: async () => {
-      const { data } = await supabase.from('workshop_lessons').select('*').eq('workshop_id', workshop!.id).order('sort_order');
+      const { data } = await supabase.from('workshop_lessons').select('*').eq('workshop_id', workshop!.id).order('sort_order').limit(100);
       return data || [];
     },
     enabled: !!workshop?.id,

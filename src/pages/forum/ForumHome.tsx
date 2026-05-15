@@ -26,7 +26,7 @@ const ForumHome = () => {
   const { data: categories = [] } = useQuery({
     queryKey: ['forum-categories'],
     queryFn: async () => {
-      const { data } = await supabase.from('forum_categories').select('*').order('sort_order');
+      const { data } = await supabase.from('forum_categories').select('id, name, slug, sort_order').order('sort_order').limit(50);
       return data || [];
     },
   });

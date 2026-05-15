@@ -101,7 +101,7 @@ const AssignmentsPage = () => {
     queryKey: ['my-submissions', user?.id],
     enabled: !!user,
     queryFn: async () => {
-      const { data } = await supabase.from('assignment_submissions').select('*').eq('user_id', user!.id);
+      const { data } = await supabase.from('assignment_submissions').select('id, assignment_id, status, score, submitted_at, graded_at').eq('user_id', user!.id).limit(500);
       return data ?? [];
     },
   });

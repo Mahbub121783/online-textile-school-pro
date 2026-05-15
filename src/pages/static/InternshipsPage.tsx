@@ -24,11 +24,12 @@ const InternshipsPage = () => {
     queryFn: async () => {
       const { data } = await supabase
         .from('internships')
-        .select('*')
+        .select('id, title, company, description, location, internship_type, department, stipend, duration, application_deadline, positions_available, positions_filled, skills_required, is_featured, status, created_at')
         .eq('is_published', true)
         .eq('status', 'open')
         .order('is_featured', { ascending: false })
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(60);
       return data ?? [];
     },
   });

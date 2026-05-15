@@ -70,7 +70,7 @@ const LessonPlayer = () => {
     queryKey: ['lesson-materials-player', lessonId],
     enabled: !!lessonId,
     queryFn: async () => {
-      const { data } = await supabase.from('lesson_materials').select('*').eq('lesson_id', lessonId!);
+      const { data } = await supabase.from('lesson_materials').select('id, lesson_id, material_type, material_id, sort_order').eq('lesson_id', lessonId!).limit(50);
       return data ?? [];
     },
   });
