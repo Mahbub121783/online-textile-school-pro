@@ -67,7 +67,6 @@ const InstructorSpotlight = () => {
         return { ...p, courseCount: instrCourses.length, studentCount };
       });
     },
-    staleTime: 10 * 60 * 1000,
   });
 
   if (!isLoading && instructors.length === 0) return null;
