@@ -386,38 +386,49 @@ const ChatWidget = () => {
     } catch {}
   }, [message, selectedUser?.userId]);
 
-  // ── Notification sound on new incoming message while closed ──
+  // ── Unified realtime: ONE stable channel for messages + requests + notify sound ──
   const lastNotifiedRef = useRef<number>(Date.now());
   useEffect(() => {
     if (!user?.id) return;
-    const ch = supabase.channel(`chat-notify-${user.id}-${Date.now()}`)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages', filter: `receiver_id=eq.${user.id}` }, (payload: any) => {
-        if (open && selectedUser?.userId === payload.new?.sender_id) return; // already viewing
-        const ts = new Date(payload.new?.created_at || Date.now()).getTime();
-        if (ts <= lastNotifiedRef.current) return;
-        lastNotifiedRef.current = ts;
-        try {
-          // Soft chime via WebAudio (no asset needed)
-          const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
-          const o = ctx.createOscillator();
-          const g = ctx.createGain();
-          o.frequency.value = 880;
-          g.gain.value = 0.05;
-          o.connect(g); g.connect(ctx.destination);
-          o.start();
-          o.frequency.exponentialRampToValueAtTime(660, ctx.currentTime + 0.18);
-          g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
-          o.stop(ctx.currentTime + 0.26);
-        } catch {}
+    const uid = user.id;
+    const ch = supabase.channel(`chat-rt-${uid}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_messages', filter: `receiver_id=eq.${uid}` }, (payload: any) => {
+        qc.invalidateQueries({ queryKey: ['chat-messages'] });
+        qc.invalidateQueries({ queryKey: ['chat-conversations'] });
+        // notify sound on incoming insert when not viewing this thread
+        if (payload.eventType === 'INSERT') {
+          if (open && selectedUserRef.current?.userId === payload.new?.sender_id) return;
+          const ts = new Date(payload.new?.created_at || Date.now()).getTime();
+          if (ts <= lastNotifiedRef.current) return;
+          lastNotifiedRef.current = ts;
+          try {
+            const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+            const o = ctx.createOscillator();
+            const g = ctx.createGain();
+            o.frequency.value = 880;
+            g.gain.value = 0.05;
+            o.connect(g); g.connect(ctx.destination);
+            o.start();
+            o.frequency.exponentialRampToValueAtTime(660, ctx.currentTime + 0.18);
+            g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
+            o.stop(ctx.currentTime + 0.26);
+          } catch {}
+        }
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_requests', filter: `receiver_id=eq.${uid}` }, () => {
+        qc.invalidateQueries({ queryKey: ['chat-requests'] });
       })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
-  }, [user?.id, open, selectedUser?.userId]);
+  }, [user?.id, qc]);
 
-  // ── Presence & Typing Channel ──
+  // ── Presence & Typing Channel (only when open) ──
+  const selectedUserRef = useRef(selectedUser);
+  useEffect(() => { selectedUserRef.current = selectedUser; }, [selectedUser]);
+
   useEffect(() => {
     if (!user?.id || !open) return;
-    const channel = supabase.channel(`presence-chat-${Date.now()}`, { config: { presence: { key: user.id } } });
+    const channel = supabase.channel(`presence-chat-${user.id}`, { config: { presence: { key: user.id } } });
 
     channel
       .on('presence', { event: 'sync' }, () => {
@@ -442,21 +453,6 @@ const ChatWidget = () => {
     return () => { supabase.removeChannel(channel); };
   }, [user?.id, open]);
 
-  // ── Real-time message listener ──
-  useEffect(() => {
-    if (!user?.id || !open) return;
-    const ch = supabase.channel(`chat-rt-${user.id}-${Date.now()}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_messages', filter: `receiver_id=eq.${user.id}` }, () => {
-        qc.invalidateQueries({ queryKey: ['chat-messages'] });
-        qc.invalidateQueries({ queryKey: ['chat-conversations'] });
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_requests', filter: `receiver_id=eq.${user.id}` }, () => {
-        qc.invalidateQueries({ queryKey: ['chat-requests'] });
-      })
-      .subscribe();
-    return () => { supabase.removeChannel(ch); };
-  }, [user?.id, open]);
-
   // ── Accepted contacts (conversations) ──
   const { data: conversations = [] } = useQuery({
     queryKey: ['chat-conversations', user?.id],
@@ -476,7 +472,8 @@ const ChatWidget = () => {
         .from('chat_messages')
         .select('sender_id, receiver_id, message, created_at, is_read, deleted_at')
         .or(`sender_id.eq.${user!.id},receiver_id.eq.${user!.id}`)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(200);
 
       const userMap = new Map<string, { lastMessage: string; lastTime: string; unread: number }>();
       (messages ?? []).forEach((m: any) => {
