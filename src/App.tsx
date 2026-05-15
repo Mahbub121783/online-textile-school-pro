@@ -4,7 +4,9 @@ import ChatWidget from '@/components/chat/ChatWidget';
 import CookieConsentBanner from '@/components/cookies/CookieConsentBanner';
 import { CookieConsentProvider } from '@/hooks/useCookieConsent';
 import { PopupRenderer } from '@/components/popups/PopupRenderer';
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient } from "@tanstack/react-query";
+import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
+import { createSyncStoragePersister } from "@tanstack/query-sync-storage-persister";
 import { BrowserRouter, Route, Routes, Navigate, useLocation } from "react-router-dom";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -192,19 +194,52 @@ const isPreviewOrEmbedded = (() => {
   }
 })();
 
-// Optimized QueryClient with aggressive caching
+// Free-tier optimized QueryClient: aggressive in-memory caching + cross-reload persistence
+const ONE_MIN = 60 * 1000;
+const ONE_HOUR = 60 * ONE_MIN;
+const ONE_DAY = 24 * ONE_HOUR;
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 2 * 60 * 1000,
-      gcTime: 30 * 60 * 1000,          // 30 min garbage collection
+      staleTime: 10 * ONE_MIN,         // treat data as fresh for 10 minutes
+      gcTime: ONE_DAY,                  // keep unused queries in memory for 24h
       refetchOnWindowFocus: false,
       refetchOnReconnect: false,
+      refetchOnMount: false,            // never auto-refetch when remounting if cached
       retry: isPreviewOrEmbedded ? 0 : 1,
-      refetchOnMount: false,
     },
   },
 });
+
+// Persist React Query cache to localStorage so a returning visitor reuses data
+// across reloads instead of re-hitting Supabase. Sensitive/realtime keys excluded.
+const SENSITIVE_KEY_PREFIXES = [
+  'auth', 'session', 'me', 'notifications', 'chat', 'messages',
+  'cart', 'wallet', 'invoice', 'orders', 'private', 'user-roles',
+];
+
+const persister = typeof window !== 'undefined'
+  ? createSyncStoragePersister({
+      storage: window.localStorage,
+      key: 'rq-cache-v1',
+      throttleTime: 1000,
+    })
+  : undefined;
+
+const persistOptions = {
+  persister: persister!,
+  maxAge: ONE_DAY,
+  buster: 'v1',
+  dehydrateOptions: {
+    shouldDehydrateQuery: (q: any) => {
+      if (q.state.status !== 'success') return false;
+      const first = Array.isArray(q.queryKey) ? String(q.queryKey[0] ?? '') : String(q.queryKey ?? '');
+      const lower = first.toLowerCase();
+      return !SENSITIVE_KEY_PREFIXES.some((p) => lower.includes(p));
+    },
+  },
+};
 
 const PageLoader = () => (
   <div className="min-h-screen flex items-center justify-center">
@@ -450,7 +485,7 @@ const GlobalOverlays = () => {
 };
 
 const App = () => (
-  <QueryClientProvider client={queryClient}>
+  <PersistQueryClientProvider client={queryClient} persistOptions={persistOptions}>
     <ThemeProvider>
       <AuthProvider>
         <CookieConsentProvider>
@@ -465,7 +500,7 @@ const App = () => (
         </CookieConsentProvider>
       </AuthProvider>
     </ThemeProvider>
-  </QueryClientProvider>
+  </PersistQueryClientProvider>
 );
 
 export default App;
