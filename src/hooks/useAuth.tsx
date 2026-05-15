@@ -80,22 +80,54 @@ const AuthContext = createContext<AuthContextType>({
   signOut: async () => {},
 });
 
+const PROFILE_LS_PREFIX = 'ots-auth-cache:';
+
+const readPersistedUserData = (userId: string): { profile: any | null; roles: string[] } | null => {
+  try {
+    const raw = localStorage.getItem(`${PROFILE_LS_PREFIX}${userId}`);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return null;
+    return { profile: parsed.profile ?? null, roles: Array.isArray(parsed.roles) ? parsed.roles : [] };
+  } catch {
+    return null;
+  }
+};
+
+const writePersistedUserData = (userId: string, data: { profile: any | null; roles: string[] }) => {
+  try {
+    localStorage.setItem(`${PROFILE_LS_PREFIX}${userId}`, JSON.stringify(data));
+  } catch { /* quota — ignore */ }
+};
+
 const fetchUserData = async (userId: string) => {
   const cached = profileCache.get(userId);
   if (cached && Date.now() - cached.at < PROFILE_CACHE_MS) {
     return cached.data;
   }
 
-  const [profileRes, rolesRes] = await Promise.all([
-    supabase.from('user_profiles').select('*').eq('id', userId).single(),
-    supabase.from('user_roles').select('role').eq('user_id', userId),
-  ]);
-  const data = {
-    profile: profileRes.data,
-    roles: rolesRes.data?.map((r: any) => r.role) ?? [],
-  };
-  profileCache.set(userId, { at: Date.now(), data });
-  return data;
+  try {
+    const [profileRes, rolesRes] = await Promise.all([
+      supabase.from('user_profiles').select('*').eq('id', userId).single(),
+      supabase.from('user_roles').select('role').eq('user_id', userId),
+    ]);
+    const data = {
+      profile: profileRes.data,
+      roles: rolesRes.data?.map((r: any) => r.role) ?? [],
+    };
+    profileCache.set(userId, { at: Date.now(), data });
+    writePersistedUserData(userId, data);
+    return data;
+  } catch (err) {
+    // DB saturated / network down — fall back to last known good data so
+    // the user still sees their dashboard instead of an infinite spinner.
+    const persisted = readPersistedUserData(userId);
+    if (persisted) {
+      profileCache.set(userId, { at: Date.now(), data: persisted });
+      return persisted;
+    }
+    throw err;
+  }
 };
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
