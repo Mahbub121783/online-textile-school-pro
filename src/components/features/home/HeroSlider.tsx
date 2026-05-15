@@ -164,7 +164,7 @@ const HeroSlider = () => {
     queryFn: async () => {
       const { data } = await supabase
         .from('hero_slides')
-        .select('id, title, subtitle, description, badge_text, image_url, video_url, cta_label, cta_url, secondary_cta_label, secondary_cta_url, countdown_target, sort_order, theme, text_align')
+        .select('id, title, subtitle, image_url, cta_text, cta_link, secondary_cta_text, secondary_cta_link, countdown_target, sort_order, gradient_from, gradient_to, gradient_direction, overlay_opacity, text_alignment, title_color, subtitle_color')
         .eq('is_active', true)
         .order('sort_order', { ascending: true })
         .limit(20);
