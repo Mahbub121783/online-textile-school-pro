@@ -506,7 +506,7 @@ const ChatWidget = () => {
         return { userId: id, name: p?.full_name || 'User', avatar: p?.avatar_url, ...userMap.get(id)! };
       }).sort((a, b) => new Date(b.lastTime).getTime() - new Date(a.lastTime).getTime());
     },
-    refetchInterval: open ? 5000 : false,
+    staleTime: 30_000,
   });
 
   // ── Chat requests ──
@@ -538,7 +538,7 @@ const ChatWidget = () => {
 
       return { incoming, outgoing };
     },
-    refetchInterval: open ? 5000 : false,
+    staleTime: 30_000,
   });
 
   // ── Blocked users ──
@@ -567,7 +567,7 @@ const ChatWidget = () => {
         .order('created_at', { ascending: true });
       return data ?? [];
     },
-    refetchInterval: selectedUser ? 3000 : false,
+    staleTime: 10_000,
   });
 
   // ── Search users ──
