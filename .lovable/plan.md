@@ -1,67 +1,64 @@
-## Problem
+## আসল সমস্যাটা কী (deep diagnosis)
 
-`AdminQuestionBank` page exists and is lazy-imported in `App.tsx` but:
-1. **No `<Route>` is registered** → opening any URL 404s.
-2. **No entry in `AdminSidebar.tsx`** → admin can't discover it.
-3. The page only has 5 basic tabs (Subjects, Questions, Bulk, AI, AI Settings). After the gamification + integrity migration we now have rich data (`qb_exam_sessions`, `qb_exam_violations`, `qb_user_stats`, `qb_badges`, `qb_user_badges`) with **no admin UI**, so it doesn't feel "advanced".
+আমি actively verify করেছি — শুধু frontend bug না:
 
-## Plan
+1. **Supabase DB নিজেই down-state-এ আছে।** আমার tool থেকে চালানো trivial query `select now()` পর্যন্ত fail করছে:
+   `544 — Connection terminated due to connection timeout`.
+   এটা হয় তখনই যখন instance compute/IO saturated, app code এ কিছুই বদলালে এটা ঠিক হবে না।
 
-### 1. Make it accessible
-- Add route in `src/App.tsx` under the admin layout: `/admin/question-bank` and `/admin/question-bank/:tab` → `AdminQuestionBank`.
-- Add a new **collapsible sidebar group "Brain Test"** in `AdminSidebar.tsx` (icon: `Brain`) with sub-items:
-  - Subjects → `/admin/question-bank/subjects`
-  - Questions → `/admin/question-bank/questions`
-  - AI Generate → `/admin/question-bank/ai`
-  - Live Sessions → `/admin/question-bank/sessions`
-  - Violations → `/admin/question-bank/violations`
-  - Badges → `/admin/question-bank/badges`
-  - Analytics → `/admin/question-bank/analytics`
-  - Settings → `/admin/question-bank/ai-settings`
-- Insert the group right after "Academic" so it sits with the learning tools.
+2. **আপনার screenshot সেটাই confirm করছে:**
+   - "Your project is currently exhausting multiple resources"
+   - "Your **Disk IO Budget has been used up** … running at the **baseline** performance"
+   - Current compute = **Nano** (free tier), baseline IO = **43 Mbps**, daily burst limit = **30 mins** — সেটা শেষ.
+   এই অবস্থায় Postgres connections কেউ পায়, কেউ পায় না — তাই login ও data load random fail করছে।
 
-### 2. Refactor `AdminQuestionBank.tsx` for advanced UX
-- Convert the page to read the active tab from `useParams().tab` (like `AdminInstructors.tsx`) so each sub-item deep-links cleanly and is bookmarkable.
-- Add a sticky page header with KPI strip: total questions, total exams taken (today / 7d), avg score, integrity violations (24h), active live sessions. All from cheap `count: 'exact', head: true` queries.
-- Restyle existing tabs (cleaner cards, search bar for Questions, CSV export of selected questions, multi-select bulk delete / activate).
+3. **App-side amplifiers (যেগুলো এই saturation-কে আরো বাজে করছে):**
+   - **Homepage burst:** Hero, FeaturedCourses, FeaturedWorkshops + counts, Stats (4 parallel COUNT queries on `user_roles` / `courses` / `user_profiles`), Ebooks, Events, Instructors, Sponsors, LearningPaths, Testimonials — public visit-এই 12+ queries fire হয়। `enabled: !isPreviewOrEmbedded` শুধু কয়েকটায় আছে, **StatsSection / FeaturedCourses / EbookShowcase / etc.** এ নেই → preview-তেও fire করছে.
+   - **NotificationBell duplicated:** Header-এ desktop+mobile **দুই জায়গায়** mount করা — same user-এ `useNotifications` দু'বার চলছে, তাই দুটি realtime channel + দুটি 2-min polling + দুটি initial query fire হচ্ছে. Dashboard/Admin/Instructor layout-এ আবার একটা — তিন নম্বর বার.
+   - **Broad realtime invalidation:** `useAdminRealtime` schema-wide subscribe করছে `orders`, `enrollments`, `wallet_transactions`, `wallets`, `courses`, `user_profiles`, `refund_requests`, `invoices`, `notifications`, `quizzes`, `quiz_questions`, `quiz_attempts`, `forum_posts`, `forum_comments`, `forum_reactions` — যেকোনো একটা change হলে multiple `invalidateQueries` → cascade refetch-storm.
+   - **Stats COUNT queries** unbounded table scans — saturated DB-তে এগুলোই সবচেয়ে দামি.
 
-### 3. New advanced tabs (frontend only, reading existing tables)
+**Bottom line:** Code-only patch এই issue পুরোপুরি সারাবে না — **Nano instance scaling-up না করলে DB stable হবে না**। কিন্তু code-side amplifiers কমালে recovery দ্রুত হবে এবং future-এ আবার এই অবস্থা হবে না.
 
-**Live Sessions** (`qb_exam_sessions` where `status='in_progress'`)
-- Auto-refreshing table (10s) showing student, subject, started_at, time elapsed, last heartbeat age, violation count, focus mode flag, resume count.
-- Row turns amber if heartbeat > 60s, red if > 120s.
-- Action buttons: View details (modal with answers so far + violations), Force-submit (calls existing `qb_submit_exam` RPC).
+---
 
-**Violations** (`qb_exam_violations`)
-- Filterable list by violation type, date range, student.
-- Aggregated chart: violations per type (last 30 days) using simple bars.
-- Click row → drawer with full session context.
+## Fix Plan — দুই ধাপে
 
-**Badges** (`qb_badges` + `qb_user_badges`)
-- Catalog grid with icon, name, criteria JSON, earned-count.
-- Add/Edit badge modal (name, description, icon emoji, criteria JSON, xp_reward, is_active toggle).
-- "Top earners" mini-leaderboard per badge.
+### Step 1 — Infrastructure (এটা আপনাকেই করতে হবে, code না)
 
-**Analytics**
-- Cards: exams per day (sparkline), pass rate %, avg time-to-complete, hardest questions (lowest correct-rate), most-attempted subjects.
-- Top 10 students by total XP (`qb_user_stats`).
-- All charts use lightweight inline SVG / recharts already installed.
+Supabase Dashboard → Project → **Settings → Add-ons → Compute size** → **Nano থেকে Micro বা Small-এ upgrade**.
 
-### 4. Polish
-- Consistent breadcrumb at top: Admin → Brain Test → {tab label}.
-- Mobile: tabs collapse into a Select dropdown (already a project pattern).
-- Respect existing dark teal / terracotta theme tokens — no hard-coded colors.
+- Nano = shared CPU, ≤0.5 GB RAM, 43 Mbps baseline IO, 30-min daily burst.
+- Micro (~$10/mo) = 1 GB RAM, much higher IO budget.
+- Small (~$15/mo) = 2 GB RAM, recommended যেহেতু আপনার project-এ 30+ tables, realtime, edge functions, file metadata সব আছে.
 
-## Out of scope
-- New DB tables or RPCs (everything reads tables created in the previous migration).
-- Editing the student-facing exam UI.
-- Email/SMS alerts for violations (can come later).
+Upgrade করার ~5 min পর instance restart হবে এবং login + data load স্বাভাবিক হবে.
 
-## Files to change
-- `src/App.tsx` — register `/admin/question-bank/:tab?` route.
-- `src/components/layout/AdminSidebar.tsx` — add "Brain Test" collapsible group.
-- `src/pages/admin/AdminQuestionBank.tsx` — switch to `useParams` tab, add KPI header, refactor existing tabs.
-- New: `src/pages/admin/question-bank/LiveSessionsTab.tsx`
-- New: `src/pages/admin/question-bank/ViolationsTab.tsx`
-- New: `src/pages/admin/question-bank/BadgesTab.tsx`
-- New: `src/pages/admin/question-bank/AnalyticsTab.tsx`
+### Step 2 — App-side hardening (আমি code-এ করব, approve করলে)
+
+1. **Header NotificationBell deduplicate** — desktop+mobile একই component-এ একবারই mount, layout-এ আলাদা bell সরিয়ে header-এর-টাই use হবে → 1 user-এ 1 channel + 1 polling, 3টা না.
+
+2. **`useNotifications` polling soft-mode** — `refetchInterval` 2 min → 5 min, realtime থাকলে polling skip; saturated DB-তে retry exponential.
+
+3. **Realtime narrowing** —
+   - `useAdminRealtime` শুধু সেই tables subscribe করবে যেগুলো actually currently visible page-এ লাগে (lazy mount per route inside admin), অথবা debounced single invalidation bus.
+   - `useStudentRealtime` থেকে `enrollments`, `lesson_progress`, `discussions` সরিয়ে শুধু `notifications` রাখব (rest already polled when needed).
+
+4. **Homepage query trimming** —
+   - `StatsSection`-এর 4টা COUNT query একটা cached `home_stats` materialized view/RPC দিয়ে replace, 1 hour stale, public visit-এ 1 query.
+   - `FeaturedCourses`, `EbookShowcase`, `LearningPathsPreview`, `InstructorSpotlight`, `Testimonials`, `Sponsors`, `UpcomingEvents`, `ClassVideosShowcase` সবগুলোতে `enabled: !isPreviewOrEmbedded` add করব যাতে preview iframe DB-তে hit না করে.
+   - `FeaturedCourses` query শুধু `is_published=true LIMIT 8`, কিন্তু select payload trim (avg_rating/enrollment_count যথেষ্ট, instructor join optional).
+
+5. **Global request budget** — একটা small `supabase` wrapper add করব যা parallel in-flight `from()` requests > 6 হলে queue করে; saturated period-এ stampede রোধ করে.
+
+6. **Auth resilience** — `useAuth.fetchUserData` saturated state-এ profile/roles fail হলে cached stale value return করবে আর background-এ retry-with-backoff করবে; login UI কখনো hang করবে না.
+
+---
+
+## ⚠ Honest expectation
+
+Step 2 alone DB recovery এনে দেবে না — Disk IO budget reset না হওয়া পর্যন্ত (next day) বা compute upgrade না করা পর্যন্ত performance baseline-এই থাকবে। Step 1 (compute upgrade) **mandatory**, Step 2 future-proofing।
+
+আমাকে বলুন:
+- আপনি কি এখনই Supabase compute upgrade করতে পারবেন? (Yes হলে আমি Step 2 implement করা শুরু করব।)
+- নাকি এখনি Step 2 (code hardening) approve করব যাতে IO budget reset-এর পরে app আর এত resource burn না করে?
