@@ -152,13 +152,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     };
 
     const loadProfileAndRoles = (uid: string) => {
-      // Fire-and-forget; UI is already unblocked
+      // Instant UI: hydrate from localStorage cache before DB even responds.
+      const persisted = readPersistedUserData(uid);
+      if (persisted && mounted) {
+        setProfile(persisted.profile);
+        setRoles(persisted.roles);
+      }
+      // Fire-and-forget refresh; UI is already unblocked
       fetchUserData(uid).then(d => {
         if (!mounted) return;
         setProfile(d.profile);
         setRoles(d.roles);
-        // Avatar normalization is heavy (Cloudinary fetch + DB update).
-        // Defer to idle time so it never delays login or stresses Supabase on free tier.
         const idle: any = (window as any).requestIdleCallback || ((cb: any) => setTimeout(cb, 5000));
         idle(() => {
           if (!mounted) return;
