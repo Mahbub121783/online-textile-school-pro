@@ -18,9 +18,10 @@ const SponsorsSection = () => {
     queryFn: async () => {
       const { data } = await supabase
         .from('sponsors')
-        .select('*')
+        .select('id, name, logo_url, website_url, description, tier, sort_order')
         .eq('is_active', true)
-        .order('sort_order', { ascending: true });
+        .order('sort_order', { ascending: true })
+        .limit(50);
       return data || [];
     },
     staleTime: 30 * 60 * 1000,

@@ -37,7 +37,7 @@ export default function FeaturedWorkshops() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('workshops')
-        .select('*, instructor:user_profiles!workshops_instructor_id_fkey(id, full_name, avatar_url)')
+        .select('id, title, slug, short_description, thumbnail_url, workshop_type, start_date, end_date, start_time, end_time, max_participants, status, fake_registration_count, instructor_name, instructor:user_profiles!workshops_instructor_id_fkey(id, full_name, avatar_url)')
         .in('status', ['published', 'ongoing'])
         .gte('start_date', today)
         .order('start_date', { ascending: true })
