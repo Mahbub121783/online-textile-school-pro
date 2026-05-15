@@ -24,7 +24,7 @@ const InternshipsPage = () => {
     queryFn: async () => {
       const { data } = await supabase
         .from('internships')
-        .select('id, title, slug, company, location, type, department, short_description, cover_image_url, deadline, is_featured, status, created_at')
+        .select('id, title, company, description, location, internship_type, department, stipend, duration, application_deadline, positions_available, positions_filled, skills_required, is_featured, status, created_at')
         .eq('is_published', true)
         .eq('status', 'open')
         .order('is_featured', { ascending: false })
