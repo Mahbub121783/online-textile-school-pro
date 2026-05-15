@@ -4,19 +4,6 @@ import { Button } from '@/components/ui/button';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
-const isPreviewOrEmbedded = (() => {
-  if (typeof window === 'undefined') return false;
-  try {
-    return (
-      window.self !== window.top ||
-      window.location.hostname.includes('id-preview--') ||
-      window.location.hostname.includes('lovable.app') ||
-      window.location.hostname.includes('lovableproject.com')
-    );
-  } catch {
-    return true;
-  }
-})();
 
 const FALLBACK_SLIDES = [
   { id: 'f1', title: 'Master Textile Engineering Online', subtitle: 'Join thousands of learners building careers in the textile industry with expert-led courses.', cta_text: 'Explore Courses', cta_link: '/courses', secondary_cta_text: 'Free Demo Class', secondary_cta_link: '#demo', image_url: '', gradient_from: 'primary', gradient_to: 'primary-dark', gradient_direction: 'br', overlay_opacity: 5, text_alignment: 'left', title_color: null, subtitle_color: null, countdown_target: null },
