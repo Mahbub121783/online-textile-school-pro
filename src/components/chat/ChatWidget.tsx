@@ -460,9 +460,10 @@ const ChatWidget = () => {
     queryFn: async () => {
       const { data: requests } = await supabase
         .from('chat_requests')
-        .select('*')
+        .select('id, sender_id, receiver_id, status')
         .or(`sender_id.eq.${user!.id},receiver_id.eq.${user!.id}`)
-        .eq('status', 'accepted');
+        .eq('status', 'accepted')
+        .limit(200);
 
       if (!requests?.length) return [];
 
@@ -516,9 +517,10 @@ const ChatWidget = () => {
     queryFn: async () => {
       const { data } = await supabase
         .from('chat_requests')
-        .select('*')
+        .select('id, sender_id, receiver_id, status, created_at')
         .or(`sender_id.eq.${user!.id},receiver_id.eq.${user!.id}`)
-        .eq('status', 'pending');
+        .eq('status', 'pending')
+        .limit(100);
 
       const incoming: any[] = [];
       const outgoing: any[] = [];
@@ -562,10 +564,12 @@ const ChatWidget = () => {
     queryFn: async () => {
       const { data } = await supabase
         .from('chat_messages')
-        .select('*')
+        .select('id, sender_id, receiver_id, message, is_read, created_at, deleted_at, reactions')
         .or(`and(sender_id.eq.${user!.id},receiver_id.eq.${selectedUser.userId}),and(sender_id.eq.${selectedUser.userId},receiver_id.eq.${user!.id})`)
-        .order('created_at', { ascending: true });
-      return data ?? [];
+        .order('created_at', { ascending: false })
+        .limit(100);
+      // returned newest-first but UI expects oldest-first
+      return (data ?? []).slice().reverse();
     },
     staleTime: 10_000,
   });
