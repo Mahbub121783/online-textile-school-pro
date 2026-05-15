@@ -23,7 +23,7 @@ const EventsPage = () => {
   const { data: events = [], isLoading } = useQuery({
     queryKey: ['events-public'],
     queryFn: async () => {
-      const { data } = await supabase.from('events').select('*').order('event_date', { ascending: true });
+      const { data } = await supabase.from('events').select('id, title, description, event_date, image_url, location').order('event_date', { ascending: true }).limit(100);
       return data ?? [];
     },
   });

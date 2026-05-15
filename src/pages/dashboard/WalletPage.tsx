@@ -42,7 +42,7 @@ const WalletPage = () => {
     queryKey: ['topup-requests', user?.id],
     enabled: !!user,
     queryFn: async () => {
-      const { data } = await supabase.from('wallet_topup_requests' as any).select('*').eq('user_id', user!.id).order('created_at', { ascending: false });
+      const { data } = await supabase.from('wallet_topup_requests' as any).select('*').eq('user_id', user!.id).order('created_at', { ascending: false }).limit(50);
       return (data || []) as any[];
     },
   });
