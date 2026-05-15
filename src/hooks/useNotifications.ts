@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { shouldSkipHeavyQueries, shouldSkipRealtime } from '@/lib/maintenanceMode';
 
 interface Notification {
   id: string;
@@ -26,9 +27,9 @@ export function useNotifications() {
 
   const { data: notifications = [], isLoading } = useQuery<Notification[]>({
     queryKey: ['notifications', user?.id],
-    staleTime: 60 * 1000,
+    staleTime: 5 * 60 * 1000,
     refetchOnMount: false,
-    refetchInterval: 5 * 60 * 1000, // 5 min — soft polling fallback
+    refetchInterval: shouldSkipHeavyQueries ? false : 10 * 60 * 1000, // 10 min in normal, off in maintenance
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
     retry: 0,
@@ -43,14 +44,14 @@ export function useNotifications() {
       if (error) throw error;
       return (data || []) as unknown as Notification[];
     },
-    enabled: !!user,
+    enabled: !!user && !shouldSkipHeavyQueries,
   });
 
   const unreadCount = notifications.filter(n => !n.is_read).length;
 
   // Shared per-user realtime channel — refcounted so duplicate mounts don't spawn extra channels.
   useEffect(() => {
-    if (!user?.id) return;
+    if (!user?.id || shouldSkipRealtime) return;
     const uid = user.id;
     const existing = realtimeRefCount.get(uid);
     if (existing) {
