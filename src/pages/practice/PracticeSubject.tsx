@@ -47,13 +47,23 @@ const PracticeSubject = () => {
   const { data: counts = { basic: 0, intermediate: 0, advanced: 0 } } = useQuery({
     queryKey: ['qb-subject-counts', subject?.id, selectedTopic],
     enabled: !!subject?.id,
+    staleTime: 30 * 60 * 1000,
+    retry: 0,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
     queryFn: async () => {
-      let q = supabase.from('qb_questions').select('difficulty', { count: 'exact' }).eq('subject_id', subject!.id).eq('is_active', true);
-      if (selectedTopic) q = q.eq('topic_id', selectedTopic);
-      const { data } = await q;
-      const c = { basic: 0, intermediate: 0, advanced: 0 };
-      (data ?? []).forEach((r: any) => { c[r.difficulty as Diff]++; });
-      return c;
+      // 3 cheap head-counts instead of pulling every question row.
+      const baseFilter = (qb: any) => {
+        let q = qb.eq('subject_id', subject!.id).eq('is_active', true);
+        if (selectedTopic) q = q.eq('topic_id', selectedTopic);
+        return q;
+      };
+      const [b, i, a] = await Promise.all([
+        baseFilter(supabase.from('qb_questions').select('id', { count: 'exact', head: true })).eq('difficulty', 'basic'),
+        baseFilter(supabase.from('qb_questions').select('id', { count: 'exact', head: true })).eq('difficulty', 'intermediate'),
+        baseFilter(supabase.from('qb_questions').select('id', { count: 'exact', head: true })).eq('difficulty', 'advanced'),
+      ]);
+      return { basic: b.count ?? 0, intermediate: i.count ?? 0, advanced: a.count ?? 0 };
     },
   });
 

@@ -7,6 +7,10 @@ import { Trophy, Flame, Zap, Target } from 'lucide-react';
 const AnalyticsTab = () => {
   const { data: sessions = [] } = useQuery({
     queryKey: ['admin-qb-analytics-sessions'],
+    staleTime: 15 * 60 * 1000,
+    retry: 0,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
     queryFn: async () => {
       const since = new Date(Date.now() - 30 * 86400_000).toISOString();
       const { data } = await supabase
@@ -14,7 +18,7 @@ const AnalyticsTab = () => {
         .select('id, percentage, passed, time_taken_seconds, submitted_at, subject_id, qb_subjects(name)')
         .eq('status', 'submitted')
         .gte('submitted_at', since)
-        .limit(2000);
+        .limit(500);
       return data ?? [];
     },
   });
