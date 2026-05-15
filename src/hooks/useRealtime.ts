@@ -162,29 +162,13 @@ export function useInstructorRealtime() {
 export function useStudentRealtime() {
   const queryClient = useQueryClient();
 
+  // Trimmed to the bare minimum: only INSERT on notifications.
+  // Other student data (enrollments / lesson_progress / certs / discussions)
+  // is already refetched on tab-mount and via mutations — keeping a wide
+  // realtime subscription was creating extra DB load on a saturated instance.
   useEffect(() => {
     const channel = supabase
-      .channel('student-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'enrollments' }, () => {
-        queryClient.invalidateQueries({ queryKey: ['enrollments'] });
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'wallet_transactions' }, () => {
-        queryClient.invalidateQueries({ queryKey: ['wallet-transactions'] });
-        queryClient.invalidateQueries({ queryKey: ['wallet'] });
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'wallets' }, () => {
-        queryClient.invalidateQueries({ queryKey: ['wallet'] });
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'lesson_progress' }, () => {
-        queryClient.invalidateQueries({ queryKey: ['lesson-progress'] });
-        queryClient.invalidateQueries({ queryKey: ['enrollments'] });
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'certificates' }, () => {
-        queryClient.invalidateQueries({ queryKey: ['cert-count'] });
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'discussions' }, () => {
-        queryClient.invalidateQueries({ queryKey: ['lesson-discussions'] });
-      })
+      .channel(`student-realtime-${Date.now()}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, () => {
         queryClient.invalidateQueries({ queryKey: ['notifications'] });
       })

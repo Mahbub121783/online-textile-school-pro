@@ -7,6 +7,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useCartStore } from '@/stores/cartStore';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { isPreviewOrEmbedded } from '@/lib/previewMode';
 
 const FeaturedCourses = () => {
   const [activeCategory, setActiveCategory] = useState('All');
@@ -18,7 +19,11 @@ const FeaturedCourses = () => {
       const { data } = await supabase.from('categories').select('id, name').order('sort_order').limit(6);
       return data ?? [];
     },
-    staleTime: 5 * 60 * 1000,
+    staleTime: 30 * 60 * 1000,
+    retry: 0,
+    refetchOnMount: false,
+    refetchOnReconnect: false,
+    enabled: !isPreviewOrEmbedded,
   });
 
   const { data: courses = [], isLoading } = useQuery({
@@ -32,7 +37,11 @@ const FeaturedCourses = () => {
         .limit(8);
       return data ?? [];
     },
-    staleTime: 2 * 60 * 1000,
+    staleTime: 10 * 60 * 1000,
+    retry: 0,
+    refetchOnMount: false,
+    refetchOnReconnect: false,
+    enabled: !isPreviewOrEmbedded,
   });
 
   const catNames = ['All', ...categories.map((c: any) => c.name)];

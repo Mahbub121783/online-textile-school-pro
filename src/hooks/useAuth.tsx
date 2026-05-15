@@ -80,22 +80,54 @@ const AuthContext = createContext<AuthContextType>({
   signOut: async () => {},
 });
 
+const PROFILE_LS_PREFIX = 'ots-auth-cache:';
+
+const readPersistedUserData = (userId: string): { profile: any | null; roles: string[] } | null => {
+  try {
+    const raw = localStorage.getItem(`${PROFILE_LS_PREFIX}${userId}`);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return null;
+    return { profile: parsed.profile ?? null, roles: Array.isArray(parsed.roles) ? parsed.roles : [] };
+  } catch {
+    return null;
+  }
+};
+
+const writePersistedUserData = (userId: string, data: { profile: any | null; roles: string[] }) => {
+  try {
+    localStorage.setItem(`${PROFILE_LS_PREFIX}${userId}`, JSON.stringify(data));
+  } catch { /* quota — ignore */ }
+};
+
 const fetchUserData = async (userId: string) => {
   const cached = profileCache.get(userId);
   if (cached && Date.now() - cached.at < PROFILE_CACHE_MS) {
     return cached.data;
   }
 
-  const [profileRes, rolesRes] = await Promise.all([
-    supabase.from('user_profiles').select('*').eq('id', userId).single(),
-    supabase.from('user_roles').select('role').eq('user_id', userId),
-  ]);
-  const data = {
-    profile: profileRes.data,
-    roles: rolesRes.data?.map((r: any) => r.role) ?? [],
-  };
-  profileCache.set(userId, { at: Date.now(), data });
-  return data;
+  try {
+    const [profileRes, rolesRes] = await Promise.all([
+      supabase.from('user_profiles').select('*').eq('id', userId).single(),
+      supabase.from('user_roles').select('role').eq('user_id', userId),
+    ]);
+    const data = {
+      profile: profileRes.data,
+      roles: rolesRes.data?.map((r: any) => r.role) ?? [],
+    };
+    profileCache.set(userId, { at: Date.now(), data });
+    writePersistedUserData(userId, data);
+    return data;
+  } catch (err) {
+    // DB saturated / network down — fall back to last known good data so
+    // the user still sees their dashboard instead of an infinite spinner.
+    const persisted = readPersistedUserData(userId);
+    if (persisted) {
+      profileCache.set(userId, { at: Date.now(), data: persisted });
+      return persisted;
+    }
+    throw err;
+  }
 };
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
@@ -120,13 +152,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     };
 
     const loadProfileAndRoles = (uid: string) => {
-      // Fire-and-forget; UI is already unblocked
+      // Instant UI: hydrate from localStorage cache before DB even responds.
+      const persisted = readPersistedUserData(uid);
+      if (persisted && mounted) {
+        setProfile(persisted.profile);
+        setRoles(persisted.roles);
+      }
+      // Fire-and-forget refresh; UI is already unblocked
       fetchUserData(uid).then(d => {
         if (!mounted) return;
         setProfile(d.profile);
         setRoles(d.roles);
-        // Avatar normalization is heavy (Cloudinary fetch + DB update).
-        // Defer to idle time so it never delays login or stresses Supabase on free tier.
         const idle: any = (window as any).requestIdleCallback || ((cb: any) => setTimeout(cb, 5000));
         idle(() => {
           if (!mounted) return;

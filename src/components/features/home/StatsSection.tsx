@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { Users, BookOpen, GraduationCap, Star } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { isPreviewOrEmbedded } from '@/lib/previewMode';
 
 const CountUp = ({ end, decimal, suffix }: { end: number; decimal?: boolean; suffix: string }) => {
   const [count, setCount] = useState(0);
@@ -65,7 +66,12 @@ const StatsSection = () => {
         avgRating: Math.round(avgRating * 10) / 10,
       };
     },
-    staleTime: 10 * 60 * 1000,
+    staleTime: 60 * 60 * 1000,
+    gcTime: 2 * 60 * 60 * 1000,
+    retry: 0,
+    refetchOnMount: false,
+    refetchOnReconnect: false,
+    enabled: !isPreviewOrEmbedded,
   });
 
   const stats = [

@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Crown } from 'lucide-react';
+import { isPreviewOrEmbedded } from '@/lib/previewMode';
 
 const TIER_ORDER = ['platinum', 'gold', 'silver', 'bronze'] as const;
 const TIER_CONFIG: Record<string, { height: string; label: string; color: string }> = {
@@ -22,6 +23,11 @@ const SponsorsSection = () => {
         .order('sort_order', { ascending: true });
       return data || [];
     },
+    staleTime: 30 * 60 * 1000,
+    retry: 0,
+    refetchOnMount: false,
+    refetchOnReconnect: false,
+    enabled: !isPreviewOrEmbedded,
   });
 
   if (!sponsors.length) return null;

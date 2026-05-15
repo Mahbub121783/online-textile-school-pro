@@ -15,15 +15,23 @@ interface Notification {
   created_at: string;
 }
 
+// Module-level realtime channel registry: ensures only ONE channel per user
+// even when multiple components (Header desktop, Header mobile, layout bell, etc.)
+// mount NotificationBell simultaneously.
+const realtimeRefCount = new Map<string, { channel: any; count: number }>();
+
 export function useNotifications() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
   const { data: notifications = [], isLoading } = useQuery<Notification[]>({
     queryKey: ['notifications', user?.id],
-    staleTime: 30 * 1000,            // 30s — bell feels live
-    refetchOnMount: true,
-    refetchInterval: 2 * 60 * 1000,  // 2 min polling fallback when realtime drops
+    staleTime: 60 * 1000,
+    refetchOnMount: false,
+    refetchInterval: 5 * 60 * 1000, // 5 min — soft polling fallback
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    retry: 0,
     queryFn: async () => {
       if (!user) return [];
       const { data, error } = await supabase
@@ -40,24 +48,35 @@ export function useNotifications() {
 
   const unreadCount = notifications.filter(n => !n.is_read).length;
 
-  // Per-user realtime channel — pushes new notifications instantly.
-  // Free-tier safe: 1 channel per logged-in user, no DB query cost.
+  // Shared per-user realtime channel — refcounted so duplicate mounts don't spawn extra channels.
   useEffect(() => {
     if (!user?.id) return;
-    const channelName = `notifications:${user.id}:${Date.now()}`;
-    const channel = supabase
-      .channel(channelName)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` },
-        () => {
-          queryClient.invalidateQueries({ queryKey: ['notifications', user.id] });
-        }
-      )
-      .subscribe();
+    const uid = user.id;
+    const existing = realtimeRefCount.get(uid);
+    if (existing) {
+      existing.count += 1;
+    } else {
+      const channel = supabase
+        .channel(`notifications:${uid}:${Date.now()}`)
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${uid}` },
+          () => {
+            queryClient.invalidateQueries({ queryKey: ['notifications', uid] });
+          }
+        )
+        .subscribe();
+      realtimeRefCount.set(uid, { channel, count: 1 });
+    }
 
     return () => {
-      supabase.removeChannel(channel);
+      const entry = realtimeRefCount.get(uid);
+      if (!entry) return;
+      entry.count -= 1;
+      if (entry.count <= 0) {
+        supabase.removeChannel(entry.channel);
+        realtimeRefCount.delete(uid);
+      }
     };
   }, [user?.id, queryClient]);
 

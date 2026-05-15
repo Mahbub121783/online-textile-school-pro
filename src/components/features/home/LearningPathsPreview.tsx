@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Link } from 'react-router-dom';
 import { ArrowRight, Route } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { isPreviewOrEmbedded } from '@/lib/previewMode';
 
 const LearningPathsPreview = () => {
   const { data: paths = [] } = useQuery({
@@ -16,6 +17,11 @@ const LearningPathsPreview = () => {
         .limit(3);
       return data ?? [];
     },
+    staleTime: 30 * 60 * 1000,
+    retry: 0,
+    refetchOnMount: false,
+    refetchOnReconnect: false,
+    enabled: !isPreviewOrEmbedded,
   });
 
   if (paths.length === 0) return null;
