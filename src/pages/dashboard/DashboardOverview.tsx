@@ -96,10 +96,10 @@ const DashboardOverview = () => {
 
   const stats = [
     { label: 'Enrolled Courses', value: enrollments.length, icon: BookOpen, color: 'text-primary', link: '/dashboard/courses' },
-    { label: 'Certificates', value: certificates.length, icon: Award, color: 'text-accent', link: '/dashboard/certificates' },
+    { label: 'Certificates', value: certCount, icon: Award, color: 'text-accent', link: '/dashboard/certificates' },
     { label: 'Avg. Progress', value: `${avgProgress}%`, icon: TrendingUp, color: 'text-primary', link: '/dashboard/courses' },
     { label: 'Wallet Balance', value: `৳${wallet?.balance ?? 0}`, icon: Wallet, color: 'text-primary', link: '/dashboard/wallet' },
-    { label: 'Referrals', value: referrals.length, icon: Users, color: 'text-primary', link: '/dashboard/referrals' },
+    { label: 'Referrals', value: referralCount, icon: Users, color: 'text-primary', link: '/dashboard/referrals' },
     { label: 'Completed', value: completedCount, icon: FileQuestion, color: 'text-accent', link: '/dashboard/courses' },
   ];
 

@@ -29,7 +29,7 @@ export function useNotifications() {
     queryKey: ['notifications', user?.id],
     staleTime: 5 * 60 * 1000,
     refetchOnMount: false,
-    refetchInterval: shouldSkipHeavyQueries ? false : 10 * 60 * 1000, // 10 min in normal, off in maintenance
+    refetchInterval: false, // realtime channel handles freshness; no polling
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
     retry: 0,

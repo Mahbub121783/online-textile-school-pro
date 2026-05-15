@@ -77,17 +77,22 @@ export function InstructorSidebar() {
   const navigate = useNavigate();
   const { signOut, profile, user } = useAuth();
 
-  // Badge counts
+  // Badge counts — light, infrequent, head-count only
   const { data: badgeCounts = { discussions: 0, submissions: 0 } } = useQuery({
     queryKey: ['instructor-badge-counts', user?.id],
     enabled: !!user,
+    staleTime: 5 * 60 * 1000,
+    refetchInterval: 5 * 60 * 1000,
     queryFn: async () => {
-      // Unanswered discussions
-      const { data: courses } = await supabase.from('courses').select('id').eq('instructor_id', user!.id);
+      const { data: courses } = await supabase
+        .from('courses')
+        .select('id')
+        .eq('instructor_id', user!.id);
       const courseIds = (courses ?? []).map((c: any) => c.id);
       let discussions = 0;
       if (courseIds.length > 0) {
-        const { count } = await supabase.from('discussions')
+        const { count } = await supabase
+          .from('discussions')
           .select('id', { count: 'exact', head: true })
           .in('course_id', courseIds)
           .is('parent_id', null)
@@ -96,7 +101,6 @@ export function InstructorSidebar() {
       }
       return { discussions, submissions: 0 };
     },
-    refetchInterval: 60000,
   });
 
   return (

@@ -47,9 +47,29 @@ const CountUp = ({ end, decimal, suffix }: { end: number; decimal?: boolean; suf
   );
 };
 
+const STATS_CACHE_KEY = 'homepage_stats_v1';
+const STATS_CACHE_TTL = 24 * 60 * 60 * 1000; // 24h
+
+const readStatsCache = () => {
+  try {
+    const raw = localStorage.getItem(STATS_CACHE_KEY);
+    if (!raw) return undefined;
+    const parsed = JSON.parse(raw);
+    if (!parsed?.at || Date.now() - parsed.at > STATS_CACHE_TTL) return undefined;
+    return parsed.data;
+  } catch { return undefined; }
+};
+
+const writeStatsCache = (data: any) => {
+  try {
+    localStorage.setItem(STATS_CACHE_KEY, JSON.stringify({ at: Date.now(), data }));
+  } catch {}
+};
+
 const StatsSection = () => {
   const { data } = useQuery({
     queryKey: ['homepage-stats'],
+    initialData: readStatsCache,
     queryFn: async () => {
       const [instructors, courses, students, ratingResult] = await Promise.all([
         supabase.from('user_roles').select('id', { count: 'exact', head: true }).eq('role', 'instructor'),
@@ -59,15 +79,17 @@ const StatsSection = () => {
       ]);
       const ratings = (ratingResult.data ?? []).map((c: any) => Number(c.avg_rating)).filter(Boolean);
       const avgRating = ratings.length > 0 ? ratings.reduce((a, b) => a + b, 0) / ratings.length : 4.8;
-      return {
+      const result = {
         instructors: instructors.count || 0,
         courses: courses.count || 0,
         students: students.count || 0,
         avgRating: Math.round(avgRating * 10) / 10,
       };
+      writeStatsCache(result);
+      return result;
     },
-    staleTime: 60 * 60 * 1000,
-    gcTime: 2 * 60 * 60 * 1000,
+    staleTime: 24 * 60 * 60 * 1000, // 24h — counts change slowly
+    gcTime: 24 * 60 * 60 * 1000,
     retry: 0,
     refetchOnMount: false,
     refetchOnReconnect: false,
