@@ -1,47 +1,16 @@
-import { useEffect } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/hooks/useAuth';
-import { shouldSkipRealtime } from '@/lib/maintenanceMode';
-
 /**
- * EMERGENCY MODE: realtime subscriptions trimmed to the bare minimum
- * to stop self-inflicted query storms while the Supabase instance is
- * recovering from saturation.
+ * EMERGENCY MODE — Phase 1 (Free Tier 200-channel cap):
+ * Layout-level realtime channels are removed. Notifications now use
+ * 60s polling inside `useNotifications` (mounted only at <NotificationBell />),
+ * so each logged-in user holds at most ONE polling query and ZERO
+ * persistent realtime channels by default.
  *
- * Subscribes only to the current user's notifications inserts (filter
- * by user_id) so OTHER users' notifications don't invalidate caches
- * across every connected client (previous behavior caused cascade
- * refetches under load).
+ * The only persistent realtime channel allowed app-wide is the chat
+ * channel inside <ChatWidget />, which mounts only while the widget is open.
+ *
+ * These exports are kept as no-ops to preserve all existing call sites
+ * (DashboardLayout, InstructorLayout, AdminLayout) without removing them.
  */
-function useNotificationsRealtime() {
-  const queryClient = useQueryClient();
-  const { user } = useAuth();
-  useEffect(() => {
-    if (shouldSkipRealtime || !user?.id) return;
-    const uid = user.id;
-    const channel = supabase
-      .channel(`notifications-user-${uid}`)
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${uid}` },
-        () => {
-          queryClient.invalidateQueries({ queryKey: ['notifications', uid] });
-        }
-      )
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [queryClient, user?.id]);
-}
-
-export function useAdminRealtime() {
-  useNotificationsRealtime();
-}
-
-export function useInstructorRealtime() {
-  useNotificationsRealtime();
-}
-
-export function useStudentRealtime() {
-  useNotificationsRealtime();
-}
+export function useAdminRealtime() { /* no-op: polling handles freshness */ }
+export function useInstructorRealtime() { /* no-op: polling handles freshness */ }
+export function useStudentRealtime() { /* no-op: polling handles freshness */ }
