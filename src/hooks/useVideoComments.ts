@@ -24,9 +24,10 @@ export function useVideoComments(videoId: string | undefined) {
     queryFn: async () => {
       const { data: comments, error } = await supabase
         .from('class_video_comments')
-        .select('*')
+        .select('id, video_id, user_id, parent_id, content, likes_count, is_deleted, created_at, updated_at')
         .eq('video_id', videoId as string)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(200);
       if (error) throw error;
 
       const userIds = Array.from(new Set((comments ?? []).map((c: any) => c.user_id)));
