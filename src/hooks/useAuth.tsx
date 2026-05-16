@@ -63,6 +63,7 @@ interface AuthContextType {
   session: Session | null;
   loading: boolean;
   isReady: boolean;
+  authzLoading: boolean;
   profile: any | null;
   roles: string[];
   isSuperAdmin: boolean;
@@ -74,14 +75,15 @@ const AuthContext = createContext<AuthContextType>({
   session: null,
   loading: true,
   isReady: false,
+  authzLoading: true,
   profile: null,
   roles: [],
   isSuperAdmin: false,
   signOut: async () => {},
 });
 
-// v2: bumped to invalidate any poisoned (null-profile) caches from previous version
-const PROFILE_LS_PREFIX = 'ots-auth-cache-v2:';
+// v3: invalidate older caches that may contain empty roles from transient DB failures
+const PROFILE_LS_PREFIX = 'ots-auth-cache-v3:';
 
 const readPersistedUserData = (userId: string): { profile: any | null; roles: string[] } | null => {
   try {
@@ -112,31 +114,38 @@ const fetchUserData = async (userId: string) => {
       supabase.from('user_profiles').select('*').eq('id', userId).maybeSingle(),
       supabase.from('user_roles').select('role').eq('user_id', userId),
     ]);
+    const resolvedRoles = rolesRes.error ? null : (rolesRes.data?.map((r: any) => r.role) ?? []);
 
-    // If profile fetch errored OR returned null, do NOT poison the cache.
+    // If profile or roles fetch errored OR returned null, do NOT poison the cache.
     // Fall back to last known good data so the UI keeps working, and retry next call.
-    if (profileRes.error || !profileRes.data) {
+    if (profileRes.error || !profileRes.data || rolesRes.error) {
       const persisted = readPersistedUserData(userId);
-      if (persisted?.profile) {
-        // Refresh roles if we got them, keep good profile
+      if (persisted?.profile || persisted?.roles?.length) {
         const merged = {
-          profile: persisted.profile,
-          roles: rolesRes.data?.map((r: any) => r.role) ?? persisted.roles,
+          profile: profileRes.data ?? persisted?.profile ?? null,
+          roles: resolvedRoles ?? persisted?.roles ?? [],
         };
         // Short TTL so we retry profile fetch soon
         profileCache.set(userId, { at: Date.now() - (PROFILE_CACHE_MS - 15_000), data: merged });
         return merged;
       }
+      // No persisted fallback — return what we have, but DON'T cache it.
+      if (!profileRes.error && profileRes.data) {
+        return {
+          profile: profileRes.data,
+          roles: resolvedRoles ?? [],
+        };
+      }
       // No persisted fallback — return empty but DON'T cache it
       return {
         profile: null,
-        roles: rolesRes.data?.map((r: any) => r.role) ?? [],
+        roles: resolvedRoles ?? [],
       };
     }
 
     const data = {
       profile: profileRes.data,
-      roles: rolesRes.data?.map((r: any) => r.role) ?? [],
+      roles: resolvedRoles ?? [],
     };
     profileCache.set(userId, { at: Date.now(), data });
     writePersistedUserData(userId, data);
@@ -158,6 +167,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [isReady, setIsReady] = useState(false);
+  const [authzLoading, setAuthzLoading] = useState(true);
   const [profile, setProfile] = useState<any>(null);
   const [roles, setRoles] = useState<string[]>([]);
 
@@ -180,7 +190,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (persisted && mounted) {
         setProfile(persisted.profile);
         setRoles(persisted.roles);
+        if (persisted.roles.length > 0) setAuthzLoading(false);
       }
+      setAuthzLoading(true);
       // Fire-and-forget refresh; UI is already unblocked
       fetchUserData(uid).then(d => {
         if (!mounted) return;
@@ -195,7 +207,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             setProfile((prev: any) => prev ? { ...prev, avatar_url: normalizedUrl } : prev);
           });
         });
-      }).catch(() => {});
+      }).catch(() => {}).finally(() => {
+        if (mounted) setAuthzLoading(false);
+      });
     };
 
     // 1. Primary init — unblock UI as soon as session is known
@@ -205,9 +219,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setUser(session?.user ?? null);
       setLoading(false);
       setIsReady(true);
-      if (session?.user) loadProfileAndRoles(session.user.id);
+      if (session?.user) {
+        setAuthzLoading(true);
+        loadProfileAndRoles(session.user.id);
+      } else {
+        setAuthzLoading(false);
+      }
     }).catch(() => {
-      if (mounted) { setLoading(false); setIsReady(true); }
+      if (mounted) { setLoading(false); setIsReady(true); setAuthzLoading(false); }
     });
 
     // 2. Listener — synchronous state update, defer DB work
@@ -218,6 +237,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setUser(session?.user ?? null);
         if (session?.user) {
           const uid = session.user.id;
+          setAuthzLoading(true);
           if (event === 'SIGNED_IN') recordLogin(uid);
           if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
             profileCache.delete(uid);
@@ -226,6 +246,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         } else {
           setProfile(null);
           setRoles([]);
+          setAuthzLoading(false);
         }
       }
     );
@@ -243,10 +264,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setSession(null);
     setProfile(null);
     setRoles([]);
+    setAuthzLoading(false);
   };
 
   return (
-    <AuthContext.Provider value={{ user, session, loading, isReady, profile, roles, isSuperAdmin: roles.includes('super_admin'), signOut }}>
+    <AuthContext.Provider value={{ user, session, loading, isReady, authzLoading, profile, roles, isSuperAdmin: roles.includes('super_admin'), signOut }}>
       {children}
     </AuthContext.Provider>
   );
