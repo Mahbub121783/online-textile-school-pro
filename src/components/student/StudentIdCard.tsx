@@ -173,7 +173,7 @@ export default function StudentIdCard({ userId }: Props) {
         </div>
       </CardHeader>
       <CardContent>
-        {!isComplete && !userId && (
+        {!completenessLoading && !isComplete && !userId && (
           <Alert variant="destructive" className="mb-4">
             <AlertTriangle className="h-4 w-4" />
             <AlertDescription>
