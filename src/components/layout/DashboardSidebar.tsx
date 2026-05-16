@@ -28,6 +28,7 @@ const baseNavItems = [
   { title: 'Assignments', url: '/dashboard/assignments', icon: ClipboardList },
   { title: 'Certificates', url: '/dashboard/certificates', icon: Award },
   { title: 'Leaderboard', url: '/dashboard/leaderboard', icon: Trophy },
+  { title: 'Practice Arena', url: '/dashboard/practice', icon: Brain },
   { title: 'Peer Reviews', url: '/dashboard/peer-reviews', icon: ClipboardCheck },
   { title: 'Attendance', url: '/dashboard/attendance', icon: CalendarCheck },
   { title: 'Transcript', url: '/dashboard/transcript', icon: GraduationCap },
