@@ -37,10 +37,10 @@ const AdminQuestionBank = () => {
   // ---- KPI strip (heavy: 4 count queries) — cached long, no auto-poll ----
   const { data: kpi } = useQuery({
     queryKey: ['admin-qb-kpi'],
-    staleTime: 10 * 60 * 1000,
+    staleTime: 30 * 1000,
     gcTime: 30 * 60 * 1000,
     retry: 0,
-    refetchOnMount: false,
+    refetchOnMount: 'always',
     refetchOnWindowFocus: false,
     refetchInterval: false,
     queryFn: async () => {
