@@ -145,6 +145,7 @@ const AdminQuestionBank = () => {
       toast({ title: `Imported ${rows.length} questions` });
       setBulkText('');
       qc.invalidateQueries({ queryKey: ['admin-qb-questions'] });
+      invalidateBootstrap();
     } catch (e: any) {
       toast({ title: 'Import failed', description: e.message, variant: 'destructive' });
     }
