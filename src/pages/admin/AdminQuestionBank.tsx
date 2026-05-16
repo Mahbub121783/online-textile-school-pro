@@ -9,6 +9,7 @@ import ViolationsTab from './question-bank/ViolationsTab';
 import BadgesTab from './question-bank/BadgesTab';
 import AnalyticsTab from './question-bank/AnalyticsTab';
 import ExportTab from './question-bank/ExportTab';
+import SubmissionsTab from './question-bank/SubmissionsTab';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -31,7 +32,7 @@ const AdminQuestionBank = () => {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const { tab: tabParam } = useParams<{ tab?: string }>();
-  const VALID = ['subjects', 'questions', 'bulk', 'export', 'ai', 'sessions', 'violations', 'badges', 'analytics', 'ai-settings'];
+  const VALID = ['subjects', 'questions', 'bulk', 'export', 'ai', 'sessions', 'submissions', 'violations', 'badges', 'analytics', 'ai-settings'];
   const tab = tabParam && VALID.includes(tabParam) ? tabParam : 'subjects';
   const setTab = (v: string) => navigate(`/admin/question-bank/${v}`);
   const isQuestionsTab = tab === 'questions';
@@ -333,6 +334,7 @@ const AdminQuestionBank = () => {
           <TabsTrigger value="export">Export CSV</TabsTrigger>
           <TabsTrigger value="ai">AI Generate</TabsTrigger>
           <TabsTrigger value="sessions">Live Sessions</TabsTrigger>
+          <TabsTrigger value="submissions">Submissions</TabsTrigger>
           <TabsTrigger value="violations">Violations</TabsTrigger>
           <TabsTrigger value="badges">Badges</TabsTrigger>
           <TabsTrigger value="analytics">Analytics</TabsTrigger>
@@ -340,6 +342,7 @@ const AdminQuestionBank = () => {
         </TabsList>
 
         <TabsContent value="sessions"><LiveSessionsTab /></TabsContent>
+        <TabsContent value="submissions"><SubmissionsTab /></TabsContent>
         <TabsContent value="violations"><ViolationsTab /></TabsContent>
         <TabsContent value="badges"><BadgesTab /></TabsContent>
         <TabsContent value="analytics"><AnalyticsTab /></TabsContent>
