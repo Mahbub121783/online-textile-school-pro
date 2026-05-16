@@ -8,6 +8,7 @@ import LiveSessionsTab from './question-bank/LiveSessionsTab';
 import ViolationsTab from './question-bank/ViolationsTab';
 import BadgesTab from './question-bank/BadgesTab';
 import AnalyticsTab from './question-bank/AnalyticsTab';
+import ExportTab from './question-bank/ExportTab';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -30,7 +31,7 @@ const AdminQuestionBank = () => {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const { tab: tabParam } = useParams<{ tab?: string }>();
-  const VALID = ['subjects', 'questions', 'bulk', 'ai', 'sessions', 'violations', 'badges', 'analytics', 'ai-settings'];
+  const VALID = ['subjects', 'questions', 'bulk', 'export', 'ai', 'sessions', 'violations', 'badges', 'analytics', 'ai-settings'];
   const tab = tabParam && VALID.includes(tabParam) ? tabParam : 'subjects';
   const setTab = (v: string) => navigate(`/admin/question-bank/${v}`);
   const isQuestionsTab = tab === 'questions';
@@ -329,6 +330,7 @@ const AdminQuestionBank = () => {
           <TabsTrigger value="subjects">Subjects</TabsTrigger>
           <TabsTrigger value="questions">Questions ({kpi?.questions ?? 0})</TabsTrigger>
           <TabsTrigger value="bulk">Bulk Import</TabsTrigger>
+          <TabsTrigger value="export">Export CSV</TabsTrigger>
           <TabsTrigger value="ai">AI Generate</TabsTrigger>
           <TabsTrigger value="sessions">Live Sessions</TabsTrigger>
           <TabsTrigger value="violations">Violations</TabsTrigger>
@@ -341,6 +343,7 @@ const AdminQuestionBank = () => {
         <TabsContent value="violations"><ViolationsTab /></TabsContent>
         <TabsContent value="badges"><BadgesTab /></TabsContent>
         <TabsContent value="analytics"><AnalyticsTab /></TabsContent>
+        <TabsContent value="export"><ExportTab /></TabsContent>
 
         {/* SUBJECTS */}
         <TabsContent value="subjects" className="space-y-3">
