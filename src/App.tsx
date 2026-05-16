@@ -304,6 +304,7 @@ const AppRoutes = () => {
             <Route path="edumail" element={<EduMailPage />} />
             <Route path="mail" element={<MailPage />} />
             <Route path="workshops" element={<MyWorkshopsPage />} />
+            <Route path="practice" element={<DashboardPracticePage />} />
             <Route path="settings" element={<SettingsPage />} />
           </Route>
           {/* Instructor Portal */}
