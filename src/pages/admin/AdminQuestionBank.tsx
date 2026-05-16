@@ -299,7 +299,7 @@ const AdminQuestionBank = () => {
     toast({ title: `Added ${rows.length} questions to bank` });
     setAiDrafts([]); setAiSelected(new Set());
     qc.invalidateQueries({ queryKey: ['admin-qb-questions'] });
-    qc.invalidateQueries({ queryKey: ['admin-qb-kpi'] });
+    invalidateBootstrap();
   };
 
   return (
