@@ -102,6 +102,7 @@ const Profile = () => {
           <div className="mt-6">
             <StudentIdCard />
           </div>
+          )}
 
 
           {/* Install App */}
