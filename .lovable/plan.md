@@ -1,107 +1,80 @@
-## Goal
+# Merge Practice Arena with Student Identity & Dashboard
 
-Practice Arena ke major restructure korbo: 10 ta subject → **4 ta department** (Yarn, Fabric, Wet, Apparel), 30 questions ekbare load (single-single na), bulk CSV export, leaderboard + analytics fix, ar "All Departments" mix mode add.
+## Clarification first
 
----
+Practice Arena already uses the **same `auth.uid()` / `user_profiles` / `roll_id`** as the rest of the site — no new user IDs were created. What feels "separate" is:
 
-## 1. Database migration
+1. Practice stats live in their own tables (`qb_user_stats`, `qb_exam_sessions`) and are only visible inside `/practice/*` pages.
+2. The student dashboard (`/dashboard/*`) has no widget, page, or sidebar link for Practice Arena.
+3. The leaderboard shows `full_name` but not `roll_id` prominently, so it looks like a separate identity.
 
-**Department mapping** (existing subjects → new departments):
-- **Yarn** = Yarn engineering + Yarn Technology + Spinning
-- **Fabric** = Weaving + Knitting
-- **Wet** = Dyeing & Finishing
-- **Apparel** = Garments Technology + Merchandising + Quality Control + Textile Management
-
-Steps:
-1. Insert 4 notun subjects: `Yarn`, `Fabric Manufacturing`, `Wet Processing`, `Apparel & Management` (slugs: yarn, fabric, wet, apparel).
-2. `UPDATE qb_questions SET subject_id = <new_dept_id>` — old → new mapping.
-3. Old 10 subjects ke `is_active=false` set kore archive (delete na, history bachano er jonno).
-4. `qb_exam_sessions.subject_id` gulo same way migrate kora (history e dekha jabe).
-5. `qb_leaderboard_cache` truncate (auto regenerate hobe).
-
-**Difficulty-wise leaderboard:**
-- `qb_leaderboard_cache` te already `subject_id` ache → notun column **`difficulty qb_difficulty NULL`** add. Unique key adjust.
-- `qb_refresh_leaderboard()` function rewrite: ranking buckets per `(period, subject_id, difficulty)` — so user difficulty + department filter kortei alada ranking.
-
-**Question count rule:**
-- `qb_start_exam` default `_question_count` 25 → **30**. Frontend o 30 pathabe.
-
-**All-Departments mix:**
-- Notun RPC `qb_start_mixed_exam(_difficulty, _question_count=30)` — 4 department theke proportionally random (~7-8 per dept), session e `subject_id` NULL save korbe (currently NOT NULL — make nullable).
+This plan unifies the experience — no schema rename, no duplicate IDs, just surfacing existing data inside the student panel and tightening identity display.
 
 ---
 
-## 2. Exam UI — 30 Q at once
+## 1. Student Dashboard — Practice Widget (Overview)
 
-`src/pages/practice/PracticeExam.tsx`:
-- Currently probably single-question paginated. Refactor to **single scrollable page** — sob 30 ta question ekbare visible, each with radio options.
-- Top-e sticky progress bar + countdown timer.
-- Right side floating "Question palette" (1-30 grid) — click → scroll to that Q. Answered = green dot, unanswered = grey.
-- "Submit Exam" button bottom-e + sticky top corner-e.
+Add a new `PracticeWidget.tsx` in `src/pages/dashboard/` showing:
+- Total XP, current streak, longest streak (from `qb_user_stats`)
+- Exams taken / passed / pass-rate
+- Latest badge earned
+- Best department + best difficulty
+- CTA buttons: **Continue Practice** → `/practice`, **View History** → `/dashboard/practice-history`, **Leaderboard** → `/practice/leaderboard`
 
----
+Mount it in `DashboardOverview.tsx` alongside `GpaWidget` / `LiveClassesWidget`.
 
-## 3. Practice Home reorganization
+## 2. Student Dashboard — Dedicated Practice Pages
 
-`PracticeHome.tsx`:
-- **Top-e (most prominent):** "All Departments Challenge" big card — Mixed 30Q from all 4 depts, choose difficulty → start.
-- Below: 4 department cards (Yarn, Fabric, Wet, Apparel) in 2x2 grid, big icons, color-coded.
-- Remove old 10-subject grid.
+New routes inside `/dashboard`:
+- `/dashboard/practice` — full stats page: XP progression chart, per-department breakdown (Yarn / Fabric / Wet / Apparel), per-difficulty breakdown, badges grid, recent 10 exams table with score/percentage/passed/date.
+- `/dashboard/practice-history` — paginated list of all exam sessions (reuses logic from `PracticeHistory.tsx` but in dashboard layout).
+- `/dashboard/practice-leaderboard` — embedded leaderboard with the user's own rank highlighted.
 
-`PracticeSubject.tsx`: update icon/color theme per department, still shows 3 difficulty (Basic/Intermediate/Advanced) → 30 Q.
+Add corresponding entries in the student `DashboardLayout` sidebar under a new **"Practice Arena"** group (or under "Academic").
 
----
+## 3. Identity unification
 
-## 4. Leaderboard fix
+- `PracticeLeaderboard.tsx`: display **Roll ID** next to the name (already fetched) and link the row to the user's public profile (`/u/:username`) — same pattern used elsewhere.
+- `PracticeHome.tsx` header: greet user by name + roll ID + show their current XP/streak inline (pulled from `qb_user_stats`) so the user clearly sees it's the same account.
+- Add a "View in Dashboard" link from `/practice` → `/dashboard/practice`.
 
-`PracticeLeaderboard.tsx`:
-- Add **Difficulty filter** (All / Basic / Intermediate / Advanced) alongside existing Period + Department filter.
-- Query `qb_leaderboard_cache` with `(period, subject_id, difficulty)` matching.
-- "All Departments" + "All Difficulty" = grand leaderboard.
-- Fix current bug: likely `subject_id is null` filter not matching properly — verify and fix.
+## 4. Student ID Card extension
 
----
+`StudentIdCard.tsx` already shows roll ID. Add a small **Practice XP / Streak** chip on the back of the card (or under the QR) so the unified identity is visible on the printed/PNG export.
 
-## 5. Bulk CSV export (Admin)
+## 5. Profile public page (`/u/:username`)
 
-Admin Question Bank-e notun **"Export"** button:
-- File: `src/pages/admin/question-bank/ExportTab.tsx` (or button in existing tab).
-- Filter: by department + difficulty (or all).
-- Generate CSV columns: `subject_name, difficulty, question_type, question_text, option_a, option_b, option_c, option_d, correct_answer, explanation, points, source`.
-- Client-side: fetch all matching rows in pages of 1000, build CSV blob, download as `question-bank-export-YYYYMMDD.csv`.
-
----
-
-## 6. Admin Analytics enhancement
-
-`src/pages/admin/question-bank/AnalyticsTab.tsx`:
-- Add new section: **"All Users — Exam Stats"** table.
-- Columns: User (name + roll_id), Total Exams, Passed, Avg %, Total XP, Current Streak, Last Practice Date.
-- Sortable. Pagination 50/page.
-- Source: join `qb_user_stats` + `user_profiles` + `qb_exam_sessions` aggregates.
-- Top XP card already ache — extend kore full table karbo.
+Add a "Practice Stats" section: total XP, badges, best department, leaderboard rank. Reuses `qb_user_stats` + `qb_leaderboard_cache` keyed by `user_id` (which is already the same `user_profiles.id`).
 
 ---
 
 ## Technical details
 
-**Files to edit:**
-- `supabase/migrations/...` — new migration (subjects insert, question remap, leaderboard col, RPC updates)
-- `src/pages/practice/PracticeHome.tsx` — 4-dept layout + mixed CTA
-- `src/pages/practice/PracticeExam.tsx` — all-30-at-once UI
-- `src/pages/practice/PracticeLeaderboard.tsx` — difficulty filter
-- `src/pages/admin/question-bank/AnalyticsTab.tsx` — user stats table
-- `src/pages/admin/question-bank/ExportTab.tsx` — new file (CSV export)
-- `src/pages/admin/QuestionBank.tsx` (or wherever tabs live) — add Export tab
+**No schema changes needed.** Everything keys off existing `auth.uid()` / `user_profiles.id`.
 
-**Open issue check during implementation:** confirm exact bug causing leaderboard + "All Subjects" to not work (likely the `.is('subject_id', null)` filter against rows that never got null inserted, plus session schema NOT NULL on subject_id).
+Files to create:
+- `src/pages/dashboard/PracticeWidget.tsx`
+- `src/pages/dashboard/PracticePage.tsx` (full stats)
+- `src/pages/dashboard/PracticeHistoryPage.tsx` (dashboard-wrapped)
+- `src/pages/dashboard/PracticeLeaderboardPage.tsx` (dashboard-wrapped)
+
+Files to edit:
+- `src/pages/dashboard/DashboardOverview.tsx` — mount `PracticeWidget`
+- `src/App.tsx` — register 3 new `/dashboard/practice*` routes
+- `src/components/dashboard/DashboardSidebar*.tsx` (or equivalent) — add Practice Arena nav group
+- `src/pages/practice/PracticeHome.tsx` — header greeting with roll ID + XP/streak chip + "View in Dashboard" link
+- `src/pages/practice/PracticeLeaderboard.tsx` — show roll ID + link to public profile
+- `src/components/student/StudentIdCard.tsx` — XP/streak chip
+- `src/pages/PublicProfile.tsx` (or equivalent `/u/:username` page) — Practice Stats section
+
+All data comes from existing RPCs / tables; no new RLS work.
 
 ---
 
-## Out of scope
+## Out of scope (unless you confirm)
 
-- Notun question authoring (existing ~3000 just regrouped).
-- Topic-level filtering UI.
-- Multilingual support.
+- Renaming/dropping `qb_user_stats` into `user_profiles` columns (not needed — it's already 1:1 by `user_id`).
+- Changing how XP/streak is calculated.
+- Merging practice "rank" with course "GPA" — they remain separate metrics.
 
-Confirm korle implementation shuru korbo.
+Confirm and I'll implement.

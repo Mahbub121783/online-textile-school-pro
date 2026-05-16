@@ -12,6 +12,7 @@ import ProfileCompletenessWidget from '@/components/ProfileCompletenessWidget';
 import StudentIdCard from '@/components/student/StudentIdCard';
 import AcademicCalendarWidget from './AcademicCalendarWidget';
 import GpaWidget from './GpaWidget';
+import PracticeWidget from './PracticeWidget';
 import BatchWidget from './BatchWidget';
 import LiveClassesWidget from './LiveClassesWidget';
 
@@ -220,6 +221,7 @@ const DashboardOverview = () => {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         <BatchWidget />
         <GpaWidget />
+        <PracticeWidget />
         <AcademicCalendarWidget />
       </div>
     </div>

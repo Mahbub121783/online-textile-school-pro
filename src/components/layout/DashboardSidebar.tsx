@@ -1,4 +1,4 @@
-import { BookOpen, LayoutDashboard, Library, Wallet, Settings, LogOut, FileQuestion, ClipboardList, Award, Users, FileText, Bell, ShoppingCart, Heart, Trophy, MessageSquare, ClipboardCheck, GraduationCap, FolderKanban, BarChart3, CalendarCheck, FlaskConical, Briefcase, Mail, AtSign, Presentation } from 'lucide-react';
+import { BookOpen, LayoutDashboard, Library, Wallet, Settings, LogOut, FileQuestion, ClipboardList, Award, Users, FileText, Bell, ShoppingCart, Heart, Trophy, MessageSquare, ClipboardCheck, GraduationCap, FolderKanban, BarChart3, CalendarCheck, FlaskConical, Briefcase, Mail, AtSign, Presentation, Brain } from 'lucide-react';
 import ProfileCompletenessWidget from '@/components/ProfileCompletenessWidget';
 import { NavLink } from '@/components/NavLink';
 import { useLocation } from 'react-router-dom';
@@ -28,6 +28,7 @@ const baseNavItems = [
   { title: 'Assignments', url: '/dashboard/assignments', icon: ClipboardList },
   { title: 'Certificates', url: '/dashboard/certificates', icon: Award },
   { title: 'Leaderboard', url: '/dashboard/leaderboard', icon: Trophy },
+  { title: 'Practice Arena', url: '/dashboard/practice', icon: Brain },
   { title: 'Peer Reviews', url: '/dashboard/peer-reviews', icon: ClipboardCheck },
   { title: 'Attendance', url: '/dashboard/attendance', icon: CalendarCheck },
   { title: 'Transcript', url: '/dashboard/transcript', icon: GraduationCap },
@@ -60,7 +61,7 @@ export function DashboardSidebar() {
 
   // Insert EduMail/Mail before Wallet if student has enrollments
   const navItems = hasPurchasedCourse
-    ? [...baseNavItems.slice(0, 21), ...enrolledOnlyItems, ...baseNavItems.slice(21)]
+    ? [...baseNavItems.slice(0, 22), ...enrolledOnlyItems, ...baseNavItems.slice(22)]
     : baseNavItems;
 
   const isActive = (path: string) =>

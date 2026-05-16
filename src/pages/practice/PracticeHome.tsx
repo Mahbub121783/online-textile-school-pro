@@ -142,9 +142,14 @@ const PracticeHome = () => {
 
               <div className="flex flex-wrap gap-2">
                 {user && (
-                  <Button asChild variant="secondary" size="sm" className="font-bold">
-                    <Link to="/practice/history"><History className="h-4 w-4 mr-2" /> My History</Link>
-                  </Button>
+                  <>
+                    <Button asChild variant="secondary" size="sm" className="font-bold">
+                      <Link to="/dashboard/practice"><Sparkles className="h-4 w-4 mr-2" /> My Dashboard</Link>
+                    </Button>
+                    <Button asChild variant="secondary" size="sm" className="font-bold">
+                      <Link to="/practice/history"><History className="h-4 w-4 mr-2" /> My History</Link>
+                    </Button>
+                  </>
                 )}
                 <Button asChild variant="outline" size="sm" className="bg-white/10 border-white/40 hover:bg-white/20 text-primary-foreground font-bold">
                   <Link to="/practice/leaderboard"><Trophy className="h-4 w-4 mr-2" /> Leaderboard</Link>
