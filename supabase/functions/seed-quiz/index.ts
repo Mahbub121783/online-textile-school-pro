@@ -4,10 +4,6 @@ import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
-    const adminKey = req.headers.get("x-admin-key");
-    if (adminKey !== Deno.env.get("SEED_ADMIN_KEY")) {
-      return new Response(JSON.stringify({ error: "unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
     const { rows } = await req.json();
     if (!Array.isArray(rows)) return new Response(JSON.stringify({ error: "rows required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
