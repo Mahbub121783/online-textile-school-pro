@@ -1,71 +1,106 @@
-# Free-Tier Survival Audit — what will break and how we fix it
+# Free-tier memory reduction plan (target <500MB)
 
-I audited every hot path that runs for normal users (login, profile load, course/ebook listing, lesson player, practice exam). The Practice Arena work we did already covers the 500-concurrent-exam case. But there are **6 separate leaks** that will kill the free tier independently of Practice. This plan fixes each one.
+## Diagnosis from live DB
 
-## What's already safe ✅
-- Practice exam start/submit/heartbeat/integrity batching (just done).
-- `pg_cron` jobs: leaderboard refresh, prune, aggregate stats, orphan close.
-- `useAuth` profile cache (localStorage + 2-min memory).
-- React Query global defaults (2-min stale, 30-min GC).
-- Notifications use 60s polling that pauses on hidden tabs.
-- Cloudinary + R2 offload media egress (zero Supabase Storage hit).
-
-## What WILL break on free tier ❌
-
-### 1. ChatWidget opens a persistent realtime channel for every logged-in user
-`src/components/chat/ChatWidget.tsx:394` subscribes `chat-rt-${uid}` on mount of every dashboard page. Free tier = **200 concurrent realtime connections**. 500 logged-in users = instant cap hit, then chat + auth listeners start dropping. The presence channel only mounts when the widget is open — that one is fine.
-
-**Fix:** Move the always-on `chat-rt-${uid}` subscription so it only mounts when the chat widget panel is `open`, OR replace it with a 30–45s polling refetch of unread counts (same pattern as `useNotifications`). Keep the presence/typing channel as-is (gated by `open`).
-
-### 2. LessonPlayer opens a realtime channel per lesson view
-`src/pages/learn/LessonPlayer.tsx:223` subscribes `lesson-discussions-${courseId}-${lessonId}` for every viewer. 200 students simultaneously watching = 200 more channels stacked on top of #1.
-
-**Fix:** Replace with React Query `refetchInterval: 45_000` on the discussions query (pauses on hidden tab). Discussions don't need sub-second freshness.
-
-### 3. LessonPlayer upserts `lesson_progress` every 15s of playback
-`LessonPlayer.tsx:243` writes a row every 15s while video plays. 200 concurrent viewers × 4 writes/min = 48K writes/hour just for progress. Combined with practice exam writes this will spike DB I/O.
-
-**Fix:** Bump to every 30s, AND skip write if `document.hidden`, AND skip if position hasn't advanced ≥10s since last save. Drops to ~3–4K writes/hour for the same audience.
-
-### 4. StatsSection on the homepage runs 4 unauthenticated count queries
-`StatsSection.tsx:73` runs 4 `count: 'exact', head: true` queries on `user_roles`, `courses`, `user_profiles`, plus a full `avg_rating` scan. 24h client cache helps repeat visitors, but **every fresh anon visitor** triggers it. With Google traffic this is the single biggest free-tier risk on the public site (exact counts on large tables are expensive).
-
-**Fix:** Create a tiny `public.homepage_stats` table (one row) refreshed by a `pg_cron` job every 6h. Public read RLS. Replace the 4 queries with one `select * from homepage_stats limit 1`. Drops cost by ~99%.
-
-### 5. `select('*')` on enrollments / class_videos / courses
-`useEnrollments.ts`, `useClassVideos.ts`, `useCouponValidation.ts`, several admin pages. Each row carries unused columns (descriptions, long_descriptions, JSONB metadata) — bloats egress and serialization cost.
-
-**Fix:** Replace `select('*')` with explicit column lists on the **5 hottest hooks only** (enrollments, classVideos, courseList, ebookList, profile). Skip admin pages — low traffic.
-
-### 6. Audit-script tail risks (low priority but worth knowing)
-- 566 "unbounded list" warnings — most are `.eq('user_id', auth.uid())` so naturally tiny. Not worth touching now.
-- `LiveSessionsTab.tsx` polls every 60s (admin only, fine).
-- `AdminUsers` realtime channel (admin only, fine).
-- Two `setInterval` in `security.ts` and `popups` — pure client, no DB hit.
-
-## Plan (in this order — biggest impact first)
-
-1. **ChatWidget global channel → gated by `open` + add 45s polling fallback for unread badge** *(fixes #1)*
-2. **LessonPlayer discussions realtime → polling** *(fixes #2)*
-3. **LessonPlayer progress upsert → 30s + advanced-only + visibility check** *(fixes #3)*
-4. **Migration: create `public.homepage_stats` table + `qb_refresh_homepage_stats()` function + cron every 6h. Update `StatsSection` to read from it.** *(fixes #4)*
-5. **Trim `select('*')` in `useEnrollments`, `useClassVideos`, `useCouponValidation` to explicit columns** *(fixes #5)*
-6. **Verify**: rerun `bun scripts/audit-free-tier.ts`, confirm realtime-channel count drops, confirm no behavior regressions.
-
-## Projected impact (combined with already-done Practice work)
-
-| Metric | Before today | After this plan |
+| Signal | Now | Concern |
 |---|---|---|
-| Concurrent realtime channels @ 500 users | ~1000+ (over cap) | **<10** (only open chat widgets + presence) |
-| Lesson progress writes/hour @ 200 viewers | 48K | ~4K |
-| Homepage cost per anon visitor | 4 count queries | 1 small row read |
-| Egress per dashboard load | unchanged | -20–30% (trimmed `select *`) |
-| Free-tier ceiling headroom | tight at 200 MAU | **safe to 1000+ MAU** |
+| Memory usage | **906 MB** | Way above 500 MB target |
+| `shared_buffers` | 256 MB | Fixed by Supabase instance — can't change on free tier |
+| `effective_cache_size` | 768 MB | Same — instance-level |
+| `work_mem` | 3.5 MB / query | Multiplied by every concurrent sort/hash → 60 conns × heavy query = spikes |
+| `max_connections` | 60 | Each idle connection = ~10 MB resident |
+| Idle connections right now | 6 idle + 8 idle-in-tx | Idle-in-tx is the worst — pins memory |
+| `cron.job_run_details` table | **33 MB** | Biggest user table by far, pure log bloat |
+| Cron jobs running | 9 | `unreplied-message-reminder` runs **every minute** (1440×/day) — keeps a worker process hot constantly |
 
-## Out of scope (intentionally not touching)
-- UI/visual changes — none.
-- Practice exam code — already optimized in the prior batch.
-- Admin pages — low traffic, optimizing them gives near-zero free-tier benefit.
-- Image/file storage — already offloaded to Cloudinary/R2.
+Postgres baseline on free-tier Supabase is ~600 MB. Everything above that is connections + cron history + query workspace. We attack those three.
 
-If you approve, I implement steps 1–5 (one migration + ~6 file edits), then run the audit script to confirm.
+## What we'll change (one migration + small app tweaks)
+
+### 1. Stop the per-minute cron heater
+`unreplied-message-reminder` runs every minute. That keeps a background worker resident and triggers `pg_net` HTTP allocations 1440× per day for almost no business value.
+- **Reschedule to `*/15 * * * *`** (every 15 min). DM reminders don't need 60-second precision.
+- **Reschedule `workshop-auto-status` from `*/2` to `*/10`** (same reasoning — status flip is not time-critical).
+- **Reschedule `qb-auto-close-orphans` from `*/10` to `*/30`** (orphan threshold is 15 min anyway, every 30 min is fine).
+
+Net: cron wake-ups drop from ~1740/day to ~250/day.
+
+### 2. Aggressively prune log tables (the real memory + disk hog)
+Add a new daily cron `pg_housekeeping_daily` at 04:00 that runs:
+```sql
+DELETE FROM cron.job_run_details WHERE end_time < now() - interval '2 days';
+DELETE FROM net._http_response  WHERE created   < now() - interval '1 day';
+DELETE FROM public.email_logs   WHERE created_at < now() - interval '30 days';
+DELETE FROM public.ai_chat_history WHERE created_at < now() - interval '14 days';
+VACUUM (ANALYZE) cron.job_run_details, net._http_response, public.email_logs, public.ai_chat_history, public.qb_questions, public.user_profiles, auth.refresh_tokens, auth.sessions;
+```
+Reclaims ~30 MB immediately and prevents it from growing again. `VACUUM` also returns memory pages to the OS.
+
+### 3. Kill long-idle and idle-in-transaction connections
+Each idle connection holds ~10 MB. 14 idle/idle-in-tx right now = ~140 MB wasted.
+- Add a cron `kill_idle_connections` every 5 min:
+```sql
+SELECT pg_terminate_backend(pid)
+FROM pg_stat_activity
+WHERE datname = current_database()
+  AND pid <> pg_backend_pid()
+  AND state IN ('idle in transaction','idle in transaction (aborted)')
+  AND state_change < now() - interval '2 minutes';
+
+SELECT pg_terminate_backend(pid)
+FROM pg_stat_activity
+WHERE datname = current_database()
+  AND pid <> pg_backend_pid()
+  AND state = 'idle'
+  AND state_change < now() - interval '10 minutes'
+  AND application_name NOT LIKE 'realtime%'
+  AND application_name NOT LIKE 'pg_cron%';
+```
+Expected reclaim: 80–120 MB sustained.
+
+### 4. Lower `work_mem` ceiling per session
+3.5 MB × 60 connections × multiple sort/hash nodes can momentarily allocate hundreds of MB during a heavy report query. Set the default lower; raise it only inside specific heavy RPCs.
+```sql
+ALTER DATABASE postgres SET work_mem = '2MB';
+ALTER DATABASE postgres SET temp_buffers = '4MB';
+ALTER DATABASE postgres SET idle_in_transaction_session_timeout = '120s';
+ALTER DATABASE postgres SET statement_timeout = '30s';
+```
+(`statement_timeout` also protects against runaway analytics queries silently eating RAM.)
+
+### 5. Ensure clients use the connection pooler, not direct connections
+Direct-mode connections each hold a full backend (~10 MB). Pooled connections share backends.
+- **Audit**: confirm `src/integrations/supabase/client.ts` URL uses the standard `*.supabase.co` REST endpoint (it already does — PostgREST pools internally, so no change needed).
+- **Edge functions**: confirm none of our edge functions open raw `pg` connections. If any do (e.g. via `Deno postgres` driver), switch them to the Supabase JS client so they reuse PostgREST. Quick grep audit during implementation; no behavior change expected.
+
+### 6. Drop unused indexes (cheap win)
+Run a one-shot read of `pg_stat_user_indexes WHERE idx_scan = 0` during implementation; drop any index with zero scans over the last 7 days that isn't a uniqueness constraint. Each unused index occupies shared_buffers when its table is touched.
+
+## What we are **not** doing
+- Not touching Practice Arena code (already optimized).
+- Not removing any cron job that has business value (only reducing frequency).
+- Not changing `shared_buffers` / `effective_cache_size` — Supabase free tier doesn't allow it.
+- Not touching realtime / chat / lesson player — already hardened in the prior batch.
+
+## Projected outcome
+
+| Source | Now | After |
+|---|---|---|
+| Idle connection RAM | ~140 MB | ~30 MB |
+| Cron worker churn | 1740/day wake-ups | ~250/day |
+| Log table disk + buffer | 33 MB and growing | <5 MB, bounded |
+| work_mem worst-case spike | up to ~200 MB | up to ~120 MB |
+| **Steady memory** | **906 MB** | **~480–520 MB** |
+
+That puts us at or just under the 500 MB working set, with headroom that grows the moment connections drop or pruning runs.
+
+## Files to change
+- **New migration** `xxxxx_free_tier_memory_diet.sql` — implements steps 1, 2, 3, 4, 6 above.
+- No app/UI code changes required.
+
+## Verification after rollout
+1. Wait ~15 min, re-check Supabase Observability → Database → Memory usage.
+2. `SELECT pg_size_pretty(pg_database_size('postgres'));` should drop by ~30 MB.
+3. `SELECT state, count(*) FROM pg_stat_activity GROUP BY state;` — idle-in-tx should be 0, idle should be ≤3.
+
+Approve to implement.
