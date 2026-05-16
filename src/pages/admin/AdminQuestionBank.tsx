@@ -70,14 +70,22 @@ const AdminQuestionBank = () => {
   const [questionSearch, setQuestionSearch] = useState('');
   const [questionModal, setQuestionModal] = useState<any>(null);
 
-  const { data: questions = [], isLoading: qLoading } = useQuery({
+  const { data: questions = [], isLoading: qLoading, error: qError } = useQuery({
     queryKey: ['admin-qb-questions', filterSubject, filterDiff, questionSearch],
     queryFn: async () => {
-      let q = supabase.from('qb_questions').select('*, qb_subjects(name)').order('created_at', { ascending: false }).limit(100);
+      let q = supabase
+        .from('qb_questions')
+        .select('*, qb_subjects!qb_questions_subject_id_fkey(name)')
+        .order('created_at', { ascending: false })
+        .limit(100);
       if (filterSubject !== 'all') q = q.eq('subject_id', filterSubject);
       if (filterDiff !== 'all') q = q.eq('difficulty', filterDiff as Diff);
       if (questionSearch.trim()) q = q.ilike('question_text', `%${questionSearch.trim()}%`);
-      const { data } = await q;
+      const { data, error } = await q;
+      if (error) {
+        console.error('[admin-qb-questions] query failed:', error);
+        throw error;
+      }
       return data ?? [];
     },
     enabled: isQuestionsTab,
@@ -405,7 +413,8 @@ const AdminQuestionBank = () => {
                   </CardContent>
                 </Card>
               ))}
-              {questions.length === 0 && <p className="text-muted-foreground py-8 text-center">No questions yet.</p>}
+              {questions.length === 0 && !qError && <p className="text-muted-foreground py-8 text-center">No questions match these filters.</p>}
+              {qError && <p className="text-destructive py-8 text-center text-sm">Failed to load questions: {(qError as any).message}</p>}
             </div>
           )}
         </TabsContent>
