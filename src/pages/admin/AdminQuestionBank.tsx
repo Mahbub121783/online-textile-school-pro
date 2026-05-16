@@ -81,6 +81,8 @@ const AdminQuestionBank = () => {
       return data ?? [];
     },
     enabled: isQuestionsTab,
+    placeholderData: keepPreviousData,
+    staleTime: 30_000,
   });
 
   const saveQuestion = useMutation({
@@ -99,13 +101,13 @@ const AdminQuestionBank = () => {
         if (error) throw error;
       }
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-qb-questions'] }); setQuestionModal(null); toast({ title: 'Saved' }); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-qb-questions'] }); invalidateBootstrap(); setQuestionModal(null); toast({ title: 'Saved' }); },
     onError: (e: any) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
   });
 
   const deleteQuestion = useMutation({
     mutationFn: async (id: string) => { const { error } = await supabase.from('qb_questions').delete().eq('id', id); if (error) throw error; },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-qb-questions'] }); toast({ title: 'Deleted' }); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-qb-questions'] }); invalidateBootstrap(); toast({ title: 'Deleted' }); },
   });
 
   // ---- Bulk import ----
