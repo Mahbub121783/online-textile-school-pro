@@ -70,19 +70,18 @@ const StatsSection = () => {
     queryKey: ['homepage-stats'],
     initialData: readStatsCache,
     queryFn: async () => {
-      const [instructors, courses, students, ratingResult] = await Promise.all([
-        supabase.from('user_roles').select('id', { count: 'exact', head: true }).eq('role', 'instructor'),
-        supabase.from('courses').select('id', { count: 'exact', head: true }).eq('is_published', true),
-        supabase.from('user_profiles').select('id', { count: 'exact', head: true }),
-        supabase.from('courses').select('avg_rating').eq('is_published', true).gt('avg_rating', 0),
-      ]);
-      const ratings = (ratingResult.data ?? []).map((c: any) => Number(c.avg_rating)).filter(Boolean);
-      const avgRating = ratings.length > 0 ? ratings.reduce((a, b) => a + b, 0) / ratings.length : 4.8;
+      // Free-tier: read pre-aggregated row (refreshed by pg_cron every 6h)
+      // instead of 4 expensive count queries per anon visitor.
+      const { data } = await supabase
+        .from('homepage_stats')
+        .select('instructors, courses, students, avg_rating')
+        .limit(1)
+        .maybeSingle();
       const result = {
-        instructors: instructors.count || 0,
-        courses: courses.count || 0,
-        students: students.count || 0,
-        avgRating: Math.round(avgRating * 10) / 10,
+        instructors: data?.instructors ?? 0,
+        courses: data?.courses ?? 0,
+        students: data?.students ?? 0,
+        avgRating: Number(data?.avg_rating ?? 4.8),
       };
       writeStatsCache(result);
       return result;
