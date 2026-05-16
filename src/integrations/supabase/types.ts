@@ -7120,6 +7120,7 @@ export type Database = {
         Args: { _user_id: string; _workshop_id: string }
         Returns: string
       }
+      kill_idle_connections: { Args: never; Returns: number }
       notify_admins: {
         Args: {
           _link?: string
@@ -7129,6 +7130,7 @@ export type Database = {
         }
         Returns: undefined
       }
+      pg_housekeeping_daily: { Args: never; Returns: undefined }
       prune_free_tier_data: { Args: never; Returns: undefined }
       qb_aggregate_question_stats: { Args: never; Returns: undefined }
       qb_auto_close_orphans: { Args: never; Returns: number }
