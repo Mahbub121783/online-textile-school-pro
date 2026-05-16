@@ -34,7 +34,7 @@ const AdminQuestionBank = () => {
   const tab = tabParam && VALID.includes(tabParam) ? tabParam : 'subjects';
   const setTab = (v: string) => navigate(`/admin/question-bank/${v}`);
   const isQuestionsTab = tab === 'questions';
-  const isAiSettingsTab = tab === 'ai-settings';
+  
 
   // ---- Parallel bootstrap: subjects + per-subject counts + KPIs + AI settings in ONE wave ----
   const { data: bootstrap } = useQuestionBankBootstrap();
