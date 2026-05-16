@@ -36,36 +36,12 @@ const AdminQuestionBank = () => {
   const isQuestionsTab = tab === 'questions';
   const isAiSettingsTab = tab === 'ai-settings';
 
-  // ---- KPI strip (heavy: 4 count queries) — cached long, no auto-poll ----
-  const { data: kpi } = useQuery({
-    queryKey: ['admin-qb-kpi'],
-    staleTime: 30 * 1000,
-    gcTime: 30 * 60 * 1000,
-    retry: 0,
-    refetchOnMount: 'always',
-    refetchOnWindowFocus: false,
-    refetchInterval: false,
-    queryFn: async () => {
-      const since24h = new Date(Date.now() - 86400_000).toISOString();
-      const since7d = new Date(Date.now() - 7 * 86400_000).toISOString();
-      const [qs, exams7d, viol24h, live] = await Promise.all([
-        supabase.from('qb_questions').select('id', { count: 'exact', head: true }),
-        supabase.from('qb_exam_sessions').select('id', { count: 'exact', head: true }).gte('started_at', since7d),
-        supabase.from('qb_exam_violations').select('id', { count: 'exact', head: true }).gte('occurred_at', since24h),
-        supabase.from('qb_exam_sessions').select('id', { count: 'exact', head: true }).eq('status', 'in_progress'),
-      ]);
-      return {
-        questions: qs.count ?? 0,
-        exams7d: exams7d.count ?? 0,
-        violations24h: viol24h.count ?? 0,
-        live: live.count ?? 0,
-      };
-    },
-  });
-  const { data: subjects = [] } = useQuery({
-    queryKey: ['admin-qb-subjects'],
-    queryFn: async () => (await supabase.from('qb_subjects').select('*').order('sort_order')).data ?? [],
-  });
+  // ---- Parallel bootstrap: subjects + per-subject counts + KPIs + AI settings in ONE wave ----
+  const { data: bootstrap } = useQuestionBankBootstrap();
+  const subjects = bootstrap?.subjects ?? [];
+  const countsBySubject = bootstrap?.countsBySubject ?? {};
+  const kpi = bootstrap?.kpi;
+  const invalidateBootstrap = () => qc.invalidateQueries({ queryKey: ['admin-qb-bootstrap'] });
   const [subjectModal, setSubjectModal] = useState<any>(null);
 
   const saveSubject = useMutation({
