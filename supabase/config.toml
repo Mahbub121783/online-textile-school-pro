@@ -1,1 +1,4 @@
 project_id = "kaiiyssrwkapromkfidv"
+
+[functions.qb-seed-batch]
+verify_jwt = false
