@@ -108,9 +108,31 @@ const fetchUserData = async (userId: string) => {
 
   try {
     const [profileRes, rolesRes] = await Promise.all([
-      supabase.from('user_profiles').select('*').eq('id', userId).single(),
+      supabase.from('user_profiles').select('*').eq('id', userId).maybeSingle(),
       supabase.from('user_roles').select('role').eq('user_id', userId),
     ]);
+
+    // If profile fetch errored OR returned null, do NOT poison the cache.
+    // Fall back to last known good data so the UI keeps working, and retry next call.
+    if (profileRes.error || !profileRes.data) {
+      const persisted = readPersistedUserData(userId);
+      if (persisted?.profile) {
+        // Refresh roles if we got them, keep good profile
+        const merged = {
+          profile: persisted.profile,
+          roles: rolesRes.data?.map((r: any) => r.role) ?? persisted.roles,
+        };
+        // Short TTL so we retry profile fetch soon
+        profileCache.set(userId, { at: Date.now() - (PROFILE_CACHE_MS - 15_000), data: merged });
+        return merged;
+      }
+      // No persisted fallback — return empty but DON'T cache it
+      return {
+        profile: null,
+        roles: rolesRes.data?.map((r: any) => r.role) ?? [],
+      };
+    }
+
     const data = {
       profile: profileRes.data,
       roles: rolesRes.data?.map((r: any) => r.role) ?? [],
