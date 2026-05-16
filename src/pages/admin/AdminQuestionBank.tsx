@@ -55,13 +55,13 @@ const AdminQuestionBank = () => {
         if (error) throw error;
       }
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-qb-subjects'] }); setSubjectModal(null); toast({ title: 'Saved' }); },
+    onSuccess: () => { invalidateBootstrap(); setSubjectModal(null); toast({ title: 'Saved' }); },
     onError: (e: any) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
   });
 
   const deleteSubject = useMutation({
     mutationFn: async (id: string) => { const { error } = await supabase.from('qb_subjects').delete().eq('id', id); if (error) throw error; },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-qb-subjects'] }); toast({ title: 'Deleted' }); },
+    onSuccess: () => { invalidateBootstrap(); toast({ title: 'Deleted' }); },
   });
 
   // ---- Questions ----
