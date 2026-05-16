@@ -319,7 +319,7 @@ const AdminQuestionBank = () => {
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="flex-wrap h-auto">
           <TabsTrigger value="subjects">Subjects</TabsTrigger>
-          <TabsTrigger value="questions">Questions ({questions.length})</TabsTrigger>
+          <TabsTrigger value="questions">Questions ({kpi?.questions ?? 0})</TabsTrigger>
           <TabsTrigger value="bulk">Bulk Import</TabsTrigger>
           <TabsTrigger value="ai">AI Generate</TabsTrigger>
           <TabsTrigger value="sessions">Live Sessions</TabsTrigger>
