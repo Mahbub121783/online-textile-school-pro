@@ -25,7 +25,6 @@ interface Props {
 
 export default function StudentIdCard({ userId }: Props) {
   const { user, profile } = useAuth();
-  const { isComplete, incomplete, percentage } = useProfileCompleteness(profile);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const cardWrapperRef = useRef<HTMLDivElement>(null);
   const [downloading, setDownloading] = useState(false);
@@ -42,6 +41,8 @@ export default function StudentIdCard({ userId }: Props) {
     },
     enabled: !!targetId,
   });
+
+  const { isComplete, incomplete, percentage, isLoading: completenessLoading } = useProfileCompleteness(targetProfile);
 
   const { data: idCard, isLoading } = useQuery({
     queryKey: ['student-id-card', targetId],
@@ -172,7 +173,7 @@ export default function StudentIdCard({ userId }: Props) {
         </div>
       </CardHeader>
       <CardContent>
-        {!isComplete && !userId && (
+        {!completenessLoading && !isComplete && !userId && (
           <Alert variant="destructive" className="mb-4">
             <AlertTriangle className="h-4 w-4" />
             <AlertDescription>

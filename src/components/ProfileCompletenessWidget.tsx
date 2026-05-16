@@ -11,9 +11,10 @@ interface Props {
 
 const ProfileCompletenessWidget = ({ settingsPath = '/dashboard/settings', compact = false }: Props) => {
   const { profile } = useAuth();
-  const { percentage, isComplete, incomplete } = useProfileCompleteness(profile);
+  const { percentage, isComplete, incomplete, isLoading } = useProfileCompleteness(profile);
   const navigate = useNavigate();
 
+  if (isLoading) return null;
   if (isComplete && compact) return null;
 
   return (

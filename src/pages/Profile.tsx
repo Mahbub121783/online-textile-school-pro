@@ -15,7 +15,7 @@ import { useNavigate } from 'react-router-dom';
 
 const Profile = () => {
   const { user, profile, roles, signOut, loading } = useAuth();
-  const { percentage, isComplete, incomplete } = useProfileCompleteness(profile);
+  const { percentage, isComplete, incomplete, isLoading: completenessLoading } = useProfileCompleteness(profile);
   const navigate = useNavigate();
 
   if (loading) {
@@ -60,6 +60,7 @@ const Profile = () => {
 
         <div className="container py-6">
           {/* Profile Completeness */}
+          {!completenessLoading && (
           <div className={`rounded-xl p-5 mb-6 ${isComplete ? 'bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800' : 'bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800'}`}>
             <div className="flex items-center gap-3 mb-2">
               {isComplete ? (
@@ -77,6 +78,7 @@ const Profile = () => {
               </div>
             )}
           </div>
+          )}
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
             {stats.map((s) => (
@@ -101,6 +103,7 @@ const Profile = () => {
           <div className="mt-6">
             <StudentIdCard />
           </div>
+
 
 
           {/* Install App */}
