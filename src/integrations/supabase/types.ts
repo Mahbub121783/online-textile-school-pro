@@ -7103,11 +7103,17 @@ export type Database = {
         Returns: undefined
       }
       prune_free_tier_data: { Args: never; Returns: undefined }
+      qb_aggregate_question_stats: { Args: never; Returns: undefined }
+      qb_auto_close_orphans: { Args: never; Returns: number }
       qb_get_session_result: { Args: { _session_id: string }; Returns: Json }
       qb_heartbeat: { Args: { _session_id: string }; Returns: undefined }
       qb_is_staff: { Args: { _uid: string }; Returns: boolean }
       qb_log_violation: {
         Args: { _metadata?: Json; _session_id: string; _type: string }
+        Returns: undefined
+      }
+      qb_log_violations_batch: {
+        Args: { _events: Json; _session_id: string }
         Returns: undefined
       }
       qb_refresh_leaderboard: { Args: never; Returns: undefined }
