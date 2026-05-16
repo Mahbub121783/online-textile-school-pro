@@ -7121,6 +7121,9 @@ export type Database = {
         Returns: string
       }
       kill_idle_connections: { Args: never; Returns: number }
+      maybe_run_unreplied_message_reminder: { Args: never; Returns: undefined }
+      maybe_run_workshop_auto_status: { Args: never; Returns: undefined }
+      maybe_run_workshop_reminder: { Args: never; Returns: undefined }
       notify_admins: {
         Args: {
           _link?: string
