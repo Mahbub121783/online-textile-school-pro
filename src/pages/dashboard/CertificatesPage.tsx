@@ -238,7 +238,7 @@ const CertificatesPage = () => {
     <div className="space-y-6">
       <h2 className="font-heading text-2xl font-bold">My Certificates</h2>
 
-      {!isComplete && (
+      {!completenessLoading && !isComplete && (
         <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4">
           <div className="flex items-start gap-3">
             <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
