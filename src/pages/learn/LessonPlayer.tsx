@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Navigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -214,35 +214,24 @@ const LessonPlayer = () => {
     },
   });
 
-  // Realtime subscription for lesson discussions
-  useEffect(() => {
-    if (!course?.id || !lessonId) return;
-    const channelName = `lesson-discussions-${course.id}-${lessonId}-${Date.now()}`;
-    const channel = supabase
-      .channel(channelName)
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'discussions',
-        filter: `course_id=eq.${course.id}`,
-      }, () => {
-        queryClient.invalidateQueries({ queryKey: ['lesson-discussions', course.id, lessonId] });
-      })
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [course?.id, lessonId, queryClient]);
+  // Free-tier: no persistent realtime channel per viewer. Discussions refresh
+  // via React Query (refetchOnWindowFocus + manual invalidate after post).
 
-  // Save video position periodically
+  // Save video position — every 30s, only when tab visible, only if advanced ≥10s
+  const lastSavedRef = useRef<number>(0);
   const handleVideoProgress = useCallback((seconds: number) => {
     if (!lessonId || !user?.id || !course?.id) return;
-    // Debounced save — only every 15 seconds
-    if (Math.floor(seconds) % 15 === 0 && seconds > 0) {
-      supabase.from('lesson_progress').upsert({
-        lesson_id: lessonId,
-        user_id: user.id,
-        last_position_seconds: Math.floor(seconds),
-      }, { onConflict: 'lesson_id,user_id' }).then(() => {});
-    }
+    if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+    const pos = Math.floor(seconds);
+    if (pos <= 0) return;
+    if (pos - lastSavedRef.current < 30) return;
+    if (Math.abs(pos - lastSavedRef.current) < 10) return;
+    lastSavedRef.current = pos;
+    supabase.from('lesson_progress').upsert({
+      lesson_id: lessonId,
+      user_id: user.id,
+      last_position_seconds: pos,
+    }, { onConflict: 'lesson_id,user_id' }).then(() => {});
   }, [lessonId, user?.id, course?.id]);
 
   // Get saved position

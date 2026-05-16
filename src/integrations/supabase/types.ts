@@ -2531,6 +2531,33 @@ export type Database = {
         }
         Relationships: []
       }
+      homepage_stats: {
+        Row: {
+          avg_rating: number
+          courses: number
+          id: boolean
+          instructors: number
+          students: number
+          updated_at: string
+        }
+        Insert: {
+          avg_rating?: number
+          courses?: number
+          id?: boolean
+          instructors?: number
+          students?: number
+          updated_at?: string
+        }
+        Update: {
+          avg_rating?: number
+          courses?: number
+          id?: boolean
+          instructors?: number
+          students?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       id_card_settings: {
         Row: {
           authority_name: string | null
@@ -7147,6 +7174,7 @@ export type Database = {
         Args: { _answers: Json; _session_id: string }
         Returns: Json
       }
+      refresh_homepage_stats: { Args: never; Returns: undefined }
       search_forum: {
         Args: { search_query: string }
         Returns: {

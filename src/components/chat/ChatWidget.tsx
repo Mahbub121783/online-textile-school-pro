@@ -386,18 +386,18 @@ const ChatWidget = () => {
     } catch {}
   }, [message, selectedUser?.userId]);
 
-  // ── Unified realtime: ONE stable channel for messages + requests + notify sound ──
+  // ── Realtime: only when widget is OPEN (free-tier: avoid 500+ persistent channels) ──
+  // When closed, the unread badge refreshes via React Query polling instead.
   const lastNotifiedRef = useRef<number>(Date.now());
   useEffect(() => {
-    if (!user?.id) return;
+    if (!user?.id || !open) return;
     const uid = user.id;
     const ch = supabase.channel(`chat-rt-${uid}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_messages', filter: `receiver_id=eq.${uid}` }, (payload: any) => {
         qc.invalidateQueries({ queryKey: ['chat-messages'] });
         qc.invalidateQueries({ queryKey: ['chat-conversations'] });
-        // notify sound on incoming insert when not viewing this thread
         if (payload.eventType === 'INSERT') {
-          if (open && selectedUserRef.current?.userId === payload.new?.sender_id) return;
+          if (selectedUserRef.current?.userId === payload.new?.sender_id) return;
           const ts = new Date(payload.new?.created_at || Date.now()).getTime();
           if (ts <= lastNotifiedRef.current) return;
           lastNotifiedRef.current = ts;
@@ -420,7 +420,7 @@ const ChatWidget = () => {
       })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
-  }, [user?.id, qc]);
+  }, [user?.id, open, qc]);
 
   // ── Presence & Typing Channel (only when open) ──
   const selectedUserRef = useRef(selectedUser);
