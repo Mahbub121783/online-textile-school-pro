@@ -58,7 +58,8 @@ export const useProfileCompleteness = (profile: any) => {
   }, [fields, profile]);
 
   const incomplete = fields.filter(f => !f.completed);
-  const isComplete = percentage === 100;
+  const isLoading = !profile;
+  const isComplete = !isLoading && percentage === 100;
 
-  return { fields, percentage, incomplete, isComplete };
+  return { fields, percentage, incomplete, isComplete, isLoading };
 };
