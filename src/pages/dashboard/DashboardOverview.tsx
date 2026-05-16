@@ -12,6 +12,7 @@ import ProfileCompletenessWidget from '@/components/ProfileCompletenessWidget';
 import StudentIdCard from '@/components/student/StudentIdCard';
 import AcademicCalendarWidget from './AcademicCalendarWidget';
 import GpaWidget from './GpaWidget';
+import PracticeWidget from './PracticeWidget';
 import BatchWidget from './BatchWidget';
 import LiveClassesWidget from './LiveClassesWidget';
 
