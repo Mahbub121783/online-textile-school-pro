@@ -42,6 +42,8 @@ export default function StudentIdCard({ userId }: Props) {
     enabled: !!targetId,
   });
 
+  const { isComplete, incomplete, percentage, isLoading: completenessLoading } = useProfileCompleteness(targetProfile);
+
   const { data: idCard, isLoading } = useQuery({
     queryKey: ['student-id-card', targetId],
     queryFn: async () => {
