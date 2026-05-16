@@ -31,16 +31,40 @@ interface Options {
   showToasts?: boolean;
 }
 
+interface QueuedEvent { type: ViolationType; metadata: Record<string, unknown>; at: number }
+
+const FLUSH_INTERVAL_MS = 30_000;
+const FLUSH_THRESHOLD = 5;
+
+/**
+ * Free-tier hardening: integrity events are queued client-side and flushed
+ * in batches (≤5 events or every 30s) via `qb_log_violations_batch`,
+ * collapsing what used to be one RPC per event into one RPC per batch.
+ */
 export function useExamIntegrity({ sessionId, enabled, showToasts = true }: Options) {
   const [count, setCount] = useState(0);
   const [events, setEvents] = useState<{ type: ViolationType; at: number }[]>([]);
   const lastFiredRef = useRef<Record<string, number>>({});
+  const queueRef = useRef<QueuedEvent[]>([]);
+
+  const flush = useCallback(async () => {
+    if (!sessionId || queueRef.current.length === 0) return;
+    const batch = queueRef.current.splice(0, queueRef.current.length);
+    try {
+      await supabase.rpc('qb_log_violations_batch', {
+        _session_id: sessionId,
+        _events: batch.map((e) => ({ type: e.type, metadata: e.metadata })) as never,
+      });
+    } catch {
+      /* swallow — never block exam */
+    }
+  }, [sessionId]);
 
   const log = useCallback(
-    async (type: ViolationType, metadata: Record<string, unknown> = {}) => {
+    (type: ViolationType, metadata: Record<string, unknown> = {}) => {
       if (!sessionId) return;
-      // Debounce identical events within 2s
       const now = Date.now();
+      // Debounce identical events within 2s
       if (lastFiredRef.current[type] && now - lastFiredRef.current[type] < 2000) return;
       lastFiredRef.current[type] = now;
 
@@ -56,18 +80,24 @@ export function useExamIntegrity({ sessionId, enabled, showToasts = true }: Opti
         });
       }
 
-      try {
-        await supabase.rpc('qb_log_violation', {
-          _session_id: sessionId,
-          _type: type,
-          _metadata: metadata as never,
-        });
-      } catch {
-        /* swallow — never block exam */
-      }
+      queueRef.current.push({ type, metadata, at: now });
+      if (queueRef.current.length >= FLUSH_THRESHOLD) flush();
     },
-    [sessionId, showToasts],
+    [sessionId, showToasts, flush],
   );
+
+  // Periodic flush + flush on unmount/pagehide
+  useEffect(() => {
+    if (!enabled || !sessionId) return;
+    const iv = setInterval(flush, FLUSH_INTERVAL_MS);
+    const onHide = () => flush();
+    window.addEventListener('pagehide', onHide);
+    return () => {
+      clearInterval(iv);
+      window.removeEventListener('pagehide', onHide);
+      flush();
+    };
+  }, [enabled, sessionId, flush]);
 
   // Tab visibility / window blur / fullscreen / copy-paste-rightclick
   useEffect(() => {
@@ -80,20 +110,10 @@ export function useExamIntegrity({ sessionId, enabled, showToasts = true }: Opti
     const onFsChange = () => {
       if (!document.fullscreenElement) log('fullscreen_exit');
     };
-    const onCopy = (e: ClipboardEvent) => {
-      e.preventDefault();
-      log('copy_attempt');
-    };
-    const onPaste = (e: ClipboardEvent) => {
-      e.preventDefault();
-      log('paste_attempt');
-    };
-    const onContext = (e: MouseEvent) => {
-      e.preventDefault();
-      log('right_click');
-    };
+    const onCopy = (e: ClipboardEvent) => { e.preventDefault(); log('copy_attempt'); };
+    const onPaste = (e: ClipboardEvent) => { e.preventDefault(); log('paste_attempt'); };
+    const onContext = (e: MouseEvent) => { e.preventDefault(); log('right_click'); };
     const onKey = (e: KeyboardEvent) => {
-      // Block common cheat shortcuts
       if ((e.ctrlKey || e.metaKey) && ['c', 'v', 'x', 'a', 'p', 's'].includes(e.key.toLowerCase())) {
         e.preventDefault();
         log(e.key.toLowerCase() === 'v' ? 'paste_attempt' : 'copy_attempt');
