@@ -184,7 +184,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       // Fire-and-forget refresh; UI is already unblocked
       fetchUserData(uid).then(d => {
         if (!mounted) return;
-        setProfile(d.profile);
+        // Don't overwrite a good cached profile with a transient null
+        setProfile((prev: any) => d.profile ?? prev);
         setRoles(d.roles);
         const idle: any = (window as any).requestIdleCallback || ((cb: any) => setTimeout(cb, 5000));
         idle(() => {
