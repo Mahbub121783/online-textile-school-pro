@@ -61,7 +61,7 @@ export function DashboardSidebar() {
 
   // Insert EduMail/Mail before Wallet if student has enrollments
   const navItems = hasPurchasedCourse
-    ? [...baseNavItems.slice(0, 21), ...enrolledOnlyItems, ...baseNavItems.slice(21)]
+    ? [...baseNavItems.slice(0, 22), ...enrolledOnlyItems, ...baseNavItems.slice(22)]
     : baseNavItems;
 
   const isActive = (path: string) =>
