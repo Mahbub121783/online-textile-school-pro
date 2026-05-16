@@ -60,6 +60,7 @@ const Profile = () => {
 
         <div className="container py-6">
           {/* Profile Completeness */}
+          {!completenessLoading && (
           <div className={`rounded-xl p-5 mb-6 ${isComplete ? 'bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800' : 'bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800'}`}>
             <div className="flex items-center gap-3 mb-2">
               {isComplete ? (
