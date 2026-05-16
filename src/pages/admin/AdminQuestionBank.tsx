@@ -18,6 +18,8 @@ import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Plus, Trash2, Pencil, Sparkles, Upload, Brain, Loader2, Download } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
+import { useQuestionBankBootstrap, EMPTY_COUNT } from './question-bank/useQuestionBankBootstrap';
+import { keepPreviousData } from '@tanstack/react-query';
 
 type Diff = 'basic' | 'intermediate' | 'advanced';
 type QType = 'multiple_choice' | 'true_false' | 'short_answer';
@@ -32,38 +34,14 @@ const AdminQuestionBank = () => {
   const tab = tabParam && VALID.includes(tabParam) ? tabParam : 'subjects';
   const setTab = (v: string) => navigate(`/admin/question-bank/${v}`);
   const isQuestionsTab = tab === 'questions';
-  const isAiSettingsTab = tab === 'ai-settings';
+  
 
-  // ---- KPI strip (heavy: 4 count queries) — cached long, no auto-poll ----
-  const { data: kpi } = useQuery({
-    queryKey: ['admin-qb-kpi'],
-    staleTime: 30 * 1000,
-    gcTime: 30 * 60 * 1000,
-    retry: 0,
-    refetchOnMount: 'always',
-    refetchOnWindowFocus: false,
-    refetchInterval: false,
-    queryFn: async () => {
-      const since24h = new Date(Date.now() - 86400_000).toISOString();
-      const since7d = new Date(Date.now() - 7 * 86400_000).toISOString();
-      const [qs, exams7d, viol24h, live] = await Promise.all([
-        supabase.from('qb_questions').select('id', { count: 'exact', head: true }),
-        supabase.from('qb_exam_sessions').select('id', { count: 'exact', head: true }).gte('started_at', since7d),
-        supabase.from('qb_exam_violations').select('id', { count: 'exact', head: true }).gte('occurred_at', since24h),
-        supabase.from('qb_exam_sessions').select('id', { count: 'exact', head: true }).eq('status', 'in_progress'),
-      ]);
-      return {
-        questions: qs.count ?? 0,
-        exams7d: exams7d.count ?? 0,
-        violations24h: viol24h.count ?? 0,
-        live: live.count ?? 0,
-      };
-    },
-  });
-  const { data: subjects = [] } = useQuery({
-    queryKey: ['admin-qb-subjects'],
-    queryFn: async () => (await supabase.from('qb_subjects').select('*').order('sort_order')).data ?? [],
-  });
+  // ---- Parallel bootstrap: subjects + per-subject counts + KPIs + AI settings in ONE wave ----
+  const { data: bootstrap } = useQuestionBankBootstrap();
+  const subjects = bootstrap?.subjects ?? [];
+  const countsBySubject = bootstrap?.countsBySubject ?? {};
+  const kpi = bootstrap?.kpi;
+  const invalidateBootstrap = () => qc.invalidateQueries({ queryKey: ['admin-qb-bootstrap'] });
   const [subjectModal, setSubjectModal] = useState<any>(null);
 
   const saveSubject = useMutation({
@@ -77,13 +55,13 @@ const AdminQuestionBank = () => {
         if (error) throw error;
       }
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-qb-subjects'] }); setSubjectModal(null); toast({ title: 'Saved' }); },
+    onSuccess: () => { invalidateBootstrap(); setSubjectModal(null); toast({ title: 'Saved' }); },
     onError: (e: any) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
   });
 
   const deleteSubject = useMutation({
     mutationFn: async (id: string) => { const { error } = await supabase.from('qb_subjects').delete().eq('id', id); if (error) throw error; },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-qb-subjects'] }); toast({ title: 'Deleted' }); },
+    onSuccess: () => { invalidateBootstrap(); toast({ title: 'Deleted' }); },
   });
 
   // ---- Questions ----
@@ -103,6 +81,8 @@ const AdminQuestionBank = () => {
       return data ?? [];
     },
     enabled: isQuestionsTab,
+    placeholderData: keepPreviousData,
+    staleTime: 30_000,
   });
 
   const saveQuestion = useMutation({
@@ -121,13 +101,13 @@ const AdminQuestionBank = () => {
         if (error) throw error;
       }
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-qb-questions'] }); setQuestionModal(null); toast({ title: 'Saved' }); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-qb-questions'] }); invalidateBootstrap(); setQuestionModal(null); toast({ title: 'Saved' }); },
     onError: (e: any) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
   });
 
   const deleteQuestion = useMutation({
     mutationFn: async (id: string) => { const { error } = await supabase.from('qb_questions').delete().eq('id', id); if (error) throw error; },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-qb-questions'] }); toast({ title: 'Deleted' }); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-qb-questions'] }); invalidateBootstrap(); toast({ title: 'Deleted' }); },
   });
 
   // ---- Bulk import ----
@@ -165,6 +145,7 @@ const AdminQuestionBank = () => {
       toast({ title: `Imported ${rows.length} questions` });
       setBulkText('');
       qc.invalidateQueries({ queryKey: ['admin-qb-questions'] });
+      invalidateBootstrap();
     } catch (e: any) {
       toast({ title: 'Import failed', description: e.message, variant: 'destructive' });
     }
@@ -270,12 +251,7 @@ const AdminQuestionBank = () => {
      });
    };
 
-  // ---- AI settings ----
-  const { data: aiSettings, refetch: refetchSettings } = useQuery({
-    queryKey: ['qb-ai-settings'],
-    queryFn: async () => (await supabase.from('qb_ai_settings').select('*').limit(1).maybeSingle()).data,
-    enabled: isAiSettingsTab,
-  });
+  const aiSettings = bootstrap?.aiSettings ?? null;
   const [settingsForm, setSettingsForm] = useState<any>(null);
   const currentSettings = settingsForm ?? aiSettings ?? { provider: 'groq', model: 'llama-3.3-70b-versatile', temperature: 0.7, fallback_enabled: true, fallback_provider: 'lovable', fallback_model: 'google/gemini-2.5-flash', max_questions_per_run: 25, system_prompt_override: '' };
 
@@ -296,7 +272,7 @@ const AdminQuestionBank = () => {
     if (error) { toast({ title: 'Save failed', description: error.message, variant: 'destructive' }); return; }
     toast({ title: 'AI settings saved' });
     setSettingsForm(null);
-    refetchSettings();
+    invalidateBootstrap();
   };
 
   const PROVIDER_HINTS: Record<string, string> = {
@@ -323,7 +299,7 @@ const AdminQuestionBank = () => {
     toast({ title: `Added ${rows.length} questions to bank` });
     setAiDrafts([]); setAiSelected(new Set());
     qc.invalidateQueries({ queryKey: ['admin-qb-questions'] });
-    qc.invalidateQueries({ queryKey: ['admin-qb-kpi'] });
+    invalidateBootstrap();
   };
 
   return (
@@ -343,7 +319,7 @@ const AdminQuestionBank = () => {
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="flex-wrap h-auto">
           <TabsTrigger value="subjects">Subjects</TabsTrigger>
-          <TabsTrigger value="questions">Questions ({questions.length})</TabsTrigger>
+          <TabsTrigger value="questions">Questions ({kpi?.questions ?? 0})</TabsTrigger>
           <TabsTrigger value="bulk">Bulk Import</TabsTrigger>
           <TabsTrigger value="ai">AI Generate</TabsTrigger>
           <TabsTrigger value="sessions">Live Sessions</TabsTrigger>
@@ -364,20 +340,28 @@ const AdminQuestionBank = () => {
             <Button onClick={() => setSubjectModal({ name: '', slug: '', sort_order: 0, is_active: true })}><Plus className="h-4 w-4 mr-1" /> Add Subject</Button>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {subjects.map((s: any) => (
-              <Card key={s.id}>
-                <CardContent className="p-4 flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-xl">{s.icon || '🧠'}</div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-bold truncate">{s.name}</p>
-                    <p className="text-xs text-muted-foreground truncate">{s.slug}</p>
-                  </div>
-                  {s.is_active ? <Badge>Active</Badge> : <Badge variant="secondary">Hidden</Badge>}
-                  <Button size="icon" variant="ghost" onClick={() => setSubjectModal(s)}><Pencil className="h-4 w-4" /></Button>
-                  <Button size="icon" variant="ghost" onClick={() => { if (confirm('Delete this subject and all its questions?')) deleteSubject.mutate(s.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
-                </CardContent>
-              </Card>
-            ))}
+            {subjects.map((s: any) => {
+              const c = countsBySubject[s.id] ?? EMPTY_COUNT;
+              return (
+                <Card key={s.id}>
+                  <CardContent className="p-4 flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-xl shrink-0">{s.icon || '🧠'}</div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="font-bold truncate">{s.name}</p>
+                        <span className="text-xs font-mono text-muted-foreground shrink-0">{c.total}</span>
+                      </div>
+                      <p className="text-[10px] text-muted-foreground mt-0.5 font-mono">
+                        B:{c.basic} · I:{c.intermediate} · A:{c.advanced}
+                      </p>
+                    </div>
+                    {s.is_active ? <Badge>Active</Badge> : <Badge variant="secondary">Hidden</Badge>}
+                    <Button size="icon" variant="ghost" onClick={() => setSubjectModal(s)}><Pencil className="h-4 w-4" /></Button>
+                    <Button size="icon" variant="ghost" onClick={() => { if (confirm('Delete this subject and all its questions?')) deleteSubject.mutate(s.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         </TabsContent>
 

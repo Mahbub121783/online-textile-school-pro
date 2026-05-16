@@ -7117,6 +7117,16 @@ export type Database = {
         }
         Returns: Json
       }
+      qb_subject_question_counts: {
+        Args: never
+        Returns: {
+          advanced: number
+          basic: number
+          intermediate: number
+          subject_id: string
+          total: number
+        }[]
+      }
       qb_submit_exam: {
         Args: { _answers: Json; _session_id: string }
         Returns: Json
