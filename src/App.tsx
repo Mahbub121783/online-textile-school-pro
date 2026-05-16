@@ -31,6 +31,7 @@ const CartPage = lazy(() => import("./pages/cart/CartPage"));
 const Checkout = lazy(() => import("./pages/cart/Checkout"));
 const DashboardLayout = lazy(() => import("./pages/dashboard/DashboardLayout"));
 const DashboardOverview = lazy(() => import("./pages/dashboard/DashboardOverview"));
+const DashboardPracticePage = lazy(() => import("./pages/dashboard/PracticePage"));
 const MyCourses = lazy(() => import("./pages/dashboard/MyCourses"));
 const MyEbooks = lazy(() => import("./pages/dashboard/MyEbooks"));
 const WalletPage = lazy(() => import("./pages/dashboard/WalletPage"));
