@@ -132,8 +132,12 @@ const PracticeLeaderboard = () => {
                         : <div className="w-full h-full flex items-center justify-center font-bold text-sm">{(r.profile?.full_name || '?')[0]}</div>}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="font-medium text-sm truncate">{r.profile?.full_name || 'Unknown'} {isMe && <Badge variant="outline" className="ml-1 text-[10px]">You</Badge>}</p>
-                      <p className="text-xs text-muted-foreground">{r.total_exams} exams • {Math.round(Number(r.avg_percentage))}% avg</p>
+                      <p className="font-medium text-sm truncate">
+                        {r.profile?.full_name || 'Unknown'} {isMe && <Badge variant="outline" className="ml-1 text-[10px]">You</Badge>}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground font-mono">
+                        {r.profile?.roll_id || '—'} · {r.total_exams} exams · {Math.round(Number(r.avg_percentage))}% avg
+                      </p>
                     </div>
                     <p className="font-bold font-heading">{r.total_points} <span className="text-xs text-muted-foreground font-normal">pts</span></p>
                   </CardContent>
