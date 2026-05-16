@@ -10,24 +10,34 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ArrowLeft, Trophy, Crown, Medal } from 'lucide-react';
 
+type Diff = 'all' | 'basic' | 'intermediate' | 'advanced';
+
 const PracticeLeaderboard = () => {
   const { user } = useAuth();
   const [period, setPeriod] = useState<'all_time' | 'monthly' | 'weekly'>('all_time');
   const [subjectId, setSubjectId] = useState<string>('all');
+  const [difficulty, setDifficulty] = useState<Diff>('all');
 
   const { data: subjects = [] } = useQuery({
     queryKey: ['qb-subjects-lb'],
     queryFn: async () => {
-      const { data } = await supabase.from('qb_subjects').select('id, name').eq('is_active', true).order('name');
+      const { data } = await supabase.from('qb_subjects').select('id, name').eq('is_active', true).order('sort_order');
       return data ?? [];
     },
   });
 
   const { data: rows = [], isLoading } = useQuery({
-    queryKey: ['qb-leaderboard', period, subjectId],
+    queryKey: ['qb-leaderboard', period, subjectId, difficulty],
     queryFn: async () => {
       let q = supabase.from('qb_leaderboard_cache').select('*').eq('period', period).order('total_points', { ascending: false }).limit(100);
       q = subjectId === 'all' ? q.is('subject_id', null) : q.eq('subject_id', subjectId);
+      q = difficulty === 'all' ? q.is('difficulty', null) : q.eq('difficulty', difficulty);
+      // Per-difficulty buckets only exist for all_time — fall back gracefully
+      if (period !== 'all_time' && difficulty !== 'all') {
+        q = supabase.from('qb_leaderboard_cache').select('*').eq('period', period).order('total_points', { ascending: false }).limit(100);
+        q = subjectId === 'all' ? q.is('subject_id', null) : q.eq('subject_id', subjectId);
+        q = q.is('difficulty', null);
+      }
       const { data } = await q;
       const userIds = (data ?? []).map((r: any) => r.user_id);
       if (userIds.length === 0) return [];
@@ -62,11 +72,26 @@ const PracticeLeaderboard = () => {
           <Select value={subjectId} onValueChange={setSubjectId}>
             <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Subjects</SelectItem>
+              <SelectItem value="all">All Departments</SelectItem>
               {subjects.map((s: any) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
             </SelectContent>
           </Select>
+          <Select value={difficulty} onValueChange={(v) => setDifficulty(v as Diff)}>
+            <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Difficulty</SelectItem>
+              <SelectItem value="basic">Basic</SelectItem>
+              <SelectItem value="intermediate">Intermediate</SelectItem>
+              <SelectItem value="advanced">Advanced</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
+
+        {period !== 'all_time' && difficulty !== 'all' && (
+          <p className="text-xs text-muted-foreground mb-3">
+            Difficulty filter currently shows only in <strong>All Time</strong>. Showing combined ranking instead.
+          </p>
+        )}
 
         {myRow && (
           <Card className="mb-4 border-primary/40 bg-primary/5">
@@ -86,7 +111,7 @@ const PracticeLeaderboard = () => {
         ) : rows.length === 0 ? (
           <Card><CardContent className="p-12 text-center text-muted-foreground">
             <Trophy className="h-16 w-16 mx-auto mb-4 opacity-30" />
-            <p>No rankings yet. Be the first!</p>
+            <p>No rankings for this filter yet.</p>
           </CardContent></Card>
         ) : (
           <div className="space-y-1.5">
