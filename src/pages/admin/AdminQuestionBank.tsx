@@ -251,12 +251,7 @@ const AdminQuestionBank = () => {
      });
    };
 
-  // ---- AI settings ----
-  const { data: aiSettings, refetch: refetchSettings } = useQuery({
-    queryKey: ['qb-ai-settings'],
-    queryFn: async () => (await supabase.from('qb_ai_settings').select('*').limit(1).maybeSingle()).data,
-    enabled: isAiSettingsTab,
-  });
+  const aiSettings = bootstrap?.aiSettings ?? null;
   const [settingsForm, setSettingsForm] = useState<any>(null);
   const currentSettings = settingsForm ?? aiSettings ?? { provider: 'groq', model: 'llama-3.3-70b-versatile', temperature: 0.7, fallback_enabled: true, fallback_provider: 'lovable', fallback_model: 'google/gemini-2.5-flash', max_questions_per_run: 25, system_prompt_override: '' };
 
@@ -277,7 +272,7 @@ const AdminQuestionBank = () => {
     if (error) { toast({ title: 'Save failed', description: error.message, variant: 'destructive' }); return; }
     toast({ title: 'AI settings saved' });
     setSettingsForm(null);
-    refetchSettings();
+    invalidateBootstrap();
   };
 
   const PROVIDER_HINTS: Record<string, string> = {
