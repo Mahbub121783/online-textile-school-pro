@@ -4583,7 +4583,7 @@ export type Database = {
           score: number
           started_at: string
           status: string
-          subject_id: string
+          subject_id: string | null
           submitted_at: string | null
           time_limit_seconds: number | null
           time_taken_seconds: number | null
@@ -4608,7 +4608,7 @@ export type Database = {
           score?: number
           started_at?: string
           status?: string
-          subject_id: string
+          subject_id?: string | null
           submitted_at?: string | null
           time_limit_seconds?: number | null
           time_taken_seconds?: number | null
@@ -4633,7 +4633,7 @@ export type Database = {
           score?: number
           started_at?: string
           status?: string
-          subject_id?: string
+          subject_id?: string | null
           submitted_at?: string | null
           time_limit_seconds?: number | null
           time_taken_seconds?: number | null
@@ -4700,6 +4700,7 @@ export type Database = {
         Row: {
           avg_percentage: number
           computed_at: string
+          difficulty: Database["public"]["Enums"]["qb_difficulty"] | null
           id: string
           period: Database["public"]["Enums"]["qb_leaderboard_period"]
           rank: number | null
@@ -4712,6 +4713,7 @@ export type Database = {
         Insert: {
           avg_percentage?: number
           computed_at?: string
+          difficulty?: Database["public"]["Enums"]["qb_difficulty"] | null
           id?: string
           period: Database["public"]["Enums"]["qb_leaderboard_period"]
           rank?: number | null
@@ -4724,6 +4726,7 @@ export type Database = {
         Update: {
           avg_percentage?: number
           computed_at?: string
+          difficulty?: Database["public"]["Enums"]["qb_difficulty"] | null
           id?: string
           period?: Database["public"]["Enums"]["qb_leaderboard_period"]
           rank?: number | null
@@ -7114,6 +7117,13 @@ export type Database = {
           _question_count?: number
           _subject_id: string
           _topic_id?: string
+        }
+        Returns: Json
+      }
+      qb_start_mixed_exam: {
+        Args: {
+          _difficulty: Database["public"]["Enums"]["qb_difficulty"]
+          _question_count?: number
         }
         Returns: Json
       }

@@ -11,9 +11,9 @@ import { toast } from '@/hooks/use-toast';
 import SEOHead from '@/components/SEOHead';
 
 const DIFFICULTY_META = {
-  basic: { label: 'Basic', icon: Brain, color: 'text-emerald-600', bg: 'bg-emerald-50 dark:bg-emerald-950/30', border: 'border-emerald-200 dark:border-emerald-900', mins: 20, desc: 'Foundation level. Perfect to warm up.' },
-  intermediate: { label: 'Intermediate', icon: Zap, color: 'text-amber-600', bg: 'bg-amber-50 dark:bg-amber-950/30', border: 'border-amber-200 dark:border-amber-900', mins: 25, desc: 'Mixed difficulty. Tests applied knowledge.' },
-  advanced: { label: 'Advanced', icon: Flame, color: 'text-rose-600', bg: 'bg-rose-50 dark:bg-rose-950/30', border: 'border-rose-200 dark:border-rose-900', mins: 30, desc: 'Challenging. For mastery seekers.' },
+  basic: { label: 'Basic', icon: Brain, color: 'text-emerald-600', bg: 'bg-emerald-50 dark:bg-emerald-950/30', border: 'border-emerald-200 dark:border-emerald-900', mins: 25, desc: 'Foundation level. Perfect to warm up.' },
+  intermediate: { label: 'Intermediate', icon: Zap, color: 'text-amber-600', bg: 'bg-amber-50 dark:bg-amber-950/30', border: 'border-amber-200 dark:border-amber-900', mins: 30, desc: 'Mixed difficulty. Tests applied knowledge.' },
+  advanced: { label: 'Advanced', icon: Flame, color: 'text-rose-600', bg: 'bg-rose-50 dark:bg-rose-950/30', border: 'border-rose-200 dark:border-rose-900', mins: 35, desc: 'Challenging. For mastery seekers.' },
 } as const;
 
 type Diff = keyof typeof DIFFICULTY_META;
@@ -79,7 +79,7 @@ const PracticeSubject = () => {
         _subject_id: subject!.id,
         _difficulty: difficulty,
         _topic_id: selectedTopic,
-        _question_count: 25,
+        _question_count: 30,
       });
       if (error) throw error;
       const sessionId = (data as any).session_id;
@@ -146,7 +146,7 @@ const PracticeSubject = () => {
                   <h3 className={`font-heading font-bold text-lg ${meta.color}`}>{meta.label}</h3>
                   <p className="text-xs text-muted-foreground mt-1 mb-4">{meta.desc}</p>
                   <ul className="text-xs space-y-1 mb-4 text-muted-foreground">
-                    <li>• 25 random questions</li>
+                    <li>• 30 random questions</li>
                     <li>• {meta.mins} min time limit</li>
                     <li>• Pass mark 60%</li>
                   </ul>
