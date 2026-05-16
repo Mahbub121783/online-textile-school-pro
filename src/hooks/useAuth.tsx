@@ -80,7 +80,8 @@ const AuthContext = createContext<AuthContextType>({
   signOut: async () => {},
 });
 
-const PROFILE_LS_PREFIX = 'ots-auth-cache:';
+// v2: bumped to invalidate any poisoned (null-profile) caches from previous version
+const PROFILE_LS_PREFIX = 'ots-auth-cache-v2:';
 
 const readPersistedUserData = (userId: string): { profile: any | null; roles: string[] } | null => {
   try {
