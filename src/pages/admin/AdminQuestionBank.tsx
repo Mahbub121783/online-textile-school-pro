@@ -340,20 +340,28 @@ const AdminQuestionBank = () => {
             <Button onClick={() => setSubjectModal({ name: '', slug: '', sort_order: 0, is_active: true })}><Plus className="h-4 w-4 mr-1" /> Add Subject</Button>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {subjects.map((s: any) => (
-              <Card key={s.id}>
-                <CardContent className="p-4 flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-xl">{s.icon || '🧠'}</div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-bold truncate">{s.name}</p>
-                    <p className="text-xs text-muted-foreground truncate">{s.slug}</p>
-                  </div>
-                  {s.is_active ? <Badge>Active</Badge> : <Badge variant="secondary">Hidden</Badge>}
-                  <Button size="icon" variant="ghost" onClick={() => setSubjectModal(s)}><Pencil className="h-4 w-4" /></Button>
-                  <Button size="icon" variant="ghost" onClick={() => { if (confirm('Delete this subject and all its questions?')) deleteSubject.mutate(s.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
-                </CardContent>
-              </Card>
-            ))}
+            {subjects.map((s: any) => {
+              const c = countsBySubject[s.id] ?? EMPTY_COUNT;
+              return (
+                <Card key={s.id}>
+                  <CardContent className="p-4 flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-xl shrink-0">{s.icon || '🧠'}</div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="font-bold truncate">{s.name}</p>
+                        <span className="text-xs font-mono text-muted-foreground shrink-0">{c.total}</span>
+                      </div>
+                      <p className="text-[10px] text-muted-foreground mt-0.5 font-mono">
+                        B:{c.basic} · I:{c.intermediate} · A:{c.advanced}
+                      </p>
+                    </div>
+                    {s.is_active ? <Badge>Active</Badge> : <Badge variant="secondary">Hidden</Badge>}
+                    <Button size="icon" variant="ghost" onClick={() => setSubjectModal(s)}><Pencil className="h-4 w-4" /></Button>
+                    <Button size="icon" variant="ghost" onClick={() => { if (confirm('Delete this subject and all its questions?')) deleteSubject.mutate(s.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         </TabsContent>
 
