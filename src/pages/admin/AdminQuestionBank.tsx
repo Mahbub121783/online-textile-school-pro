@@ -18,6 +18,8 @@ import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Plus, Trash2, Pencil, Sparkles, Upload, Brain, Loader2, Download } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
+import { useQuestionBankBootstrap, EMPTY_COUNT } from './question-bank/useQuestionBankBootstrap';
+import { keepPreviousData } from '@tanstack/react-query';
 
 type Diff = 'basic' | 'intermediate' | 'advanced';
 type QType = 'multiple_choice' | 'true_false' | 'short_answer';
