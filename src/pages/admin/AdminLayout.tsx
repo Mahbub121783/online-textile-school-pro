@@ -7,7 +7,7 @@ import NotificationBell from '@/components/layout/NotificationBell';
 import ErrorBoundary from '@/components/ErrorBoundary';
 
 const AdminLayout = () => {
-  const { user, roles, loading, isReady } = useAuth();
+  const { user, roles, loading, isReady, authzLoading } = useAuth();
   const location = useLocation();
   useAdminRealtime();
 
@@ -28,6 +28,14 @@ const AdminLayout = () => {
     location.pathname.startsWith('/admin/class-videos') ||
     location.pathname.startsWith('/admin/class-video-categories');
   const allowed = isAdmin || (isInstructor && isClassVideoRoute);
+
+  if (authzLoading && user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-pulse text-muted-foreground">Checking access...</div>
+      </div>
+    );
+  }
 
   if (!allowed) {
     return (

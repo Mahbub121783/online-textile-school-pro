@@ -8,7 +8,7 @@ import NotificationBell from '@/components/layout/NotificationBell';
 import ErrorBoundary from '@/components/ErrorBoundary';
 
 const InstructorLayout = () => {
-  const { user, roles, loading, isReady } = useAuth();
+  const { user, roles, loading, isReady, authzLoading } = useAuth();
   const location = useLocation();
   useInstructorRealtime();
 
@@ -23,6 +23,14 @@ const InstructorLayout = () => {
   if (!user) return <Navigate to="/auth/login?redirect=/instructor" replace />;
 
   const isInstructor = roles.includes('instructor') || roles.includes('admin') || roles.includes('super_admin');
+  if (authzLoading && user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <PageSkeleton />
+      </div>
+    );
+  }
+
   if (!isInstructor) {
     return (
       <div className="min-h-screen flex items-center justify-center">
