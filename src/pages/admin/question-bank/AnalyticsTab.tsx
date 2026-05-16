@@ -169,8 +169,135 @@ const AnalyticsTab = () => {
           )}
         </CardContent>
       </Card>
+
+      <UserStatsTable />
     </div>
   );
 };
+
+type SortKey = 'total_xp' | 'exams_taken' | 'exams_passed' | 'current_streak' | 'last_practice_date';
+
+const UserStatsTable = () => {
+  const [search, setSearch] = useState('');
+  const [sortBy, setSortBy] = useState<SortKey>('total_xp');
+  const [page, setPage] = useState(0);
+  const PAGE_SIZE = 25;
+
+  const { data: rows = [], isLoading } = useQuery({
+    queryKey: ['admin-qb-user-stats-table', sortBy, page],
+    queryFn: async () => {
+      const { data: stats } = await supabase
+        .from('qb_user_stats')
+        .select('*')
+        .order(sortBy, { ascending: false, nullsFirst: false })
+        .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1);
+      const ids = (stats ?? []).map((s: any) => s.user_id);
+      if (ids.length === 0) return [];
+      const { data: profiles } = await supabase
+        .from('user_profiles').select('id, full_name, roll_id, avatar_url').in('id', ids);
+      const pmap = new Map((profiles ?? []).map((p: any) => [p.id, p]));
+      // Get avg %
+      const { data: sessions } = await supabase
+        .from('qb_exam_sessions')
+        .select('user_id, percentage')
+        .in('user_id', ids)
+        .not('submitted_at', 'is', null);
+      const avgMap = new Map<string, number>();
+      const cntMap = new Map<string, number>();
+      (sessions ?? []).forEach((s: any) => {
+        avgMap.set(s.user_id, (avgMap.get(s.user_id) || 0) + Number(s.percentage));
+        cntMap.set(s.user_id, (cntMap.get(s.user_id) || 0) + 1);
+      });
+      return (stats ?? []).map((s: any) => ({
+        ...s,
+        profile: pmap.get(s.user_id),
+        avg_pct: cntMap.get(s.user_id) ? Math.round((avgMap.get(s.user_id) || 0) / cntMap.get(s.user_id)!) : 0,
+      }));
+    },
+  });
+
+  const filtered = useMemo(() => {
+    if (!search.trim()) return rows;
+    const s = search.toLowerCase();
+    return rows.filter((r: any) =>
+      r.profile?.full_name?.toLowerCase().includes(s) || r.profile?.roll_id?.toLowerCase().includes(s),
+    );
+  }, [rows, search]);
+
+  return (
+    <Card>
+      <CardContent className="p-4 space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-sm font-bold flex items-center gap-2">
+            <Users className="h-4 w-4 text-primary" /> All Users — Exam Stats
+          </p>
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <Search className="h-3.5 w-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Name / roll id"
+                className="h-8 pl-7 w-48 text-xs"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="text-left border-b text-muted-foreground">
+                <th className="py-2 px-2 font-semibold">User</th>
+                <SortHeader label="XP" k="total_xp" sortBy={sortBy} setSortBy={setSortBy} />
+                <SortHeader label="Exams" k="exams_taken" sortBy={sortBy} setSortBy={setSortBy} />
+                <SortHeader label="Passed" k="exams_passed" sortBy={sortBy} setSortBy={setSortBy} />
+                <th className="py-2 px-2 font-semibold">Avg %</th>
+                <SortHeader label="Streak" k="current_streak" sortBy={sortBy} setSortBy={setSortBy} />
+                <SortHeader label="Last" k="last_practice_date" sortBy={sortBy} setSortBy={setSortBy} />
+              </tr>
+            </thead>
+            <tbody>
+              {isLoading && <tr><td colSpan={7} className="py-6 text-center text-muted-foreground">Loading...</td></tr>}
+              {!isLoading && filtered.length === 0 && (
+                <tr><td colSpan={7} className="py-6 text-center text-muted-foreground">No users yet.</td></tr>
+              )}
+              {filtered.map((r: any) => (
+                <tr key={r.user_id} className="border-b hover:bg-muted/30">
+                  <td className="py-2 px-2">
+                    <p className="font-semibold">{r.profile?.full_name || r.user_id.slice(0, 8)}</p>
+                    <p className="text-[10px] text-muted-foreground">{r.profile?.roll_id || ''}</p>
+                  </td>
+                  <td className="py-2 px-2 font-bold text-amber-600 tabular-nums">{r.total_xp}</td>
+                  <td className="py-2 px-2 tabular-nums">{r.exams_taken}</td>
+                  <td className="py-2 px-2 tabular-nums text-emerald-600">{r.exams_passed}</td>
+                  <td className="py-2 px-2 tabular-nums">{r.avg_pct}%</td>
+                  <td className="py-2 px-2 tabular-nums">🔥 {r.current_streak}</td>
+                  <td className="py-2 px-2 text-muted-foreground">{r.last_practice_date || '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="flex items-center justify-between text-xs text-muted-foreground">
+          <span>Page {page + 1} · {filtered.length} shown</span>
+          <div className="flex gap-1">
+            <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage((p) => Math.max(0, p - 1))}>Prev</Button>
+            <Button variant="outline" size="sm" disabled={rows.length < PAGE_SIZE} onClick={() => setPage((p) => p + 1)}>Next</Button>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+};
+
+const SortHeader = ({ label, k, sortBy, setSortBy }: { label: string; k: SortKey; sortBy: SortKey; setSortBy: (k: SortKey) => void }) => (
+  <th className="py-2 px-2 font-semibold">
+    <button onClick={() => setSortBy(k)} className={`inline-flex items-center gap-1 hover:text-foreground ${sortBy === k ? 'text-primary' : ''}`}>
+      {label} <ArrowUpDown className="h-3 w-3" />
+    </button>
+  </th>
+);
 
 export default AnalyticsTab;
