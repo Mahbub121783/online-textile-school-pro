@@ -413,7 +413,8 @@ const AdminQuestionBank = () => {
                   </CardContent>
                 </Card>
               ))}
-              {questions.length === 0 && <p className="text-muted-foreground py-8 text-center">No questions yet.</p>}
+              {questions.length === 0 && !qError && <p className="text-muted-foreground py-8 text-center">No questions match these filters.</p>}
+              {qError && <p className="text-destructive py-8 text-center text-sm">Failed to load questions: {(qError as any).message}</p>}
             </div>
           )}
         </TabsContent>
