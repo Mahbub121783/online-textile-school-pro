@@ -15,7 +15,7 @@ import { useNavigate } from 'react-router-dom';
 
 const Profile = () => {
   const { user, profile, roles, signOut, loading } = useAuth();
-  const { percentage, isComplete, incomplete } = useProfileCompleteness(profile);
+  const { percentage, isComplete, incomplete, isLoading: completenessLoading } = useProfileCompleteness(profile);
   const navigate = useNavigate();
 
   if (loading) {
