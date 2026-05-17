@@ -27,14 +27,20 @@ export function useIsEnrolled(courseId: string | undefined) {
   return useQuery({
     queryKey: ['enrollment', user?.id, courseId],
     enabled: !!user && !!courseId,
+    retry: 0,
     queryFn: async () => {
-      const { data } = await supabase
-        .from('enrollments')
-        .select('id')
-        .eq('user_id', user!.id)
-        .eq('course_id', courseId!)
-        .maybeSingle();
-      return !!data;
+      try {
+        const { data, error } = await supabase
+          .from('enrollments')
+          .select('id')
+          .eq('user_id', user!.id)
+          .eq('course_id', courseId!)
+          .maybeSingle();
+        if (error) return false;
+        return !!data;
+      } catch {
+        return false;
+      }
     },
   });
 }
