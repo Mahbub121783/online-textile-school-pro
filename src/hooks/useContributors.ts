@@ -24,15 +24,20 @@ export const useContributors = (contentType: ContentType, contentId?: string | n
     queryKey: ['content-contributors', contentType, contentId],
     enabled: !!contentId,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('content_contributors')
-        .select('id, user_id, role, sort_order, user_profiles!content_contributors_user_id_fkey(id, full_name, avatar_url, headline)')
-        .eq('content_type', contentType)
-        .eq('content_id', contentId!)
-        .order('sort_order', { ascending: true });
-      if (error) throw error;
-      return (data || []) as unknown as ContributorRow[];
+      try {
+        const { data, error } = await supabase
+          .from('content_contributors')
+          .select('id, user_id, role, sort_order, user_profiles!content_contributors_user_id_fkey(id, full_name, avatar_url, headline)')
+          .eq('content_type', contentType)
+          .eq('content_id', contentId!)
+          .order('sort_order', { ascending: true });
+        if (error) return [];
+        return (data || []) as unknown as ContributorRow[];
+      } catch {
+        return [] as ContributorRow[];
+      }
     },
+    retry: 0,
   });
 
 export const useAddContributor = () => {
