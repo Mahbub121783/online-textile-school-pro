@@ -38,24 +38,26 @@ const CourseDetail = () => {
 
   const { data: course, isLoading } = useQuery({
     queryKey: ['course-detail', slug],
+    retry: 0,
     queryFn: async () => {
-      // Try slug first, then fallback to UUID
-      let { data, error } = await supabase
-        .from('courses')
-        .select('*, categories(name), user_profiles!courses_instructor_id_fkey(id, full_name, avatar_url)')
-        .eq('slug', slug!)
-        .maybeSingle();
-      if (!data) {
-        const res = await supabase
+      try {
+        let { data } = await supabase
           .from('courses')
           .select('*, categories(name), user_profiles!courses_instructor_id_fkey(id, full_name, avatar_url)')
-          .eq('id', slug!)
+          .eq('slug', slug!)
           .maybeSingle();
-        data = res.data;
-        error = res.error;
+        if (!data) {
+          const res = await supabase
+            .from('courses')
+            .select('*, categories(name), user_profiles!courses_instructor_id_fkey(id, full_name, avatar_url)')
+            .eq('id', slug!)
+            .maybeSingle();
+          data = res.data;
+        }
+        return data;
+      } catch {
+        return null;
       }
-      if (error) throw error;
-      return data;
     },
     enabled: !!slug,
   });
@@ -70,43 +72,58 @@ const CourseDetail = () => {
   const { data: sections = [] } = useQuery({
     queryKey: ['course-sections', course?.id],
     enabled: !!course?.id,
+    retry: 0,
     queryFn: async () => {
-      const { data } = await supabase
-        .from('course_sections')
-        .select('*, lessons(*)')
-        .eq('course_id', course!.id)
-        .order('sort_order');
-      return (data ?? []).map((s: any) => ({
-        ...s,
-        lessons: (s.lessons ?? []).sort((a: any, b: any) => (a.sort_order ?? 0) - (b.sort_order ?? 0)),
-      }));
+      try {
+        const { data } = await supabase
+          .from('course_sections')
+          .select('*, lessons(*)')
+          .eq('course_id', course!.id)
+          .order('sort_order');
+        return (data ?? []).map((s: any) => ({
+          ...s,
+          lessons: (s.lessons ?? []).sort((a: any, b: any) => (a.sort_order ?? 0) - (b.sort_order ?? 0)),
+        }));
+      } catch {
+        return [];
+      }
     },
   });
 
   const { data: reviews = [] } = useQuery({
     queryKey: ['course-reviews', course?.id],
     enabled: !!course?.id,
+    retry: 0,
     queryFn: async () => {
-      const { data } = await supabase
-        .from('reviews')
-        .select('*, user_profiles!reviews_user_id_fkey(full_name, avatar_url)')
-        .eq('course_id', course!.id)
-        .eq('is_approved', true)
-        .order('created_at', { ascending: false });
-      return data ?? [];
+      try {
+        const { data } = await supabase
+          .from('reviews')
+          .select('*, user_profiles!reviews_user_id_fkey(full_name, avatar_url)')
+          .eq('course_id', course!.id)
+          .eq('is_approved', true)
+          .order('created_at', { ascending: false });
+        return data ?? [];
+      } catch {
+        return [];
+      }
     },
   });
 
   const { data: qaCount = 0 } = useQuery({
     queryKey: ['course-qa-count', course?.id],
     enabled: !!course?.id,
+    retry: 0,
     queryFn: async () => {
-      const { count } = await supabase
-        .from('discussions')
-        .select('id', { count: 'exact', head: true })
-        .eq('course_id', course!.id)
-        .is('parent_id', null);
-      return count ?? 0;
+      try {
+        const { count } = await supabase
+          .from('discussions')
+          .select('id', { count: 'exact', head: true })
+          .eq('course_id', course!.id)
+          .is('parent_id', null);
+        return count ?? 0;
+      } catch {
+        return 0;
+      }
     },
   });
 
@@ -116,16 +133,21 @@ const CourseDetail = () => {
   const { data: hasPendingOrder } = useQuery({
     queryKey: ['course-pending-order', course?.id, user?.id],
     enabled: !!course?.id && !!user && !isEnrolled,
+    retry: 0,
     queryFn: async () => {
-      const { data } = await supabase
-        .from('order_items')
-        .select('id, orders!inner(user_id, status)')
-        .eq('item_type', 'course')
-        .eq('item_id', course!.id)
-        .eq('orders.user_id', user!.id)
-        .eq('orders.status', 'pending')
-        .limit(1);
-      return (data?.length ?? 0) > 0;
+      try {
+        const { data } = await supabase
+          .from('order_items')
+          .select('id, orders!inner(user_id, status)')
+          .eq('item_type', 'course')
+          .eq('item_id', course!.id)
+          .eq('orders.user_id', user!.id)
+          .eq('orders.status', 'pending')
+          .limit(1);
+        return (data?.length ?? 0) > 0;
+      } catch {
+        return false;
+      }
     },
   });
 

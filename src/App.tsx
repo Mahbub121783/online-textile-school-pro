@@ -206,6 +206,8 @@ const queryClient = new QueryClient({
 const SENSITIVE_KEY_PREFIXES = [
   'auth', 'session', 'me', 'notifications', 'chat', 'messages',
   'cart', 'wallet', 'invoice', 'orders', 'private', 'user-roles',
+  'wishlist', 'enrollment', 'lesson-progress', 'ebook-purchased', 'ebook-pending-order',
+  'course-pending-order',
 ];
 
 const persister = typeof window !== 'undefined'

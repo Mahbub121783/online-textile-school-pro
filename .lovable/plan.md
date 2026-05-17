@@ -1,51 +1,78 @@
-# Profile Completeness 0% Bug — Fix Plan
+# Plan: Stabilize course/eBook detail pages and repair the purchase pipeline
 
-## Bug
+## What I’ll fix
 
-Sidebar widget এবং Student ID Card alert এ "Profile 0% complete. Missing: ." দেখাচ্ছে — অথচ DB তে user (OTS-386588) এর সব field পূরণ আছে (full_name, phone, DOB, gender, blood_group, district, upazila, university, department, batch, professional_role, avatar)। ID Card নিজেই সব data সঠিকভাবে render করছে।
+1. Stop the intermittent crash on single course/eBook pages.
+2. Make add-to-cart, buy-now, cart, and checkout resilient when Supabase has transient failures.
+3. Remove client-side purchase steps that are currently brittle under RLS / partial insert failures.
+4. Verify the exact failure points with safer fallbacks instead of letting `ErrorBoundary` take down the page.
 
-## Root Cause
+## Implementation
 
-`useProfileCompleteness(profile)` এর শুরুতে:
+### 1) Harden course/eBook detail pages
+- Audit the logged-in-only queries on `CourseDetail` and `EbookDetail`.
+- Wrap non-critical queries so transient DB failures do not crash the full page:
+  - enrollment check
+  - pending order check
+  - wishlist state
+  - contributors
+  - review/Q&A count
+- Convert these to fail-soft behavior:
+  - return safe defaults on read failures
+  - show degraded UI states instead of throwing
+- Guard any data access paths that can become `undefined` during partial failures.
 
-```ts
-if (!profile) return 0;          // percentage
-const incomplete = fields.filter(...) // [] when fields=[]
-```
+### 2) Stabilize cart and checkout frontend flow
+- Review `CartPage`, `Checkout`, `useCouponValidation`, cart store, and related helpers.
+- Remove any crash-prone assumptions around coupon/application/payment gateway queries.
+- Ensure cart browsing works even if coupon/gateway/config tables fail temporarily.
+- Add defensive handling for checkout form prefill and derived totals so the page never hard-crashes.
 
-যখন `profile === null` (auth এখনও load হয়নি, বা persisted cache খালি), hook return করে:
-- `percentage: 0`
-- `incomplete: []` → তাই "Missing: ." এ কিছুই নেই
-- `isComplete: false` → তাই red alert দেখায়
+### 3) Refactor purchase flow to tolerate partial DB/RLS failures
+- Inspect the current multi-step client checkout flow:
+  - create order
+  - create order items
+  - create invoice
+  - write coupon usage
+  - send notifications
+  - wallet/manual/free completion logic
+- Refactor so non-critical steps cannot break the whole purchase.
+- Keep critical steps atomic from the UI perspective:
+  - if order creation fails, show a clean actionable error
+  - if optional side-effects fail, continue and log instead of breaking checkout
+- Replace fragile `.single()` usage in risky places with safer read patterns where needed.
 
-ফলে loading state কে "0% incomplete" বলে দেখাচ্ছে। `StudentIdCard` `useAuth().profile` ব্যবহার করছে completeness এর জন্য, কিন্তু card render এর জন্য নিজের আলাদা `targetProfile` query চালাচ্ছে — তাই card data দেখা যাচ্ছে কিন্তু completeness wrong।
+### 4) Align purchase flow with backend constraints
+- Re-check active RLS policies for:
+  - orders
+  - order_items
+  - invoices
+  - coupon_usage / coupon_usages
+  - enrollments
+  - notifications
+  - wallets / wallet_transactions
+- If frontend logic is depending on writes that are no longer allowed or are too fragile, shift that logic to the safer path already used in the project patterns.
+- If a DB-side patch is required, I’ll prepare the migration only for the exact blocked path.
 
-`DashboardSidebar` এর `ProfileCompletenessWidget` ও same useAuth profile এ depend করে, profile null থাকলে "Profile 0%" দেখায়।
+### 5) Verification
+- Re-test:
+  - course detail page while logged in
+  - eBook detail page while logged in
+  - add to cart from catalog and single-product pages
+  - buy now path
+  - cart page load
+  - checkout page load
+  - at least one purchase path (free/manual/wallet depending on current config)
+- Confirm the app now degrades gracefully during transient DB failures instead of showing the global “Something went wrong” screen.
 
-## Fix (frontend only)
+## Technical notes
+- I strongly suspect two overlapping causes:
+  1. non-critical detail-page queries are still throwing during intermittent database/RLS hiccups for logged-in users;
+  2. checkout is too dependent on sequential client-side inserts, so one transient failure breaks the whole purchase flow.
+- I’ll fix both together so this doesn’t keep coming back intermittently.
 
-### 1. `src/hooks/useProfileCompleteness.ts`
-- নতুন `isLoading` field যোগ করো: `isLoading = !profile`
-- profile null হলে `percentage: 0, incomplete: [], isComplete: false, isLoading: true` return করো — consumers এর হাতে decision থাকবে।
-
-### 2. `src/components/student/StudentIdCard.tsx`
-- `useProfileCompleteness(profile)` এর জায়গায় `useProfileCompleteness(targetProfile)` ব্যবহার করো — যেটা card data এর সাথে consistent (same source)।
-- `isLoading` হলে warning alert render skip করো।
-
-### 3. `src/components/ProfileCompletenessWidget.tsx`
-- `isLoading` true হলে কিছুই render করো না (return `null`) — যাতে "0%" flash না হয়।
-
-### 4. `src/pages/Profile.tsx`
-- Same pattern: `isLoading` হলে completeness card skip করো।
-
-### 5. `src/pages/dashboard/CertificatesPage.tsx`
-- Same defensive check।
-
-## Validation
-
-- Logged-in user এর dashboard load করে নিশ্চিত করো sidebar widget আর "Profile 0%" flash দেখায় না — সরাসরি actual percentage (এই user এর ক্ষেত্রে 100%) দেখায়।
-- Student ID Card এ আর red "Missing: ." alert আসবে না।
-
-## Out of Scope
-
-- কোনো DB / RLS / migration change লাগবে না — data fine আছে, শুধুমাত্র frontend render guard issue।
+## Expected result
+- Single course/eBook pages open reliably.
+- Cart and checkout remain usable.
+- Purchase actions fail gracefully with clear errors instead of full-page crashes.
+- Intermittent Supabase instability no longer causes the whole purchase flow to collapse.

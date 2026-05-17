@@ -24,22 +24,26 @@ const EbookDetail = () => {
 
   const { data: ebook, isLoading } = useQuery({
     queryKey: ['ebook', slug],
+    retry: 0,
     queryFn: async () => {
-      // Try slug first, then fallback to UUID
-      let { data } = await supabase
-        .from('ebooks')
-        .select('id, title, slug, description, author, cover_url, price, discount_price, page_count, is_published, category_id, tags, sub_writers, age_restriction, gallery_urls, categories(name)')
-        .eq('slug', slug!)
-        .maybeSingle();
-      if (!data) {
-        const res = await supabase
+      try {
+        let { data } = await supabase
           .from('ebooks')
           .select('id, title, slug, description, author, cover_url, price, discount_price, page_count, is_published, category_id, tags, sub_writers, age_restriction, gallery_urls, categories(name)')
-          .eq('id', slug!)
+          .eq('slug', slug!)
           .maybeSingle();
-        data = res.data;
+        if (!data) {
+          const res = await supabase
+            .from('ebooks')
+            .select('id, title, slug, description, author, cover_url, price, discount_price, page_count, is_published, category_id, tags, sub_writers, age_restriction, gallery_urls, categories(name)')
+            .eq('id', slug!)
+            .maybeSingle();
+          data = res.data;
+        }
+        return data;
+      } catch {
+        return null;
       }
-      return data;
     },
     enabled: !!slug,
   });
@@ -56,32 +60,42 @@ const EbookDetail = () => {
   const { data: isPurchased } = useQuery({
     queryKey: ['ebook-purchased', ebook?.id, user?.id],
     enabled: !!ebook?.id && !!user,
+    retry: 0,
     queryFn: async () => {
-      const { data } = await supabase
-        .from('order_items')
-        .select('id, orders!inner(user_id, status)')
-        .eq('item_type', 'ebook')
-        .eq('item_id', ebook!.id)
-        .eq('orders.user_id', user!.id)
-        .eq('orders.status', 'completed')
-        .maybeSingle();
-      return !!data;
+      try {
+        const { data } = await supabase
+          .from('order_items')
+          .select('id, orders!inner(user_id, status)')
+          .eq('item_type', 'ebook')
+          .eq('item_id', ebook!.id)
+          .eq('orders.user_id', user!.id)
+          .eq('orders.status', 'completed')
+          .limit(1);
+        return (data?.length ?? 0) > 0;
+      } catch {
+        return false;
+      }
     },
   });
 
   const { data: hasPendingOrder } = useQuery({
     queryKey: ['ebook-pending-order', ebook?.id, user?.id],
     enabled: !!ebook?.id && !!user && !isPurchased,
+    retry: 0,
     queryFn: async () => {
-      const { data } = await supabase
-        .from('order_items')
-        .select('id, orders!inner(user_id, status)')
-        .eq('item_type', 'ebook')
-        .eq('item_id', ebook!.id)
-        .eq('orders.user_id', user!.id)
-        .eq('orders.status', 'pending')
-        .limit(1);
-      return (data?.length ?? 0) > 0;
+      try {
+        const { data } = await supabase
+          .from('order_items')
+          .select('id, orders!inner(user_id, status)')
+          .eq('item_type', 'ebook')
+          .eq('item_id', ebook!.id)
+          .eq('orders.user_id', user!.id)
+          .eq('orders.status', 'pending')
+          .limit(1);
+        return (data?.length ?? 0) > 0;
+      } catch {
+        return false;
+      }
     },
   });
 
@@ -89,15 +103,20 @@ const EbookDetail = () => {
   const { data: relatedEbooks = [] } = useQuery({
     queryKey: ['related-ebooks', ebook?.category_id, ebook?.id],
     enabled: !!ebook?.category_id,
+    retry: 0,
     queryFn: async () => {
-      const { data } = await supabase
-        .from('ebooks')
-        .select('id, title, slug, author, cover_url, price, discount_price')
-        .eq('is_published', true)
-        .eq('category_id', ebook!.category_id!)
-        .neq('id', ebook!.id)
-        .limit(4);
-      return data ?? [];
+      try {
+        const { data } = await supabase
+          .from('ebooks')
+          .select('id, title, slug, author, cover_url, price, discount_price')
+          .eq('is_published', true)
+          .eq('category_id', ebook!.category_id!)
+          .neq('id', ebook!.id)
+          .limit(4);
+        return data ?? [];
+      } catch {
+        return [];
+      }
     },
   });
 
