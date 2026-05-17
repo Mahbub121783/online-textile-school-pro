@@ -51,28 +51,32 @@ export function useLessonProgress(courseId: string | undefined) {
   return useQuery({
     queryKey: ['lesson-progress', user?.id, courseId],
     enabled: !!user && !!courseId,
+    retry: 0,
     queryFn: async () => {
-      const { data: sections } = await supabase
-        .from('course_sections')
-        .select('id')
-        .eq('course_id', courseId!);
-      if (!sections?.length) return [];
+      try {
+        const { data: sections } = await supabase
+          .from('course_sections')
+          .select('id')
+          .eq('course_id', courseId!);
+        if (!sections?.length) return [];
 
-      const sectionIds = sections.map((s) => s.id);
-      const { data: lessons } = await supabase
-        .from('lessons')
-        .select('id')
-        .in('section_id', sectionIds);
-      if (!lessons?.length) return [];
+        const sectionIds = sections.map((s) => s.id);
+        const { data: lessons } = await supabase
+          .from('lessons')
+          .select('id')
+          .in('section_id', sectionIds);
+        if (!lessons?.length) return [];
 
-      const lessonIds = lessons.map((l) => l.id);
-      const { data, error } = await supabase
-        .from('lesson_progress')
-        .select('*')
-        .eq('user_id', user!.id)
-        .in('lesson_id', lessonIds);
-      if (error) throw error;
-      return data ?? [];
+        const lessonIds = lessons.map((l) => l.id);
+        const { data } = await supabase
+          .from('lesson_progress')
+          .select('*')
+          .eq('user_id', user!.id)
+          .in('lesson_id', lessonIds);
+        return data ?? [];
+      } catch {
+        return [];
+      }
     },
   });
 }
