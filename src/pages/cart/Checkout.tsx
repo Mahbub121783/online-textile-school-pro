@@ -229,37 +229,43 @@ const Checkout = () => {
       const { error: itemsError } = await supabase.from('order_items').insert(orderItems);
       if (itemsError) throw new Error(`Failed to save order items: ${itemsError.message}`);
 
-      const { error: invoiceError } = await supabase.from('invoices').insert({
-        invoice_number: generateInvoiceNumber(),
-        order_id: orderId,
-        user_id: user.id,
-        subtotal,
-        discount_amount: discountAmount,
-        coupon_code: appliedCoupon?.code || null,
-        total,
-        billing_name: formData.fullName,
-        billing_email: formData.email,
-        billing_phone: formData.phone,
-        billing_district: formData.district,
-        payment_method: effectiveMethod,
-        payment_status: 'pending',
-      });
-      if (invoiceError) console.error('Invoice creation failed:', invoiceError);
+      try {
+        const { error: invoiceError } = await supabase.from('invoices').insert({
+          invoice_number: generateInvoiceNumber(),
+          order_id: orderId,
+          user_id: user.id,
+          subtotal,
+          discount_amount: discountAmount,
+          coupon_code: appliedCoupon?.code || null,
+          total,
+          billing_name: formData.fullName,
+          billing_email: formData.email,
+          billing_phone: formData.phone,
+          billing_district: formData.district,
+          payment_method: effectiveMethod,
+          payment_status: 'pending',
+        });
+        if (invoiceError) console.error('Invoice creation failed:', invoiceError);
+      } catch (e) { console.warn('Invoice insert skipped:', e); }
 
       if (appliedCoupon) {
-        // Record in new coupon_usage table (per-user tracking)
-        await supabase.from('coupon_usage').insert({
-          coupon_id: appliedCoupon.id,
-          user_id: user.id,
-          order_id: orderId,
-        });
-        // Also keep legacy coupon_usages record
-        await supabase.from('coupon_usages').insert({
-          coupon_id: appliedCoupon.id,
-          user_id: user.id,
-          order_id: orderId,
-        });
-        await supabase.from('coupons').update({ used_count: (appliedCoupon.used_count || 0) + 1 }).eq('id', appliedCoupon.id);
+        try {
+          await supabase.from('coupon_usage').insert({
+            coupon_id: appliedCoupon.id,
+            user_id: user.id,
+            order_id: orderId,
+          });
+        } catch (e) { console.warn('coupon_usage insert failed (non-critical):', e); }
+        try {
+          await supabase.from('coupon_usages').insert({
+            coupon_id: appliedCoupon.id,
+            user_id: user.id,
+            order_id: orderId,
+          });
+        } catch (e) { console.warn('coupon_usages insert failed (non-critical):', e); }
+        try {
+          await supabase.from('coupons').update({ used_count: (appliedCoupon.used_count || 0) + 1 }).eq('id', appliedCoupon.id);
+        } catch (e) { console.warn('coupon used_count update failed (non-critical):', e); }
       }
 
       // UddoktaPay
@@ -276,16 +282,20 @@ const Checkout = () => {
 
       // Manual / Bank — pending verification
       if ((isManualPayment || paymentMethod === 'bank') && total > 0) {
-        await supabase.from('notifications').insert({
-          user_id: user.id, type: 'order', title: 'Order Placed',
-          message: `Your order #${orderId.slice(0, 8)} has been placed and is pending verification.`,
-          link: '/dashboard/orders',
-        });
-        await supabase.rpc('notify_admins', {
-          _type: 'order', _title: 'New Order Received',
-          _message: `New order #${orderId.slice(0, 8)} from ${formData.fullName} requires verification.`,
-          _link: '/admin/orders',
-        });
+        try {
+          await supabase.from('notifications').insert({
+            user_id: user.id, type: 'order', title: 'Order Placed',
+            message: `Your order #${orderId.slice(0, 8)} has been placed and is pending verification.`,
+            link: '/dashboard/orders',
+          });
+        } catch (e) { console.warn('user notification skipped:', e); }
+        try {
+          await supabase.rpc('notify_admins', {
+            _type: 'order', _title: 'New Order Received',
+            _message: `New order #${orderId.slice(0, 8)} from ${formData.fullName} requires verification.`,
+            _link: '/admin/orders',
+          });
+        } catch (e) { console.warn('admin notification skipped:', e); }
         clearCart();
         toast.success('Order placed! Your payment will be verified by admin.');
         navigate('/dashboard/orders');
