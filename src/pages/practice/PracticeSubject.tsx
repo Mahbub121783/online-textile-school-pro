@@ -164,6 +164,8 @@ const PracticeSubject = () => {
                     <li>• 30 random questions</li>
                     <li>• {meta.mins} min time limit</li>
                     <li>• Pass mark 60%</li>
+                    <li className="inline-flex items-center gap-1"><Coins className="h-3 w-3" /> Cost: 5 tokens</li>
+                    <li>• Wrong answers: −{d === 'basic' ? 15 : d === 'intermediate' ? 20 : 25}% of points</li>
                   </ul>
                   <Button
                     className="w-full gap-2"
