@@ -4,12 +4,13 @@ import { trackMetaEvent } from '@/lib/metaPixel';
 
 export interface CartItem {
   id: string;
-  type: 'course' | 'ebook';
+  type: 'course' | 'ebook' | 'practice_credits';
   title: string;
   price: number;
   discount_price?: number;
   thumbnail_url?: string;
   instructor_name?: string;
+  credits?: number; // for practice_credits items
 }
 
 interface CartState {

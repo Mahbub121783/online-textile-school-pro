@@ -219,6 +219,18 @@ Deno.serve(async (req) => {
                     });
                   } catch (e) { console.warn("ebook_purchase email failed:", e); }
                 }
+              } else if (item.item_type === "practice_credits") {
+                // 100 credits = 50 BDT  =>  credits = price * 2
+                const credits = Math.round(Number(item.price) * 2);
+                if (credits > 0) {
+                  try {
+                    await supabaseAdmin.rpc("qb_credit_paid_tokens_admin", {
+                      _user_id: order.user_id,
+                      _credits: credits,
+                      _order_id: order.id,
+                    });
+                  } catch (e) { console.warn("practice credit grant failed:", e); }
+                }
               }
             }
           }
