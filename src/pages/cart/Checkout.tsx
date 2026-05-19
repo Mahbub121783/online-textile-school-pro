@@ -73,15 +73,24 @@ const Checkout = () => {
     },
   });
 
-  // Auto-apply coupon from URL
-  const autoApplyCouponFromUrl = async () => {
-    if (couponAutoApplied || !urlCoupon || appliedCoupon) return;
+  // Auto-apply coupon from URL (once per mount)
+  useEffect(() => {
+    if (couponAutoApplied || !urlCoupon || appliedCoupon || !user) return;
     setCouponAutoApplied(true);
-    await applyCoupon(urlCoupon, getTotal(), user?.id, items);
-  };
-  if (urlCoupon && !couponAutoApplied && user) {
-    autoApplyCouponFromUrl();
-  }
+    applyCoupon(urlCoupon, getTotal(), user.id, items).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, urlCoupon]);
+
+  // Sync billing fields once profile loads — don't overwrite user typing
+  useEffect(() => {
+    if (!profile && !user?.email) return;
+    setFormData(prev => ({
+      fullName: prev.fullName || profile?.full_name || '',
+      email: prev.email || user?.email || '',
+      phone: prev.phone || profile?.phone || '',
+      district: prev.district || profile?.district || '',
+    }));
+  }, [profile?.full_name, profile?.phone, profile?.district, user?.email]);
 
   // Fire Meta InitiateCheckout once when user lands on checkout with items
   useEffect(() => {
@@ -311,17 +320,21 @@ const Checkout = () => {
         });
         if (debitError) throw debitError;
         await supabase.from('orders').update({ status: 'completed' }).eq('id', orderId);
-        await supabase.from('invoices').update({ payment_status: 'paid', paid_at: new Date().toISOString() }).eq('order_id', orderId);
+        try {
+          await supabase.from('invoices').update({ payment_status: 'paid', paid_at: new Date().toISOString() }).eq('order_id', orderId);
+        } catch (e) { console.warn('invoice paid-update skipped:', e); }
         await enrollAfterPayment(orderId);
-        await creditInstructorRevenue(orderId, items);
+        try { await creditInstructorRevenue(orderId, items); } catch (e) { console.warn('instructor revenue credit skipped:', e); }
       }
 
       // Free order (100% coupon or free items)
       if (total === 0) {
         await supabase.from('orders').update({ status: 'completed' }).eq('id', orderId);
-        await supabase.from('invoices').update({ payment_status: 'paid', paid_at: new Date().toISOString() }).eq('order_id', orderId);
+        try {
+          await supabase.from('invoices').update({ payment_status: 'paid', paid_at: new Date().toISOString() }).eq('order_id', orderId);
+        } catch (e) { console.warn('invoice paid-update skipped:', e); }
         await enrollAfterPayment(orderId);
-        await creditInstructorRevenue(orderId, items);
+        try { await creditInstructorRevenue(orderId, items); } catch (e) { console.warn('instructor revenue credit skipped:', e); }
       }
 
       clearCart();

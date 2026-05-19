@@ -8,7 +8,7 @@ export interface LessonProgressEntry {
   completed_at: string | null;
 }
 
-export function useLessonProgress() {
+export function useLessonProgressMap() {
   const { user } = useAuth();
 
   const { data: progressMap = new Map<string, LessonProgressEntry>(), isLoading } = useQuery({

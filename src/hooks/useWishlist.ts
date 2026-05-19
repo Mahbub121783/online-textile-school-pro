@@ -10,12 +10,17 @@ export const useWishlist = () => {
   const { data: wishlistIds = new Set<string>() } = useQuery({
     queryKey: ['wishlist-ids', user?.id],
     enabled: !!user,
+    retry: 0,
     queryFn: async () => {
-      const { data } = await supabase
-        .from('wishlists')
-        .select('course_id')
-        .eq('user_id', user!.id);
-      return new Set((data ?? []).map((w) => w.course_id).filter(Boolean) as string[]);
+      try {
+        const { data } = await supabase
+          .from('wishlists')
+          .select('course_id')
+          .eq('user_id', user!.id);
+        return new Set((data ?? []).map((w) => w.course_id).filter(Boolean) as string[]);
+      } catch {
+        return new Set<string>();
+      }
     },
   });
 

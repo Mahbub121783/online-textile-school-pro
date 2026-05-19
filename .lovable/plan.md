@@ -1,78 +1,37 @@
-# Plan: Stabilize course/eBook detail pages and repair the purchase pipeline
+## Remaining issues found (deep audit)
 
-## What I’ll fix
+### 1. `Checkout.tsx` — coupon auto-apply runs during render (CRITICAL)
+Lines 82–84 call `autoApplyCouponFromUrl()` directly in the component body, not inside `useEffect`. This fires on every render until the `couponAutoApplied` flag flips and can race / duplicate-trigger the coupon API. Move to a proper `useEffect` keyed on `[user?.id, urlCoupon]`.
 
-1. Stop the intermittent crash on single course/eBook pages.
-2. Make add-to-cart, buy-now, cart, and checkout resilient when Supabase has transient failures.
-3. Remove client-side purchase steps that are currently brittle under RLS / partial insert failures.
-4. Verify the exact failure points with safer fallbacks instead of letting `ErrorBoundary` take down the page.
+### 2. `Checkout.tsx` — billing form fields stay blank if profile loads late
+`formData` uses lazy state init from `profile`. If `useAuth` hydrates `profile` after mount (the common path — cache miss), name/phone/district stay empty and the user has to retype. Add a `useEffect` that syncs name/phone/district from `profile` only while the field is still empty (don't overwrite user typing).
 
-## Implementation
+### 3. `Checkout.tsx` — wallet & free-order paths abort whole flow if invoice update fails
+After `orders.update({status: completed})` we do `invoices.update(...)` un-guarded. If the invoice insert was skipped (step 2 already wraps it in try/catch), the update finds no row and the unhandled error throws out of the whole handler, leaving the order completed but enrollment never created. Wrap both `invoices.update` calls in try/catch, and only treat `orders.update` + `enrollAfterPayment` as critical.
 
-### 1) Harden course/eBook detail pages
-- Audit the logged-in-only queries on `CourseDetail` and `EbookDetail`.
-- Wrap non-critical queries so transient DB failures do not crash the full page:
-  - enrollment check
-  - pending order check
-  - wishlist state
-  - contributors
-  - review/Q&A count
-- Convert these to fail-soft behavior:
-  - return safe defaults on read failures
-  - show degraded UI states instead of throwing
-- Guard any data access paths that can become `undefined` during partial failures.
+### 4. `EbookDetail.tsx` — bare "Loading..." text feels stuck on slow networks
+Replace with the same `Skeleton` pattern used in `CourseDetail` so the page communicates progress instead of looking frozen.
 
-### 2) Stabilize cart and checkout frontend flow
-- Review `CartPage`, `Checkout`, `useCouponValidation`, cart store, and related helpers.
-- Remove any crash-prone assumptions around coupon/application/payment gateway queries.
-- Ensure cart browsing works even if coupon/gateway/config tables fail temporarily.
-- Add defensive handling for checkout form prefill and derived totals so the page never hard-crashes.
+### 5. `useLessonProgress` — duplicate export with conflicting signatures
+`src/hooks/useLessonProgress.ts` exports `useLessonProgress()` (no args, returns Map) and `src/hooks/useEnrollments.ts` exports `useLessonProgress(courseId)` (returns array). They share a similar `queryKey` prefix which can cause cross-cache invalidation surprises. Rename the map-based one to `useLessonProgressMap` and update its single caller, so the two never collide.
 
-### 3) Refactor purchase flow to tolerate partial DB/RLS failures
-- Inspect the current multi-step client checkout flow:
-  - create order
-  - create order items
-  - create invoice
-  - write coupon usage
-  - send notifications
-  - wallet/manual/free completion logic
-- Refactor so non-critical steps cannot break the whole purchase.
-- Keep critical steps atomic from the UI perspective:
-  - if order creation fails, show a clean actionable error
-  - if optional side-effects fail, continue and log instead of breaking checkout
-- Replace fragile `.single()` usage in risky places with safer read patterns where needed.
+### 6. `useWishlist` — wishlist query has no `retry: 0` / fail-soft
+A transient DB error throws inside `queryFn` (no try/catch). Add the same defensive pattern as other hooks: `retry: 0`, try/catch, return empty Set on failure.
 
-### 4) Align purchase flow with backend constraints
-- Re-check active RLS policies for:
-  - orders
-  - order_items
-  - invoices
-  - coupon_usage / coupon_usages
-  - enrollments
-  - notifications
-  - wallets / wallet_transactions
-- If frontend logic is depending on writes that are no longer allowed or are too fragile, shift that logic to the safer path already used in the project patterns.
-- If a DB-side patch is required, I’ll prepare the migration only for the exact blocked path.
+### Out of scope (intentional, leave as-is)
+- `refetchOnMount: false` on home-page sections — intentional free-tier load reduction.
+- ErrorBoundary auto-reload on chunk errors — already correct.
 
-### 5) Verification
-- Re-test:
-  - course detail page while logged in
-  - eBook detail page while logged in
-  - add to cart from catalog and single-product pages
-  - buy now path
-  - cart page load
-  - checkout page load
-  - at least one purchase path (free/manual/wallet depending on current config)
-- Confirm the app now degrades gracefully during transient DB failures instead of showing the global “Something went wrong” screen.
+## Verification
+- Hard refresh, open `/checkout` with `?coupon=X` and confirm the coupon applies exactly once (network panel).
+- Log in fresh, open `/checkout` — billing fields should pre-fill from profile.
+- Simulate offline mid-checkout for wallet payment — order completes and enrollment is created.
+- Open `/ebooks/<slug>` on throttled network — skeleton shows instead of "Loading...".
+- Grep confirms only one `useLessonProgress` import per file after rename.
 
-## Technical notes
-- I strongly suspect two overlapping causes:
-  1. non-critical detail-page queries are still throwing during intermittent database/RLS hiccups for logged-in users;
-  2. checkout is too dependent on sequential client-side inserts, so one transient failure breaks the whole purchase flow.
-- I’ll fix both together so this doesn’t keep coming back intermittently.
-
-## Expected result
-- Single course/eBook pages open reliably.
-- Cart and checkout remain usable.
-- Purchase actions fail gracefully with clear errors instead of full-page crashes.
-- Intermittent Supabase instability no longer causes the whole purchase flow to collapse.
+## Files to edit
+- `src/pages/cart/Checkout.tsx`
+- `src/pages/ebooks/EbookDetail.tsx`
+- `src/hooks/useLessonProgress.ts` (rename export)
+- `src/hooks/useWishlist.ts`
+- Any caller of the old `useLessonProgress()` (map variant) — likely `LessonPlayer.tsx` / curriculum components; will grep and update.
