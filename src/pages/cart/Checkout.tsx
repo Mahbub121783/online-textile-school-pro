@@ -191,9 +191,12 @@ const Checkout = () => {
         });
         // Ignore duplicate enrollment (already enrolled)
         if (enrollError && !enrollError.message.includes('duplicate')) throw enrollError;
+      } else if (item.type === 'practice_credits' && item.credits) {
+        try {
+          await supabase.rpc('qb_credit_paid_tokens', { _credits: item.credits, _order_id: orderId });
+        } catch (e) { console.warn('practice credit grant failed:', e); }
       }
       // eBook ownership is verified via order_items + completed order status
-      // No separate table needed — the order being "completed" is the proof of purchase
     }
   };
 
