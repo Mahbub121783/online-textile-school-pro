@@ -179,6 +179,7 @@ const PracticeExam = lazy(() => import("./pages/practice/PracticeExam"));
 const PracticeResult = lazy(() => import("./pages/practice/PracticeResult"));
 const PracticeHistory = lazy(() => import("./pages/practice/PracticeHistory"));
 const PracticeLeaderboard = lazy(() => import("./pages/practice/PracticeLeaderboard"));
+const PracticeCredits = lazy(() => import("./pages/practice/PracticeCredits"));
 const AdminQuestionBank = lazy(() => import("./pages/admin/AdminQuestionBank"));
 
 import { isPreviewOrEmbedded } from '@/lib/previewMode';
@@ -441,6 +442,7 @@ const AppRoutes = () => {
           <Route path="/practice/result/:sessionId" element={<PracticeResult />} />
           <Route path="/practice/history" element={<PracticeHistory />} />
           <Route path="/practice/leaderboard" element={<PracticeLeaderboard />} />
+          <Route path="/practice/credits" element={<PracticeCredits />} />
           <Route path="/practice/:slug" element={<PracticeSubject />} />
           {/* Dynamic CMS pages - must be before 404 */}
           <Route path="/:slug" element={<DynamicPage />} />

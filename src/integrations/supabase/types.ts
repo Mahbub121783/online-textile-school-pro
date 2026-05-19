@@ -7197,6 +7197,10 @@ export type Database = {
         Args: { _credits: number; _order_id: string }
         Returns: undefined
       }
+      qb_credit_paid_tokens_admin: {
+        Args: { _credits: number; _order_id: string; _user_id: string }
+        Returns: undefined
+      }
       qb_get_session_result: { Args: { _session_id: string }; Returns: Json }
       qb_get_token_status: { Args: never; Returns: Json }
       qb_heartbeat: { Args: { _session_id: string }; Returns: undefined }
