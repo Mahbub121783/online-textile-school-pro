@@ -26,6 +26,7 @@ const PracticeExam = () => {
   const navigate = useNavigate();
   const [questions, setQuestions] = useState<Question[]>([]);
   const [timeLimit, setTimeLimit] = useState(0);
+  const [difficulty, setDifficulty] = useState<'basic' | 'intermediate' | 'advanced' | null>(null);
   const [loading, setLoading] = useState(true);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [flagged, setFlagged] = useState<Set<string>>(new Set());
@@ -47,7 +48,7 @@ const PracticeExam = () => {
     (async () => {
       const { data: session, error } = await supabase
         .from('qb_exam_sessions')
-        .select('question_ids, time_limit_seconds, started_at, submitted_at, resume_count')
+        .select('question_ids, time_limit_seconds, started_at, submitted_at, resume_count, difficulty')
         .eq('id', sessionId)
         .maybeSingle();
       if (error || !session) {
@@ -72,6 +73,7 @@ const PracticeExam = () => {
       }));
       setQuestions(final);
       setTimeLimit(session.time_limit_seconds || 1800);
+      setDifficulty(session.difficulty as any);
 
       try {
         const raw = localStorage.getItem(LS_KEY(sessionId));
@@ -218,6 +220,11 @@ const PracticeExam = () => {
           </div>
 
           <div className="flex items-center gap-1.5 sm:gap-2">
+            {difficulty && (
+              <Badge variant="outline" className={`text-[10px] ${focusMode ? 'border-rose-700 text-rose-300' : 'border-rose-300 text-rose-600'}`}>
+                −{difficulty === 'basic' ? 15 : difficulty === 'intermediate' ? 20 : 25}% / wrong
+              </Badge>
+            )}
             <IntegrityBanner count={integrity.count} focusMode={focusMode} />
             <div className={`flex items-center gap-1.5 font-mono font-bold px-2.5 sm:px-3 py-1 rounded-lg text-sm ${timerColor}`}>
               <Clock className="h-4 w-4" />

@@ -81,6 +81,9 @@ const PracticeResult = () => {
   const subject = data?.subject;
   const questions = data?.questions || [];
   const correctCount = questions.filter((q: any) => q.is_correct).length;
+  const wrongCount = questions.filter((q: any) => q.selected_answer && !q.is_correct).length;
+  const skippedCount = questions.filter((q: any) => !q.selected_answer).length;
+  const penaltyTotal = questions.reduce((sum: number, q: any) => sum + (Number(q.penalty_points) || 0), 0);
   const pct = session ? Math.round(Number(session.percentage)) : 0;
   const animatedPct = useCountUp(pct);
   const xp = session?.xp_earned || 0;
@@ -175,6 +178,34 @@ const PracticeResult = () => {
             </CardContent>
           </Card>
         </motion.div>
+
+        {/* Score breakdown */}
+        <Card className="mt-6 border-2">
+          <CardContent className="p-5">
+            <h3 className="font-heading font-bold text-lg mb-3">Score Breakdown</h3>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center text-sm">
+              <div className="p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/30">
+                <p className="text-emerald-700 dark:text-emerald-400 font-heading font-bold text-xl tabular-nums">{correctCount}</p>
+                <p className="text-[11px] uppercase text-muted-foreground">Correct</p>
+              </div>
+              <div className="p-3 rounded-lg bg-rose-50 dark:bg-rose-950/30">
+                <p className="text-rose-700 dark:text-rose-400 font-heading font-bold text-xl tabular-nums">{wrongCount}</p>
+                <p className="text-[11px] uppercase text-muted-foreground">Wrong (−{penaltyTotal} pts)</p>
+              </div>
+              <div className="p-3 rounded-lg bg-muted">
+                <p className="font-heading font-bold text-xl tabular-nums">{skippedCount}</p>
+                <p className="text-[11px] uppercase text-muted-foreground">Skipped</p>
+              </div>
+              <div className="p-3 rounded-lg bg-primary/10">
+                <p className="font-heading font-bold text-xl tabular-nums text-primary">{session.score}</p>
+                <p className="text-[11px] uppercase text-muted-foreground">Net Score</p>
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground mt-3">
+              Penalty per wrong answer: −{session.difficulty === 'basic' ? 15 : session.difficulty === 'intermediate' ? 20 : 25}% of question points.
+            </p>
+          </CardContent>
+        </Card>
 
         {/* New badges */}
         {recentlyEarned.length > 0 && (

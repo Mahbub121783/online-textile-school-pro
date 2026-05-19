@@ -5,10 +5,11 @@ import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, Brain, Zap, Flame, Lock, Play, Loader2 } from 'lucide-react';
+import { ArrowLeft, Brain, Zap, Flame, Lock, Play, Loader2, Coins } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from '@/hooks/use-toast';
 import SEOHead from '@/components/SEOHead';
+import { useTokenBalance } from '@/hooks/useTokenBalance';
 
 const DIFFICULTY_META = {
   basic: { label: 'Basic', icon: Brain, color: 'text-emerald-600', bg: 'bg-emerald-50 dark:bg-emerald-950/30', border: 'border-emerald-200 dark:border-emerald-900', mins: 25, desc: 'Foundation level. Perfect to warm up.' },
@@ -24,6 +25,8 @@ const PracticeSubject = () => {
   const { user } = useAuth();
   const [selectedTopic, setSelectedTopic] = useState<string | null>(null);
   const [starting, setStarting] = useState<Diff | null>(null);
+  const { data: tokens, refetch: refetchTokens } = useTokenBalance();
+  const canStart = !!tokens?.is_staff || ((tokens?.daily_balance ?? 0) + (tokens?.paid_balance ?? 0)) >= 5;
 
   const { data: subject, isLoading } = useQuery({
     queryKey: ['qb-subject', slug],
@@ -73,6 +76,11 @@ const PracticeSubject = () => {
       navigate('/auth/login');
       return;
     }
+    if (!canStart) {
+      toast({ title: 'Not enough tokens', description: 'Department exam costs 5 tokens. Top up to continue.', variant: 'destructive' });
+      navigate('/practice/credits');
+      return;
+    }
     setStarting(difficulty);
     try {
       const { data, error } = await supabase.rpc('qb_start_exam', {
@@ -82,10 +90,17 @@ const PracticeSubject = () => {
         _question_count: 30,
       });
       if (error) throw error;
+      refetchTokens();
       const sessionId = (data as any).session_id;
       navigate(`/practice/exam/${sessionId}`);
     } catch (e: any) {
-      toast({ title: 'Could not start exam', description: e.message || 'Try again later.', variant: 'destructive' });
+      const msg = String(e.message || '');
+      if (msg.includes('insufficient_tokens')) {
+        toast({ title: 'Not enough tokens', description: 'Top up to continue.', variant: 'destructive' });
+        navigate('/practice/credits');
+      } else {
+        toast({ title: 'Could not start exam', description: msg || 'Try again later.', variant: 'destructive' });
+      }
     } finally {
       setStarting(null);
     }
@@ -149,6 +164,8 @@ const PracticeSubject = () => {
                     <li>• 30 random questions</li>
                     <li>• {meta.mins} min time limit</li>
                     <li>• Pass mark 60%</li>
+                    <li className="inline-flex items-center gap-1"><Coins className="h-3 w-3" /> Cost: 5 tokens</li>
+                    <li>• Wrong answers: −{d === 'basic' ? 15 : d === 'intermediate' ? 20 : 25}% of points</li>
                   </ul>
                   <Button
                     className="w-full gap-2"

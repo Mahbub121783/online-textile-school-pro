@@ -7,12 +7,13 @@ import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Brain, Trophy, History, ArrowRight, Sparkles, Zap, Flame, Award, Shuffle, Loader2 } from 'lucide-react';
+import { Brain, Trophy, History, ArrowRight, Sparkles, Zap, Flame, Award, Shuffle, Loader2, Coins } from 'lucide-react';
 import SEOHead from '@/components/SEOHead';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import BottomNav from '@/components/layout/BottomNav';
 import { toast } from '@/hooks/use-toast';
+import { useTokenBalance } from '@/hooks/useTokenBalance';
 
 type Diff = 'basic' | 'intermediate' | 'advanced';
 
@@ -21,6 +22,9 @@ const PracticeHome = () => {
   const navigate = useNavigate();
   const [mixedDiff, setMixedDiff] = useState<Diff>('basic');
   const [starting, setStarting] = useState(false);
+  const { data: tokens, refetch: refetchTokens } = useTokenBalance();
+  const totalTokens = (tokens?.daily_balance ?? 0) + (tokens?.paid_balance ?? 0);
+  const canMixed = !!tokens?.is_staff || totalTokens >= 10;
 
   const { data: subjects = [], isLoading } = useQuery({
     queryKey: ['qb-subjects'],
@@ -81,13 +85,25 @@ const PracticeHome = () => {
 
   const startMixed = async () => {
     if (!user) { toast({ title: 'Please sign in to start', variant: 'destructive' }); navigate('/auth/login'); return; }
+    if (!canMixed) {
+      toast({ title: 'Not enough tokens', description: 'Mixed exam costs 10 tokens. Buy more credits to continue.', variant: 'destructive' });
+      navigate('/practice/credits');
+      return;
+    }
     setStarting(true);
     try {
       const { data, error } = await supabase.rpc('qb_start_mixed_exam', { _difficulty: mixedDiff, _question_count: 30 });
       if (error) throw error;
+      refetchTokens();
       navigate(`/practice/exam/${(data as any).session_id}`);
     } catch (e: any) {
-      toast({ title: 'Could not start exam', description: e.message, variant: 'destructive' });
+      const msg = String(e.message || '');
+      if (msg.includes('insufficient_tokens')) {
+        toast({ title: 'Not enough tokens', description: 'Buy more credits to continue.', variant: 'destructive' });
+        navigate('/practice/credits');
+      } else {
+        toast({ title: 'Could not start exam', description: msg, variant: 'destructive' });
+      }
       setStarting(false);
     }
   };
@@ -140,7 +156,7 @@ const PracticeHome = () => {
                 </div>
               )}
 
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-2 items-center">
                 {user && (
                   <>
                     <Button asChild variant="secondary" size="sm" className="font-bold">
@@ -154,6 +170,19 @@ const PracticeHome = () => {
                 <Button asChild variant="outline" size="sm" className="bg-white/10 border-white/40 hover:bg-white/20 text-primary-foreground font-bold">
                   <Link to="/practice/leaderboard"><Trophy className="h-4 w-4 mr-2" /> Leaderboard</Link>
                 </Button>
+                {user && tokens && (
+                  <Link to="/practice/credits" className="inline-flex items-center gap-2 bg-white/15 hover:bg-white/25 backdrop-blur rounded-full px-3.5 py-1.5 text-xs font-bold transition">
+                    <Coins className="h-3.5 w-3.5" />
+                    {tokens.is_staff ? (
+                      <span>Staff · unlimited</span>
+                    ) : (
+                      <span className="tabular-nums">
+                        {tokens.daily_balance} daily · {tokens.paid_balance} paid
+                      </span>
+                    )}
+                    <span className="opacity-70">· Top up</span>
+                  </Link>
+                )}
               </div>
             </div>
           </motion.div>
@@ -189,11 +218,16 @@ const PracticeHome = () => {
                 ))}
               </div>
 
-              <Button size="lg" onClick={startMixed} disabled={starting} className="bg-accent text-accent-foreground hover:bg-accent/90 font-bold gap-2">
-                {starting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Shuffle className="h-4 w-4" />}
-                Start Mixed Exam
-                <ArrowRight className="h-4 w-4" />
-              </Button>
+              <div className="flex flex-wrap items-center gap-3">
+                <Button size="lg" onClick={startMixed} disabled={starting} className="bg-accent text-accent-foreground hover:bg-accent/90 font-bold gap-2">
+                  {starting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Shuffle className="h-4 w-4" />}
+                  Start Mixed Exam
+                  <ArrowRight className="h-4 w-4" />
+                </Button>
+                <span className="text-xs text-muted-foreground inline-flex items-center gap-1">
+                  <Coins className="h-3.5 w-3.5" /> Cost: 10 tokens · Penalty: −15/20/25% per wrong
+                </span>
+              </div>
             </CardContent>
           </Card>
 

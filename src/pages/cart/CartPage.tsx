@@ -58,12 +58,12 @@ const CartPage = () => {
                     {item.thumbnail_url ? (
                       <img src={item.thumbnail_url} alt={item.title} className="w-full h-full object-cover" />
                     ) : (
-                      <span className="text-xl opacity-40">{item.type === 'course' ? '📚' : '📖'}</span>
+                      <span className="text-xl opacity-40">{item.type === 'course' ? '📚' : item.type === 'ebook' ? '📖' : '🪙'}</span>
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
                     <h3 className="font-heading font-semibold text-sm truncate">{item.title}</h3>
-                    <p className="text-xs text-muted-foreground capitalize">{item.type}</p>
+                    <p className="text-xs text-muted-foreground capitalize">{item.type.replace('_', ' ')}</p>
                   </div>
                   <div className="text-right shrink-0">
                     <p className="font-heading font-bold">৳{(item.discount_price ?? item.price).toLocaleString()}</p>
