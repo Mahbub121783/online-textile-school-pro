@@ -156,7 +156,7 @@ const PracticeHome = () => {
                 </div>
               )}
 
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-2 items-center">
                 {user && (
                   <>
                     <Button asChild variant="secondary" size="sm" className="font-bold">
@@ -170,6 +170,19 @@ const PracticeHome = () => {
                 <Button asChild variant="outline" size="sm" className="bg-white/10 border-white/40 hover:bg-white/20 text-primary-foreground font-bold">
                   <Link to="/practice/leaderboard"><Trophy className="h-4 w-4 mr-2" /> Leaderboard</Link>
                 </Button>
+                {user && tokens && (
+                  <Link to="/practice/credits" className="inline-flex items-center gap-2 bg-white/15 hover:bg-white/25 backdrop-blur rounded-full px-3.5 py-1.5 text-xs font-bold transition">
+                    <Coins className="h-3.5 w-3.5" />
+                    {tokens.is_staff ? (
+                      <span>Staff · unlimited</span>
+                    ) : (
+                      <span className="tabular-nums">
+                        {tokens.daily_balance} daily · {tokens.paid_balance} paid
+                      </span>
+                    )}
+                    <span className="opacity-70">· Top up</span>
+                  </Link>
+                )}
               </div>
             </div>
           </motion.div>
@@ -205,11 +218,16 @@ const PracticeHome = () => {
                 ))}
               </div>
 
-              <Button size="lg" onClick={startMixed} disabled={starting} className="bg-accent text-accent-foreground hover:bg-accent/90 font-bold gap-2">
-                {starting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Shuffle className="h-4 w-4" />}
-                Start Mixed Exam
-                <ArrowRight className="h-4 w-4" />
-              </Button>
+              <div className="flex flex-wrap items-center gap-3">
+                <Button size="lg" onClick={startMixed} disabled={starting} className="bg-accent text-accent-foreground hover:bg-accent/90 font-bold gap-2">
+                  {starting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Shuffle className="h-4 w-4" />}
+                  Start Mixed Exam
+                  <ArrowRight className="h-4 w-4" />
+                </Button>
+                <span className="text-xs text-muted-foreground inline-flex items-center gap-1">
+                  <Coins className="h-3.5 w-3.5" /> Cost: 10 tokens · Penalty: −15/20/25% per wrong
+                </span>
+              </div>
             </CardContent>
           </Card>
 
