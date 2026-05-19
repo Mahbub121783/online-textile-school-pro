@@ -7,12 +7,13 @@ import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Brain, Trophy, History, ArrowRight, Sparkles, Zap, Flame, Award, Shuffle, Loader2 } from 'lucide-react';
+import { Brain, Trophy, History, ArrowRight, Sparkles, Zap, Flame, Award, Shuffle, Loader2, Coins } from 'lucide-react';
 import SEOHead from '@/components/SEOHead';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import BottomNav from '@/components/layout/BottomNav';
 import { toast } from '@/hooks/use-toast';
+import { useTokenBalance } from '@/hooks/useTokenBalance';
 
 type Diff = 'basic' | 'intermediate' | 'advanced';
 
@@ -21,6 +22,9 @@ const PracticeHome = () => {
   const navigate = useNavigate();
   const [mixedDiff, setMixedDiff] = useState<Diff>('basic');
   const [starting, setStarting] = useState(false);
+  const { data: tokens, refetch: refetchTokens } = useTokenBalance();
+  const totalTokens = (tokens?.daily_balance ?? 0) + (tokens?.paid_balance ?? 0);
+  const canMixed = !!tokens?.is_staff || totalTokens >= 10;
 
   const { data: subjects = [], isLoading } = useQuery({
     queryKey: ['qb-subjects'],
@@ -81,13 +85,25 @@ const PracticeHome = () => {
 
   const startMixed = async () => {
     if (!user) { toast({ title: 'Please sign in to start', variant: 'destructive' }); navigate('/auth/login'); return; }
+    if (!canMixed) {
+      toast({ title: 'Not enough tokens', description: 'Mixed exam costs 10 tokens. Buy more credits to continue.', variant: 'destructive' });
+      navigate('/practice/credits');
+      return;
+    }
     setStarting(true);
     try {
       const { data, error } = await supabase.rpc('qb_start_mixed_exam', { _difficulty: mixedDiff, _question_count: 30 });
       if (error) throw error;
+      refetchTokens();
       navigate(`/practice/exam/${(data as any).session_id}`);
     } catch (e: any) {
-      toast({ title: 'Could not start exam', description: e.message, variant: 'destructive' });
+      const msg = String(e.message || '');
+      if (msg.includes('insufficient_tokens')) {
+        toast({ title: 'Not enough tokens', description: 'Buy more credits to continue.', variant: 'destructive' });
+        navigate('/practice/credits');
+      } else {
+        toast({ title: 'Could not start exam', description: msg, variant: 'destructive' });
+      }
       setStarting(false);
     }
   };
