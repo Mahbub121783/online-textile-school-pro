@@ -1,37 +1,109 @@
-## Remaining issues found (deep audit)
+# Practice Arena: Negative Marking + Token / Credit System
 
-### 1. `Checkout.tsx` — coupon auto-apply runs during render (CRITICAL)
-Lines 82–84 call `autoApplyCouponFromUrl()` directly in the component body, not inside `useEffect`. This fires on every render until the `couponAutoApplied` flag flips and can race / duplicate-trigger the coupon API. Move to a proper `useEffect` keyed on `[user?.id, urlCoupon]`.
+## 1. Negative marking (per question)
 
-### 2. `Checkout.tsx` — billing form fields stay blank if profile loads late
-`formData` uses lazy state init from `profile`. If `useAuth` hydrates `profile` after mount (the common path — cache miss), name/phone/district stay empty and the user has to retype. Add a `useEffect` that syncs name/phone/district from `profile` only while the field is still empty (don't overwrite user typing).
+Penalty as a **percentage of that question's `points`**, applied only when a user submits a **wrong** answer (blank/skipped = 0, no penalty).
 
-### 3. `Checkout.tsx` — wallet & free-order paths abort whole flow if invoice update fails
-After `orders.update({status: completed})` we do `invoices.update(...)` un-guarded. If the invoice insert was skipped (step 2 already wraps it in try/catch), the update finds no row and the unhandled error throws out of the whole handler, leaving the order completed but enrollment never created. Wrap both `invoices.update` calls in try/catch, and only treat `orders.update` + `enrollAfterPayment` as critical.
+| Difficulty   | Penalty per wrong |
+|--------------|-------------------|
+| basic        | −15%              |
+| intermediate | −20%              |
+| advanced     | −25%              |
 
-### 4. `EbookDetail.tsx` — bare "Loading..." text feels stuck on slow networks
-Replace with the same `Skeleton` pattern used in `CourseDetail` so the page communicates progress instead of looking frozen.
+- Applied inside `qb_submit_exam` using the session's `difficulty`.
+- Final `score` is floored at 0 (never negative); `percentage = score / total_points * 100`.
+- XP unchanged in shape but only counts correct answers (existing formula already does this).
+- New column `qb_exam_answers.penalty_points int default 0` (cheap, no per-row update of `qb_questions`).
+- Result page shows: Correct, Wrong (−X pts), Skipped, Net Score.
 
-### 5. `useLessonProgress` — duplicate export with conflicting signatures
-`src/hooks/useLessonProgress.ts` exports `useLessonProgress()` (no args, returns Map) and `src/hooks/useEnrollments.ts` exports `useLessonProgress(courseId)` (returns array). They share a similar `queryKey` prefix which can cause cross-cache invalidation surprises. Rename the map-based one to `useLessonProgressMap` and update its single caller, so the two never collide.
+## 2. Daily token system (free users)
 
-### 6. `useWishlist` — wishlist query has no `retry: 0` / fail-soft
-A transient DB error throws inside `queryFn` (no try/catch). Add the same defensive pattern as other hooks: `retry: 0`, try/catch, return empty Set on failure.
+Single shared daily pool of **20 tokens / day**.
 
-### Out of scope (intentional, leave as-is)
-- `refetchOnMount: false` on home-page sections — intentional free-tier load reduction.
-- ErrorBoundary auto-reload on chunk errors — already correct.
+| Exam type         | Cost per exam |
+|-------------------|---------------|
+| Mixed (all dept)  | 10 tokens     |
+| Department exam   | 5 tokens      |
 
-## Verification
-- Hard refresh, open `/checkout` with `?coupon=X` and confirm the coupon applies exactly once (network panel).
-- Log in fresh, open `/checkout` — billing fields should pre-fill from profile.
-- Simulate offline mid-checkout for wallet payment — order completes and enrollment is created.
-- Open `/ebooks/<slug>` on throttled network — skeleton shows instead of "Loading...".
-- Grep confirms only one `useLessonProgress` import per file after rename.
+→ free user can do 2 mixed, or 4 dept, or any combo summing ≤ 20.
 
-## Files to edit
-- `src/pages/cart/Checkout.tsx`
-- `src/pages/ebooks/EbookDetail.tsx`
-- `src/hooks/useLessonProgress.ts` (rename export)
-- `src/hooks/useWishlist.ts`
-- Any caller of the old `useLessonProgress()` (map variant) — likely `LessonPlayer.tsx` / curriculum components; will grep and update.
+New table `qb_user_tokens`:
+- `user_id uuid PK`
+- `daily_balance int` — auto-refills to 20 on first use of a new day (lazy refill, no cron → free-tier friendly)
+- `paid_balance int default 0` — purchased credits, never expire
+- `last_refill_date date`
+- `updated_at`
+
+Spending order on exam start: **daily first, then paid**. Unused daily tokens **do not carry over** (reset on next-day first call) — matches "existing remove hobe jodi free user hoy".
+
+Implementation:
+- New RPC `qb_consume_tokens(_cost int)` — `SECURITY DEFINER`, does refill-if-stale + atomic debit, raises `'insufficient_tokens'` when neither bucket covers `_cost`. Wrapped in a single `UPDATE ... RETURNING` for concurrency safety.
+- `qb_start_exam` calls it with cost = 5, `qb_start_mixed_exam` with cost = 10, **before** inserting the session. If it fails, no session is created.
+- New helper RPC `qb_get_token_status()` → `{daily_balance, paid_balance, refills_at}` for the UI badge.
+
+Admins/instructors bypass via existing `qb_is_staff()`.
+
+## 3. Purchasable credits (paid_balance)
+
+- Price: **100 credits = 50 BDT** → 0.5 BDT / credit. Any quantity ≥ 100 (step of 100).
+- Reuses existing cart + checkout flow.
+
+Cart changes (`src/stores/cartStore.ts`):
+- Extend `CartItem.type` to `'course' | 'ebook' | 'practice_credits'`.
+- New optional field `credits?: number` (for the credit pack).
+
+Checkout changes (`src/pages/cart/Checkout.tsx`):
+- Skip course-only side effects (enrollment, instructor revenue share, installment plans) for `practice_credits` items.
+- After order completes, for each `practice_credits` item call new RPC `qb_credit_paid_tokens(_credits int, _order_id uuid)` which adds to `paid_balance` and writes an `admin_activity_log`-style row in a new `qb_token_ledger` (id, user_id, delta, reason, ref_id, created_at) for auditing/refunds.
+- Wallet & free-order paths reuse the same crediting call (already wrapped in try/catch per recent hardening).
+
+Order line storage:
+- `order_items` already stores `item_type` + `item_id` + price; for credits, `item_type='practice_credits'`, `item_id = <pack uuid>`, store `credits` in the existing `meta` jsonb (or `quantity` field if present — confirmed during implementation by reading the table).
+
+## 4. UI
+
+- **`PracticeHome.tsx`**: token badge in hero ("Tokens: 15 daily · 200 paid"), buy-credits CTA, disable start buttons + tooltip when insufficient.
+- **`PracticeSubject.tsx`**: show cost (5) on each Start button, same disabled state.
+- **New page `src/pages/practice/PracticeCredits.tsx`** at `/practice/credits`:
+  - Pack picker (100, 500, 1000, 2500, custom) → adds to cart and routes to `/checkout`.
+  - Shows current balances + last 10 ledger rows.
+- **`PracticeResult.tsx`**: show net score breakdown (correct +X, wrong −Y, net = Z).
+- **`PracticeExam.tsx`**: small "Penalty: −15%/wrong" chip in the header so users know before answering.
+- New hook `useTokenBalance()` (1-min stale, no realtime → free-tier friendly).
+
+## 5. Free-tier / performance considerations
+
+- All new logic lives in 1 table (`qb_user_tokens`, 1 row/user) + 1 small ledger; lazy refill avoids any cron job.
+- No new triggers on hot tables; reuses existing `qb_submit_exam` (one extra column write).
+- Token RPCs are tiny single-row updates → negligible CPU.
+- UI queries: 1 extra row fetch per home page mount, cached 60 s.
+
+## 6. Files touched
+
+```
+DB migration (single file)
+  - alter qb_exam_answers add penalty_points
+  - create table qb_user_tokens
+  - create table qb_token_ledger
+  - rpc qb_consume_tokens, qb_get_token_status, qb_credit_paid_tokens
+  - replace qb_submit_exam (add negative marking)
+  - replace qb_start_exam / qb_start_mixed_exam (call qb_consume_tokens)
+  - RLS: users read own rows; SECURITY DEFINER RPCs handle writes
+
+Frontend
+  - src/stores/cartStore.ts                 (extend type + credits field)
+  - src/pages/cart/Checkout.tsx             (skip course-only steps for credits; call credit RPC)
+  - src/pages/practice/PracticeHome.tsx     (token badge, disable states, link to /practice/credits)
+  - src/pages/practice/PracticeSubject.tsx  (cost label + disabled state)
+  - src/pages/practice/PracticeExam.tsx     (penalty chip)
+  - src/pages/practice/PracticeResult.tsx   (net score breakdown)
+  - src/pages/practice/PracticeCredits.tsx  (new)
+  - src/hooks/useTokenBalance.ts            (new)
+  - src/App.tsx                             (route /practice/credits)
+```
+
+## 7. Out of scope (confirm before adding)
+
+- No refunds on credits (paid_balance is final).
+- Admin UI to gift/adjust tokens — can be added later via the same `qb_token_ledger`.
+- No SMS/email on low balance.
