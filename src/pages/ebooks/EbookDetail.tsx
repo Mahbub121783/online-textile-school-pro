@@ -139,7 +139,25 @@ const EbookDetail = () => {
     return (
       <div className="min-h-screen flex flex-col">
         <UtilityBar /><Header />
-        <main className="flex-1 flex items-center justify-center"><div className="animate-pulse">Loading...</div></main>
+        <main className="flex-1 pb-14 lg:pb-0">
+          <div className="container py-6">
+            <div className="flex flex-col md:flex-row gap-8">
+              <div className="w-full md:w-80 shrink-0">
+                <div className="aspect-[3/4] bg-muted rounded-xl animate-pulse" />
+              </div>
+              <div className="flex-1 space-y-4">
+                <div className="h-8 w-3/4 bg-muted rounded animate-pulse" />
+                <div className="h-5 w-1/3 bg-muted rounded animate-pulse" />
+                <div className="h-10 w-40 bg-muted rounded animate-pulse" />
+                <div className="space-y-2 pt-4">
+                  <div className="h-4 w-full bg-muted rounded animate-pulse" />
+                  <div className="h-4 w-5/6 bg-muted rounded animate-pulse" />
+                  <div className="h-4 w-4/6 bg-muted rounded animate-pulse" />
+                </div>
+              </div>
+            </div>
+          </div>
+        </main>
         <Footer /><BottomNav />
       </div>
     );
