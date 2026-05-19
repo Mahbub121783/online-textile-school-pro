@@ -4555,6 +4555,7 @@ export type Database = {
           created_at: string
           id: string
           is_correct: boolean
+          penalty_points: number
           question_id: string
           selected_answer: string | null
           session_id: string
@@ -4564,6 +4565,7 @@ export type Database = {
           created_at?: string
           id?: string
           is_correct?: boolean
+          penalty_points?: number
           question_id: string
           selected_answer?: string | null
           session_id: string
@@ -4573,6 +4575,7 @@ export type Database = {
           created_at?: string
           id?: string
           is_correct?: boolean
+          penalty_points?: number
           question_id?: string
           selected_answer?: string | null
           session_id?: string
@@ -4893,6 +4896,33 @@ export type Database = {
         }
         Relationships: []
       }
+      qb_token_ledger: {
+        Row: {
+          created_at: string
+          delta: number
+          id: string
+          reason: string
+          ref_id: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          delta: number
+          id?: string
+          reason: string
+          ref_id?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          delta?: number
+          id?: string
+          reason?: string
+          ref_id?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       qb_topics: {
         Row: {
           created_at: string
@@ -5007,6 +5037,30 @@ export type Database = {
           longest_streak?: number
           perfect_scores?: number
           total_xp?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      qb_user_tokens: {
+        Row: {
+          daily_balance: number
+          last_refill_date: string
+          paid_balance: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          daily_balance?: number
+          last_refill_date?: string
+          paid_balance?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          daily_balance?: number
+          last_refill_date?: string
+          paid_balance?: number
           updated_at?: string
           user_id?: string
         }
@@ -7138,7 +7192,13 @@ export type Database = {
       prune_free_tier_data: { Args: never; Returns: undefined }
       qb_aggregate_question_stats: { Args: never; Returns: undefined }
       qb_auto_close_orphans: { Args: never; Returns: number }
+      qb_consume_tokens: { Args: { _cost: number }; Returns: undefined }
+      qb_credit_paid_tokens: {
+        Args: { _credits: number; _order_id: string }
+        Returns: undefined
+      }
       qb_get_session_result: { Args: { _session_id: string }; Returns: Json }
+      qb_get_token_status: { Args: never; Returns: Json }
       qb_heartbeat: { Args: { _session_id: string }; Returns: undefined }
       qb_is_staff: { Args: { _uid: string }; Returns: boolean }
       qb_log_violation: {
