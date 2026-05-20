@@ -18,6 +18,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import CreditBalancePill from '@/components/layout/CreditBalancePill';
 
 const TRENDING_SEARCHES = [
   'Spinning Technology',
@@ -202,6 +203,8 @@ const Header = () => {
               </Link>
             )}
 
+            <CreditBalancePill />
+
             <Link to="/cart" className="relative">
               <Button variant="ghost" size="icon" className="h-9 w-9">
                 <ShoppingCart className="h-[18px] w-[18px]" />
@@ -309,6 +312,7 @@ const Header = () => {
 
           <div className="flex items-center gap-0.5">
             <ThemeToggle />
+            <CreditBalancePill />
             {user && <NotificationBell basePath="/dashboard" />}
             <Link to="/cart" className="relative">
               <Button variant="ghost" size="icon" className="h-9 w-9">
