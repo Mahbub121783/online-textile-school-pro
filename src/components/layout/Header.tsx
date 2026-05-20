@@ -203,6 +203,8 @@ const Header = () => {
               </Link>
             )}
 
+            <CreditBalancePill />
+
             <Link to="/cart" className="relative">
               <Button variant="ghost" size="icon" className="h-9 w-9">
                 <ShoppingCart className="h-[18px] w-[18px]" />
