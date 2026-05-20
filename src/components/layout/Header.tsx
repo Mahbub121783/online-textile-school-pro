@@ -312,6 +312,7 @@ const Header = () => {
 
           <div className="flex items-center gap-0.5">
             <ThemeToggle />
+            <CreditBalancePill />
             {user && <NotificationBell basePath="/dashboard" />}
             <Link to="/cart" className="relative">
               <Button variant="ghost" size="icon" className="h-9 w-9">
