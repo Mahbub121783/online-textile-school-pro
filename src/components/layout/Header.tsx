@@ -18,6 +18,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import CreditBalancePill from '@/components/layout/CreditBalancePill';
 
 const TRENDING_SEARCHES = [
   'Spinning Technology',
