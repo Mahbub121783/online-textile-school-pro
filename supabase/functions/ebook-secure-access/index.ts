@@ -231,7 +231,10 @@ async function streamEbookFile(
   let fetchError: string | null = null;
 
   try {
-    const fetchHeaders: Record<string, string> = {};
+    const fetchHeaders: Record<string, string> = {
+      // Force raw bytes — gzip on a range response breaks PDF.js byte math
+      'Accept-Encoding': 'identity',
+    };
     if (rangeHeader) fetchHeaders["Range"] = rangeHeader;
 
     fileResponse = await fetch(fileUrl, { headers: fetchHeaders });

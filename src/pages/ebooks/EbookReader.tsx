@@ -23,6 +23,13 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
   import.meta.url
 ).toString();
 
+// One-time diagnostic log so version-mismatch issues are obvious in console
+if (typeof window !== 'undefined' && !(window as any).__pdfjsVersionLogged) {
+  (window as any).__pdfjsVersionLogged = true;
+  // eslint-disable-next-line no-console
+  console.info(`[EbookReader] pdfjs-dist v${pdfjsLib.version} | worker: ${pdfjsLib.GlobalWorkerOptions.workerSrc}`);
+}
+
 type ReadingMode = 'light' | 'dark' | 'sepia';
 type FitMode = 'width' | 'page';
 type HighlightColor = 'yellow' | 'green' | 'blue' | 'pink';
@@ -218,8 +225,18 @@ const EbookReader = () => {
       await initPdf(pdf);
     } catch (err: any) {
       console.error('EbookReader load error:', err);
+      const msg = String(err?.message || err || '');
+      const status = err?.status || err?.response?.status;
+      // Auto-retry once on auth failures (expired/invalid token) — generate a fresh token transparently
+      const isAuthErr = status === 401 || status === 403 || /401|403|Unauthorized|Forbidden|Invalid or expired token/i.test(msg);
+      if (isAuthErr && !(window as any).__ebookRetryDone) {
+        (window as any).__ebookRetryDone = true;
+        console.info('[EbookReader] auth error — regenerating token and retrying once');
+        setLoadingProgress(5);
+        return loadPdf();
+      }
       setLoadingState('error');
-      setErrorMsg(err.message || 'Failed to load ebook');
+      setErrorMsg(msg || 'Failed to load ebook');
     }
   };
 
@@ -735,10 +752,26 @@ const EbookReader = () => {
           {isMissingFile ? 'eBook is being prepared' : 'Unable to load eBook'}
         </h2>
         <p className="text-muted-foreground text-sm max-w-md text-center">{errorMsg}</p>
+        <p className="text-[10px] text-muted-foreground/70 max-w-md text-center font-mono">
+          pdfjs v{pdfjsLib.version}
+        </p>
         <div className="flex flex-wrap gap-2 justify-center">
           <Button onClick={() => navigate(-1)} variant="outline">
             <ArrowLeft className="h-4 w-4 mr-2" /> Go Back
           </Button>
+          {!isMissingFile && (
+            <Button
+              onClick={() => {
+                (window as any).__ebookRetryDone = false;
+                setErrorMsg('');
+                setLoadingState('loading');
+                setLoadingProgress(5);
+                loadPdf();
+              }}
+            >
+              Retry
+            </Button>
+          )}
           {isMissingFile && (
             <Button onClick={() => navigate('/contact')}>Contact Support</Button>
           )}
