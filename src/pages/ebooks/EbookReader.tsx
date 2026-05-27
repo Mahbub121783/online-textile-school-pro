@@ -225,8 +225,18 @@ const EbookReader = () => {
       await initPdf(pdf);
     } catch (err: any) {
       console.error('EbookReader load error:', err);
+      const msg = String(err?.message || err || '');
+      const status = err?.status || err?.response?.status;
+      // Auto-retry once on auth failures (expired/invalid token) — generate a fresh token transparently
+      const isAuthErr = status === 401 || status === 403 || /401|403|Unauthorized|Forbidden|Invalid or expired token/i.test(msg);
+      if (isAuthErr && !(window as any).__ebookRetryDone) {
+        (window as any).__ebookRetryDone = true;
+        console.info('[EbookReader] auth error — regenerating token and retrying once');
+        setLoadingProgress(5);
+        return loadPdf();
+      }
       setLoadingState('error');
-      setErrorMsg(err.message || 'Failed to load ebook');
+      setErrorMsg(msg || 'Failed to load ebook');
     }
   };
 
