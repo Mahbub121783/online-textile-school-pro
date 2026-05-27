@@ -7244,6 +7244,10 @@ export type Database = {
         Args: { _answers: Json; _session_id: string }
         Returns: Json
       }
+      recalc_course_lesson_stats: {
+        Args: { _course_id: string }
+        Returns: undefined
+      }
       refresh_homepage_stats: { Args: never; Returns: undefined }
       search_forum: {
         Args: { search_query: string }
