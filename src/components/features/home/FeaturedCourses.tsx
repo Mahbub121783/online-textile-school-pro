@@ -31,6 +31,7 @@ const FeaturedCourses = () => {
         .from('courses')
         .select('id, title, slug, price, discount_price, avg_rating, enrollment_count, total_duration_minutes, difficulty_level, thumbnail_url, category_id, categories(name), user_profiles!courses_instructor_id_fkey(full_name), created_at')
         .eq('is_published', true)
+        .gt('total_lessons', 0)
         .order('created_at', { ascending: false })
         .limit(8);
       return data ?? [];
