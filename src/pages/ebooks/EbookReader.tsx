@@ -23,6 +23,13 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
   import.meta.url
 ).toString();
 
+// One-time diagnostic log so version-mismatch issues are obvious in console
+if (typeof window !== 'undefined' && !(window as any).__pdfjsVersionLogged) {
+  (window as any).__pdfjsVersionLogged = true;
+  // eslint-disable-next-line no-console
+  console.info(`[EbookReader] pdfjs-dist v${pdfjsLib.version} | worker: ${pdfjsLib.GlobalWorkerOptions.workerSrc}`);
+}
+
 type ReadingMode = 'light' | 'dark' | 'sepia';
 type FitMode = 'width' | 'page';
 type HighlightColor = 'yellow' | 'green' | 'blue' | 'pink';
