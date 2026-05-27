@@ -752,10 +752,26 @@ const EbookReader = () => {
           {isMissingFile ? 'eBook is being prepared' : 'Unable to load eBook'}
         </h2>
         <p className="text-muted-foreground text-sm max-w-md text-center">{errorMsg}</p>
+        <p className="text-[10px] text-muted-foreground/70 max-w-md text-center font-mono">
+          pdfjs v{pdfjsLib.version}
+        </p>
         <div className="flex flex-wrap gap-2 justify-center">
           <Button onClick={() => navigate(-1)} variant="outline">
             <ArrowLeft className="h-4 w-4 mr-2" /> Go Back
           </Button>
+          {!isMissingFile && (
+            <Button
+              onClick={() => {
+                (window as any).__ebookRetryDone = false;
+                setErrorMsg('');
+                setLoadingState('loading');
+                setLoadingProgress(5);
+                loadPdf();
+              }}
+            >
+              Retry
+            </Button>
+          )}
           {isMissingFile && (
             <Button onClick={() => navigate('/contact')}>Contact Support</Button>
           )}
