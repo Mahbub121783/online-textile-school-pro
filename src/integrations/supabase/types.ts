@@ -7040,6 +7040,21 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      admin_list_student_ids: {
+        Args: { p_search?: string; p_status?: string }
+        Returns: string[]
+      }
+      admin_list_students: {
+        Args: {
+          p_asc?: boolean
+          p_limit?: number
+          p_offset?: number
+          p_search?: string
+          p_sort?: string
+          p_status?: string
+        }
+        Returns: Json
+      }
       auto_update_workshop_status: { Args: never; Returns: undefined }
       bulk_issue_workshop_certificates: {
         Args: { _workshop_id: string }
