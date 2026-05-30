@@ -1,5 +1,5 @@
-import { useState, useMemo } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useState, useEffect } from 'react';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
 import { Input } from '@/components/ui/input';
@@ -20,6 +20,17 @@ import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, Command
 
 type SortKey = 'name' | 'joined' | 'spend';
 const PER_PAGE = 25;
+
+// Normalize RPC row shape (snake_case → camelCase aliases used by the UI)
+const normalize = (r: any) => ({
+  ...r,
+  coursesCount: r.courses_count ?? 0,
+  ebooksCount: r.ebooks_count ?? 0,
+  totalSpend: Number(r.total_spend ?? 0),
+  certsCount: r.certs_count ?? 0,
+  quizCount: r.quiz_count ?? 0,
+  institutionalEmail: r.institutional_email ?? null,
+});
 
 export default function AdminStudents() {
   const [search, setSearch] = useState('');
