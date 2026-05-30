@@ -238,17 +238,17 @@ export default function AdminStudents() {
     <div className="space-y-6">
       {/* Stats bar */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <Card><CardContent className="p-4 flex items-center gap-3"><Users className="h-8 w-8 text-primary" /><div><p className="text-2xl font-bold">{students.length}</p><p className="text-xs text-muted-foreground">Total Students</p></div></CardContent></Card>
-        <Card><CardContent className="p-4 flex items-center gap-3"><UserCheck className="h-8 w-8 text-green-600" /><div><p className="text-2xl font-bold">{activeCount}</p><p className="text-xs text-muted-foreground">Active</p></div></CardContent></Card>
-        <Card><CardContent className="p-4 flex items-center gap-3"><ShieldAlert className="h-8 w-8 text-destructive" /><div><p className="text-2xl font-bold">{blockedCount}</p><p className="text-xs text-muted-foreground">Blocked</p></div></CardContent></Card>
-        <Card><CardContent className="p-4 flex items-center gap-3"><CalendarPlus className="h-8 w-8 text-amber-600" /><div><p className="text-2xl font-bold">{newThisMonth}</p><p className="text-xs text-muted-foreground">New This Month</p></div></CardContent></Card>
+        <Card><CardContent className="p-4 flex items-center gap-3"><Users className="h-8 w-8 text-primary" /><div><p className="text-2xl font-bold">{stats.total}</p><p className="text-xs text-muted-foreground">Total Students</p></div></CardContent></Card>
+        <Card><CardContent className="p-4 flex items-center gap-3"><UserCheck className="h-8 w-8 text-green-600" /><div><p className="text-2xl font-bold">{stats.active}</p><p className="text-xs text-muted-foreground">Active</p></div></CardContent></Card>
+        <Card><CardContent className="p-4 flex items-center gap-3"><ShieldAlert className="h-8 w-8 text-destructive" /><div><p className="text-2xl font-bold">{stats.blocked}</p><p className="text-xs text-muted-foreground">Blocked</p></div></CardContent></Card>
+        <Card><CardContent className="p-4 flex items-center gap-3"><CalendarPlus className="h-8 w-8 text-amber-600" /><div><p className="text-2xl font-bold">{stats.new_this_month}</p><p className="text-xs text-muted-foreground">New This Month</p></div></CardContent></Card>
       </div>
 
       {/* Controls */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-heading font-bold">Student Management</h1>
-          <p className="text-sm text-muted-foreground">{filtered.length} of {students.length} students · Page {page}/{totalPages}</p>
+          <p className="text-sm text-muted-foreground">{totalFiltered} of {stats.total} students · Page {page}/{totalPages}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative w-full sm:w-64">
