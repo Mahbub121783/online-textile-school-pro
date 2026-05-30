@@ -47,84 +47,41 @@ export default function AdminStudents() {
   const navigate = useNavigate();
   const qc = useQueryClient();
 
-  const { data: students = [], isLoading } = useQuery({
-    queryKey: ['admin-students'],
+  // Debounce search to avoid one RPC per keystroke
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  useEffect(() => {
+    const t = setTimeout(() => { setDebouncedSearch(search); setPage(1); }, 350);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  // Single server-side RPC — returns 25 rows + global stats. No more whole-table fetches.
+  const { data: pageData, isLoading } = useQuery({
+    queryKey: ['admin-students', debouncedSearch, statusFilter, sortBy, sortAsc, page],
     queryFn: async () => {
-      // 1) Get student user-ids (tiny payload, short URL)
-      const { data: roles, error: rolesErr } = await supabase
-        .from('user_roles').select('user_id').eq('role', 'student').limit(10000);
-      if (rolesErr) throw rolesErr;
-      if (!roles?.length) return [];
-      const studentIdSet = new Set(roles.map(r => r.user_id));
-
-      // 2) Fetch full tables (each is small) and filter client-side to AVOID
-      //    sending 273-UUID `.in()` filters which blow past the URL length limit
-      //    and caused the page to hang in loading state.
-      const [
-        { data: profiles },
-        { data: enrollments },
-        { data: orders },
-        { data: orderItems },
-        { data: certs },
-        { data: quizAttempts },
-        { data: emailReqs },
-      ] = await Promise.all([
-        supabase.from('user_profiles').select('*').limit(10000),
-        supabase.from('enrollments').select('user_id').limit(10000),
-        supabase.from('orders').select('id, user_id, total, status').eq('status', 'completed').limit(10000),
-        supabase.from('order_items').select('order_id, item_type').eq('item_type', 'ebook').limit(10000),
-        supabase.from('certificates').select('user_id').limit(10000),
-        supabase.from('quiz_attempts').select('user_id').limit(10000),
-        supabase.from('institutional_email_requests').select('user_id, requested_email, status, is_blocked').limit(10000),
-      ]);
-
-      const studentProfiles = (profiles ?? []).filter(p => studentIdSet.has(p.id));
-
-      const orderById = new Map((orders ?? []).map(o => [o.id, o]));
-      const ebookCountMap: Record<string, number> = {};
-      (orderItems ?? []).forEach(oi => {
-        const order = orderById.get(oi.order_id);
-        if (order && studentIdSet.has(order.user_id)) {
-          ebookCountMap[order.user_id] = (ebookCountMap[order.user_id] || 0) + 1;
-        }
+      const { data, error } = await (supabase.rpc as any)('admin_list_students', {
+        p_search: debouncedSearch || null,
+        p_status: statusFilter,
+        p_sort: sortBy,
+        p_asc: sortAsc,
+        p_limit: PER_PAGE,
+        p_offset: (page - 1) * PER_PAGE,
       });
-
-      const enrollCountMap: Record<string, number> = {};
-      (enrollments ?? []).forEach(e => {
-        if (studentIdSet.has(e.user_id)) enrollCountMap[e.user_id] = (enrollCountMap[e.user_id] || 0) + 1;
-      });
-
-      const spendMap: Record<string, number> = {};
-      (orders ?? []).forEach(o => {
-        if (studentIdSet.has(o.user_id)) spendMap[o.user_id] = (spendMap[o.user_id] || 0) + (o.total || 0);
-      });
-
-      const certCountMap: Record<string, number> = {};
-      (certs ?? []).forEach(c => {
-        if (studentIdSet.has(c.user_id)) certCountMap[c.user_id] = (certCountMap[c.user_id] || 0) + 1;
-      });
-
-      const quizCountMap: Record<string, number> = {};
-      (quizAttempts ?? []).forEach(q => {
-        if (studentIdSet.has(q.user_id)) quizCountMap[q.user_id] = (quizCountMap[q.user_id] || 0) + 1;
-      });
-
-      const emailMap: Record<string, { email: string; status: string; is_blocked: boolean }> = {};
-      (emailReqs ?? []).forEach((e: any) => {
-        if (studentIdSet.has(e.user_id)) emailMap[e.user_id] = { email: e.requested_email, status: e.status, is_blocked: e.is_blocked };
-      });
-
-      return studentProfiles.map(p => ({
-        ...p,
-        coursesCount: enrollCountMap[p.id] || 0,
-        ebooksCount: ebookCountMap[p.id] || 0,
-        totalSpend: spendMap[p.id] || 0,
-        certsCount: certCountMap[p.id] || 0,
-        quizCount: quizCountMap[p.id] || 0,
-        institutionalEmail: emailMap[p.id] || null,
-      }));
+      if (error) throw error;
+      const payload = data as any;
+      return {
+        rows: ((payload?.rows ?? []) as any[]).map(normalize),
+        total: Number(payload?.total ?? 0),
+        stats: payload?.stats ?? { total: 0, active: 0, blocked: 0, new_this_month: 0, total_revenue: 0 },
+      };
     },
+    placeholderData: keepPreviousData,
   });
+
+  const paginated = pageData?.rows ?? [];
+  const totalFiltered = pageData?.total ?? 0;
+  const stats = pageData?.stats ?? { total: 0, active: 0, blocked: 0, new_this_month: 0, total_revenue: 0 };
+  const totalPages = Math.max(1, Math.ceil(totalFiltered / PER_PAGE));
+
 
   const toggleStatus = useMutation({
     mutationFn: async ({ ids, active }: { ids: string[]; active: boolean }) => {
