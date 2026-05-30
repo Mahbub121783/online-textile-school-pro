@@ -39,43 +39,71 @@ export default function AdminStudents() {
   const { data: students = [], isLoading } = useQuery({
     queryKey: ['admin-students'],
     queryFn: async () => {
-      const { data: roles } = await supabase.from('user_roles').select('user_id').eq('role', 'student').limit(5000);
+      // 1) Get student user-ids (tiny payload, short URL)
+      const { data: roles, error: rolesErr } = await supabase
+        .from('user_roles').select('user_id').eq('role', 'student').limit(10000);
+      if (rolesErr) throw rolesErr;
       if (!roles?.length) return [];
-      const userIds = roles.map(r => r.user_id);
+      const studentIdSet = new Set(roles.map(r => r.user_id));
 
-      const { data: profiles } = await supabase.from('user_profiles').select('*').in('id', userIds).limit(5000);
-      const { data: enrollments } = await supabase.from('enrollments').select('user_id').in('user_id', userIds).limit(5000);
-      const { data: orders } = await supabase.from('orders').select('id, user_id, total, status').in('user_id', userIds).eq('status', 'completed').limit(5000);
-      const { data: orderItems } = await supabase.from('order_items').select('order_id, item_type').eq('item_type', 'ebook').limit(5000);
-      const { data: certs } = await supabase.from('certificates').select('user_id').in('user_id', userIds).limit(5000);
-      const { data: quizAttempts } = await supabase.from('quiz_attempts').select('user_id').in('user_id', userIds).limit(5000);
-      const { data: emailReqs } = await supabase.from('institutional_email_requests').select('user_id, requested_email, status, is_blocked').in('user_id', userIds).limit(5000);
+      // 2) Fetch full tables (each is small) and filter client-side to AVOID
+      //    sending 273-UUID `.in()` filters which blow past the URL length limit
+      //    and caused the page to hang in loading state.
+      const [
+        { data: profiles },
+        { data: enrollments },
+        { data: orders },
+        { data: orderItems },
+        { data: certs },
+        { data: quizAttempts },
+        { data: emailReqs },
+      ] = await Promise.all([
+        supabase.from('user_profiles').select('*').limit(10000),
+        supabase.from('enrollments').select('user_id').limit(10000),
+        supabase.from('orders').select('id, user_id, total, status').eq('status', 'completed').limit(10000),
+        supabase.from('order_items').select('order_id, item_type').eq('item_type', 'ebook').limit(10000),
+        supabase.from('certificates').select('user_id').limit(10000),
+        supabase.from('quiz_attempts').select('user_id').limit(10000),
+        supabase.from('institutional_email_requests').select('user_id, requested_email, status, is_blocked').limit(10000),
+      ]);
 
-      const orderIds = new Set((orders ?? []).map(o => o.id));
+      const studentProfiles = (profiles ?? []).filter(p => studentIdSet.has(p.id));
+
+      const orderById = new Map((orders ?? []).map(o => [o.id, o]));
       const ebookCountMap: Record<string, number> = {};
       (orderItems ?? []).forEach(oi => {
-        if (orderIds.has(oi.order_id)) {
-          const order = (orders ?? []).find(o => o.id === oi.order_id);
-          if (order) ebookCountMap[order.user_id] = (ebookCountMap[order.user_id] || 0) + 1;
+        const order = orderById.get(oi.order_id);
+        if (order && studentIdSet.has(order.user_id)) {
+          ebookCountMap[order.user_id] = (ebookCountMap[order.user_id] || 0) + 1;
         }
       });
 
       const enrollCountMap: Record<string, number> = {};
-      (enrollments ?? []).forEach(e => { enrollCountMap[e.user_id] = (enrollCountMap[e.user_id] || 0) + 1; });
+      (enrollments ?? []).forEach(e => {
+        if (studentIdSet.has(e.user_id)) enrollCountMap[e.user_id] = (enrollCountMap[e.user_id] || 0) + 1;
+      });
 
       const spendMap: Record<string, number> = {};
-      (orders ?? []).forEach(o => { spendMap[o.user_id] = (spendMap[o.user_id] || 0) + (o.total || 0); });
+      (orders ?? []).forEach(o => {
+        if (studentIdSet.has(o.user_id)) spendMap[o.user_id] = (spendMap[o.user_id] || 0) + (o.total || 0);
+      });
 
       const certCountMap: Record<string, number> = {};
-      (certs ?? []).forEach(c => { certCountMap[c.user_id] = (certCountMap[c.user_id] || 0) + 1; });
+      (certs ?? []).forEach(c => {
+        if (studentIdSet.has(c.user_id)) certCountMap[c.user_id] = (certCountMap[c.user_id] || 0) + 1;
+      });
 
       const quizCountMap: Record<string, number> = {};
-      (quizAttempts ?? []).forEach(q => { quizCountMap[q.user_id] = (quizCountMap[q.user_id] || 0) + 1; });
+      (quizAttempts ?? []).forEach(q => {
+        if (studentIdSet.has(q.user_id)) quizCountMap[q.user_id] = (quizCountMap[q.user_id] || 0) + 1;
+      });
 
       const emailMap: Record<string, { email: string; status: string; is_blocked: boolean }> = {};
-      (emailReqs ?? []).forEach((e: any) => { emailMap[e.user_id] = { email: e.requested_email, status: e.status, is_blocked: e.is_blocked }; });
+      (emailReqs ?? []).forEach((e: any) => {
+        if (studentIdSet.has(e.user_id)) emailMap[e.user_id] = { email: e.requested_email, status: e.status, is_blocked: e.is_blocked };
+      });
 
-      return (profiles ?? []).map(p => ({
+      return studentProfiles.map(p => ({
         ...p,
         coursesCount: enrollCountMap[p.id] || 0,
         ebooksCount: ebookCountMap[p.id] || 0,
