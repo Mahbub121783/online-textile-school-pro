@@ -185,41 +185,6 @@ export default function AdminStudents() {
     onError: (e: any) => toast.error(e.message),
   });
 
-  const filtered = useMemo(() => {
-    let list = students.filter((s: any) => {
-      if (statusFilter === 'active' && s.is_active === false) return false;
-      if (statusFilter === 'inactive' && s.is_active !== false) return false;
-      if (statusFilter === 'blocked' && s.is_active !== false) return false;
-      if (!search) return true;
-      const q = search.toLowerCase();
-      return [s.full_name, s.roll_id, s.phone, s.university, s.department, s.campus, s.batch, s.district, s.division, s.occupation, s.company_name, s.username]
-        .some(f => f?.toLowerCase().includes(q));
-    });
-
-    list.sort((a: any, b: any) => {
-      let cmp = 0;
-      if (sortBy === 'name') cmp = (a.full_name || '').localeCompare(b.full_name || '');
-      else if (sortBy === 'joined') cmp = new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime();
-      else if (sortBy === 'spend') cmp = (a.totalSpend || 0) - (b.totalSpend || 0);
-      return sortAsc ? cmp : -cmp;
-    });
-
-    return list;
-  }, [students, search, statusFilter, sortBy, sortAsc]);
-
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PER_PAGE));
-  const paginated = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
-
-  const activeCount = students.filter((s: any) => s.is_active !== false).length;
-  const blockedCount = students.filter((s: any) => s.is_active === false).length;
-  const totalRevenue = students.reduce((s: number, st: any) => s + (st.totalSpend || 0), 0);
-  const now = new Date();
-  const newThisMonth = students.filter((s: any) => {
-    if (!s.created_at) return false;
-    const d = new Date(s.created_at);
-    return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-  }).length;
-
   const toggleSort = (key: SortKey) => {
     if (sortBy === key) setSortAsc(!sortAsc);
     else { setSortBy(key); setSortAsc(false); }
@@ -239,8 +204,20 @@ export default function AdminStudents() {
     else setSelectedIds(new Set(paginated.map((s: any) => s.id)));
   };
 
-  const exportCSV = () => {
-    const rows = filtered.map((s: any) => [
+  // Export uses RPC with a wide limit (server-side filtered) — still one round-trip
+  const exportCSV = async () => {
+    toast.loading('Preparing CSV...', { id: 'csv' });
+    const { data, error } = await (supabase.rpc as any)('admin_list_students', {
+      p_search: debouncedSearch || null,
+      p_status: statusFilter,
+      p_sort: sortBy,
+      p_asc: sortAsc,
+      p_limit: 10000,
+      p_offset: 0,
+    });
+    if (error) { toast.error(error.message, { id: 'csv' }); return; }
+    const all = ((data as any)?.rows ?? []).map(normalize);
+    const rows = all.map((s: any) => [
       s.full_name || '', s.roll_id || '', s.phone || '', s.university || '', (s.department || s.campus || ''),
       s.coursesCount, s.ebooksCount, s.totalSpend, s.certsCount, s.quizCount,
       s.is_active !== false ? 'Active' : 'Blocked',
@@ -253,8 +230,9 @@ export default function AdminStudents() {
     a.href = URL.createObjectURL(blob);
     a.download = `students_${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
-    toast.success('CSV exported');
+    toast.success(`CSV exported (${all.length} rows)`, { id: 'csv' });
   };
+
 
   return (
     <div className="space-y-6">
