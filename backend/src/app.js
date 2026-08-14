@@ -3,6 +3,7 @@ const cors = require('cors');
 const { pool } = require('./db');
 const { router: authRouter } = require('./auth');
 const restRouter = require('./rest');
+const functionsRouter = require('./functions');
 
 const ALLOWED_ORIGINS = [
   'https://www.onlinetextileschool.com',
@@ -36,6 +37,7 @@ app.get('/health/db', async (req, res) => {
 
 app.use('/auth/v1', authRouter);
 app.use('/rest/v1', restRouter);
+app.use('/functions/v1', functionsRouter);
 
 app.use((req, res) => res.status(404).json({ error: 'Not found' }));
 

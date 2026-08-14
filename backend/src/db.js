@@ -42,4 +42,14 @@ async function withRequestContext(auth, fn) {
   }
 }
 
-module.exports = { pool, withRequestContext };
+// Convenience for backend-internal code (ported edge functions) that needs
+// to run trusted, elevated queries outside of a per-user request -- these
+// are equivalent to what Supabase edge functions did with the
+// SERVICE_ROLE_KEY to bypass RLS. A bare pool.query() runs with no GUCs set,
+// which auth.role() defaults to 'anon' (see db/01-auth-shim.sql), so any
+// RLS-gated write silently fails without this.
+async function serviceQuery(text, params) {
+  return withRequestContext({ role: 'service_role' }, (client) => client.query(text, params));
+}
+
+module.exports = { pool, withRequestContext, serviceQuery };
