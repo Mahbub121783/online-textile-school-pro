@@ -238,6 +238,21 @@ function preferReturn(req) {
   return prefer.includes('return=representation');
 }
 
+// supabase-js (postgrest-js) parses a non-2xx response body directly as a
+// PostgrestError: { message, details, hint, code }. Every catch block below
+// used to send { error: err.message }, which has no `.message` key -- so
+// every failed request surfaced as literally "undefined" in the UI (e.g.
+// "Failed to save order items: undefined") no matter what the real error
+// was, hiding the actual RLS/constraint failure from both users and admins.
+function sendPgError(res, err) {
+  res.status(err.status || 500).json({
+    message: err.message || 'Unknown error',
+    details: err.detail || null,
+    hint: err.hint || null,
+    code: err.code || null,
+  });
+}
+
 const router = express.Router();
 
 // Cron-only / maintenance SECURITY DEFINER functions. On real Supabase these
@@ -264,7 +279,7 @@ const RPC_BLOCKLIST = new Set([
 router.post('/rpc/:fn', async (req, res) => {
   try {
     const fn = assertValidIdentifier(req.params.fn);
-    if (RPC_BLOCKLIST.has(fn)) return res.status(403).json({ error: 'Function not callable via RPC' });
+    if (RPC_BLOCKLIST.has(fn)) return res.status(403).json({ message: 'Function not callable via RPC' });
     const auth = readAuth(req);
     const args = req.body && typeof req.body === 'object' ? req.body : {};
     const argNames = Object.keys(args);
@@ -276,7 +291,7 @@ router.post('/rpc/:fn', async (req, res) => {
     );
     res.json(result.rows.length === 1 ? result.rows[0].result : result.rows.map((r) => r.result));
   } catch (err) {
-    res.status(err.status || 500).json({ error: err.message });
+    sendPgError(res, err);
   }
 });
 
@@ -314,13 +329,13 @@ router.route('/:table')
 
       if (wantsSingleObject(req)) {
         if (result.rows.length !== 1) {
-          return res.status(406).json({ code: 'PGRST116', error: 'Expected exactly one row' });
+          return res.status(406).json({ code: 'PGRST116', message: 'Expected exactly one row' });
         }
         return res.json(result.rows[0]);
       }
       res.json(result.rows);
     } catch (err) {
-      res.status(err.status || 500).json({ error: err.message });
+      sendPgError(res, err);
     }
   })
   .post(async (req, res) => {
@@ -328,7 +343,7 @@ router.route('/:table')
       const table = assertValidIdentifier(req.params.table);
       const auth = readAuth(req);
       const rows = Array.isArray(req.body) ? req.body : [req.body];
-      if (rows.length === 0) return res.status(400).json({ error: 'empty insert body' });
+      if (rows.length === 0) return res.status(400).json({ message: 'empty insert body' });
 
       const columns = Object.keys(rows[0]);
       columns.forEach(assertValidIdentifier);
@@ -378,7 +393,7 @@ router.route('/:table')
 
       res.status(201).json(preferReturn(req) ? result.rows : []);
     } catch (err) {
-      res.status(err.status || 500).json({ error: err.message });
+      sendPgError(res, err);
     }
   })
   .patch(async (req, res) => {
@@ -386,7 +401,7 @@ router.route('/:table')
       const table = assertValidIdentifier(req.params.table);
       const auth = readAuth(req);
       const columns = Object.keys(req.body || {});
-      if (columns.length === 0) return res.status(400).json({ error: 'empty update body' });
+      if (columns.length === 0) return res.status(400).json({ message: 'empty update body' });
       columns.forEach(assertValidIdentifier);
 
       const params = [];
@@ -403,7 +418,7 @@ router.route('/:table')
 
       res.json(preferReturn(req) ? result.rows : []);
     } catch (err) {
-      res.status(err.status || 500).json({ error: err.message });
+      sendPgError(res, err);
     }
   })
   .delete(async (req, res) => {
@@ -412,7 +427,7 @@ router.route('/:table')
       const auth = readAuth(req);
       const params = [];
       const where = buildWhere(req.query, params);
-      if (!where) return res.status(400).json({ error: 'refusing DELETE with no filter' });
+      if (!where) return res.status(400).json({ message: 'refusing DELETE with no filter' });
 
       const returning = preferReturn(req) ? `RETURNING ${await buildSelectClause(table, req.query.select)}` : '';
       const sql = `DELETE FROM public."${table}" ${where} ${returning}`;
@@ -420,7 +435,7 @@ router.route('/:table')
 
       res.json(preferReturn(req) ? result.rows : []);
     } catch (err) {
-      res.status(err.status || 500).json({ error: err.message });
+      sendPgError(res, err);
     }
   });
 

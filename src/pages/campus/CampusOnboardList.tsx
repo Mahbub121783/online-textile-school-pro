@@ -12,6 +12,8 @@ import { MapPin, Users, Building2, Plus, School } from 'lucide-react';
 const CampusOnboardList = () => {
   const { data: campuses = [], isLoading } = useQuery({
     queryKey: ['campus-onboard-approved'],
+    refetchInterval: 30000,
+    refetchIntervalInBackground: false,
     queryFn: async () => {
       const { data } = await supabase
         .from('campus_onboard_requests')
@@ -51,32 +53,30 @@ const CampusOnboardList = () => {
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {campuses.map((c: any) => (
-                <Card key={c.id} className="hover:shadow-md transition-shadow">
-                  <CardContent className="pt-6 space-y-3">
-                    <div className="flex items-center gap-2">
-                      <Building2 className="h-5 w-5 text-primary shrink-0" />
-                      <h3 className="font-heading font-bold text-lg leading-tight">{c.campus_name}</h3>
-                    </div>
-                    <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                      <MapPin className="h-3.5 w-3.5 shrink-0" /> {c.area}
-                    </div>
-                    {c.student_count != null && (
-                      <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                        <Users className="h-3.5 w-3.5 shrink-0" /> {c.student_count} students
+                <Link key={c.id} to={`/campus-onboard/${c.id}`}>
+                  <Card className="hover:shadow-md transition-shadow h-full">
+                    <CardContent className="pt-6 space-y-3">
+                      <div className="flex items-center gap-2">
+                        <Building2 className="h-5 w-5 text-primary shrink-0" />
+                        <h3 className="font-heading font-bold text-lg leading-tight">{c.campus_name}</h3>
                       </div>
-                    )}
-                    {c.facilities && <p className="text-sm text-foreground/80 line-clamp-2">{c.facilities}</p>}
-                    {c.subdomain_provisioned && (
-                      <a
-                        href={`https://${c.subdomain_slug}.onlinetextileschool.com`}
-                        target="_blank" rel="noopener noreferrer"
-                        className="text-xs text-primary hover:underline block"
-                      >
-                        {c.subdomain_slug}.onlinetextileschool.com
-                      </a>
-                    )}
-                  </CardContent>
-                </Card>
+                      <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                        <MapPin className="h-3.5 w-3.5 shrink-0" /> {c.area}
+                      </div>
+                      {c.student_count != null && (
+                        <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                          <Users className="h-3.5 w-3.5 shrink-0" /> {c.student_count} students
+                        </div>
+                      )}
+                      {c.facilities && <p className="text-sm text-foreground/80 line-clamp-2">{c.facilities}</p>}
+                      {c.subdomain_provisioned && (
+                        <span className="text-xs text-primary hover:underline block">
+                          {c.subdomain_slug}.onlinetextileschool.com
+                        </span>
+                      )}
+                    </CardContent>
+                  </Card>
+                </Link>
               ))}
             </div>
           )}

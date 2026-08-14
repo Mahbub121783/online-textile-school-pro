@@ -36,6 +36,8 @@ export default function InstitutionalEmailWidget() {
   const { data: existingRequest, isLoading } = useQuery({
     queryKey: ['my-institutional-email', user?.id],
     enabled: !!user && (enrollmentCount ?? 0) > 0,
+    refetchInterval: 15000,
+    refetchIntervalInBackground: false,
     queryFn: async () => {
       const { data } = await supabase
         .from('institutional_email_requests')

@@ -92,6 +92,7 @@ export function useFileUpload() {
             publicId: options?.publicId,
             folder: options?.folder,
             overwrite: options?.overwrite,
+            silent: true,
           });
           setProgress(100);
           return {

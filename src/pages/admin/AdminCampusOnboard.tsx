@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
-import { CheckCircle, XCircle, Loader2, Globe, MapPin, Users } from 'lucide-react';
+import { CheckCircle, XCircle, Loader2, Globe, MapPin, Users, Eye, EyeOff } from 'lucide-react';
 
 const statusColors: Record<string, string> = {
   pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
@@ -67,6 +67,18 @@ const AdminCampusOnboard = () => {
     onError: (e: any) => toast.error(e.message),
   });
 
+  const visibilityMutation = useMutation({
+    mutationFn: async ({ id, is_visible }: { id: string; is_visible: boolean }) => {
+      const { error } = await supabase.from('campus_onboard_requests').update({ is_visible }).eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: (_data, vars) => {
+      queryClient.invalidateQueries({ queryKey: ['admin-campus-onboard'] });
+      toast.success(vars.is_visible ? 'Campus is now visible on the public list' : 'Campus hidden from the public list');
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
   return (
     <div className="space-y-6">
       <div>
@@ -120,6 +132,24 @@ const AdminCampusOnboard = () => {
                   <a href={`https://${c.subdomain_slug}.onlinetextileschool.com`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-primary text-sm hover:underline pt-2">
                     <Globe className="h-3.5 w-3.5" /> {c.subdomain_slug}.onlinetextileschool.com (live)
                   </a>
+                )}
+                {c.status === 'approved' && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="w-full mt-2"
+                    onClick={() => visibilityMutation.mutate({ id: c.id, is_visible: !c.is_visible })}
+                    disabled={visibilityMutation.isPending}
+                  >
+                    {c.is_visible === false ? (
+                      <><Eye className="h-3.5 w-3.5 mr-1.5" /> Unhide from public list</>
+                    ) : (
+                      <><EyeOff className="h-3.5 w-3.5 mr-1.5" /> Hide from public list</>
+                    )}
+                  </Button>
+                )}
+                {c.is_visible === false && (
+                  <Badge variant="outline" className="text-xs">Hidden from public</Badge>
                 )}
               </CardContent>
             </Card>

@@ -42,6 +42,8 @@ const AdminEmailRequests = () => {
 
   const { data: requests = [], isLoading } = useQuery({
     queryKey: ['institutional-email-requests', filter],
+    refetchInterval: 20000,
+    refetchIntervalInBackground: false,
     queryFn: async () => {
       let q = supabase.from('institutional_email_requests').select('*').order('created_at', { ascending: false });
       if (filter !== 'all') q = q.eq('status', filter);

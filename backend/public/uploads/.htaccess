@@ -1,0 +1,12 @@
+# Files under public/ are served directly by Apache/Passenger, bypassing
+# Express entirely (Passenger's standard convention: any file that exists
+# under <PassengerAppRoot>/public/ is served by the web server, never
+# reaching app.js -- so the cors() middleware there never runs for these
+# requests). Locally-uploaded avatars/photos are drawn onto a <canvas> with
+# crossOrigin="anonymous" (see src/lib/idCardRenderer.ts, ID card / signature
+# rendering) -- without this header the browser refuses to load the image
+# into the canvas at all, so the photo silently falls back to a blank
+# initial-letter placeholder.
+<IfModule mod_headers.c>
+  Header set Access-Control-Allow-Origin "*"
+</IfModule>

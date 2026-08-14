@@ -4,6 +4,8 @@ import { NavLink } from '@/components/NavLink';
 import { useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useEnrollments } from '@/hooks/useEnrollments';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import {
   Sidebar,
   SidebarContent,
@@ -54,14 +56,38 @@ export function DashboardSidebar() {
   const { state } = useSidebar();
   const collapsed = state === 'collapsed';
   const location = useLocation();
-  const { signOut, profile } = useAuth();
+  const { signOut, profile, user } = useAuth();
   const { data: enrollments } = useEnrollments();
 
   const hasPurchasedCourse = (enrollments ?? []).length > 0;
 
-  // Insert EduMail/Mail before Wallet if student has enrollments
+  // Mail (the actual inbox) must stay hidden until the student's EduMail
+  // request is approved & provisioned -- previously it showed for any
+  // enrolled student regardless of request status, exposing an inbox page
+  // with no working account behind it.
+  const { data: emailReq } = useQuery({
+    queryKey: ['my-edumail', user?.id],
+    enabled: !!user && hasPurchasedCourse,
+    refetchInterval: 20000,
+    refetchIntervalInBackground: false,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('institutional_email_requests')
+        .select('status')
+        .eq('user_id', user!.id)
+        .order('created_at', { ascending: false })
+        .limit(1);
+      return (data?.[0] as any) || null;
+    },
+  });
+  const mailApproved = emailReq?.status === 'approved';
+
+  // Insert EduMail (always, once enrolled) + Mail (only once approved)
+  const visibleEnrolledItems = hasPurchasedCourse
+    ? enrolledOnlyItems.filter((i) => i.title !== 'Mail' || mailApproved)
+    : [];
   const navItems = hasPurchasedCourse
-    ? [...baseNavItems.slice(0, 22), ...enrolledOnlyItems, ...baseNavItems.slice(22)]
+    ? [...baseNavItems.slice(0, 22), ...visibleEnrolledItems, ...baseNavItems.slice(22)]
     : baseNavItems;
 
   const isActive = (path: string) =>
@@ -73,9 +99,17 @@ export function DashboardSidebar() {
         <SidebarGroup>
           {!collapsed && (
             <div className="p-4 border-b">
-              <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-heading font-bold text-lg">
-                {profile?.full_name?.[0]?.toUpperCase() || 'S'}
-              </div>
+              {profile?.avatar_url ? (
+                <img
+                  src={profile.avatar_url}
+                  alt={profile?.full_name || 'Profile'}
+                  className="w-10 h-10 rounded-full object-cover border"
+                />
+              ) : (
+                <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-heading font-bold text-lg">
+                  {profile?.full_name?.[0]?.toUpperCase() || 'S'}
+                </div>
+              )}
               <p className="mt-2 font-heading font-semibold text-sm truncate">{profile?.full_name || 'Student'}</p>
               <p className="text-xs text-muted-foreground truncate">{profile?.roll_id}</p>
               <div className="mt-3">

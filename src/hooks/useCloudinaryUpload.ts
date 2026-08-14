@@ -14,6 +14,10 @@ interface UploadOptions {
   publicId?: string;
   folder?: string;
   overwrite?: boolean;
+  /** Skip the error toast -- for callers (useFileUpload.ts) that silently
+   * retry via a fallback path, where surfacing this failure would wrongly
+   * read as "your upload failed" even though it's about to succeed anyway. */
+  silent?: boolean;
 }
 
 export function useCloudinaryUpload() {
@@ -56,7 +60,7 @@ export function useCloudinaryUpload() {
         overwrite: options?.overwrite,
       });
     } catch (err: any) {
-      toast.error('Upload failed: ' + (err.message || 'Unknown error'));
+      if (!options?.silent) toast.error('Upload failed: ' + (err.message || 'Unknown error'));
       throw err;
     } finally {
       setUploading(false);

@@ -128,6 +128,7 @@ const BecomeInstructor = lazy(() => import("./pages/static/BecomeInstructor"));
 const PublicRegistration = lazy(() => import("./pages/registration/PublicRegistration"));
 const CampusOnboardList = lazy(() => import("./pages/campus/CampusOnboardList"));
 const CampusOnboardRegister = lazy(() => import("./pages/campus/CampusOnboardRegister"));
+const CampusOnboardDetail = lazy(() => import("./pages/campus/CampusOnboardDetail"));
 const AdminRegistrations = lazy(() => import("./pages/admin/AdminRegistrations"));
 const AdminSiteContent = lazy(() => import("./pages/admin/AdminSiteContent"));
 const AdminBatches = lazy(() => import("./pages/admin/AdminBatches"));
@@ -438,6 +439,7 @@ const AppRoutes = () => {
           <Route path="/register" element={<PublicRegistration />} />
           <Route path="/campus-onboard" element={<CampusOnboardList />} />
           <Route path="/campus-onboard/register" element={<CampusOnboardRegister />} />
+          <Route path="/campus-onboard/:id" element={<CampusOnboardDetail />} />
           <Route path="/verify-certificate" element={<VerifyCertificate />} />
           <Route path="/register/:slug" element={<PublicRegistration />} />
           {/* Forum */}

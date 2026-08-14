@@ -47,6 +47,8 @@ const ApprovalsTab = () => {
 
   const { data: applications = [], isLoading } = useQuery({
     queryKey: ['instructor-applications'],
+    refetchInterval: 20000,
+    refetchIntervalInBackground: false,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('instructor_applications')

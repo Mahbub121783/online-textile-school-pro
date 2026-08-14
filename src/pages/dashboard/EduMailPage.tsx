@@ -29,6 +29,8 @@ const EduMailPage = () => {
   const { data: emailReq, isLoading } = useQuery({
     queryKey: ['my-edumail', user?.id],
     enabled: !!user,
+    refetchInterval: 15000,
+    refetchIntervalInBackground: false,
     queryFn: async () => {
       const { data } = await supabase
         .from('institutional_email_requests')
