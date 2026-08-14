@@ -1,17 +1,4 @@
--- Drop existing cron jobs we are replacing with conditional versions
-DO $$
-BEGIN
-  IF EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'unreplied-message-reminder') THEN
-    PERFORM cron.unschedule('unreplied-message-reminder');
-  END IF;
-  IF EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'workshop-auto-status') THEN
-    PERFORM cron.unschedule('workshop-auto-status');
-  END IF;
-  IF EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'workshop-reminder-cron') THEN
-    PERFORM cron.unschedule('workshop-reminder-cron');
-  END IF;
-END $$;
-
+-- pg_cron unavailable on self-host; old job unschedule calls removed.
 -- Helper: invoke unreplied-message-reminder edge function only if unread messages exist
 CREATE OR REPLACE FUNCTION public.maybe_run_unreplied_message_reminder()
 RETURNS void
@@ -85,24 +72,10 @@ BEGIN
   END IF;
 END $$;
 
--- Reschedule with the conditional wrappers
-SELECT cron.schedule(
-  'unreplied-message-reminder',
-  '*/15 * * * *',
-  $$ SELECT public.maybe_run_unreplied_message_reminder(); $$
-);
-
-SELECT cron.schedule(
-  'workshop-reminder-cron',
-  '*/15 * * * *',
-  $$ SELECT public.maybe_run_workshop_reminder(); $$
-);
-
-SELECT cron.schedule(
-  'workshop-auto-status',
-  '*/30 * * * *',
-  $$ SELECT public.maybe_run_workshop_auto_status(); $$
-);
+-- pg_cron unavailable on self-host; scheduling moved to cPanel Cron Jobs (Phase 5).
+-- Original: 'unreplied-message-reminder' & 'workshop-reminder-cron' */15 * * * *, 'workshop-auto-status' */30 * * * *
+-- Phase 5 note: these net.http_post calls inside the functions above also need porting to call
+-- the new Node backend instead of the dead *.supabase.co edge function URLs.
 
 -- Instant event-driven trigger: when a new registration is created, hit the reminder fn right away
 CREATE OR REPLACE FUNCTION public.tg_workshop_registration_notify()

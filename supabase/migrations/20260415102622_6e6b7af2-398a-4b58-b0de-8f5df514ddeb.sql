@@ -1,12 +1,6 @@
 
--- Create workshop_type enum
-CREATE TYPE public.workshop_type AS ENUM ('one_day', 'multi_day');
-
--- Create workshop_status enum
-CREATE TYPE public.workshop_status AS ENUM ('draft', 'published', 'ongoing', 'completed', 'cancelled');
-
--- Create registration_status enum
-CREATE TYPE public.workshop_registration_status AS ENUM ('registered', 'attended', 'cancelled', 'no_show');
+-- workshop_type / workshop_status / workshop_registration_status enums are
+-- created in db/00-bootstrap-core-schema.sql (self-host only)
 
 -- ============ WORKSHOPS ============
 CREATE TABLE public.workshops (

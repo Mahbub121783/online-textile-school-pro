@@ -1,0 +1,358 @@
+const express = require('express');
+const { withRequestContext } = require('./db');
+const { readAuth } = require('./auth');
+
+// ============================================================
+// PostgREST-subset query layer. Implements exactly the operator set the
+// frontend's 756 supabase.from() call sites actually use (confirmed via
+// grep across src/): eq, neq, gt, gte, lt, lte, like, ilike, in, is, not,
+// or, select, order, limit, range, insert, update, upsert, delete, rpc.
+//
+// Known gap: `select=col,relation(cols)` embedded/nested resource selects
+// are NOT implemented -- only flat column lists. Any relation syntax in a
+// select param is dropped with a console warning. Revisit if a page breaks
+// on a query that relies on an embedded select.
+// ============================================================
+
+const RESERVED_PARAMS = new Set(['select', 'order', 'limit', 'offset', 'or']);
+const TABLE_NAME_RE = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
+
+function assertValidIdentifier(name) {
+  if (!TABLE_NAME_RE.test(name)) {
+    const err = new Error(`Invalid identifier: ${name}`);
+    err.status = 400;
+    throw err;
+  }
+  return name;
+}
+
+function parseSelect(selectParam) {
+  if (!selectParam || selectParam === '*') return '*';
+  const cols = [];
+  let depth = 0;
+  let current = '';
+  for (const ch of selectParam) {
+    if (ch === '(') depth++;
+    if (ch === ')') depth--;
+    if (ch === ',' && depth === 0) {
+      cols.push(current);
+      current = '';
+    } else {
+      current += ch;
+    }
+  }
+  if (current) cols.push(current);
+
+  const flatCols = [];
+  for (const c of cols) {
+    const trimmed = c.trim();
+    if (trimmed.includes('(')) {
+      console.warn(`[rest] dropping unsupported embedded select fragment: ${trimmed}`);
+      continue;
+    }
+    flatCols.push(trimmed);
+  }
+  if (flatCols.length === 0) return '*';
+  return flatCols.map((c) => assertValidIdentifier(c.split(':').pop())).join(', ');
+}
+
+// Translates one `col=op.value` pair into a SQL fragment + bound param(s).
+function buildCondition(column, rawValue, params) {
+  assertValidIdentifier(column);
+  let value = rawValue;
+  let negate = false;
+  if (value.startsWith('not.')) {
+    negate = true;
+    value = value.slice(4);
+  }
+  const dot = value.indexOf('.');
+  const op = dot === -1 ? value : value.slice(0, dot);
+  const arg = dot === -1 ? '' : value.slice(dot + 1);
+
+  let sql;
+  switch (op) {
+    case 'eq':
+      params.push(arg);
+      sql = `"${column}" = $${params.length}`;
+      break;
+    case 'neq':
+      params.push(arg);
+      sql = `"${column}" <> $${params.length}`;
+      break;
+    case 'gt':
+      params.push(arg);
+      sql = `"${column}" > $${params.length}`;
+      break;
+    case 'gte':
+      params.push(arg);
+      sql = `"${column}" >= $${params.length}`;
+      break;
+    case 'lt':
+      params.push(arg);
+      sql = `"${column}" < $${params.length}`;
+      break;
+    case 'lte':
+      params.push(arg);
+      sql = `"${column}" <= $${params.length}`;
+      break;
+    case 'like':
+      params.push(arg.replace(/\*/g, '%'));
+      sql = `"${column}" LIKE $${params.length}`;
+      break;
+    case 'ilike':
+      params.push(arg.replace(/\*/g, '%'));
+      sql = `"${column}" ILIKE $${params.length}`;
+      break;
+    case 'is':
+      sql = `"${column}" IS ${arg === 'null' ? 'NULL' : arg === 'true' ? 'TRUE' : 'FALSE'}`;
+      break;
+    case 'in': {
+      const list = arg.replace(/^\(|\)$/g, '').split(',').filter((v) => v.length);
+      const placeholders = list.map((v) => {
+        params.push(v);
+        return `$${params.length}`;
+      });
+      sql = `"${column}" IN (${placeholders.join(', ')})`;
+      break;
+    }
+    case 'cs':
+      params.push(arg);
+      sql = `"${column}" @> $${params.length}`;
+      break;
+    default: {
+      const err = new Error(`Unsupported filter operator: ${op}`);
+      err.status = 400;
+      throw err;
+    }
+  }
+  return negate ? `NOT (${sql})` : sql;
+}
+
+// `or=(col.eq.val,col2.eq.val2)` -> "(col = $1 OR col2 = $2)"
+function buildOrCondition(orParam, params) {
+  const inner = orParam.replace(/^\(|\)$/g, '');
+  const parts = [];
+  let depth = 0;
+  let current = '';
+  for (const ch of inner) {
+    if (ch === '(') depth++;
+    if (ch === ')') depth--;
+    if (ch === ',' && depth === 0) {
+      parts.push(current);
+      current = '';
+    } else {
+      current += ch;
+    }
+  }
+  if (current) parts.push(current);
+
+  const clauses = parts.map((part) => {
+    const dot = part.indexOf('.');
+    const col = part.slice(0, dot);
+    const rest = part.slice(dot + 1);
+    return buildCondition(col, rest, params);
+  });
+  return `(${clauses.join(' OR ')})`;
+}
+
+function buildWhere(query, params) {
+  const clauses = [];
+  for (const [key, value] of Object.entries(query)) {
+    if (RESERVED_PARAMS.has(key)) continue;
+    const rawValue = Array.isArray(value) ? value[0] : value;
+    clauses.push(buildCondition(key, rawValue, params));
+  }
+  if (query.or) {
+    clauses.push(buildOrCondition(Array.isArray(query.or) ? query.or[0] : query.or, params));
+  }
+  return clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
+}
+
+function buildOrder(orderParam) {
+  if (!orderParam) return '';
+  const parts = orderParam.split(',').map((p) => {
+    const [col, dir, nulls] = p.split('.');
+    assertValidIdentifier(col);
+    let sql = `"${col}" ${dir === 'desc' ? 'DESC' : 'ASC'}`;
+    if (nulls === 'nullsfirst') sql += ' NULLS FIRST';
+    if (nulls === 'nullslast') sql += ' NULLS LAST';
+    return sql;
+  });
+  return `ORDER BY ${parts.join(', ')}`;
+}
+
+function wantsSingleObject(req) {
+  return (req.headers.accept || '').includes('application/vnd.pgrst.object+json');
+}
+
+function preferReturn(req) {
+  const prefer = req.headers.prefer || '';
+  return prefer.includes('return=representation');
+}
+
+const router = express.Router();
+
+// Cron-only / maintenance SECURITY DEFINER functions. On real Supabase these
+// were protected by REVOKE EXECUTE FROM anon, authenticated (see the removed
+// DO block in migration 20260516131917) -- since self-host has no such
+// per-role grants, block them here instead so they're never reachable via
+// public RPC, only ever called internally (cron jobs, triggers).
+const RPC_BLOCKLIST = new Set([
+  'kill_idle_connections', 'prune_free_tier_data', 'cleanup_old_ai_chats',
+  'pg_housekeeping_daily', 'pg_vacuum_bloat_tables', 'auto_update_workshop_status',
+  'qb_refresh_leaderboard', 'qb_aggregate_question_stats', 'qb_auto_close_orphans',
+  'refresh_homepage_stats', 'notify_admins', 'maybe_run_unreplied_message_reminder',
+  'maybe_run_workshop_reminder', 'maybe_run_workshop_auto_status',
+  'bulk_issue_workshop_certificates', 'handle_new_user', 'handle_updated_at',
+]);
+
+router.post('/rpc/:fn', async (req, res) => {
+  try {
+    const fn = assertValidIdentifier(req.params.fn);
+    if (RPC_BLOCKLIST.has(fn)) return res.status(403).json({ error: 'Function not callable via RPC' });
+    const auth = readAuth(req);
+    const args = req.body && typeof req.body === 'object' ? req.body : {};
+    const argNames = Object.keys(args);
+    const params = argNames.map((k) => args[k]);
+    const namedArgs = argNames.map((k, i) => `"${k}" := $${i + 1}`).join(', ');
+
+    const result = await withRequestContext(auth, (client) =>
+      client.query(`SELECT public.${fn}(${namedArgs}) AS result`, params)
+    );
+    res.json(result.rows.length === 1 ? result.rows[0].result : result.rows.map((r) => r.result));
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
+  }
+});
+
+router.route('/:table')
+  .get(async (req, res) => {
+    try {
+      const table = assertValidIdentifier(req.params.table);
+      const auth = readAuth(req);
+      const params = [];
+      const where = buildWhere(req.query, params);
+      const order = buildOrder(req.query.order);
+      const select = parseSelect(req.query.select);
+
+      let limitClause = '';
+      if (req.query.limit) {
+        params.push(Number(req.query.limit));
+        limitClause += ` LIMIT $${params.length}`;
+      }
+      if (req.query.offset) {
+        params.push(Number(req.query.offset));
+        limitClause += ` OFFSET $${params.length}`;
+      }
+      // supabase-js .range(from, to) sends a Range header instead of limit/offset.
+      const rangeHeader = req.headers.range;
+      if (!req.query.limit && rangeHeader) {
+        const [from, to] = rangeHeader.split('-').map(Number);
+        params.push(to - from + 1);
+        limitClause += ` LIMIT $${params.length}`;
+        params.push(from);
+        limitClause += ` OFFSET $${params.length}`;
+      }
+
+      const sql = `SELECT ${select} FROM public."${table}" ${where} ${order} ${limitClause}`;
+      const result = await withRequestContext(auth, (client) => client.query(sql, params));
+
+      if (wantsSingleObject(req)) {
+        if (result.rows.length !== 1) {
+          return res.status(406).json({ code: 'PGRST116', error: 'Expected exactly one row' });
+        }
+        return res.json(result.rows[0]);
+      }
+      res.json(result.rows);
+    } catch (err) {
+      res.status(err.status || 500).json({ error: err.message });
+    }
+  })
+  .post(async (req, res) => {
+    try {
+      const table = assertValidIdentifier(req.params.table);
+      const auth = readAuth(req);
+      const rows = Array.isArray(req.body) ? req.body : [req.body];
+      if (rows.length === 0) return res.status(400).json({ error: 'empty insert body' });
+
+      const columns = Object.keys(rows[0]);
+      columns.forEach(assertValidIdentifier);
+      const params = [];
+      const valueRows = rows.map((row) => {
+        const placeholders = columns.map((col) => {
+          params.push(row[col]);
+          return `$${params.length}`;
+        });
+        return `(${placeholders.join(', ')})`;
+      });
+
+      const onConflict = req.query.on_conflict;
+      const prefer = req.headers.prefer || '';
+      let conflictClause = '';
+      if (onConflict) {
+        onConflict.split(',').forEach(assertValidIdentifier);
+        if (prefer.includes('resolution=ignore-duplicates')) {
+          conflictClause = ` ON CONFLICT (${onConflict}) DO NOTHING`;
+        } else {
+          const updates = columns
+            .filter((c) => !onConflict.split(',').includes(c))
+            .map((c) => `"${c}" = EXCLUDED."${c}"`)
+            .join(', ');
+          conflictClause = ` ON CONFLICT (${onConflict}) DO UPDATE SET ${updates}`;
+        }
+      }
+
+      const cols = columns.map((c) => `"${c}"`).join(', ');
+      const returning = preferReturn(req) ? 'RETURNING *' : '';
+      const sql = `INSERT INTO public."${table}" (${cols}) VALUES ${valueRows.join(', ')}${conflictClause} ${returning}`;
+      const result = await withRequestContext(auth, (client) => client.query(sql, params));
+
+      res.status(201).json(preferReturn(req) ? result.rows : []);
+    } catch (err) {
+      res.status(err.status || 500).json({ error: err.message });
+    }
+  })
+  .patch(async (req, res) => {
+    try {
+      const table = assertValidIdentifier(req.params.table);
+      const auth = readAuth(req);
+      const columns = Object.keys(req.body || {});
+      if (columns.length === 0) return res.status(400).json({ error: 'empty update body' });
+      columns.forEach(assertValidIdentifier);
+
+      const params = [];
+      const setClause = columns
+        .map((c) => {
+          params.push(req.body[c]);
+          return `"${c}" = $${params.length}`;
+        })
+        .join(', ');
+      const where = buildWhere(req.query, params);
+      const returning = preferReturn(req) ? 'RETURNING *' : '';
+      const sql = `UPDATE public."${table}" SET ${setClause} ${where} ${returning}`;
+      const result = await withRequestContext(auth, (client) => client.query(sql, params));
+
+      res.json(preferReturn(req) ? result.rows : []);
+    } catch (err) {
+      res.status(err.status || 500).json({ error: err.message });
+    }
+  })
+  .delete(async (req, res) => {
+    try {
+      const table = assertValidIdentifier(req.params.table);
+      const auth = readAuth(req);
+      const params = [];
+      const where = buildWhere(req.query, params);
+      if (!where) return res.status(400).json({ error: 'refusing DELETE with no filter' });
+
+      const returning = preferReturn(req) ? 'RETURNING *' : '';
+      const sql = `DELETE FROM public."${table}" ${where} ${returning}`;
+      const result = await withRequestContext(auth, (client) => client.query(sql, params));
+
+      res.json(preferReturn(req) ? result.rows : []);
+    } catch (err) {
+      res.status(err.status || 500).json({ error: err.message });
+    }
+  });
+
+module.exports = router;

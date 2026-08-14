@@ -1,9 +1,7 @@
--- Enable citext for case-insensitive unique usernames
-CREATE EXTENSION IF NOT EXISTS citext;
-
+-- citext extension unavailable on self-host; username lowercase-enforced via CHECK constraint below instead
 -- 1. Add new columns to user_profiles
 ALTER TABLE public.user_profiles
-  ADD COLUMN IF NOT EXISTS username citext,
+  ADD COLUMN IF NOT EXISTS username text,
   ADD COLUMN IF NOT EXISTS name_last_changed_at timestamptz,
   ADD COLUMN IF NOT EXISTS campus text,
   ADD COLUMN IF NOT EXISTS upazila text,

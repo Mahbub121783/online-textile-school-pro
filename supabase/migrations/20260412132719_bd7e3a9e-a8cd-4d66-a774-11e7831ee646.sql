@@ -1,3 +1,3 @@
-INSERT INTO public.user_roles (user_id, role)
-VALUES ('98283ed2-1b8a-4966-b228-4bfe2c392a09', 'super_admin')
-ON CONFLICT (user_id, role) DO NOTHING;
+-- Original: seeded a specific user (from the old Supabase project, now
+-- deleted) as super_admin. That user_id doesn't exist in the self-hosted
+-- system. See 20260412122046 for the equivalent note.

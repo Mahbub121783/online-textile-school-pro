@@ -47,15 +47,5 @@ END $$;
 -- Seed once now
 SELECT public.refresh_homepage_stats();
 
--- Schedule refresh every 6 hours
-DO $$
-BEGIN
-  PERFORM cron.unschedule('refresh-homepage-stats');
-EXCEPTION WHEN OTHERS THEN NULL;
-END $$;
-
-SELECT cron.schedule(
-  'refresh-homepage-stats',
-  '0 */6 * * *',
-  $$ SELECT public.refresh_homepage_stats(); $$
-);
+-- pg_cron unavailable on self-host; scheduling moved to a cPanel Cron Job (Phase 5).
+-- Original: 'refresh-homepage-stats' every 6h -> public.refresh_homepage_stats()

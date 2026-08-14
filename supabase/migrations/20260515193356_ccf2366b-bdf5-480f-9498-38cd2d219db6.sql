@@ -23,14 +23,5 @@ BEGIN
 END;
 $$;
 
-DO $$
-BEGIN
-  PERFORM cron.unschedule('prune-free-tier-data-daily');
-EXCEPTION WHEN OTHERS THEN NULL;
-END $$;
-
-SELECT cron.schedule(
-  'prune-free-tier-data-daily',
-  '15 3 * * *',
-  $$ SELECT public.prune_free_tier_data(); $$
-);
+-- pg_cron unavailable on self-host; scheduling moved to a cPanel Cron Job (Phase 5).
+-- Original: 'prune-free-tier-data-daily' at 03:15 daily -> public.prune_free_tier_data()

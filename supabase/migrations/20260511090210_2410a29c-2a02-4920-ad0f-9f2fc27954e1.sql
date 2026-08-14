@@ -1,8 +1,6 @@
 
-CREATE TYPE public.qb_difficulty AS ENUM ('basic', 'intermediate', 'advanced');
-CREATE TYPE public.qb_question_type AS ENUM ('multiple_choice', 'true_false', 'short_answer');
-CREATE TYPE public.qb_question_source AS ENUM ('manual', 'bulk', 'ai');
-CREATE TYPE public.qb_leaderboard_period AS ENUM ('all_time', 'monthly', 'weekly');
+-- qb_difficulty / qb_question_type / qb_question_source / qb_leaderboard_period
+-- enums are created in db/00-bootstrap-core-schema.sql (self-host only)
 
 CREATE TABLE public.qb_subjects (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

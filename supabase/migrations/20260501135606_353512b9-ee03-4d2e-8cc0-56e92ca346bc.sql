@@ -50,9 +50,8 @@ REVOKE EXECUTE ON FUNCTION public.auto_seo_research_papers() FROM anon, authenti
 REVOKE EXECUTE ON FUNCTION public.auto_seo_posts() FROM anon, authenticated;
 REVOKE EXECUTE ON FUNCTION public.auto_seo_internships() FROM anon, authenticated;
 
--- 5. Move citext extension out of public schema
+-- 5. citext extension not used on self-host (see migration 20260420083052)
 CREATE SCHEMA IF NOT EXISTS extensions;
-ALTER EXTENSION citext SET SCHEMA extensions;
 
 -- 6. RLS Policy Always True - tighten "Anyone" insert policies that have no rate/abuse guard
 -- workshop_registrations: require an authenticated user matching user_id, or session-based via edge function

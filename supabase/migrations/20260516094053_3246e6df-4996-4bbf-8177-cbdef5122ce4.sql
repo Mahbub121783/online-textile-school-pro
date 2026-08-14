@@ -39,9 +39,21 @@ ALTER TABLE public.qb_exam_sessions ALTER COLUMN subject_id DROP NOT NULL;
 ALTER TABLE public.qb_leaderboard_cache ADD COLUMN IF NOT EXISTS difficulty public.qb_difficulty NULL;
 ALTER TABLE public.qb_leaderboard_cache DROP CONSTRAINT IF EXISTS qb_leaderboard_cache_user_id_period_subject_id_key;
 TRUNCATE public.qb_leaderboard_cache;
-ALTER TABLE public.qb_leaderboard_cache
-  ADD CONSTRAINT qb_leaderboard_cache_unique_combo
-  UNIQUE NULLS NOT DISTINCT (user_id, period, subject_id, difficulty);
+-- PG13 (self-host) lacks NULLS NOT DISTINCT (PG15+ only); equivalent via 4
+-- partial unique indexes covering each NULL-combination of subject_id/difficulty
+-- (an enum::text cast in a single combined index isn't IMMUTABLE, so can't index it directly).
+CREATE UNIQUE INDEX qb_leaderboard_cache_unique_both
+  ON public.qb_leaderboard_cache (user_id, period, subject_id, difficulty)
+  WHERE subject_id IS NOT NULL AND difficulty IS NOT NULL;
+CREATE UNIQUE INDEX qb_leaderboard_cache_unique_subject_only
+  ON public.qb_leaderboard_cache (user_id, period, subject_id)
+  WHERE subject_id IS NOT NULL AND difficulty IS NULL;
+CREATE UNIQUE INDEX qb_leaderboard_cache_unique_difficulty_only
+  ON public.qb_leaderboard_cache (user_id, period, difficulty)
+  WHERE subject_id IS NULL AND difficulty IS NOT NULL;
+CREATE UNIQUE INDEX qb_leaderboard_cache_unique_neither
+  ON public.qb_leaderboard_cache (user_id, period)
+  WHERE subject_id IS NULL AND difficulty IS NULL;
 
 -- 7. Default exam count 30, longer timers
 CREATE OR REPLACE FUNCTION public.qb_start_exam(_subject_id uuid, _difficulty qb_difficulty, _topic_id uuid DEFAULT NULL::uuid, _question_count integer DEFAULT 30)

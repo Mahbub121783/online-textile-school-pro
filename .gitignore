@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# Backend secrets (DB password, JWT secret) -- never commit, only .env.example
+backend/.env
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

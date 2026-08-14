@@ -55,19 +55,8 @@ BEGIN
 END;
 $$;
 
--- 5. Schedule auto-status job every 2 minutes (unschedule old one if exists)
-DO $$
-BEGIN
-  IF EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'workshop-auto-status') THEN
-    PERFORM cron.unschedule('workshop-auto-status');
-  END IF;
-END $$;
-
-SELECT cron.schedule(
-  'workshop-auto-status',
-  '*/2 * * * *',
-  $$ SELECT public.auto_update_workshop_status(); $$
-);
+-- 5. pg_cron unavailable on self-host; scheduling moved to a cPanel Cron Job (Phase 5).
+-- Original: 'workshop-auto-status' every 2 minutes -> public.auto_update_workshop_status()
 
 -- 6. Run once immediately to fix current state
 SELECT public.auto_update_workshop_status();

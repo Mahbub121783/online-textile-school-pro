@@ -245,9 +245,9 @@ CREATE TRIGGER trg_auto_seo_internships BEFORE INSERT OR UPDATE ON public.intern
 
 -- ============================================================
 -- Publish-ping: notify search engines via IndexNow when content goes live
--- Requires pg_net extension
+-- pg_net unavailable on self-host; extensions.http_post() calls below are dead code
+-- until Phase 5 ports this to a direct HTTP call from the Node backend instead.
 -- ============================================================
-CREATE EXTENSION IF NOT EXISTS pg_net WITH SCHEMA extensions;
 
 CREATE OR REPLACE FUNCTION public.notify_search_engines_on_publish()
 RETURNS trigger
