@@ -25,6 +25,7 @@ const { edumailClient } = require('./edumailClient');
 const { edumailImapSync } = require('./edumailImapSync');
 const { localUpload } = require('./localUpload');
 const { submitQuizAttempt } = require('./submitQuizAttempt');
+const { startQuizAttempt } = require('./startQuizAttempt');
 const { issueCertificate } = require('./issueCertificate');
 
 const router = express.Router();
@@ -57,6 +58,7 @@ router.post('/edumail-client', edumailClient);
 router.post('/edumail-imap-sync', edumailImapSync);
 router.post('/local-upload', localUpload);
 router.post('/submit-quiz-attempt', submitQuizAttempt);
+router.post('/start-quiz-attempt', startQuizAttempt);
 router.post('/issue-certificate', issueCertificate);
 
 // ebook-secure-access: GET for streaming (PDF.js range requests), POST for

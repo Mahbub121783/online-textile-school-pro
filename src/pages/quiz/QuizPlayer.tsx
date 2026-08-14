@@ -41,28 +41,28 @@ const QuizPlayer = () => {
     enabled: !!quizId,
   });
 
-  // Only columns needed to RENDER a question -- correct_answer/explanation
-  // deliberately excluded. quiz_questions RLS lets an enrolled/authenticated
-  // student read the full row (needed for review after submitting), so a
-  // plain `select('*')` here would hand every correct answer straight to
-  // the Network tab before the student even answers. Scoring already
-  // happens server-side (submit-quiz-attempt); this closes the read-side
-  // leak for multiple_choice/checkbox/true_false/short_answer.
-  // Known residual gap: sequence_items is still included because it also
-  // doubles as the item pool the drag-to-reorder UI needs -- for
-  // `sequence` questions the correct order is technically still visible in
-  // the network response. Properly closing that needs the server to shuffle
-  // sequence_items before sending, which is out of scope for this pass.
-  const { data: rawQuestions = [] } = useQuery({
-    queryKey: ['quiz-questions', quizId],
+  // Starts (or resumes) the attempt server-side -- see
+  // backend/src/functions/startQuizAttempt.js. This replaces a plain
+  // `quiz_questions.select('*')`, which handed correct_answer/explanation/
+  // sequence_items straight to the Network tab before the student answered
+  // anything, and it also persists `started_at` server-side so the timer
+  // survives a page refresh instead of resetting to the full duration
+  // (the previous client-only `setTimeLeft(quiz.time_limit_minutes * 60)`
+  // on every mount was a trivial bypass).
+  const { data: attemptStart, error: attemptStartError } = useQuery({
+    queryKey: ['quiz-start', quizId],
     queryFn: async () => {
-      const { data } = await supabase.from('quiz_questions')
-        .select('id, quiz_id, question_text, question_type, options, sequence_items, points, timer_seconds, image_url, is_instruction, sort_order')
-        .eq('quiz_id', quizId!).order('sort_order');
-      return data ?? [];
+      const { data, error } = await supabase.functions.invoke('start-quiz-attempt', { body: { quiz_id: quizId } });
+      if (error) throw new Error(error.message || 'Could not start quiz');
+      if (data?.error) throw new Error(data.error);
+      return data as { attempt_id: string; started_at: string; time_limit_minutes: number | null; questions: any[] };
     },
-    enabled: !!quizId,
+    enabled: !!quizId && !!user && !submitted,
+    retry: false,
+    staleTime: Infinity,
   });
+
+  const rawQuestions = attemptStart?.questions ?? [];
 
   // Full rows (with correct_answer/explanation/sequence_items) -- fetched
   // only after the attempt is submitted, for the results/review screen.
@@ -132,12 +132,15 @@ const QuizPlayer = () => {
     localStorage.setItem(key, JSON.stringify({ answers, currentQ }));
   }, [answers, currentQ, quizId, user, submitted]);
 
-  // Global timer
+  // Global timer -- derived from the server-persisted `started_at`
+  // (attemptStart), not a fresh full-duration reset on every mount, so a
+  // page refresh resumes the real remaining time instead of restarting it.
   useEffect(() => {
-    if (quiz?.time_limit_minutes && !submitted && timeLeft === null && (quiz as any)?.timer_mode !== 'per_question') {
-      setTimeLeft(quiz.time_limit_minutes * 60);
+    if (attemptStart?.time_limit_minutes && !submitted && timeLeft === null && (quiz as any)?.timer_mode !== 'per_question') {
+      const elapsedSec = (Date.now() - new Date(attemptStart.started_at).getTime()) / 1000;
+      setTimeLeft(Math.max(0, Math.round(attemptStart.time_limit_minutes * 60 - elapsedSec)));
     }
-  }, [quiz, submitted, timeLeft]);
+  }, [attemptStart, quiz, submitted, timeLeft]);
 
   useEffect(() => {
     if (timeLeft === null || timeLeft <= 0 || submitted) return;
@@ -204,7 +207,7 @@ const QuizPlayer = () => {
       // -- the client only submits raw answers, never a computed score, so a
       // student can no longer fabricate a passing result via devtools/curl.
       const { data, error } = await supabase.functions.invoke('submit-quiz-attempt', {
-        body: { quiz_id: quizId, answers, time_spent_seconds: timeSpent },
+        body: { quiz_id: quizId, attempt_id: attemptStart?.attempt_id, answers, time_spent_seconds: timeSpent },
       });
       if (error) throw new Error(error.message || 'Failed to submit quiz');
       if (data?.error) throw new Error(data.error);
@@ -315,6 +318,12 @@ const QuizPlayer = () => {
               <ResultsView result={result} questions={reviewQuestionsRaw.length > 0 ? reviewQuestionsRaw : questions} answers={answers} canAttempt={canAttempt} quiz={quiz}
                 onRetry={() => { setSubmitted(false); setResult(null); setAnswers({}); setCurrentQ(0); setTimeLeft(null); submitRef.current = false; startTime.current = Date.now(); }}
                 onBack={() => navigate(-1)} />
+            ) : attemptStartError ? (
+              <div className="text-center py-12 space-y-3">
+                <AlertTriangle className="h-10 w-10 mx-auto text-destructive" />
+                <p className="text-sm text-muted-foreground">{(attemptStartError as Error).message || 'Could not start this quiz.'}</p>
+                <Button variant="outline" onClick={() => navigate(-1)}>Go Back</Button>
+              </div>
             ) : questions.length > 0 ? (
               <div className="space-y-6">
                 <Progress value={((currentQ + 1) / questions.length) * 100} className="h-2" />

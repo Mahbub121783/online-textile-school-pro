@@ -49,6 +49,7 @@ const InstructorCourses = lazy(() => import("./pages/instructor/InstructorCourse
 const CourseBuilder = lazy(() => import("./pages/instructor/CourseBuilder"));
 const InstructorQuizzes = lazy(() => import("./pages/instructor/InstructorQuizzes"));
 const InstructorAssignments = lazy(() => import("./pages/instructor/InstructorAssignments"));
+const InstructorLiveClasses = lazy(() => import("./pages/instructor/InstructorLiveClasses"));
 const RevenueDashboard = lazy(() => import("./pages/instructor/RevenueDashboard"));
 const InstructorStudents = lazy(() => import("./pages/instructor/InstructorStudents"));
 const InstructorWallet = lazy(() => import("./pages/instructor/InstructorWallet"));
@@ -319,6 +320,7 @@ const AppRoutes = () => {
             <Route path="lessons" element={<InstructorLessons />} />
             <Route path="quizzes" element={<InstructorQuizzes />} />
             <Route path="assignments" element={<InstructorAssignments />} />
+            <Route path="live-classes" element={<InstructorLiveClasses />} />
             <Route path="ebooks" element={<InstructorEbooks />} />
             <Route path="gradebook" element={<InstructorGradebook />} />
             <Route path="certificates" element={<InstructorCertificates />} />

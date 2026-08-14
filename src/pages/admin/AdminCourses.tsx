@@ -7,6 +7,7 @@ import QuizManagementTab from './course-management/QuizManagementTab';
 import AssignmentTab from './course-management/AssignmentTab';
 import AdminCertificates from './AdminCertificates';
 import CourseSettingsTab from './course-management/CourseSettingsTab';
+import CategoriesTab from './course-management/CategoriesTab';
 
 const tabComponents: Record<string, React.ComponentType> = {
   dashboard: CourseDashboardTab,
@@ -16,6 +17,7 @@ const tabComponents: Record<string, React.ComponentType> = {
   quizzes: QuizManagementTab,
   assignments: AssignmentTab,
   certificates: AdminCertificates,
+  categories: CategoriesTab,
   settings: CourseSettingsTab,
 };
 
@@ -27,6 +29,7 @@ const tabTitles: Record<string, string> = {
   quizzes: 'Quizzes',
   assignments: 'Assignments',
   certificates: 'Certificates',
+  categories: 'Categories',
   settings: 'Settings',
 };
 

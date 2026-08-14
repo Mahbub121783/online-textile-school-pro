@@ -60,7 +60,7 @@ async function submitQuizAttempt(req, res) {
     const userId = requireUser(req);
     if (!userId) return res.status(401).json({ error: 'Unauthorized' });
 
-    const { quiz_id, answers, time_spent_seconds } = req.body || {};
+    const { quiz_id, attempt_id, answers, time_spent_seconds } = req.body || {};
     if (!quiz_id || typeof answers !== 'object' || answers === null) {
       return res.status(400).json({ error: 'quiz_id and answers are required' });
     }
@@ -85,7 +85,34 @@ async function submitQuizAttempt(req, res) {
       }
     }
 
-    if (quiz.max_attempts) {
+    // Attempts are created by start-quiz-attempt (see startQuizAttempt.js),
+    // which persists `started_at` server-side -- this is what makes the
+    // time limit refresh-proof. Fall back to a fresh INSERT only for
+    // clients/attempts that predate that endpoint (attempt_id absent) so
+    // this doesn't hard-break in a half-deployed state, but any deadline
+    // enforcement below only applies when we have a real started_at.
+    let attempt = null;
+    if (attempt_id) {
+      attempt = (await serviceQuery(
+        'SELECT * FROM public.quiz_attempts WHERE id = $1 AND quiz_id = $2 AND user_id = $3',
+        [attempt_id, quiz_id, userId]
+      )).rows[0];
+      if (!attempt) return res.status(404).json({ error: 'Attempt not found' });
+      if (attempt.completed_at) return res.status(409).json({ error: 'This attempt was already submitted' });
+
+      if (quiz.time_limit_minutes) {
+        const deadline = new Date(attempt.started_at).getTime() + Number(quiz.time_limit_minutes) * 60 * 1000;
+        const GRACE_MS = 15000; // network/round-trip slack
+        if (Date.now() > deadline + GRACE_MS) {
+          await serviceQuery(
+            `UPDATE public.quiz_attempts SET completed_at = $2, score = 0, total_points = 0, percentage = 0, passed = false
+             WHERE id = $1`,
+            [attempt.id, new Date(deadline).toISOString()]
+          );
+          return res.status(403).json({ error: 'Time expired for this attempt. It has been recorded as unsuccessful.' });
+        }
+      }
+    } else if (quiz.max_attempts) {
       const countRes = await serviceQuery(
         'SELECT count(*) FROM public.quiz_attempts WHERE quiz_id = $1 AND user_id = $2 AND completed_at IS NOT NULL',
         [quiz_id, userId]
@@ -114,14 +141,22 @@ async function submitQuizAttempt(req, res) {
     const percentage = totalPoints > 0 ? Math.round((score / totalPoints) * 100) : 0;
     const passed = percentage >= (quiz.pass_percentage || 60);
 
-    const insertRes = await serviceQuery(
-      `INSERT INTO public.quiz_attempts (quiz_id, user_id, answers, score, total_points, percentage, passed, completed_at, time_spent_seconds)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, now(), $8)
-       RETURNING *`,
-      [quiz_id, userId, JSON.stringify(answers), score, totalPoints, percentage, passed, time_spent_seconds || null]
-    );
+    const resultRow = attempt
+      ? (await serviceQuery(
+          `UPDATE public.quiz_attempts
+           SET answers = $2, score = $3, total_points = $4, percentage = $5, passed = $6, completed_at = now(), time_spent_seconds = $7
+           WHERE id = $1
+           RETURNING *`,
+          [attempt.id, JSON.stringify(answers), score, totalPoints, percentage, passed, time_spent_seconds || null]
+        )).rows[0]
+      : (await serviceQuery(
+          `INSERT INTO public.quiz_attempts (quiz_id, user_id, answers, score, total_points, percentage, passed, completed_at, time_spent_seconds)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, now(), $8)
+           RETURNING *`,
+          [quiz_id, userId, JSON.stringify(answers), score, totalPoints, percentage, passed, time_spent_seconds || null]
+        )).rows[0];
 
-    res.json({ ...insertRes.rows[0], per_question: perQuestion });
+    res.json({ ...resultRow, per_question: perQuestion });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

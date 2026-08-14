@@ -29,6 +29,7 @@ const navGroups = [
       { title: 'Lessons', url: '/instructor/lessons', icon: FileText },
       { title: 'Quizzes', url: '/instructor/quizzes', icon: FileQuestion },
       { title: 'Assignments', url: '/instructor/assignments', icon: ClipboardList },
+      { title: 'Live Classes', url: '/instructor/live-classes', icon: Video },
       { title: 'eBooks', url: '/instructor/ebooks', icon: Library },
       { title: 'Certificates', url: '/instructor/certificates', icon: Award },
       { title: 'Class Videos', url: '/admin/class-videos', icon: Video },

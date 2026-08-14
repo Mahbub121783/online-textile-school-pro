@@ -32,6 +32,7 @@ const cmsSubItems = [
   { title: 'Quizzes', url: '/admin/cms/quizzes', icon: HelpCircle },
   { title: 'Assignments', url: '/admin/cms/assignments', icon: ClipboardList },
   { title: 'Certificates', url: '/admin/cms/certificates', icon: Award },
+  { title: 'Categories', url: '/admin/cms/categories', icon: Tag },
   { title: 'Settings', url: '/admin/cms/settings', icon: Settings },
 ];
 
