@@ -74,7 +74,7 @@ CREATE POLICY "Admins manage user roles" ON public.user_roles FOR ALL
   USING (auth.role() = 'authenticated' AND (has_role(auth.uid(),'admin'::app_role) OR has_role(auth.uid(),'super_admin'::app_role)))
   WITH CHECK (auth.role() = 'authenticated' AND (has_role(auth.uid(),'admin'::app_role) OR has_role(auth.uid(),'super_admin'::app_role)));
 CREATE POLICY "Users read own roles" ON public.user_roles FOR SELECT
-  USING (auth.role() = 'authenticated' AND user_id = auth.uid());
+  USING (auth.role() = 'service_role' OR (auth.role() = 'authenticated' AND user_id = auth.uid()));
 
 -- ---------- User profile (public read, own write, service_role insert at signup) ----------
 CREATE POLICY "Public read profiles" ON public.user_profiles FOR SELECT USING (true);
