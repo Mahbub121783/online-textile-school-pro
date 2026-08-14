@@ -46,8 +46,13 @@ function splitTopLevel(str) {
 
 // `[alias:]name[!constraint](inner)` -- the embed syntax for one select token.
 const EMBED_RE = /^(?:([a-zA-Z_][a-zA-Z0-9_]*):)?([a-zA-Z_][a-zA-Z0-9_]*)(?:!([a-zA-Z_][a-zA-Z0-9_]*))?\(([\s\S]*)\)$/;
-// `[alias:]column` -- a flat column, optionally aliased.
-const FLAT_RE = /^(?:([a-zA-Z_][a-zA-Z0-9_]*):)?([a-zA-Z_][a-zA-Z0-9_*]*)$/;
+// `[alias:]column` -- a flat column, optionally aliased. `*` alone (e.g. as
+// one token in `select=*,relation(cols)`) must also match -- the previous
+// pattern required the token to START with a letter/underscore, so a bare
+// `*` token fell through to "Unparseable select fragment" and broke every
+// query that combines `*` with an embed (e.g. CourseDetail.tsx's
+// `select('*, categories(name), ...')`, used platform-wide).
+const FLAT_RE = /^(?:([a-zA-Z_][a-zA-Z0-9_]*):)?(\*|[a-zA-Z_][a-zA-Z0-9_]*)$/;
 
 // Recursively builds a SQL select-list for `table`, resolving embedded
 // resources into correlated subqueries (to_jsonb for many-to-one,

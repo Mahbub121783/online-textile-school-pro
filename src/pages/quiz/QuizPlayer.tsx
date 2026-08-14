@@ -41,13 +41,38 @@ const QuizPlayer = () => {
     enabled: !!quizId,
   });
 
+  // Only columns needed to RENDER a question -- correct_answer/explanation
+  // deliberately excluded. quiz_questions RLS lets an enrolled/authenticated
+  // student read the full row (needed for review after submitting), so a
+  // plain `select('*')` here would hand every correct answer straight to
+  // the Network tab before the student even answers. Scoring already
+  // happens server-side (submit-quiz-attempt); this closes the read-side
+  // leak for multiple_choice/checkbox/true_false/short_answer.
+  // Known residual gap: sequence_items is still included because it also
+  // doubles as the item pool the drag-to-reorder UI needs -- for
+  // `sequence` questions the correct order is technically still visible in
+  // the network response. Properly closing that needs the server to shuffle
+  // sequence_items before sending, which is out of scope for this pass.
   const { data: rawQuestions = [] } = useQuery({
     queryKey: ['quiz-questions', quizId],
+    queryFn: async () => {
+      const { data } = await supabase.from('quiz_questions')
+        .select('id, quiz_id, question_text, question_type, options, sequence_items, points, timer_seconds, image_url, is_instruction, sort_order')
+        .eq('quiz_id', quizId!).order('sort_order');
+      return data ?? [];
+    },
+    enabled: !!quizId,
+  });
+
+  // Full rows (with correct_answer/explanation/sequence_items) -- fetched
+  // only after the attempt is submitted, for the results/review screen.
+  const { data: reviewQuestionsRaw = [] } = useQuery({
+    queryKey: ['quiz-questions-review', quizId],
     queryFn: async () => {
       const { data } = await supabase.from('quiz_questions').select('*').eq('quiz_id', quizId!).order('sort_order');
       return data ?? [];
     },
-    enabled: !!quizId,
+    enabled: !!quizId && submitted,
   });
 
   const questions = useMemo(() => {
@@ -287,7 +312,7 @@ const QuizPlayer = () => {
             )}
 
             {submitted && result ? (
-              <ResultsView result={result} questions={questions} answers={answers} canAttempt={canAttempt} quiz={quiz}
+              <ResultsView result={result} questions={reviewQuestionsRaw.length > 0 ? reviewQuestionsRaw : questions} answers={answers} canAttempt={canAttempt} quiz={quiz}
                 onRetry={() => { setSubmitted(false); setResult(null); setAnswers({}); setCurrentQ(0); setTimeLeft(null); submitRef.current = false; startTime.current = Date.now(); }}
                 onBack={() => navigate(-1)} />
             ) : questions.length > 0 ? (
