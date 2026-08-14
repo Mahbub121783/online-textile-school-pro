@@ -4,6 +4,51 @@ const { pool } = require('./db');
 // demand (schema doesn't change at runtime for this app).
 let cache = null;
 
+// Cache of { table -> Set(column names with data_type json/jsonb) }. The
+// generic REST insert/update handlers push req.body values straight into `pg`
+// query params -- for a jsonb/json column, `pg` needs a JSON *string*, but
+// supabase-js/fetch already deserializes the request body into a real JS
+// array/object by the time it reaches us, and `pg` serializes a raw JS array
+// param as a Postgres array literal (`{a,b}`), not JSON, which Postgres then
+// rejects for a jsonb column ("invalid input syntax for type json"). This
+// lets the insert/update handlers know which columns need an explicit
+// JSON.stringify() first, without touching genuinely-native array columns
+// (text[], uuid[], etc., whose information_schema.data_type is "ARRAY", not
+// "json"/"jsonb", and which `pg` already serializes correctly on its own).
+let jsonColumnsCache = null;
+
+async function loadJsonColumns() {
+  if (jsonColumnsCache) return jsonColumnsCache;
+  const { rows } = await pool.query(`
+    SELECT table_name, column_name
+    FROM information_schema.columns
+    WHERE table_schema = 'public' AND data_type IN ('json', 'jsonb')
+  `);
+  const map = new Map();
+  for (const r of rows) {
+    if (!map.has(r.table_name)) map.set(r.table_name, new Set());
+    map.get(r.table_name).add(r.column_name);
+  }
+  jsonColumnsCache = map;
+  return jsonColumnsCache;
+}
+
+async function isJsonColumn(table, column) {
+  const map = await loadJsonColumns();
+  return map.get(table)?.has(column) ?? false;
+}
+
+// Normalizes a single value for binding as a `pg` query param: JSON.stringify
+// it if (and only if) the target column is a json/jsonb column and the value
+// is a real object/array that still needs serializing (already-a-string and
+// null/undefined pass through untouched).
+async function serializeForColumn(table, column, value) {
+  if (value !== null && typeof value === 'object' && (await isJsonColumn(table, column))) {
+    return JSON.stringify(value);
+  }
+  return value;
+}
+
 async function loadRelationships() {
   if (cache) return cache;
   const { rows } = await pool.query(`
@@ -58,4 +103,4 @@ async function resolveEmbed(table, hint, constraintHint) {
   return { targetTable: r.local_table, localColumn: r.foreign_column, foreignColumn: r.local_column, isArray: true };
 }
 
-module.exports = { resolveEmbed, loadRelationships };
+module.exports = { resolveEmbed, loadRelationships, serializeForColumn };

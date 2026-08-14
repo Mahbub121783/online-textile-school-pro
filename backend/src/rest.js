@@ -1,7 +1,7 @@
 const express = require('express');
 const { withRequestContext } = require('./db');
 const { readAuth } = require('./auth');
-const { resolveEmbed } = require('./relationships');
+const { resolveEmbed, serializeForColumn } = require('./relationships');
 
 // ============================================================
 // PostgREST-subset query layer. Implements exactly the operator set the
@@ -321,13 +321,15 @@ router.route('/:table')
       const columns = Object.keys(rows[0]);
       columns.forEach(assertValidIdentifier);
       const params = [];
-      const valueRows = rows.map((row) => {
-        const placeholders = columns.map((col) => {
-          params.push(row[col]);
-          return `$${params.length}`;
-        });
-        return `(${placeholders.join(', ')})`;
-      });
+      const valueRows = [];
+      for (const row of rows) {
+        const placeholders = [];
+        for (const col of columns) {
+          params.push(await serializeForColumn(table, col, row[col]));
+          placeholders.push(`$${params.length}`);
+        }
+        valueRows.push(`(${placeholders.join(', ')})`);
+      }
 
       const onConflict = req.query.on_conflict;
       const prefer = req.headers.prefer || '';
@@ -364,12 +366,12 @@ router.route('/:table')
       columns.forEach(assertValidIdentifier);
 
       const params = [];
-      const setClause = columns
-        .map((c) => {
-          params.push(req.body[c]);
-          return `"${c}" = $${params.length}`;
-        })
-        .join(', ');
+      const setParts = [];
+      for (const c of columns) {
+        params.push(await serializeForColumn(table, c, req.body[c]));
+        setParts.push(`"${c}" = $${params.length}`);
+      }
+      const setClause = setParts.join(', ');
       const where = buildWhere(req.query, params);
       const returning = preferReturn(req) ? `RETURNING ${await buildSelectClause(table, req.query.select)}` : '';
       const sql = `UPDATE public."${table}" SET ${setClause} ${where} ${returning}`;
