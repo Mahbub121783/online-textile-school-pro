@@ -2,9 +2,14 @@ import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { isStandalone } from "@/hooks/useStandaloneMode";
 
-// VAPID public key — public, safe to embed in client. Pairs with VAPID_PRIVATE_KEY secret in edge functions.
+// VAPID public key — public, safe to embed in client. Pairs with VAPID_PRIVATE_KEY
+// in backend/.env. Regenerated during the self-host migration (the original
+// key's private half only ever existed in the deleted Supabase project's
+// secrets vault and could not be recovered) -- any push subscriptions from
+// before the cutover are stale and will silently fail until users revisit
+// the site and get re-subscribed under this key.
 const VAPID_PUBLIC_KEY =
-  "BK_3WnSi0YgfRqoi9F2xZ3f8NltbxsC7685HVb7JwQAgw_GVagA6zoF2EQaFyyn7WADsrT-gQd3SFdARBvyZ2JY";
+  "BJdE7YoRjgxTFKdSwatdxWNKLCXIiy6SSxV9cF_GOSgzF4mVZ9T25XLbGXjMfd8i34-t0yPq64eKxKWpBlrU8js";
 
 const urlBase64ToUint8Array = (base64: string) => {
   const padding = "=".repeat((4 - (base64.length % 4)) % 4);
