@@ -20,6 +20,9 @@ const { aiIndexBuilder } = require('./aiIndexBuilder');
 const { qbAiGenerate } = require('./qbAiGenerate');
 const { cloudinaryProxy } = require('./cloudinaryProxy');
 const { qbSeedBatch } = require('./qbSeedBatch');
+const { cpanelEmailProvisioner } = require('./cpanelEmailProvisioner');
+const { edumailClient } = require('./edumailClient');
+const { edumailImapSync } = require('./edumailImapSync');
 
 const router = express.Router();
 
@@ -46,6 +49,9 @@ router.post('/ai-index-builder', aiIndexBuilder);
 router.post('/qb-ai-generate', qbAiGenerate);
 router.post('/cloudinary-proxy', cloudinaryProxy);
 router.post('/qb-seed-batch', qbSeedBatch);
+router.post('/cpanel-email-provisioner', cpanelEmailProvisioner);
+router.post('/edumail-client', edumailClient);
+router.post('/edumail-imap-sync', edumailImapSync);
 
 // ebook-secure-access: GET for streaming (PDF.js range requests), POST for
 // generate_token -- same path, dispatched by method (matches the original
