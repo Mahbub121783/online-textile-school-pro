@@ -116,6 +116,7 @@ const InstructorWallet = () => {
       setWithdrawOpen(false);
       setWithdrawAmount(''); setWithdrawMethod(''); setWithdrawAccount('');
       queryClient.invalidateQueries({ queryKey: ['wallet-transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['wallet'] });
     } catch (err: any) { toast.error(err.message || 'Failed'); }
     setWithdrawing(false);
   };

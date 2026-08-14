@@ -39,7 +39,7 @@ const AssignmentSubmit = () => {
   const { data: assignment } = useQuery({
     queryKey: ['assignment', assignmentId],
     queryFn: async () => {
-      const { data } = await supabase.from('assignments').select('*, courses(title)').eq('id', assignmentId!).single();
+      const { data } = await supabase.from('assignments').select('*, courses(title, instructor_id)').eq('id', assignmentId!).single();
       return data;
     },
     enabled: !!assignmentId,
@@ -126,8 +126,24 @@ const AssignmentSubmit = () => {
             user_id: user!.id,
             submission_text: text,
             file_url: driveLink.trim() || null,
+            status: 'submitted',
           });
         if (error) throw error;
+      }
+
+      // Notify the instructor -- previously nothing ever told them a new
+      // submission (or resubmission) had come in; they'd only find out by
+      // manually revisiting the grading screen.
+      const instructorId = assignment?.courses?.instructor_id;
+      if (instructorId) {
+        const { createNotification } = await import('@/lib/notifications');
+        await createNotification({
+          userId: instructorId,
+          type: 'assignment_submitted',
+          title: submission ? 'Assignment Resubmitted' : 'New Assignment Submission',
+          message: `${user?.email || 'A student'} ${submission ? 're-' : ''}submitted "${assignment?.title || 'an assignment'}".`,
+          link: '/instructor/assignments',
+        });
       }
     },
     onSuccess: () => {

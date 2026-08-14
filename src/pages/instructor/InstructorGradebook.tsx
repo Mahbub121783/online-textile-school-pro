@@ -109,6 +109,7 @@ const InstructorGradebook = () => {
         credits: parseFloat(gradeForm.credits),
         semester: gradeForm.semester || null,
         notes: gradeForm.notes || null,
+        graded_by: user?.id || null,
       };
       if (existing) {
         const { error } = await supabase.from('student_grades' as any).update(payload).eq('id', existing.id);

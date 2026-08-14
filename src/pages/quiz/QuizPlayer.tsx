@@ -173,38 +173,16 @@ const QuizPlayer = () => {
     mutationFn: async () => {
       if (submitRef.current) return null;
       submitRef.current = true;
-      let score = 0;
-      let totalPoints = 0;
-      questions.forEach((q: any) => {
-        if (q.is_instruction) return;
-        totalPoints += q.points || 1;
-        const userAns = answers[q.id]?.trim().toLowerCase() || '';
-        const correctAns = q.correct_answer?.trim().toLowerCase() || '';
-        if (q.question_type === 'sequence') {
-          const seqItems = Array.isArray(q.sequence_items) ? q.sequence_items : [];
-          const userSeq = userAns ? userAns.split('|||') : [];
-          if (JSON.stringify(userSeq) === JSON.stringify(seqItems.map((s: string) => s.toLowerCase()))) {
-            score += q.points || 1;
-          } else if (userAns && Number(q.negative_marks) > 0) {
-            score -= Number(q.negative_marks);
-          }
-        } else if (userAns === correctAns) {
-          score += q.points || 1;
-        } else if (userAns && Number(q.negative_marks) > 0) {
-          score -= Number(q.negative_marks);
-        }
-      });
-      score = Math.max(0, score);
-      const percentage = totalPoints > 0 ? Math.round((score / totalPoints) * 100) : 0;
-      const passed = percentage >= (quiz?.pass_percentage || 60);
       const timeSpent = Math.round((Date.now() - startTime.current) / 1000);
 
-      const { data, error } = await supabase.from('quiz_attempts').insert({
-        quiz_id: quizId!, user_id: user!.id, answers, score, total_points: totalPoints,
-        percentage, passed, completed_at: new Date().toISOString(),
-        time_spent_seconds: timeSpent,
-      }).select().single();
-      if (error) throw error;
+      // Scoring is authoritative server-side (see backend/src/functions/submitQuizAttempt.js)
+      // -- the client only submits raw answers, never a computed score, so a
+      // student can no longer fabricate a passing result via devtools/curl.
+      const { data, error } = await supabase.functions.invoke('submit-quiz-attempt', {
+        body: { quiz_id: quizId, answers, time_spent_seconds: timeSpent },
+      });
+      if (error) throw new Error(error.message || 'Failed to submit quiz');
+      if (data?.error) throw new Error(data.error);
       localStorage.removeItem(`quiz_session_${quizId}_${user!.id}`);
       return data;
     },
@@ -214,6 +192,10 @@ const QuizPlayer = () => {
       setSubmitted(true);
       qc.invalidateQueries({ queryKey: ['quiz-attempts'] });
       toast({ title: data.passed ? '🎉 Quiz Passed!' : 'Quiz Completed', description: `Score: ${data.score}/${data.total_points} (${data.percentage}%)` });
+    },
+    onError: (e: any) => {
+      submitRef.current = false;
+      toast({ title: 'Could not submit quiz', description: e.message, variant: 'destructive' });
     },
   });
 
@@ -244,9 +226,11 @@ const QuizPlayer = () => {
       const stored = answers[q.id];
       if (stored) setSeqOrder(stored.split('|||'));
       else {
-        const shuffled = [...seqItems].sort(() => Math.random() - 0.5);
-        setSeqOrder(shuffled);
-        setAnswers(prev => ({ ...prev, [q.id]: shuffled.join('|||') }));
+        // Only shuffle for DISPLAY -- don't write to `answers` yet, or a
+        // student who never touches this question still gets an "answer"
+        // recorded (and can be negative-marked for it if the question has
+        // negative_marks set).
+        setSeqOrder([...seqItems].sort(() => Math.random() - 0.5));
       }
     }
   }, [currentQ, q?.id]);
@@ -408,12 +392,22 @@ const ResultsView = ({ result, questions, answers, canAttempt, quiz, onRetry, on
       <h3 className="font-heading font-bold">Review Answers</h3>
       {questions.filter((q: any) => !q.is_instruction).map((question: any, idx: number) => {
         const userAnswer = answers[question.id] || '';
-        const isCorrect = userAnswer.trim().toLowerCase() === question.correct_answer?.trim().toLowerCase();
+        // Authoritative correctness comes from the server's per-question
+        // scoring result, not a client-side re-derivation -- previously this
+        // compared every question type (including sequence, whose
+        // correct_answer is stored as the placeholder "N/A") against
+        // question.correct_answer, so correctly-scored sequence questions
+        // always displayed as wrong.
+        const perQ = (result.per_question || []).find((p: any) => p.question_id === question.id);
+        const isCorrect = perQ ? perQ.is_correct : userAnswer.trim().toLowerCase() === question.correct_answer?.trim().toLowerCase();
+        const correctDisplay = question.question_type === 'sequence'
+          ? (Array.isArray(question.sequence_items) ? question.sequence_items.join(' → ') : '')
+          : question.correct_answer;
         return (
           <div key={question.id} className={`p-4 rounded-lg border ${isCorrect ? 'border-green-200 bg-green-50/50 dark:bg-green-950/10' : 'border-red-200 bg-red-50/50 dark:bg-red-950/10'}`}>
             <p className="font-medium text-sm mb-2">Q{idx + 1}. {question.question_text}</p>
-            <p className="text-sm">Your answer: <span className={isCorrect ? 'text-green-600 font-medium' : 'text-destructive font-medium'}>{userAnswer || '(no answer)'}</span></p>
-            {!isCorrect && <p className="text-sm text-green-600 mt-1">Correct: {question.correct_answer}</p>}
+            <p className="text-sm">Your answer: <span className={isCorrect ? 'text-green-600 font-medium' : 'text-destructive font-medium'}>{userAnswer.replaceAll('|||', ' → ') || '(no answer)'}</span></p>
+            {!isCorrect && <p className="text-sm text-green-600 mt-1">Correct: {correctDisplay}</p>}
             {question.explanation && <p className="text-xs text-muted-foreground mt-2 italic">{question.explanation}</p>}
           </div>
         );

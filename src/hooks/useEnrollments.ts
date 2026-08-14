@@ -151,130 +151,18 @@ export function useMarkLessonComplete() {
 
 async function autoIssueCertificate(userId: string, courseId: string) {
   try {
-    // Check if cert already exists
-    const { data: existing } = await supabase
-      .from('certificates')
-      .select('id')
-      .eq('user_id', userId)
-      .eq('course_id', courseId)
-      .maybeSingle();
-    if (existing) return; // already issued
-
-    // Get course with template
-    const { data: course } = await supabase
-      .from('courses')
-      .select('id, title, cert_template_id, certificate_threshold_pct')
-      .eq('id', courseId)
-      .single();
-    if (!course) return;
-
-    // Check threshold (default 100% — we're already at 100% if we got here)
-    const threshold = course.certificate_threshold_pct ?? 100;
-
-    // If gradebook_pass rule, check quiz scores
-    let scorePercentage: number | null = null;
-    if (course.cert_template_id) {
-      const { data: template } = await supabase
-        .from('certificate_templates')
-        .select('download_rule, min_score_pct')
-        .eq('id', course.cert_template_id)
-        .single();
-
-      if (template?.download_rule === 'gradebook_pass') {
-        const { data: quizzes } = await supabase
-          .from('quizzes')
-          .select('id, pass_percentage')
-          .eq('course_id', courseId)
-          .eq('is_published', true);
-
-        if (quizzes?.length) {
-          const { data: attempts } = await supabase
-            .from('quiz_attempts')
-            .select('quiz_id, percentage')
-            .eq('user_id', userId)
-            .in('quiz_id', quizzes.map(q => q.id))
-            .order('percentage', { ascending: false });
-
-          const bestScores = new Map<string, number>();
-          (attempts ?? []).forEach((a: any) => {
-            if (!bestScores.has(a.quiz_id) || a.percentage > bestScores.get(a.quiz_id)!) {
-              bestScores.set(a.quiz_id, a.percentage ?? 0);
-            }
-          });
-
-          const avgScore = quizzes.reduce((sum, q) => sum + (bestScores.get(q.id) ?? 0), 0) / quizzes.length;
-          scorePercentage = Math.round(avgScore);
-
-          const minScore = template.min_score_pct ?? 60;
-          if (avgScore < minScore) return; // not eligible
-        }
-      }
-    }
-
-    // Get template snapshot for certificate
-    let templateSnapshot = null;
-    if (course.cert_template_id) {
-      const { data: tmpl } = await supabase
-        .from('certificate_templates')
-        .select('*')
-        .eq('id', course.cert_template_id)
-        .single();
-      templateSnapshot = tmpl;
-    }
-
-    // Generate certificate number
-    const certNumber = `CERT-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
-
-    // Issue certificate
-    const { error: certError } = await supabase.from('certificates').insert({
-      user_id: userId,
-      course_id: courseId,
-      certificate_number: certNumber,
-      score_percentage: scorePercentage,
-      template_snapshot: templateSnapshot,
-      issued_at: new Date().toISOString(),
+    // Issuance is authoritative server-side now (backend/src/functions/issueCertificate.js)
+    // -- this used to insert into `certificates` directly under the student's
+    // own session, which the table's RLS policy (service_role/admin/
+    // instructor/super_admin only) always correctly rejected, silently
+    // breaking auto-issuance for every student. The endpoint re-verifies
+    // completion/score eligibility itself before issuing, and sends the
+    // in-app notification itself on success.
+    const { data, error } = await supabase.functions.invoke('issue-certificate', {
+      body: { course_id: courseId },
     });
-
-    if (certError) {
-      console.error('Auto-issue certificate failed:', certError);
-      return;
-    }
-
-    // Notify user
-    await supabase.from('notifications').insert({
-      user_id: userId,
-      type: 'certificate',
-      title: '🎉 Certificate Earned!',
-      message: `Congratulations! You earned a certificate for completing "${course.title}".`,
-      link: '/dashboard/certificates',
-    });
-
-    // Send certificate email
-    try {
-      const { data: userProfile } = await supabase
-        .from('user_profiles')
-        .select('id')
-        .eq('id', userId)
-        .single();
-      if (userProfile) {
-        const { data: authUser } = await supabase.auth.admin?.getUserById?.(userId) || {};
-        const email = (authUser as any)?.user?.email;
-        if (email) {
-          await supabase.functions.invoke('send-smtp-email', {
-            body: {
-              templateKey: 'certificate_issued',
-              recipientEmail: email,
-              placeholders: {
-                student_name: 'Student',
-                course_title: course.title,
-                certificate_number: certNumber,
-              },
-            },
-          });
-        }
-      }
-    } catch (emailErr) {
-      console.warn('Certificate email send failed (non-critical):', emailErr);
+    if (error || data?.error) {
+      console.error('Auto-issue certificate failed:', error || data?.error);
     }
   } catch (err) {
     console.error('Certificate auto-issue error:', err);

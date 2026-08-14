@@ -98,7 +98,24 @@ const InstructorStudents = () => {
     const { error } = await supabase.from('assignment_submissions').update({
       score: Number(score), feedback, status: 'graded', graded_at: new Date().toISOString(),
     }).eq('id', gradingSheet.submission.id);
-    if (!error) { toast.success('Graded!'); setGradingSheet({ open: false }); }
+    if (!error) {
+      // Notify the student -- previously this grading path (unlike AssignmentTab.tsx's)
+      // saved the grade silently with no notification at all.
+      const sub = gradingSheet.submission;
+      const assignment = gradebookData.assignments.find((a: any) => a.id === sub.assignment_id);
+      if (sub.user_id) {
+        const { createNotification } = await import('@/lib/notifications');
+        await createNotification({
+          userId: sub.user_id,
+          type: 'assignment_graded',
+          title: 'Assignment Graded ✅',
+          message: `Your assignment "${assignment?.title || 'Unknown'}" scored ${score}/${assignment?.max_score || 100}.${feedback ? ` Feedback: ${feedback}` : ''}`,
+          link: '/dashboard/assignments',
+        });
+      }
+      toast.success('Graded!');
+      setGradingSheet({ open: false });
+    }
   };
 
   // Build gradebook matrix
