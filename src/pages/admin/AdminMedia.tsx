@@ -25,90 +25,9 @@ const AdminMedia = () => {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [selectedMedia, setSelectedMedia] = useState<any>(null);
   const [uploading, setUploading] = useState(false);
-  const [scanning, setScanning] = useState(false);
-  const [migrating, setMigrating] = useState(false);
-  const [stopRequested, setStopRequested] = useState(false);
-  const [queueStatus, setQueueStatus] = useState<{ pending: number; processing: number; success: number; failed: number; total: number } | null>(null);
-  const [currentFile, setCurrentFile] = useState<string>('');
-  const [liveCounts, setLiveCounts] = useState({ cloudinary: 0, r2: 0, failed: 0 });
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const { upload: fileUpload } = useFileUpload();
-
-  const refreshStatus = async () => {
-    const { data } = await supabase.functions.invoke('migrate-storage-to-cloud', { body: { action: 'status' } });
-    if (data) setQueueStatus(data);
-    return data;
-  };
-
-  const runScan = async () => {
-    setScanning(true);
-    try {
-      const folderQueue: string[] = [''];
-      let totalInserted = 0;
-      while (folderQueue.length > 0) {
-        const prefix = folderQueue.shift()!;
-        let offset = 0;
-        while (true) {
-          const { data, error } = await supabase.functions.invoke('migrate-storage-to-cloud', {
-            body: { action: 'scan', prefix, offset },
-          });
-          if (error) throw error;
-          totalInserted += data.inserted || 0;
-          if (Array.isArray(data.folders)) folderQueue.push(...data.folders);
-          if (!data.hasMore) break;
-          offset = data.nextOffset;
-        }
-      }
-      toast.success(`Scan complete: ${totalInserted} files queued`);
-      await refreshStatus();
-    } catch (err: any) {
-      toast.error('Scan failed: ' + (err.message || 'Unknown'));
-    } finally {
-      setScanning(false);
-    }
-  };
-
-  const runMigration = async () => {
-    if (!confirm('Migrate queued legacy files? Images go to Cloudinary, others to Cloudflare R2. Originals will be DELETED from Supabase.')) return;
-    setMigrating(true);
-    setStopRequested(false);
-    setLiveCounts({ cloudinary: 0, r2: 0, failed: 0 });
-    try {
-      while (true) {
-        if (stopRequested) break;
-        const { data, error } = await supabase.functions.invoke('migrate-storage-to-cloud', {
-          body: { action: 'migrate-next', deleteOriginals: true },
-        });
-        if (error) throw error;
-        if (data?.done) break;
-        const p = data?.processed;
-        if (p) {
-          setCurrentFile(p.file || '');
-          setLiveCounts((c) => ({
-            cloudinary: c.cloudinary + (p.source === 'cloudinary' ? 1 : 0),
-            r2: c.r2 + (p.source === 'r2' ? 1 : 0),
-            failed: c.failed + (p.error ? 1 : 0),
-          }));
-        }
-        if (Math.random() < 0.2) await refreshStatus();
-      }
-      await refreshStatus();
-      toast.success('Migration finished');
-      queryClient.invalidateQueries({ queryKey: ['admin-media'] });
-    } catch (err: any) {
-      toast.error('Migration error: ' + (err.message || 'Unknown'));
-    } finally {
-      setMigrating(false);
-      setCurrentFile('');
-    }
-  };
-
-  const retryFailed = async () => {
-    await supabase.functions.invoke('migrate-storage-to-cloud', { body: { action: 'retry-failed' } });
-    toast.success('Failed items moved back to pending');
-    await refreshStatus();
-  };
 
   const { data: media = [], isLoading } = useQuery({
     queryKey: ['admin-media'],
@@ -266,54 +185,6 @@ const AdminMedia = () => {
           <strong>Routing rule:</strong> Images always go to <strong>Cloudinary</strong>. All other files always go to <strong>Cloudflare R2</strong>. Supabase Storage is never used for new uploads.
         </AlertDescription>
       </Alert>
-
-      <Card className="p-4 space-y-3">
-        <div className="flex items-center justify-between flex-wrap gap-2">
-          <div>
-            <h3 className="font-semibold">Legacy Supabase Migration</h3>
-            <p className="text-xs text-muted-foreground">Step 1: scan to queue files. Step 2: process the queue one by one.</p>
-          </div>
-          <div className="flex gap-2 flex-wrap">
-            <Button variant="outline" size="sm" onClick={runScan} disabled={scanning || migrating}>
-              {scanning ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Search className="h-4 w-4 mr-2" />}
-              {scanning ? 'Scanning...' : '1. Scan legacy'}
-            </Button>
-            <Button variant="outline" size="sm" onClick={refreshStatus} disabled={scanning || migrating}>
-              Refresh status
-            </Button>
-            {!migrating ? (
-              <Button size="sm" onClick={runMigration} disabled={scanning || !queueStatus?.pending}>
-                <CloudUpload className="h-4 w-4 mr-2" />
-                2. Migrate ({queueStatus?.pending ?? 0} pending)
-              </Button>
-            ) : (
-              <Button size="sm" variant="destructive" onClick={() => setStopRequested(true)}>
-                Stop
-              </Button>
-            )}
-            {!!queueStatus?.failed && (
-              <Button size="sm" variant="ghost" onClick={retryFailed} disabled={migrating}>
-                Retry {queueStatus.failed} failed
-              </Button>
-            )}
-          </div>
-        </div>
-        {queueStatus && (
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs">
-            <div className="bg-muted rounded p-2"><div className="text-muted-foreground">Total</div><div className="font-bold">{queueStatus.total}</div></div>
-            <div className="bg-muted rounded p-2"><div className="text-muted-foreground">Pending</div><div className="font-bold">{queueStatus.pending}</div></div>
-            <div className="bg-muted rounded p-2"><div className="text-muted-foreground">Processing</div><div className="font-bold">{queueStatus.processing}</div></div>
-            <div className="bg-muted rounded p-2"><div className="text-muted-foreground">Success</div><div className="font-bold text-primary">{queueStatus.success}</div></div>
-            <div className="bg-muted rounded p-2"><div className="text-muted-foreground">Failed</div><div className="font-bold text-destructive">{queueStatus.failed}</div></div>
-          </div>
-        )}
-        {migrating && (
-          <div className="text-xs space-y-1">
-            <div className="flex items-center gap-2"><Loader2 className="h-3 w-3 animate-spin" /> <span className="truncate">{currentFile || 'starting...'}</span></div>
-            <div>This session: <strong>{liveCounts.cloudinary}</strong> → Cloudinary, <strong>{liveCounts.r2}</strong> → R2, <strong className="text-destructive">{liveCounts.failed}</strong> failed</div>
-          </div>
-        )}
-      </Card>
 
       <div className="flex gap-3 items-center">
         <div className="relative flex-1 max-w-sm">

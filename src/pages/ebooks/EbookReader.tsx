@@ -634,7 +634,7 @@ const EbookReader = () => {
       if (!user || !ebookId || !totalPages) return;
       const progressPct = totalPages > 0 ? Math.round((currentPage / totalPages) * 100) : 0;
       const readerData: ReaderData = { highlights, notes };
-      await supabase
+      const { error } = await supabase
         .from('ebook_reading_progress')
         .upsert({
           user_id: user.id,
@@ -648,6 +648,7 @@ const EbookReader = () => {
           notes: readerData as unknown as any,
           updated_at: new Date().toISOString(),
         } as any, { onConflict: 'user_id,ebook_id' });
+      if (error) console.warn('Failed to save reading progress:', error.message);
     }, 800);
   }, [currentPage, totalPages, readingMode, zoomLevel, brightness, notes, highlights, user, ebookId]);
 
