@@ -16,6 +16,7 @@ const { validateDriveLink } = require('./validateDriveLink');
 const { sendSms } = require('./sendSms');
 const { metaCapi } = require('./metaCapi');
 const { aiTutor } = require('./aiTutor');
+const { aiIndexBuilder } = require('./aiIndexBuilder');
 
 const router = express.Router();
 
@@ -38,6 +39,7 @@ router.post('/validate-drive-link', validateDriveLink);
 router.post('/send-sms', sendSms);
 router.post('/meta-capi', metaCapi);
 router.post('/ai-tutor', aiTutor);
+router.post('/ai-index-builder', aiIndexBuilder);
 
 // ebook-secure-access: GET for streaming (PDF.js range requests), POST for
 // generate_token -- same path, dispatched by method (matches the original
