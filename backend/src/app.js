@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
+const path = require('path');
 const { pool } = require('./db');
 const { router: authRouter } = require('./auth');
 const restRouter = require('./rest');
@@ -33,6 +34,10 @@ app.use(cors({
   credentials: true,
 }));
 app.use(express.json({ limit: '10mb' }));
+// Local file-manager image hosting (fallback path alongside Cloudinary/R2) --
+// see backend/src/functions/localUpload.js. Images only, served as static
+// files so it costs nothing beyond disk (no extra Node process/CPU per request).
+app.use('/uploads', express.static(path.join(__dirname, '..', 'public', 'uploads'), { maxAge: '30d', immutable: true }));
 
 app.get('/health', (req, res) => {
   res.json({ ok: true, service: 'ots-backend', time: new Date().toISOString() });

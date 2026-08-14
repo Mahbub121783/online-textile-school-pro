@@ -361,19 +361,29 @@ const CourseDetail = () => {
             <div className="flex-1">
               {course.intro_video_url ? (
                 <div className="aspect-video bg-black rounded-xl overflow-hidden mb-6">
-                  <iframe
-                    src={(() => {
-                      const url = course.intro_video_url!;
-                      const ytMatch = url.match(/(?:v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
-                      if (ytMatch) return `https://www.youtube.com/embed/${ytMatch[1]}`;
-                      const vmMatch = url.match(/vimeo\.com\/(\d+)/);
-                      if (vmMatch) return `https://player.vimeo.com/video/${vmMatch[1]}`;
-                      return url;
-                    })()}
-                    className="w-full h-full"
-                    allowFullScreen
-                    allow="autoplay; encrypted-media"
-                  />
+                  {/^https?:\/\/.*\.(mp4|webm|ogg|mov|m3u8)(\?.*)?$/i.test(course.intro_video_url) ? (
+                    <video src={course.intro_video_url} className="w-full h-full" controls playsInline />
+                  ) : (
+                    <iframe
+                      src={(() => {
+                        const url = course.intro_video_url!;
+                        const ytMatch = url.match(/(?:v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+                        if (ytMatch) return `https://www.youtube.com/embed/${ytMatch[1]}`;
+                        const vmMatch = url.match(/vimeo\.com\/(\d+)/);
+                        if (vmMatch) return `https://player.vimeo.com/video/${vmMatch[1]}`;
+                        const driveMatch = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) || url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+                        if (driveMatch && /drive\.google\.com|docs\.google\.com/i.test(url)) {
+                          return `https://drive.google.com/file/d/${driveMatch[1]}/preview?rm=minimal`;
+                        }
+                        return url;
+                      })()}
+                      className="w-full h-full"
+                      allowFullScreen
+                      allow="autoplay; encrypted-media"
+                      sandbox="allow-scripts allow-same-origin allow-presentation"
+                      referrerPolicy="no-referrer"
+                    />
+                  )}
                 </div>
               ) : (
                 <div className="aspect-video bg-gradient-to-br from-primary/10 to-primary/5 rounded-xl flex items-center justify-center mb-6 border">

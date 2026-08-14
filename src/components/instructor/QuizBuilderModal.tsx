@@ -39,6 +39,7 @@ const QuizBuilderModal = ({ open, onClose, onSave, quiz, existingQuestions }: Qu
     time_limit_minutes: quiz?.time_limit_minutes || '',
     pass_percentage: quiz?.pass_percentage || 60,
     max_attempts: quiz?.max_attempts || 3,
+    is_published: quiz?.is_published ?? true,
   });
 
   const [questions, setQuestions] = useState<Question[]>(
@@ -105,6 +106,10 @@ const QuizBuilderModal = ({ open, onClose, onSave, quiz, existingQuestions }: Qu
                 <Label>Max Attempts</Label>
                 <Input type="number" value={info.max_attempts} onChange={(e) => setInfo((p) => ({ ...p, max_attempts: Number(e.target.value) }))} />
               </div>
+            </div>
+            <div className="flex items-center gap-2 pt-2">
+              <Switch checked={info.is_published} onCheckedChange={(v) => setInfo((p) => ({ ...p, is_published: v }))} />
+              <Label className="text-sm">Published (visible to students in the Quizzes dashboard)</Label>
             </div>
           </TabsContent>
 

@@ -5,8 +5,13 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
+import { Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
 import RichTextEditor from './RichTextEditor';
 import MediaUploader from './MediaUploader';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
+
+const DRIVE_URL_REGEX = /^https:\/\/(drive|docs)\.google\.com\/.+/i;
 
 interface LessonModalProps {
   open: boolean;
@@ -27,7 +32,47 @@ const LessonModal = ({ open, onClose, onSave, lesson }: LessonModalProps) => {
     resource_url: lesson?.resource_url || '',
   });
 
-  const update = (field: string, value: any) => setForm((p) => ({ ...p, [field]: value }));
+  const [driveLinkStatus, setDriveLinkStatus] = useState<'idle' | 'checking' | 'valid' | 'invalid'>('idle');
+  const [driveLinkError, setDriveLinkError] = useState('');
+
+  const update = (field: string, value: any) => {
+    setForm((p) => ({ ...p, [field]: value }));
+    if (field === 'video_url' || field === 'video_platform') setDriveLinkStatus('idle');
+  };
+
+  const checkDriveLink = async () => {
+    if (form.video_platform !== 'drive' || !form.video_url.trim()) return;
+    if (!DRIVE_URL_REGEX.test(form.video_url.trim())) {
+      setDriveLinkStatus('invalid');
+      setDriveLinkError('Not a Google Drive URL');
+      return;
+    }
+    setDriveLinkStatus('checking');
+    setDriveLinkError('');
+    try {
+      const { data, error } = await supabase.functions.invoke('validate-drive-link', { body: { url: form.video_url.trim() } });
+      if (error) throw error;
+      if (data?.valid) {
+        setDriveLinkStatus('valid');
+      } else {
+        setDriveLinkStatus('invalid');
+        setDriveLinkError(data?.error || 'Invalid or inaccessible Drive link');
+      }
+    } catch (e: any) {
+      setDriveLinkStatus('invalid');
+      setDriveLinkError(e.message || 'Failed to validate link');
+    }
+  };
+
+  const handleSave = () => {
+    if (!form.title.trim()) return;
+    if (form.video_platform === 'drive' && form.video_url.trim() && driveLinkStatus === 'invalid') {
+      toast.error(driveLinkError || 'Fix the Drive link before saving');
+      return;
+    }
+    onSave(form);
+    onClose();
+  };
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
@@ -73,15 +118,29 @@ const LessonModal = ({ open, onClose, onSave, lesson }: LessonModalProps) => {
           ) : (
             <div className="space-y-2">
               <Label>Video URL</Label>
-              <Input
-                value={form.video_url}
-                onChange={(e) => update('video_url', e.target.value)}
-                placeholder={
-                  form.video_platform === 'drive'
-                    ? 'Paste Google Drive share link (any format)'
-                    : `Paste ${form.video_platform} URL`
-                }
-              />
+              <div className="relative">
+                <Input
+                  value={form.video_url}
+                  onChange={(e) => update('video_url', e.target.value)}
+                  onBlur={checkDriveLink}
+                  placeholder={
+                    form.video_platform === 'drive'
+                      ? 'Paste Google Drive share link (any format)'
+                      : `Paste ${form.video_platform} URL`
+                  }
+                  className={form.video_platform === 'drive' ? 'pr-8' : ''}
+                />
+                {form.video_platform === 'drive' && driveLinkStatus !== 'idle' && (
+                  <span className="absolute right-2 top-1/2 -translate-y-1/2">
+                    {driveLinkStatus === 'checking' && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+                    {driveLinkStatus === 'valid' && <CheckCircle2 className="h-4 w-4 text-green-600" />}
+                    {driveLinkStatus === 'invalid' && <AlertCircle className="h-4 w-4 text-destructive" />}
+                  </span>
+                )}
+              </div>
+              {form.video_platform === 'drive' && driveLinkStatus === 'invalid' && (
+                <p className="text-xs text-destructive">{driveLinkError}</p>
+              )}
             </div>
           )}
 
@@ -122,7 +181,7 @@ const LessonModal = ({ open, onClose, onSave, lesson }: LessonModalProps) => {
 
           <div className="flex justify-end gap-2 pt-4 border-t">
             <Button variant="outline" onClick={onClose}>Cancel</Button>
-            <Button className="bg-accent hover:bg-accent-hover text-accent-foreground" onClick={() => { if (!form.title.trim()) return; onSave(form); onClose(); }}>
+            <Button className="bg-accent hover:bg-accent-hover text-accent-foreground" onClick={handleSave}>
               {lesson ? 'Update Lesson' : 'Add Lesson'}
             </Button>
           </div>

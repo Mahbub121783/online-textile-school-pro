@@ -17,8 +17,11 @@ import { toast } from 'sonner';
 import { format } from 'date-fns';
 import {
   Search, Plus, Pencil, Trash2, Video, FileText, Eye, BookOpen, ClipboardList, X,
-  Clock, Lock, Globe, CalendarIcon, Link2, Upload, Monitor, ExternalLink, Download
+  Clock, Lock, Globe, CalendarIcon, Link2, Upload, Monitor, ExternalLink, Download,
+  Loader2, CheckCircle2, AlertCircle
 } from 'lucide-react';
+
+const DRIVE_URL_REGEX = /^https:\/\/(drive|docs)\.google\.com\/.+/i;
 import RichTextEditor from '@/components/instructor/RichTextEditor';
 import MediaUploader from '@/components/instructor/MediaUploader';
 import LessonPreviewModal from '@/components/admin/LessonPreviewModal';
@@ -67,7 +70,33 @@ const LessonMakerTab = () => {
   const [materialSearch, setMaterialSearch] = useState('');
   const [form, setForm] = useState<LessonForm>(defaultForm);
   const [resourceForm, setResourceForm] = useState({ name: '', url: '', type: 'pdf' });
+  const [driveLinkStatus, setDriveLinkStatus] = useState<'idle' | 'checking' | 'valid' | 'invalid'>('idle');
+  const [driveLinkError, setDriveLinkError] = useState('');
   const qc = useQueryClient();
+
+  const checkDriveLink = async () => {
+    if (form.video_platform !== 'drive' || !form.video_url.trim()) return;
+    if (!DRIVE_URL_REGEX.test(form.video_url.trim())) {
+      setDriveLinkStatus('invalid');
+      setDriveLinkError('Not a Google Drive URL');
+      return;
+    }
+    setDriveLinkStatus('checking');
+    setDriveLinkError('');
+    try {
+      const { data, error } = await supabase.functions.invoke('validate-drive-link', { body: { url: form.video_url.trim() } });
+      if (error) throw error;
+      if (data?.valid) {
+        setDriveLinkStatus('valid');
+      } else {
+        setDriveLinkStatus('invalid');
+        setDriveLinkError(data?.error || 'Invalid or inaccessible Drive link');
+      }
+    } catch (e: any) {
+      setDriveLinkStatus('invalid');
+      setDriveLinkError(e.message || 'Failed to validate link');
+    }
+  };
 
   const { data: courses = [] } = useQuery({
     queryKey: ['admin-all-courses-for-lessons', scope, user?.id],
@@ -197,11 +226,16 @@ const LessonMakerTab = () => {
     } else {
       setForm({ ...defaultForm });
     }
+    setDriveLinkStatus('idle');
+    setDriveLinkError('');
     setEditDialog({ open: true, lesson });
   };
 
   const handleSave = () => {
     if (!form.title.trim()) return toast.error('Title is required');
+    if (form.video_platform === 'drive' && form.video_url.trim() && driveLinkStatus === 'invalid') {
+      return toast.error(driveLinkError || 'Fix the Drive link before saving');
+    }
     const payload: any = {
       title: form.title,
       description: form.description,
@@ -421,7 +455,25 @@ const LessonMakerTab = () => {
             <TabsContent value="content" className="space-y-3 mt-3">
               <div>
                 <Label className="text-xs">Video URL</Label>
-                <Input value={form.video_url} onChange={e => setForm(f => ({ ...f, video_url: e.target.value }))} className="h-9" placeholder="https://youtube.com/watch?v=..." />
+                <div className="relative">
+                  <Input
+                    value={form.video_url}
+                    onChange={e => { setForm(f => ({ ...f, video_url: e.target.value })); setDriveLinkStatus('idle'); }}
+                    onBlur={checkDriveLink}
+                    className={`h-9 ${form.video_platform === 'drive' ? 'pr-8' : ''}`}
+                    placeholder={form.video_platform === 'drive' ? 'Paste Google Drive share link (any format)' : 'https://youtube.com/watch?v=...'}
+                  />
+                  {form.video_platform === 'drive' && driveLinkStatus !== 'idle' && (
+                    <span className="absolute right-2 top-1/2 -translate-y-1/2">
+                      {driveLinkStatus === 'checking' && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+                      {driveLinkStatus === 'valid' && <CheckCircle2 className="h-4 w-4 text-green-600" />}
+                      {driveLinkStatus === 'invalid' && <AlertCircle className="h-4 w-4 text-destructive" />}
+                    </span>
+                  )}
+                </div>
+                {form.video_platform === 'drive' && driveLinkStatus === 'invalid' && (
+                  <p className="text-xs text-destructive mt-1">{driveLinkError}</p>
+                )}
               </div>
               <div>
                 <Label className="text-xs">Video Platform</Label>

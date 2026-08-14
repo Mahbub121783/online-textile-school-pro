@@ -23,6 +23,7 @@ const { qbSeedBatch } = require('./qbSeedBatch');
 const { cpanelEmailProvisioner } = require('./cpanelEmailProvisioner');
 const { edumailClient } = require('./edumailClient');
 const { edumailImapSync } = require('./edumailImapSync');
+const { localUpload } = require('./localUpload');
 
 const router = express.Router();
 
@@ -52,6 +53,7 @@ router.post('/qb-seed-batch', qbSeedBatch);
 router.post('/cpanel-email-provisioner', cpanelEmailProvisioner);
 router.post('/edumail-client', edumailClient);
 router.post('/edumail-imap-sync', edumailImapSync);
+router.post('/local-upload', localUpload);
 
 // ebook-secure-access: GET for streaming (PDF.js range requests), POST for
 // generate_token -- same path, dispatched by method (matches the original

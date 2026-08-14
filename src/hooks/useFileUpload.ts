@@ -51,7 +51,7 @@ function fileToBase64(file: Blob): Promise<string> {
 
 interface UploadResult {
   url: string;
-  source: 'cloudinary' | 'r2';
+  source: 'cloudinary' | 'r2' | 'local';
   publicId?: string;
   fallbackUrl?: string;
   accountId?: string;
@@ -83,21 +83,27 @@ export function useFileUpload() {
         return await uploadToR2Reliable(file);
       }
 
-      // Route: images → Cloudinary (any size, for f_auto/q_auto optimization)
+      // Route: images → Cloudinary (any size, for f_auto/q_auto optimization),
+      // falling back to our own server's local file-manager storage if
+      // Cloudinary is unreachable/unconfigured, so image uploads never hard-fail.
       if (isImageFile(file) && !isHeavyFile(file)) {
-        const result = await cloudinary.upload(file, {
-          publicId: options?.publicId,
-          folder: options?.folder,
-          overwrite: options?.overwrite,
-        });
-        setProgress(100);
-        return {
-          url: result.url,
-          source: 'cloudinary',
-          publicId: result.publicId,
-          fallbackUrl: result.fallbackUrl,
-          accountId: result.accountId,
-        };
+        try {
+          const result = await cloudinary.upload(file, {
+            publicId: options?.publicId,
+            folder: options?.folder,
+            overwrite: options?.overwrite,
+          });
+          setProgress(100);
+          return {
+            url: result.url,
+            source: 'cloudinary',
+            publicId: result.publicId,
+            fallbackUrl: result.fallbackUrl,
+            accountId: result.accountId,
+          };
+        } catch (cloudinaryErr) {
+          return await uploadToLocal(file);
+        }
       }
 
       // Everything else → R2
@@ -107,6 +113,28 @@ export function useFileUpload() {
     } finally {
       setUploading(false);
     }
+  };
+
+  /**
+   * Fallback image host: our own server's local file manager (see
+   * backend/src/functions/localUpload.js). Only used when Cloudinary fails.
+   */
+  const uploadToLocal = async (file: File): Promise<UploadResult> => {
+    const base64 = await fileToBase64(file);
+    const { data, error } = await supabase.functions.invoke('local-upload', {
+      body: { file_base64: base64, file_type: file.type || 'application/octet-stream' },
+    });
+    if (error) {
+      toast.error('Upload failed: ' + (error.message || 'Unknown error'));
+      throw new Error(error.message || 'Upload failed');
+    }
+    if (data?.error) {
+      toast.error('Upload error: ' + data.error);
+      throw new Error(data.error);
+    }
+    setProgress(100);
+    toast.success('Uploaded (local storage)');
+    return { url: data.url, source: 'local' };
   };
 
   /**

@@ -24,6 +24,8 @@ const CurriculumBuilder = ({ courseId }: CurriculumBuilderProps) => {
   const [pickerModal, setPickerModal] = useState<{ open: boolean; type: 'lesson' | 'quiz' | 'assignment'; sectionId: string }>({ open: false, type: 'lesson', sectionId: '' });
   const [materialModal, setMaterialModal] = useState<{ open: boolean; sectionId: string }>({ open: false, sectionId: '' });
   const [editingTitle, setEditingTitle] = useState<string | null>(null);
+  const [dragSectionIdx, setDragSectionIdx] = useState<number | null>(null);
+  const [dragLesson, setDragLesson] = useState<{ sectionId: string; idx: number } | null>(null);
 
   const { data: sections = [], refetch } = useQuery({
     queryKey: ['curriculum-sections', courseId],
@@ -178,6 +180,33 @@ const CurriculumBuilder = ({ courseId }: CurriculumBuilderProps) => {
     refetch();
   };
 
+  // --- Reordering (drag & drop) ---
+  const reorderSections = async (fromIdx: number, toIdx: number) => {
+    const reordered = [...sections];
+    const [moved] = reordered.splice(fromIdx, 1);
+    reordered.splice(toIdx, 0, moved);
+    for (let i = 0; i < reordered.length; i++) {
+      if (reordered[i].sort_order !== i) {
+        await supabase.from('course_sections').update({ sort_order: i }).eq('id', reordered[i].id);
+      }
+    }
+    refetch();
+  };
+
+  const reorderLessons = async (sectionId: string, fromIdx: number, toIdx: number) => {
+    const section = sections.find((s: any) => s.id === sectionId);
+    if (!section) return;
+    const reordered = [...section.lessons];
+    const [moved] = reordered.splice(fromIdx, 1);
+    reordered.splice(toIdx, 0, moved);
+    for (let i = 0; i < reordered.length; i++) {
+      if (reordered[i].sort_order !== i) {
+        await supabase.from('lessons').update({ sort_order: i }).eq('id', reordered[i].id);
+      }
+    }
+    refetch();
+  };
+
   // --- Edit quiz helper ---
   const openEditQuiz = async (quiz: any) => {
     const { data: questions } = await supabase.from('quiz_questions').select('*').eq('quiz_id', quiz.id).order('sort_order');
@@ -199,12 +228,22 @@ const CurriculumBuilder = ({ courseId }: CurriculumBuilderProps) => {
         </div>
       ) : (
         <div className="space-y-3">
-          {sections.map((section: any) => (
+          {sections.map((section: any, sIdx: number) => (
             <Collapsible key={section.id} defaultOpen>
-              <div className="border rounded-xl bg-card overflow-hidden">
+              <div
+                className="border rounded-xl bg-card overflow-hidden"
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={() => { if (dragSectionIdx !== null && dragSectionIdx !== sIdx) reorderSections(dragSectionIdx, sIdx); setDragSectionIdx(null); }}
+              >
                 {/* Header — title + controls separated from collapsible trigger */}
                 <div className="flex items-center gap-2 p-4 border-b bg-muted/20">
-                  <GripVertical className="h-4 w-4 text-muted-foreground cursor-grab shrink-0" />
+                  <GripVertical
+                    className="h-4 w-4 text-muted-foreground cursor-grab shrink-0"
+                    draggable
+                    onDragStart={() => setDragSectionIdx(sIdx)}
+                    onDragEnd={() => setDragSectionIdx(null)}
+                    title="Drag to reorder topics"
+                  />
 
                   {editingTitle === section.id ? (
                     <Input
@@ -267,9 +306,23 @@ const CurriculumBuilder = ({ courseId }: CurriculumBuilderProps) => {
                     />
 
                     {/* Lessons */}
-                    {section.lessons.map((lesson: any) => (
-                      <div key={lesson.id} className="flex items-center gap-3 p-3 rounded-lg bg-muted/20 border group">
-                        <GripVertical className="h-4 w-4 text-muted-foreground cursor-grab" />
+                    {section.lessons.map((lesson: any, lIdx: number) => (
+                      <div
+                        key={lesson.id}
+                        className="flex items-center gap-3 p-3 rounded-lg bg-muted/20 border group"
+                        onDragOver={(e) => e.preventDefault()}
+                        onDrop={() => {
+                          if (dragLesson && dragLesson.sectionId === section.id && dragLesson.idx !== lIdx) reorderLessons(section.id, dragLesson.idx, lIdx);
+                          setDragLesson(null);
+                        }}
+                      >
+                        <GripVertical
+                          className="h-4 w-4 text-muted-foreground cursor-grab"
+                          draggable
+                          onDragStart={() => setDragLesson({ sectionId: section.id, idx: lIdx })}
+                          onDragEnd={() => setDragLesson(null)}
+                          title="Drag to reorder lessons"
+                        />
                         <Video className="h-4 w-4 text-primary shrink-0" />
                         <span className="flex-1 text-sm font-medium truncate">{lesson.title}</span>
                         <span className="text-xs text-muted-foreground">{lesson.duration_minutes || 0} min</span>
