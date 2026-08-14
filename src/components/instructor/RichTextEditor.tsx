@@ -13,6 +13,21 @@ interface RichTextEditorProps {
 const RichTextEditor = ({ value, onChange, placeholder = 'Start writing...', minHeight = '200px' }: RichTextEditorProps) => {
   const editorRef = useRef<HTMLDivElement>(null);
 
+  // Sync the contentEditable's DOM from `value` only on mount and on
+  // genuine external changes (switching blocks/posts) -- never while this
+  // element has focus. Previously this was done via
+  // dangerouslySetInnerHTML tied directly to `value`, which React
+  // re-applies on every render (a new {__html} object every time), wiping
+  // and resetting the caret to the start of the content on every single
+  // keystroke -- typed characters landed in the wrong position, producing
+  // garbled/reversed-looking text.
+  useEffect(() => {
+    if (!editorRef.current) return;
+    if (document.activeElement === editorRef.current) return;
+    const clean = sanitizeRichHtml(value);
+    if (editorRef.current.innerHTML !== clean) editorRef.current.innerHTML = clean;
+  }, [value]);
+
   const exec = useCallback((command: string, val?: string) => {
     document.execCommand(command, false, val);
     if (editorRef.current) {
@@ -93,7 +108,7 @@ const RichTextEditor = ({ value, onChange, placeholder = 'Start writing...', min
         contentEditable
         className="p-4 outline-none prose prose-sm max-w-none text-foreground"
         style={{ minHeight }}
-        dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(value) }}
+        suppressContentEditableWarning
         onInput={() => {
           if (editorRef.current) onChange(editorRef.current.innerHTML);
         }}

@@ -75,6 +75,8 @@ export default function AdminStudents() {
       };
     },
     placeholderData: keepPreviousData,
+    refetchInterval: 20000,
+    refetchIntervalInBackground: false,
   });
 
   const paginated = pageData?.rows ?? [];

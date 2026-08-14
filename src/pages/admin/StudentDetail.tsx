@@ -143,6 +143,8 @@ export default function StudentDetail() {
       return data;
     },
     enabled: !!id,
+    refetchInterval: 15000,
+    refetchIntervalInBackground: false,
   });
 
   const { data: enrollments = [] } = useQuery({
@@ -152,6 +154,8 @@ export default function StudentDetail() {
       return data ?? [];
     },
     enabled: !!id,
+    refetchInterval: 15000,
+    refetchIntervalInBackground: false,
   });
 
   const { data: orders = [] } = useQuery({
@@ -161,6 +165,8 @@ export default function StudentDetail() {
       return data ?? [];
     },
     enabled: !!id,
+    refetchInterval: 15000,
+    refetchIntervalInBackground: false,
   });
 
   const { data: certificates = [] } = useQuery({
