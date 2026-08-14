@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
 import { Search, ShoppingCart, Menu, X, ChevronDown, Heart, User, LogOut, GraduationCap, Shield, BookOpen, Settings, TrendingUp } from 'lucide-react';
 import ThemeToggle from '@/components/ThemeToggle';
@@ -34,6 +35,7 @@ const Header = () => {
   const [searchFocused, setSearchFocused] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [certDropdown, setCertDropdown] = useState(false);
+  const { t } = useTranslation();
   const { user, roles, signOut, profile } = useAuth();
   const itemCount = useCartStore((s) => s.getItemCount());
   const navigate = useNavigate();
@@ -87,7 +89,7 @@ const Header = () => {
           {/* Nav links */}
           <nav className="hidden lg:flex items-center gap-0.5 shrink-0">
             <Link to="/courses" className="px-3 py-2 text-sm font-medium text-foreground hover:text-primary transition-colors rounded-md">
-              Find Courses
+              {t('nav.courses')}
             </Link>
 
             <div
@@ -99,7 +101,7 @@ const Header = () => {
                 to="/learning-paths"
                 className={`flex items-center gap-1 px-3 py-2 text-sm font-medium transition-colors rounded-md hover:text-primary ${certDropdown ? 'text-primary' : 'text-foreground'}`}
               >
-                Get Certified
+                {t('nav.learningPaths')}
                 <ChevronDown className="h-3.5 w-3.5" />
               </Link>
 
@@ -133,11 +135,11 @@ const Header = () => {
             </div>
 
             <Link to="/ebooks" className="px-3 py-2 text-sm font-medium text-foreground hover:text-primary transition-colors rounded-md">
-              eBooks
+              {t('nav.ebooks')}
             </Link>
 
             <Link to="/register" className="px-3 py-2 text-sm font-medium text-foreground hover:text-primary transition-colors rounded-md">
-              Registration
+              {t('nav.registration')}
             </Link>
           </nav>
 
@@ -147,7 +149,7 @@ const Header = () => {
               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <input
                 type="text"
-                placeholder="Search for anything"
+                placeholder={t('common.search')}
                 className="w-full h-10 pl-10 pr-4 rounded-full border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -184,7 +186,7 @@ const Header = () => {
             </Link>
             {user && (
               <Link to="/dashboard/courses" className="px-3 py-2 text-sm font-medium text-foreground hover:text-primary transition-colors whitespace-nowrap">
-                My Learning
+                {t('dashboard.myCourses')}
               </Link>
             )}
           </nav>
@@ -237,13 +239,13 @@ const Header = () => {
                   </div>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={() => navigate('/dashboard')}>
-                    <User className="mr-2 h-4 w-4" /> Dashboard
+                    <User className="mr-2 h-4 w-4" /> {t('common.dashboard')}
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => navigate(`/contributor/${user.id}`)}>
                     <GraduationCap className="mr-2 h-4 w-4" /> View public profile
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => navigate('/dashboard/courses')}>
-                    <BookOpen className="mr-2 h-4 w-4" /> My Courses
+                    <BookOpen className="mr-2 h-4 w-4" /> {t('dashboard.myCourses')}
                   </DropdownMenuItem>
                   {isInstructor && (
                     <DropdownMenuItem onClick={() => navigate('/instructor')}>
@@ -256,21 +258,21 @@ const Header = () => {
                     </DropdownMenuItem>
                   )}
                   <DropdownMenuItem onClick={() => navigate('/dashboard/settings')}>
-                    <Settings className="mr-2 h-4 w-4" /> Settings
+                    <Settings className="mr-2 h-4 w-4" /> {t('common.settings')}
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={signOut} className="text-destructive focus:text-destructive">
-                    <LogOut className="mr-2 h-4 w-4" /> Sign Out
+                    <LogOut className="mr-2 h-4 w-4" /> {t('common.signOut')}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             ) : (
               <div className="flex items-center gap-2 ml-2">
                 <Button variant="ghost" size="sm" className="h-8 text-sm" onClick={() => navigate('/auth/login')}>
-                  Log in
+                  {t('common.login')}
                 </Button>
                 <Button size="sm" className="h-8 text-sm bg-primary hover:bg-primary/90 text-primary-foreground" onClick={() => navigate('/auth/register')}>
-                  Sign up
+                  {t('common.register')}
                 </Button>
               </div>
             )}
@@ -291,13 +293,13 @@ const Header = () => {
                 {cat.name}
               </Link>
             ))}
-            <Link to="/events" className="px-2.5 py-1 text-[13px] text-foreground/80 hover:text-primary transition-colors whitespace-nowrap">Events</Link>
+            <Link to="/events" className="px-2.5 py-1 text-[13px] text-foreground/80 hover:text-primary transition-colors whitespace-nowrap">{t('nav.events')}</Link>
             <Link to="/workshops" className="px-2.5 py-1 text-[13px] text-foreground/80 hover:text-primary transition-colors whitespace-nowrap">Workshops</Link>
             <Link to="/class-videos" className="px-2.5 py-1 text-[13px] text-foreground/80 hover:text-primary transition-colors whitespace-nowrap font-medium">Class Videos</Link>
             <Link to="/practice" className="px-2.5 py-1 text-[13px] text-accent hover:text-accent-hover transition-colors whitespace-nowrap font-bold">🧠 Practice</Link>
-            <Link to="/blog" className="px-2.5 py-1 text-[13px] text-foreground/80 hover:text-primary transition-colors whitespace-nowrap">Blog</Link>
-            <Link to="/forum" className="px-2.5 py-1 text-[13px] text-foreground/80 hover:text-primary transition-colors whitespace-nowrap">Forum</Link>
-            <Link to="/about" className="px-2.5 py-1 text-[13px] text-foreground/80 hover:text-primary transition-colors whitespace-nowrap">About</Link>
+            <Link to="/blog" className="px-2.5 py-1 text-[13px] text-foreground/80 hover:text-primary transition-colors whitespace-nowrap">{t('nav.blog')}</Link>
+            <Link to="/forum" className="px-2.5 py-1 text-[13px] text-foreground/80 hover:text-primary transition-colors whitespace-nowrap">{t('nav.forum')}</Link>
+            <Link to="/about" className="px-2.5 py-1 text-[13px] text-foreground/80 hover:text-primary transition-colors whitespace-nowrap">{t('nav.about')}</Link>
           </nav>
         </div>
       </div>
@@ -347,17 +349,17 @@ const Header = () => {
             </form>
 
             {[
-              { label: 'Courses', href: '/courses' },
-              { label: 'Learning Paths', href: '/learning-paths' },
-              { label: 'eBooks', href: '/ebooks' },
-              { label: 'Registration', href: '/register' },
-              { label: 'Events', href: '/events' },
+              { label: t('nav.courses'), href: '/courses' },
+              { label: t('nav.learningPaths'), href: '/learning-paths' },
+              { label: t('nav.ebooks'), href: '/ebooks' },
+              { label: t('nav.registration'), href: '/register' },
+              { label: t('nav.events'), href: '/events' },
               { label: 'Workshops', href: '/workshops' },
               { label: 'Class Videos', href: '/class-videos' },
               { label: '🧠 Practice Arena', href: '/practice' },
-              { label: 'Blog', href: '/blog' },
-              { label: 'Forum', href: '/forum' },
-              { label: 'About', href: '/about' },
+              { label: t('nav.blog'), href: '/blog' },
+              { label: t('nav.forum'), href: '/forum' },
+              { label: t('nav.about'), href: '/about' },
             ].map((link) => (
               <Link key={link.label} to={link.href} className="block px-3 py-2.5 text-sm font-medium rounded-md hover:bg-secondary" onClick={() => setMobileMenuOpen(false)}>
                 {link.label}
@@ -368,7 +370,7 @@ const Header = () => {
               {user ? (
                 <>
                   <Button variant="outline" className="w-full justify-start" size="sm" onClick={() => { navigate('/dashboard'); setMobileMenuOpen(false); }}>
-                    <User className="h-4 w-4 mr-2" /> Dashboard
+                    <User className="h-4 w-4 mr-2" /> {t('common.dashboard')}
                   </Button>
                   {isInstructor && (
                     <Button variant="outline" className="w-full justify-start" size="sm" onClick={() => { navigate('/instructor'); setMobileMenuOpen(false); }}>
@@ -381,13 +383,13 @@ const Header = () => {
                     </Button>
                   )}
                   <Button variant="ghost" className="w-full justify-start text-destructive" size="sm" onClick={() => { signOut(); setMobileMenuOpen(false); }}>
-                    <LogOut className="h-4 w-4 mr-2" /> Sign Out
+                    <LogOut className="h-4 w-4 mr-2" /> {t('common.signOut')}
                   </Button>
                 </>
               ) : (
                 <>
-                  <Button variant="outline" className="w-full" size="sm" onClick={() => { navigate('/auth/login'); setMobileMenuOpen(false); }}>Log in</Button>
-                  <Button className="w-full bg-primary text-primary-foreground" size="sm" onClick={() => { navigate('/auth/register'); setMobileMenuOpen(false); }}>Sign up</Button>
+                  <Button variant="outline" className="w-full" size="sm" onClick={() => { navigate('/auth/login'); setMobileMenuOpen(false); }}>{t('common.login')}</Button>
+                  <Button className="w-full bg-primary text-primary-foreground" size="sm" onClick={() => { navigate('/auth/register'); setMobileMenuOpen(false); }}>{t('common.register')}</Button>
                 </>
               )}
             </div>

@@ -84,12 +84,8 @@ const AdminWallets = () => {
       if (!amount || amount <= 0) throw new Error('Invalid amount');
       if (!selectedUserId) throw new Error('No user selected');
 
-      const fnName = txType === 'credit' ? 'credit_wallet' : 'debit_wallet';
-      const { error } = await supabase.rpc(fnName as any, {
-        _user_id: selectedUserId,
-        _amount: amount,
-        _description: txDescription || `Admin ${txType}`,
-        _reference_id: `admin-${Date.now()}`,
+      const { error } = await supabase.functions.invoke('admin-wallet-adjust', {
+        body: { userId: selectedUserId, type: txType, amount, description: txDescription },
       });
       if (error) throw error;
     },
@@ -106,11 +102,11 @@ const AdminWallets = () => {
 
   const approveTopup = async (request: any) => {
     try {
-      const { error: rpcError } = await supabase.rpc('credit_wallet' as any, {
-        _user_id: request.user_id,
-        _amount: request.amount,
-        _description: `Wallet top-up via ${request.payment_method} (TxID: ${request.transaction_id})`,
-        _reference_id: `topup-${request.id}`,
+      const { error: rpcError } = await supabase.functions.invoke('admin-wallet-adjust', {
+        body: {
+          userId: request.user_id, type: 'credit', amount: request.amount,
+          description: `Wallet top-up via ${request.payment_method} (TxID: ${request.transaction_id})`,
+        },
       });
       if (rpcError) throw rpcError;
 
@@ -404,20 +400,10 @@ const WithdrawalRequestsTab = () => {
 
   const approveWithdrawal = async (tx: any) => {
     try {
-      const userId = (tx.wallets as any)?.user_id;
-      if (!userId) throw new Error('User not found');
-
-      // Debit wallet
-      const { error: debitErr } = await supabase.rpc('debit_wallet' as any, {
-        _user_id: userId,
-        _amount: tx.amount,
-        _description: `Withdrawal processed: ${tx.description}`,
-        _reference_id: `wd-${tx.id}`,
+      const { error } = await supabase.functions.invoke('admin-approve-withdrawal', {
+        body: { transactionId: tx.id },
       });
-      if (debitErr) throw debitErr;
-
-      // Delete the withdrawal_request transaction (it's been replaced by the debit)
-      await supabase.from('wallet_transactions').delete().eq('id', tx.id);
+      if (error) throw error;
 
       toast.success('Withdrawal approved and processed!');
       queryClient.invalidateQueries({ queryKey: ['admin-withdrawal-requests'] });

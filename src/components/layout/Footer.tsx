@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Facebook, Youtube, Linkedin, Mail, Phone, MapPin } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -7,6 +8,7 @@ import OTSLogo from '@/assets/OTS_LOGO.png';
 import { useCookieConsent } from '@/hooks/useCookieConsent';
 
 const Footer = () => {
+  const { t } = useTranslation();
   const { openPreferences } = useCookieConsent();
   return (
     <footer className="bg-primary text-primary-foreground">
@@ -44,7 +46,7 @@ const Footer = () => {
 
           {/* Quick Links */}
           <div>
-            <h4 className="font-heading font-semibold text-sm mb-4 uppercase tracking-wider">Quick Links</h4>
+            <h4 className="font-heading font-semibold text-sm mb-4 uppercase tracking-wider">{t('footer.quickLinks')}</h4>
             <ul className="space-y-2">
               {[
                 { label: 'About Us', href: '/about' },
@@ -69,7 +71,7 @@ const Footer = () => {
 
           {/* Contact & Newsletter */}
           <div className="space-y-4">
-            <h4 className="font-heading font-semibold text-sm mb-4 uppercase tracking-wider">Contact</h4>
+            <h4 className="font-heading font-semibold text-sm mb-4 uppercase tracking-wider">{t('footer.contact')}</h4>
             <div className="space-y-2 text-sm text-primary-foreground/70">
               <a href={`tel:${SITE_CONFIG.phone}`} className="flex items-center gap-2 hover:text-accent-light">
                 <Phone className="h-4 w-4 shrink-0" /> {SITE_CONFIG.phone}
@@ -97,7 +99,7 @@ const Footer = () => {
       {/* Copyright */}
       <div className="border-t border-primary-light/30">
         <div className="container py-4 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-primary-foreground/50">
-          <span>© {new Date().getFullYear()} Online Textile School. All rights reserved.</span>
+          <span>© {new Date().getFullYear()} Online Textile School. {t('footer.rights')}</span>
           <div className="flex items-center gap-3">
             <Link to="/privacy" className="hover:text-primary-foreground transition-colors">Privacy Policy</Link>
             <span>|</span>

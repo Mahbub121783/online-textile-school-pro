@@ -206,7 +206,7 @@ const CourseBuilder = () => {
               <DropdownMenuContent align="end">
                 <DropdownMenuItem onClick={() => handleSave('draft')}>Save as Draft</DropdownMenuItem>
                 <DropdownMenuItem onClick={() => handleSave('pending')}>Submit for Review</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => handleSave('approved')}>Publish Now</DropdownMenuItem>
+                {isAdmin && <DropdownMenuItem onClick={() => handleSave('approved')}>Publish Now</DropdownMenuItem>}
               </DropdownMenuContent>
             </DropdownMenu>
           </div>

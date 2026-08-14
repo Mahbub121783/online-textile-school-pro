@@ -69,11 +69,11 @@ const RefundsTab = () => {
 
       // If wallet refund, credit the user's wallet
       if (refundMethod === 'wallet') {
-        await supabase.rpc('credit_wallet', {
-          _user_id: selectedOrder.user_id,
-          _amount: amount,
-          _description: `Refund for order ${selectedOrder.id.slice(0, 8)}`,
-          _reference_id: selectedOrder.id,
+        await supabase.functions.invoke('admin-wallet-adjust', {
+          body: {
+            userId: selectedOrder.user_id, type: 'credit', amount,
+            description: `Refund for order ${selectedOrder.id.slice(0, 8)}`,
+          },
         });
       }
 

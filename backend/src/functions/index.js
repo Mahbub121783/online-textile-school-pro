@@ -1,7 +1,7 @@
 const express = require('express');
 const { sendSmtpEmail } = require('./sendSmtpEmail');
 const { passwordResetRequest, passwordResetVerify } = require('./passwordReset');
-const { processPayment } = require('./processPayment');
+const { processPayment, processPaymentWebhook } = require('./processPayment');
 const { r2Presign } = require('./r2Presign');
 const { ebookGenerateToken, ebookStream } = require('./ebookSecureAccess');
 const { sitemap } = require('./sitemap');
@@ -27,6 +27,8 @@ const { localUpload } = require('./localUpload');
 const { submitQuizAttempt } = require('./submitQuizAttempt');
 const { startQuizAttempt } = require('./startQuizAttempt');
 const { issueCertificate } = require('./issueCertificate');
+const { checkoutWallet, checkoutFree, checkoutAdminApprove, checkoutAdminReject } = require('./checkoutFinalize');
+const { adminWalletAdjust, adminApproveWithdrawal, adminRejectWithdrawal } = require('./walletAdmin');
 
 const router = express.Router();
 
@@ -34,6 +36,7 @@ router.post('/send-smtp-email', sendSmtpEmail);
 router.post('/password-reset-request', passwordResetRequest);
 router.post('/password-reset-verify', passwordResetVerify);
 router.post('/process-payment', processPayment);
+router.post('/process-payment-webhook', processPaymentWebhook);
 router.post('/r2-presign', r2Presign);
 router.get('/sitemap', sitemap);
 router.get('/og-meta', ogMeta);
@@ -60,6 +63,13 @@ router.post('/local-upload', localUpload);
 router.post('/submit-quiz-attempt', submitQuizAttempt);
 router.post('/start-quiz-attempt', startQuizAttempt);
 router.post('/issue-certificate', issueCertificate);
+router.post('/checkout-wallet', checkoutWallet);
+router.post('/checkout-free', checkoutFree);
+router.post('/checkout-admin-approve', checkoutAdminApprove);
+router.post('/checkout-admin-reject', checkoutAdminReject);
+router.post('/admin-wallet-adjust', adminWalletAdjust);
+router.post('/admin-approve-withdrawal', adminApproveWithdrawal);
+router.post('/admin-reject-withdrawal', adminRejectWithdrawal);
 
 // ebook-secure-access: GET for streaming (PDF.js range requests), POST for
 // generate_token -- same path, dispatched by method (matches the original

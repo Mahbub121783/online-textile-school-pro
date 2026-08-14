@@ -76,7 +76,11 @@ async function ebookGenerateToken(req, res) {
   );
   if (!purchaseRes.rows[0]) return res.status(403).json({ error: 'You have not purchased this ebook' });
 
-  const ebookRes = await serviceQuery('SELECT title, file_format, file_url FROM public.ebooks WHERE id = $1', [ebook_id]);
+  const ebookRes = await serviceQuery(
+    `SELECT e.title, e.file_format, f.file_url FROM public.ebooks e
+     LEFT JOIN public.ebook_secure_files f ON f.ebook_id = e.id WHERE e.id = $1`,
+    [ebook_id]
+  );
   const ebook = ebookRes.rows[0];
   if (!ebook?.file_url || !ebook.file_url.trim()) {
     return res.status(422).json({ error: 'EBOOK_FILE_MISSING', message: "This eBook is not ready yet — the publisher has not uploaded the PDF file. Please contact support and we'll fix it for you." });
@@ -113,7 +117,11 @@ async function ebookStream(req, res) {
   );
   if (!tokenRes.rows[0]) return res.status(403).json({ error: 'Invalid or expired token' });
 
-  const ebookRes = await serviceQuery('SELECT file_url, title FROM public.ebooks WHERE id = $1', [ebook_id]);
+  const ebookRes = await serviceQuery(
+    `SELECT f.file_url, e.title FROM public.ebooks e
+     LEFT JOIN public.ebook_secure_files f ON f.ebook_id = e.id WHERE e.id = $1`,
+    [ebook_id]
+  );
   const ebook = ebookRes.rows[0];
   if (!ebook?.file_url || !ebook.file_url.trim()) {
     return res.status(422).json({ error: 'EBOOK_FILE_MISSING', message: "This eBook is not ready yet — the publisher has not uploaded the PDF file. Please contact support and we'll fix it for you." });

@@ -252,6 +252,13 @@ const RPC_BLOCKLIST = new Set([
   'refresh_homepage_stats', 'notify_admins', 'maybe_run_unreplied_message_reminder',
   'maybe_run_workshop_reminder', 'maybe_run_workshop_auto_status',
   'bulk_issue_workshop_certificates', 'handle_new_user', 'handle_updated_at',
+  // credit_wallet/debit_wallet: found to be a live fund-mint/drain exploit
+  // when called directly via this public RPC endpoint (any caller could
+  // pass an arbitrary _user_id/_amount). The SQL functions themselves are
+  // now also locked to service_role-origin-only (db/29), but block them
+  // here too as defense in depth -- every legitimate use case now goes
+  // through backend/src/functions/checkoutFinalize.js instead.
+  'credit_wallet', 'debit_wallet',
 ]);
 
 router.post('/rpc/:fn', async (req, res) => {

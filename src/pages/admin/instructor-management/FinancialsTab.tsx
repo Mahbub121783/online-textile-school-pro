@@ -134,17 +134,10 @@ const FinancialsTab = () => {
   // Approve withdrawal
   const approveWithdrawal = useMutation({
     mutationFn: async (withdrawal: any) => {
-      // Debit the wallet
-      const { error: debitError } = await supabase.rpc('debit_wallet', {
-        _user_id: withdrawal.instructor_id,
-        _amount: Number(withdrawal.amount),
-        _description: `Withdrawal approved — ${withdrawal.description?.replace('— Pending admin approval', '').trim() || 'Withdrawal'}`,
-        _reference_id: withdrawal.reference_id || `wd-${Date.now()}`,
+      const { error } = await supabase.functions.invoke('admin-approve-withdrawal', {
+        body: { transactionId: withdrawal.id },
       });
-      if (debitError) throw debitError;
-
-      // Delete the withdrawal_request transaction (it's now replaced by the debit)
-      await supabase.from('wallet_transactions').delete().eq('id', withdrawal.id);
+      if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['withdrawal-requests'] });
@@ -157,7 +150,8 @@ const FinancialsTab = () => {
   // Reject withdrawal
   const rejectWithdrawal = useMutation({
     mutationFn: async ({ id, reason, instructorId }: { id: string; reason: string; instructorId: string }) => {
-      await supabase.from('wallet_transactions').delete().eq('id', id);
+      const { error } = await supabase.functions.invoke('admin-reject-withdrawal', { body: { transactionId: id } });
+      if (error) throw error;
       return { instructorId, reason };
     },
     onSuccess: (data) => {
@@ -179,11 +173,8 @@ const FinancialsTab = () => {
   // Send bonus
   const sendBonus = useMutation({
     mutationFn: async () => {
-      const { error } = await supabase.rpc('credit_wallet', {
-        _user_id: bonusInstructor,
-        _amount: parseFloat(bonusAmount),
-        _description: bonusReason || 'Admin bonus',
-        _reference_id: `bonus-${Date.now()}`,
+      const { error } = await supabase.functions.invoke('admin-wallet-adjust', {
+        body: { userId: bonusInstructor, type: 'credit', amount: parseFloat(bonusAmount), description: bonusReason || 'Admin bonus' },
       });
       if (error) throw error;
     },

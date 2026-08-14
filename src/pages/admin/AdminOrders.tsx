@@ -104,69 +104,16 @@ const AdminOrders = () => {
       const order = orders.find((o: any) => o.id === orderId);
       if (!order) throw new Error('Order not found');
 
-      // Update order status
-      await supabase.from('orders').update({ status: 'completed' } as any).eq('id', orderId);
-      // Update invoice
-      await supabase.from('invoices').update({ payment_status: 'paid', paid_at: new Date().toISOString() } as any).eq('order_id', orderId);
-
-      // Create enrollments for course items
-      const courseItems = (order.order_items || []).filter((i: any) => i.item_type === 'course');
-      for (const item of courseItems) {
-        await supabase.from('enrollments').upsert({
-          user_id: order.user_id,
-          course_id: item.item_id,
-          payment_id: orderId,
-        }, { onConflict: 'user_id,course_id' } as any);
-      }
-
-      // Grant ebook access for ebook items
-      const ebookItems = (order.order_items || []).filter((i: any) => i.item_type === 'ebook');
-      for (const item of ebookItems) {
-        await supabase.from('ebook_access_tokens').insert({
-          user_id: order.user_id,
-          ebook_id: item.item_id,
-          token: crypto.randomUUID(),
-          expires_at: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
-        } as any);
-      }
-
-      // Credit instructor revenue
-      for (const item of courseItems) {
-        const course = courses.find((c: any) => c.id === item.item_id);
-        if (course?.instructor_id) {
-          const sharePct = Number(course.revenue_share_pct ?? 70);
-          const amount = (Number(item.price) * sharePct) / 100;
-          if (amount > 0) {
-            await supabase.rpc('credit_wallet', {
-              _user_id: course.instructor_id,
-              _amount: amount,
-              _description: `Revenue from order ${orderId.slice(0, 8)}`,
-              _reference_id: orderId,
-            });
-          }
-        }
-      }
-
-      // Credit referral reward -- mirrors backend/src/functions/
-      // processPayment.js's logic, which only runs for the UddoktaPay
-      // gateway path. Manually-verified orders (bank transfer / bKash-Nagad
-      // "send money" -- the common path for this platform) approved here
-      // never credited the referrer at all until now.
-      try {
-        const { data: buyerProfile } = await supabase.from('user_profiles').select('referred_by').eq('id', order.user_id).single();
-        if (buyerProfile?.referred_by) {
-          await supabase.from('referral_rewards')
-            .update({ status: 'credited', reward_amount: 50, credited_at: new Date().toISOString() })
-            .eq('referred_id', order.user_id)
-            .eq('status', 'pending');
-          await supabase.rpc('credit_wallet', {
-            _user_id: buyerProfile.referred_by,
-            _amount: 50,
-            _description: `Referral reward for order ${orderId.slice(0, 8)}`,
-            _reference_id: orderId,
-          });
-        }
-      } catch (e) { console.warn('referral credit skipped:', e); }
+      // Order completion (status, enrollments/ebook access, instructor
+      // revenue, referral reward, coupon usage) now happens entirely
+      // server-side in backend/src/functions/checkoutFinalize.js -- it
+      // recomputes real catalog prices rather than trusting order_items,
+      // and its writes go through serviceQuery so they're never blocked
+      // by RLS the way the old direct client calls here silently were
+      // (referral_rewards UPDATE and ebook_access_tokens INSERT both
+      // required service_role and had no admin branch until this fix).
+      const { error } = await supabase.functions.invoke('checkout-admin-approve', { body: { orderId } });
+      if (error) throw error;
 
       // Send approval notification + email
       const { createNotificationWithEmail, NOTIFICATION_TYPES } = await import('@/lib/notifications');
@@ -191,8 +138,8 @@ const AdminOrders = () => {
       const order = orders.find((o: any) => o.id === orderId);
       if (!order) throw new Error('Order not found');
 
-      await supabase.from('orders').update({ status: 'rejected' } as any).eq('id', orderId);
-      await supabase.from('invoices').update({ payment_status: 'failed' } as any).eq('order_id', orderId);
+      const { error } = await supabase.functions.invoke('checkout-admin-reject', { body: { orderId, reason } });
+      if (error) throw error;
 
       const { createNotificationWithEmail, NOTIFICATION_TYPES } = await import('@/lib/notifications');
       await createNotificationWithEmail({

@@ -48,8 +48,8 @@ const Checkout = () => {
     queryKey: ['all-payment-gateways-checkout'],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('payment_gateways')
-        .select('id, gateway_name, display_name, is_active, credentials');
+        .from('payment_gateways_public')
+        .select('id, gateway_name, display_name, is_active, public_info');
       if (error) console.error('Gateway fetch error:', error);
       return (data || []) as any[];
     },
@@ -155,71 +155,23 @@ const Checkout = () => {
     return `INV-${y}${m}-${rand}`;
   };
 
-  // Mirrors backend/src/functions/processPayment.js's referral-crediting
-  // logic -- that logic only ran for the UddoktaPay gateway path. The
-  // wallet-payment and free-order branches below complete entirely
-  // client-side and never called it, so a referred user's first purchase
-  // never credited their referrer through either of those paths (both
-  // common on this platform -- free course enrollment especially).
-  const creditReferralReward = async (orderId: string) => {
-    if (!user || !profile?.referred_by) return;
-    try {
-      await supabase.from('referral_rewards')
-        .update({ status: 'credited', reward_amount: 50, credited_at: new Date().toISOString() })
-        .eq('referred_id', user.id)
-        .eq('status', 'pending');
-      await supabase.rpc('credit_wallet', {
-        _user_id: profile.referred_by,
-        _amount: 50,
-        _description: `Referral reward for order ${orderId.slice(0, 8)}`,
-        _reference_id: orderId,
-      });
-    } catch (e) { console.warn('referral credit skipped:', e); }
+  // Order completion (marking 'completed', granting enrollments/ebook
+  // access, crediting instructor revenue + referral rewards, recording
+  // coupon usage) now happens entirely server-side in
+  // backend/src/functions/checkoutFinalize.js -- it recomputes the real
+  // price from the catalog rather than trusting anything sent from here.
+  // This used to be done directly from the browser (RLS-blocked writes to
+  // referral_rewards/coupon_usages, plus a since-fixed exploit where a
+  // student could self-mark their own order 'completed' via a raw PATCH).
+  const finalizeWalletOrder = async (orderId: string) => {
+    const { data, error } = await supabase.functions.invoke('checkout-wallet', { body: { orderId } });
+    if (error) throw error;
+    return data;
   };
-
-  const creditInstructorRevenue = async (orderId: string, orderItems: typeof items) => {
-    for (const item of orderItems) {
-      if (item.type === 'course') {
-        const { data: course } = await supabase
-          .from('courses')
-          .select('instructor_id, revenue_share_pct')
-          .eq('id', item.id)
-          .single();
-        if (course?.instructor_id) {
-          const sharePct = Number(course.revenue_share_pct ?? 70);
-          const itemPrice = item.discount_price ?? item.price;
-          const instructorAmount = (itemPrice * sharePct) / 100;
-          if (instructorAmount > 0) {
-            await supabase.rpc('credit_wallet', {
-              _user_id: course.instructor_id,
-              _amount: instructorAmount,
-              _description: `Revenue from order ${orderId.slice(0, 8)}`,
-              _reference_id: orderId,
-            });
-          }
-        }
-      }
-    }
-  };
-
-  // Enroll user in courses and ensure eBook ownership via completed order
-  const enrollAfterPayment = async (orderId: string) => {
-    for (const item of items) {
-      if (item.type === 'course') {
-        const { error: enrollError } = await supabase.from('enrollments').insert({
-          user_id: user.id,
-          course_id: item.id,
-          payment_id: orderId,
-        });
-        // Ignore duplicate enrollment (already enrolled)
-        if (enrollError && !enrollError.message.includes('duplicate')) throw enrollError;
-      } else if (item.type === 'practice_credits' && item.credits) {
-        try {
-          await supabase.rpc('qb_credit_paid_tokens', { _credits: item.credits, _order_id: orderId });
-        } catch (e) { console.warn('practice credit grant failed:', e); }
-      }
-      // eBook ownership is verified via order_items + completed order status
-    }
+  const finalizeFreeOrder = async (orderId: string) => {
+    const { data, error } = await supabase.functions.invoke('checkout-free', { body: { orderId } });
+    if (error) throw error;
+    return data;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -282,25 +234,11 @@ const Checkout = () => {
         if (invoiceError) console.error('Invoice creation failed:', invoiceError);
       } catch (e) { console.warn('Invoice insert skipped:', e); }
 
-      if (appliedCoupon) {
-        try {
-          await supabase.from('coupon_usage').insert({
-            coupon_id: appliedCoupon.id,
-            user_id: user.id,
-            order_id: orderId,
-          });
-        } catch (e) { console.warn('coupon_usage insert failed (non-critical):', e); }
-        try {
-          await supabase.from('coupon_usages').insert({
-            coupon_id: appliedCoupon.id,
-            user_id: user.id,
-            order_id: orderId,
-          });
-        } catch (e) { console.warn('coupon_usages insert failed (non-critical):', e); }
-        try {
-          await supabase.from('coupons').update({ used_count: (appliedCoupon.used_count || 0) + 1 }).eq('id', appliedCoupon.id);
-        } catch (e) { console.warn('coupon used_count update failed (non-critical):', e); }
-      }
+      // Coupon usage (coupon_usage row + coupons.used_count) is now
+      // recorded server-side, only once the order actually completes --
+      // see checkoutFinalize.js. Recording it here unconditionally (even
+      // for orders that stay 'pending' forever, e.g. an abandoned manual
+      // payment) would double-count and drift from the real usage limit.
 
       // UddoktaPay
       if (paymentMethod === 'uddoktapay' && total > 0) {
@@ -339,29 +277,12 @@ const Checkout = () => {
       // Wallet payment
       if (paymentMethod === 'wallet' && total > 0) {
         if (walletBalance < total) { toast.error('Insufficient wallet balance'); setSubmitting(false); return; }
-        const { error: debitError } = await supabase.rpc('debit_wallet', {
-          _user_id: user.id, _amount: total,
-          _description: `Payment for order ${orderId}`, _reference_id: orderId,
-        });
-        if (debitError) throw debitError;
-        await supabase.from('orders').update({ status: 'completed' }).eq('id', orderId);
-        try {
-          await supabase.from('invoices').update({ payment_status: 'paid', paid_at: new Date().toISOString() }).eq('order_id', orderId);
-        } catch (e) { console.warn('invoice paid-update skipped:', e); }
-        await enrollAfterPayment(orderId);
-        try { await creditInstructorRevenue(orderId, items); } catch (e) { console.warn('instructor revenue credit skipped:', e); }
-        await creditReferralReward(orderId);
+        await finalizeWalletOrder(orderId);
       }
 
       // Free order (100% coupon or free items)
       if (total === 0) {
-        await supabase.from('orders').update({ status: 'completed' }).eq('id', orderId);
-        try {
-          await supabase.from('invoices').update({ payment_status: 'paid', paid_at: new Date().toISOString() }).eq('order_id', orderId);
-        } catch (e) { console.warn('invoice paid-update skipped:', e); }
-        await enrollAfterPayment(orderId);
-        try { await creditInstructorRevenue(orderId, items); } catch (e) { console.warn('instructor revenue credit skipped:', e); }
-        await creditReferralReward(orderId);
+        await finalizeFreeOrder(orderId);
       }
 
       clearCart();
@@ -474,7 +395,7 @@ const Checkout = () => {
                   )}
                   {bankGateway && (
                     <PaymentOption value="bank" icon={gatewayIcons.bank} title="Bank Transfer"
-                      subtitle={`${bankGateway.credentials?.bank_name || 'Bank'} — ${bankGateway.credentials?.account_number || ''}`} />
+                      subtitle={`${bankGateway.public_info?.bank_name || 'Bank'} — ${bankGateway.public_info?.account_number || ''}`} />
                   )}
 
                   <div className="flex items-center space-x-3 border rounded-lg p-4 cursor-pointer hover:bg-muted/50">
@@ -514,8 +435,8 @@ const Checkout = () => {
                       <div className="bg-card border rounded-lg p-4 space-y-4">
                         <div className="text-center space-y-1">
                           <p className="text-sm text-muted-foreground">Send <span className="font-bold text-foreground">৳{total.toLocaleString()}</span> via {selectedManualGateway.display_name} Send Money</p>
-                          <p className="text-2xl font-bold font-heading text-primary">{selectedManualGateway.credentials?.phone_number || 'N/A'}</p>
-                          <p className="text-xs text-muted-foreground">Account Type: {selectedManualGateway.credentials?.account_type || 'Personal'}</p>
+                          <p className="text-2xl font-bold font-heading text-primary">{selectedManualGateway.public_info?.phone_number || 'N/A'}</p>
+                          <p className="text-xs text-muted-foreground">Account Type: {selectedManualGateway.public_info?.account_type || 'Personal'}</p>
                         </div>
                         <div className="space-y-3">
                           <div className="space-y-1">
@@ -554,11 +475,11 @@ const Checkout = () => {
                 {paymentMethod === 'bank' && bankGateway && (
                   <div className="bg-muted rounded-lg p-4 space-y-2 text-sm">
                     <p className="font-medium">Bank Transfer Details:</p>
-                    <p>Bank: {bankGateway.credentials?.bank_name}</p>
-                    <p>Account: {bankGateway.credentials?.account_name}</p>
-                    <p>Number: {bankGateway.credentials?.account_number}</p>
-                    <p>Branch: {bankGateway.credentials?.branch}</p>
-                    {bankGateway.credentials?.routing_number && <p>Routing: {bankGateway.credentials.routing_number}</p>}
+                    <p>Bank: {bankGateway.public_info?.bank_name}</p>
+                    <p>Account: {bankGateway.public_info?.account_name}</p>
+                    <p>Number: {bankGateway.public_info?.account_number}</p>
+                    <p>Branch: {bankGateway.public_info?.branch}</p>
+                    {bankGateway.public_info?.routing_number && <p>Routing: {bankGateway.public_info.routing_number}</p>}
                     <div className="space-y-1 mt-3">
                       <Label className="text-sm">Transaction Reference *</Label>
                       <Input placeholder="Enter bank reference number" value={transactionId} onChange={(e) => setTransactionId(e.target.value)} required />
