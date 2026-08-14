@@ -43,7 +43,7 @@ const router = express.Router();
 router.post('/signup', async (req, res) => {
   const { email, password, data } = req.body || {};
   if (!email || !password) return res.status(400).json({ error: 'email and password required' });
-  if (password.length < 8) return res.status(400).json({ error: 'password must be at least 8 characters' });
+  if (password.length < 6) return res.status(400).json({ error: 'password must be at least 6 characters' });
 
   const client = await pool.connect();
   try {
@@ -122,6 +122,23 @@ router.get('/user', async (req, res) => {
   const auth = readAuth(req);
   if (!auth.sub) return res.status(401).json({ error: 'Not authenticated' });
   const r = await pool.query('SELECT id, email, created_at FROM auth.users WHERE id = $1', [auth.sub]);
+  if (!r.rows[0]) return res.status(404).json({ error: 'User not found' });
+  res.json(publicUser(r.rows[0]));
+});
+
+// PATCH /auth/v1/user -- updateUser({ password }) equivalent
+router.patch('/user', async (req, res) => {
+  const auth = readAuth(req);
+  if (!auth.sub) return res.status(401).json({ error: 'Not authenticated' });
+  const { password } = req.body || {};
+  if (!password) return res.status(400).json({ error: 'nothing to update' });
+  if (password.length < 6) return res.status(400).json({ error: 'password must be at least 6 characters' });
+
+  const hash = await bcrypt.hash(password, 10);
+  const r = await pool.query(
+    'UPDATE auth.users SET encrypted_password = $1, updated_at = now() WHERE id = $2 RETURNING id, email, created_at',
+    [hash, auth.sub]
+  );
   if (!r.rows[0]) return res.status(404).json({ error: 'User not found' });
   res.json(publicUser(r.rows[0]));
 });

@@ -1,17 +1,15 @@
 const express = require('express');
 const { withRequestContext } = require('./db');
 const { readAuth } = require('./auth');
+const { resolveEmbed } = require('./relationships');
 
 // ============================================================
 // PostgREST-subset query layer. Implements exactly the operator set the
 // frontend's 756 supabase.from() call sites actually use (confirmed via
 // grep across src/): eq, neq, gt, gte, lt, lte, like, ilike, in, is, not,
-// or, select, order, limit, range, insert, update, upsert, delete, rpc.
-//
-// Known gap: `select=col,relation(cols)` embedded/nested resource selects
-// are NOT implemented -- only flat column lists. Any relation syntax in a
-// select param is dropped with a console warning. Revisit if a page breaks
-// on a query that relies on an embedded select.
+// or, select, order, limit, range, insert, update, upsert, delete, rpc,
+// plus embedded/nested resource selects (select=col,relation(cols),
+// alias:relation(cols), relation!fk_constraint(cols) -- see relationships.js).
 // ============================================================
 
 const RESERVED_PARAMS = new Set(['select', 'order', 'limit', 'offset', 'or']);
@@ -26,34 +24,79 @@ function assertValidIdentifier(name) {
   return name;
 }
 
-function parseSelect(selectParam) {
-  if (!selectParam || selectParam === '*') return '*';
-  const cols = [];
+// Splits a select/order-by-comma string on top-level commas only (ignores
+// commas nested inside parens, e.g. `a,b(c,d),e` -> ['a', 'b(c,d)', 'e']).
+function splitTopLevel(str) {
+  const parts = [];
   let depth = 0;
   let current = '';
-  for (const ch of selectParam) {
+  for (const ch of str) {
     if (ch === '(') depth++;
     if (ch === ')') depth--;
     if (ch === ',' && depth === 0) {
-      cols.push(current);
+      parts.push(current);
       current = '';
     } else {
       current += ch;
     }
   }
-  if (current) cols.push(current);
+  if (current) parts.push(current);
+  return parts;
+}
 
-  const flatCols = [];
-  for (const c of cols) {
-    const trimmed = c.trim();
-    if (trimmed.includes('(')) {
-      console.warn(`[rest] dropping unsupported embedded select fragment: ${trimmed}`);
+// `[alias:]name[!constraint](inner)` -- the embed syntax for one select token.
+const EMBED_RE = /^(?:([a-zA-Z_][a-zA-Z0-9_]*):)?([a-zA-Z_][a-zA-Z0-9_]*)(?:!([a-zA-Z_][a-zA-Z0-9_]*))?\(([\s\S]*)\)$/;
+// `[alias:]column` -- a flat column, optionally aliased.
+const FLAT_RE = /^(?:([a-zA-Z_][a-zA-Z0-9_]*):)?([a-zA-Z_][a-zA-Z0-9_*]*)$/;
+
+// Recursively builds a SQL select-list for `table`, resolving embedded
+// resources into correlated subqueries (to_jsonb for many-to-one,
+// jsonb_agg for one-to-many), so `select=title,course(name)` becomes
+// `"title", (SELECT to_jsonb(sub) FROM (SELECT "name" FROM course WHERE course.id = t.course_id) sub) AS "course"`.
+async function buildSelectClause(table, selectParam) {
+  if (!selectParam || selectParam === '*') return '*';
+  const tokens = splitTopLevel(selectParam).map((t) => t.trim()).filter(Boolean);
+  if (tokens.length === 0) return '*';
+
+  const parts = [];
+  for (const token of tokens) {
+    const embedMatch = EMBED_RE.exec(token);
+    if (embedMatch) {
+      const [, alias, name, constraint, inner] = embedMatch;
+      const rel = await resolveEmbed(table, name, constraint);
+      assertValidIdentifier(rel.targetTable);
+      assertValidIdentifier(rel.localColumn);
+      assertValidIdentifier(rel.foreignColumn);
+      const innerSelect = await buildSelectClause(rel.targetTable, inner);
+      const outAlias = alias || name;
+      assertValidIdentifier(outAlias);
+
+      const innerQuery = `SELECT ${innerSelect} FROM public."${rel.targetTable}" WHERE public."${rel.targetTable}"."${rel.foreignColumn}" = "${table}"."${rel.localColumn}"`;
+      if (rel.isArray) {
+        parts.push(`(SELECT COALESCE(jsonb_agg(to_jsonb(sub)), '[]'::jsonb) FROM (${innerQuery}) sub) AS "${outAlias}"`);
+      } else {
+        parts.push(`(SELECT to_jsonb(sub) FROM (${innerQuery} LIMIT 1) sub) AS "${outAlias}"`);
+      }
       continue;
     }
-    flatCols.push(trimmed);
+
+    const flatMatch = FLAT_RE.exec(token);
+    if (flatMatch) {
+      const [, alias, column] = flatMatch;
+      if (column === '*') {
+        parts.push('*');
+      } else {
+        assertValidIdentifier(column);
+        parts.push(alias ? `"${column}" AS "${alias}"` : `"${column}"`);
+      }
+      continue;
+    }
+
+    const err = new Error(`Unparseable select fragment: ${token}`);
+    err.status = 400;
+    throw err;
   }
-  if (flatCols.length === 0) return '*';
-  return flatCols.map((c) => assertValidIdentifier(c.split(':').pop())).join(', ');
+  return parts.join(', ');
 }
 
 // Translates one `col=op.value` pair into a SQL fragment + bound param(s).
@@ -233,7 +276,7 @@ router.route('/:table')
       const params = [];
       const where = buildWhere(req.query, params);
       const order = buildOrder(req.query.order);
-      const select = parseSelect(req.query.select);
+      const select = await buildSelectClause(table, req.query.select);
 
       let limitClause = '';
       if (req.query.limit) {
@@ -303,7 +346,7 @@ router.route('/:table')
       }
 
       const cols = columns.map((c) => `"${c}"`).join(', ');
-      const returning = preferReturn(req) ? 'RETURNING *' : '';
+      const returning = preferReturn(req) ? `RETURNING ${await buildSelectClause(table, req.query.select)}` : '';
       const sql = `INSERT INTO public."${table}" (${cols}) VALUES ${valueRows.join(', ')}${conflictClause} ${returning}`;
       const result = await withRequestContext(auth, (client) => client.query(sql, params));
 
@@ -328,7 +371,7 @@ router.route('/:table')
         })
         .join(', ');
       const where = buildWhere(req.query, params);
-      const returning = preferReturn(req) ? 'RETURNING *' : '';
+      const returning = preferReturn(req) ? `RETURNING ${await buildSelectClause(table, req.query.select)}` : '';
       const sql = `UPDATE public."${table}" SET ${setClause} ${where} ${returning}`;
       const result = await withRequestContext(auth, (client) => client.query(sql, params));
 
@@ -345,7 +388,7 @@ router.route('/:table')
       const where = buildWhere(req.query, params);
       if (!where) return res.status(400).json({ error: 'refusing DELETE with no filter' });
 
-      const returning = preferReturn(req) ? 'RETURNING *' : '';
+      const returning = preferReturn(req) ? `RETURNING ${await buildSelectClause(table, req.query.select)}` : '';
       const sql = `DELETE FROM public."${table}" ${where} ${returning}`;
       const result = await withRequestContext(auth, (client) => client.query(sql, params));
 

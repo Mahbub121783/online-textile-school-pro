@@ -4,8 +4,21 @@ const { pool } = require('./db');
 const { router: authRouter } = require('./auth');
 const restRouter = require('./rest');
 
+const ALLOWED_ORIGINS = [
+  'https://www.onlinetextileschool.com',
+  'https://onlinetextileschool.com',
+  'http://localhost:8080',
+];
+
 const app = express();
-app.use(cors());
+app.use(cors({
+  origin(origin, callback) {
+    // Allow no-origin requests (curl, server-to-server) and any allowed origin.
+    if (!origin || ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
+    callback(new Error('Not allowed by CORS'));
+  },
+  credentials: true,
+}));
 app.use(express.json({ limit: '10mb' }));
 
 app.get('/health', (req, res) => {
