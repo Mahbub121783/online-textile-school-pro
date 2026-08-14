@@ -17,6 +17,7 @@ const { sendSms } = require('./sendSms');
 const { metaCapi } = require('./metaCapi');
 const { aiTutor } = require('./aiTutor');
 const { aiIndexBuilder } = require('./aiIndexBuilder');
+const { qbAiGenerate } = require('./qbAiGenerate');
 
 const router = express.Router();
 
@@ -40,6 +41,7 @@ router.post('/send-sms', sendSms);
 router.post('/meta-capi', metaCapi);
 router.post('/ai-tutor', aiTutor);
 router.post('/ai-index-builder', aiIndexBuilder);
+router.post('/qb-ai-generate', qbAiGenerate);
 
 // ebook-secure-access: GET for streaming (PDF.js range requests), POST for
 // generate_token -- same path, dispatched by method (matches the original
