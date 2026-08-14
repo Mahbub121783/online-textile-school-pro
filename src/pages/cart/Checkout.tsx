@@ -155,6 +155,28 @@ const Checkout = () => {
     return `INV-${y}${m}-${rand}`;
   };
 
+  // Mirrors backend/src/functions/processPayment.js's referral-crediting
+  // logic -- that logic only ran for the UddoktaPay gateway path. The
+  // wallet-payment and free-order branches below complete entirely
+  // client-side and never called it, so a referred user's first purchase
+  // never credited their referrer through either of those paths (both
+  // common on this platform -- free course enrollment especially).
+  const creditReferralReward = async (orderId: string) => {
+    if (!user || !profile?.referred_by) return;
+    try {
+      await supabase.from('referral_rewards')
+        .update({ status: 'credited', reward_amount: 50, credited_at: new Date().toISOString() })
+        .eq('referred_id', user.id)
+        .eq('status', 'pending');
+      await supabase.rpc('credit_wallet', {
+        _user_id: profile.referred_by,
+        _amount: 50,
+        _description: `Referral reward for order ${orderId.slice(0, 8)}`,
+        _reference_id: orderId,
+      });
+    } catch (e) { console.warn('referral credit skipped:', e); }
+  };
+
   const creditInstructorRevenue = async (orderId: string, orderItems: typeof items) => {
     for (const item of orderItems) {
       if (item.type === 'course') {
@@ -328,6 +350,7 @@ const Checkout = () => {
         } catch (e) { console.warn('invoice paid-update skipped:', e); }
         await enrollAfterPayment(orderId);
         try { await creditInstructorRevenue(orderId, items); } catch (e) { console.warn('instructor revenue credit skipped:', e); }
+        await creditReferralReward(orderId);
       }
 
       // Free order (100% coupon or free items)
@@ -338,6 +361,7 @@ const Checkout = () => {
         } catch (e) { console.warn('invoice paid-update skipped:', e); }
         await enrollAfterPayment(orderId);
         try { await creditInstructorRevenue(orderId, items); } catch (e) { console.warn('instructor revenue credit skipped:', e); }
+        await creditReferralReward(orderId);
       }
 
       clearCart();

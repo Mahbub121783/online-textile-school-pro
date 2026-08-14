@@ -147,6 +147,27 @@ const AdminOrders = () => {
         }
       }
 
+      // Credit referral reward -- mirrors backend/src/functions/
+      // processPayment.js's logic, which only runs for the UddoktaPay
+      // gateway path. Manually-verified orders (bank transfer / bKash-Nagad
+      // "send money" -- the common path for this platform) approved here
+      // never credited the referrer at all until now.
+      try {
+        const { data: buyerProfile } = await supabase.from('user_profiles').select('referred_by').eq('id', order.user_id).single();
+        if (buyerProfile?.referred_by) {
+          await supabase.from('referral_rewards')
+            .update({ status: 'credited', reward_amount: 50, credited_at: new Date().toISOString() })
+            .eq('referred_id', order.user_id)
+            .eq('status', 'pending');
+          await supabase.rpc('credit_wallet', {
+            _user_id: buyerProfile.referred_by,
+            _amount: 50,
+            _description: `Referral reward for order ${orderId.slice(0, 8)}`,
+            _reference_id: orderId,
+          });
+        }
+      } catch (e) { console.warn('referral credit skipped:', e); }
+
       // Send approval notification + email
       const { createNotificationWithEmail, NOTIFICATION_TYPES } = await import('@/lib/notifications');
       await createNotificationWithEmail({

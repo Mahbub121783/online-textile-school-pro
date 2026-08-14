@@ -1,7 +1,7 @@
 const express = require('express');
 const { withRequestContext } = require('./db');
 const { readAuth } = require('./auth');
-const { resolveEmbed, serializeForColumn } = require('./relationships');
+const { resolveEmbed, serializeForColumn, resolveConflictWhere } = require('./relationships');
 
 // ============================================================
 // PostgREST-subset query layer. Implements exactly the operator set the
@@ -340,15 +340,27 @@ router.route('/:table')
       const prefer = req.headers.prefer || '';
       let conflictClause = '';
       if (onConflict) {
-        onConflict.split(',').forEach(assertValidIdentifier);
+        const conflictCols = onConflict.split(',');
+        conflictCols.forEach(assertValidIdentifier);
+        // Several dedupe tables use a PARTIAL unique index (one per
+        // NULL-combination) instead of a plain UNIQUE constraint -- Postgres
+        // 13 has no `UNIQUE NULLS NOT DISTINCT`. A bare `ON CONFLICT (cols)`
+        // only matches a partial index if its WHERE predicate is repeated
+        // verbatim, otherwise Postgres rejects it with "no unique or
+        // exclusion constraint matching the ON CONFLICT specification" --
+        // confirmed live on class_video_views, which broke ALL video view
+        // counting. resolveConflictWhere looks up the real index so this
+        // works for any such table without hardcoding table names here.
+        const whereClause = await resolveConflictWhere(table, conflictCols);
+        const conflictTarget = `(${onConflict})${whereClause ? ` WHERE ${whereClause}` : ''}`;
         if (prefer.includes('resolution=ignore-duplicates')) {
-          conflictClause = ` ON CONFLICT (${onConflict}) DO NOTHING`;
+          conflictClause = ` ON CONFLICT ${conflictTarget} DO NOTHING`;
         } else {
           const updates = columns
-            .filter((c) => !onConflict.split(',').includes(c))
+            .filter((c) => !conflictCols.includes(c))
             .map((c) => `"${c}" = EXCLUDED."${c}"`)
             .join(', ');
-          conflictClause = ` ON CONFLICT (${onConflict}) DO UPDATE SET ${updates}`;
+          conflictClause = ` ON CONFLICT ${conflictTarget} DO UPDATE SET ${updates}`;
         }
       }
 

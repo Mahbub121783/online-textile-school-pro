@@ -49,6 +49,62 @@ async function serializeForColumn(table, column, value) {
   return value;
 }
 
+// Cache of { table -> [{ columns: string[], whereClause: string|null }] }
+// for every unique/PK index in public schema. Needed because several
+// dedupe tables use a PARTIAL unique index per NULL-combination instead of
+// a single plain UNIQUE constraint (Postgres 13 has no `UNIQUE NULLS NOT
+// DISTINCT` -- see db/ migration notes), e.g. class_video_views has
+// separate `(video_id, user_id) WHERE user_id IS NOT NULL` and
+// `(video_id, session_key) WHERE user_id IS NULL AND session_key IS NOT
+// NULL` indexes. A bare `ON CONFLICT (video_id, user_id) DO ...` does NOT
+// match a partial index unless the WHERE predicate is repeated verbatim in
+// the ON CONFLICT clause -- Postgres rejects it with "no unique or
+// exclusion constraint matching the ON CONFLICT specification". This cache
+// lets the upsert handler find and reattach the right predicate instead of
+// trusting the client-supplied column list blindly.
+let uniqueIndexCache = null;
+
+async function loadUniqueIndexes() {
+  if (uniqueIndexCache) return uniqueIndexCache;
+  const { rows } = await pool.query(`
+    SELECT
+      t.relname AS table_name,
+      i.relname AS index_name,
+      pg_get_expr(ix.indpred, ix.indrelid) AS where_clause,
+      array_agg(a.attname::text ORDER BY k.ord) AS columns
+    FROM pg_index ix
+    JOIN pg_class t ON t.oid = ix.indrelid
+    JOIN pg_class i ON i.oid = ix.indexrelid
+    JOIN pg_namespace n ON n.oid = t.relnamespace
+    JOIN LATERAL unnest(ix.indkey) WITH ORDINALITY AS k(attnum, ord) ON true
+    JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = k.attnum
+    WHERE ix.indisunique AND n.nspname = 'public'
+    GROUP BY t.relname, i.relname, ix.indpred, ix.indrelid
+  `);
+  const map = new Map();
+  for (const r of rows) {
+    if (!map.has(r.table_name)) map.set(r.table_name, []);
+    map.get(r.table_name).push({ columns: r.columns, whereClause: r.where_clause });
+  }
+  uniqueIndexCache = map;
+  return uniqueIndexCache;
+}
+
+// Given the on_conflict column list a client supplied, finds the matching
+// unique index and returns its WHERE clause (null for a plain, non-partial
+// unique constraint -- the common case, where a bare column-list ON
+// CONFLICT already works fine).
+async function resolveConflictWhere(table, columns) {
+  const map = await loadUniqueIndexes();
+  const indexes = map.get(table) || [];
+  const wanted = [...columns].sort();
+  const match = indexes.find((idx) => {
+    const cols = [...idx.columns].sort();
+    return cols.length === wanted.length && cols.every((c, i) => c === wanted[i]);
+  });
+  return match ? match.whereClause : null;
+}
+
 async function loadRelationships() {
   if (cache) return cache;
   const { rows } = await pool.query(`
@@ -103,4 +159,4 @@ async function resolveEmbed(table, hint, constraintHint) {
   return { targetTable: r.local_table, localColumn: r.foreign_column, foreignColumn: r.local_column, isArray: true };
 }
 
-module.exports = { resolveEmbed, loadRelationships, serializeForColumn };
+module.exports = { resolveEmbed, loadRelationships, serializeForColumn, resolveConflictWhere };
