@@ -19,6 +19,7 @@ const { aiTutor } = require('./aiTutor');
 const { aiIndexBuilder } = require('./aiIndexBuilder');
 const { qbAiGenerate } = require('./qbAiGenerate');
 const { cloudinaryProxy } = require('./cloudinaryProxy');
+const { qbSeedBatch } = require('./qbSeedBatch');
 
 const router = express.Router();
 
@@ -44,6 +45,7 @@ router.post('/ai-tutor', aiTutor);
 router.post('/ai-index-builder', aiIndexBuilder);
 router.post('/qb-ai-generate', qbAiGenerate);
 router.post('/cloudinary-proxy', cloudinaryProxy);
+router.post('/qb-seed-batch', qbSeedBatch);
 
 // ebook-secure-access: GET for streaming (PDF.js range requests), POST for
 // generate_token -- same path, dispatched by method (matches the original
