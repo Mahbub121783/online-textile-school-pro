@@ -4,7 +4,7 @@ import { Slider } from '@/components/ui/slider';
 
 import {
   Play, Pause, Volume2, VolumeX, Maximize, Minimize,
-  SkipBack, SkipForward, Monitor, Loader2, MoreVertical
+  SkipBack, SkipForward, Monitor, Loader2, MoreVertical, AlertTriangle, ExternalLink
 } from 'lucide-react';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel
@@ -81,9 +81,13 @@ function parseVideoSource(url: string, platformRaw?: string | null) {
     const id = extractYouTubeId(url);
     if (id) {
       const origin = typeof window !== 'undefined' ? window.location.origin : '';
+      // youtube-nocookie.com avoids the third-party-cookie-blocked embed
+      // failures ("Error 153: Video player configuration error") that show
+      // up under strict browser privacy settings / ad blockers -- origin
+      // is required (not just recommended) once enablejsapi=1 is set.
       return {
         type: 'youtube' as const,
-        embedUrl: `https://www.youtube.com/embed/${id}?rel=0&modestbranding=1&iv_load_policy=3&cc_load_policy=0&fs=1&playsinline=1&enablejsapi=1${origin ? `&origin=${origin}` : ''}`,
+        embedUrl: `https://www.youtube-nocookie.com/embed/${id}?rel=0&modestbranding=1&iv_load_policy=3&cc_load_policy=0&fs=1&playsinline=1&enablejsapi=1${origin ? `&origin=${origin}` : ''}`,
         videoId: id,
       };
     }
@@ -170,6 +174,7 @@ const SecureMediaPlayer = ({
   const [playbackRate, setPlaybackRate] = useState(1);
   const [showOverlay, setShowOverlay] = useState(true);
   const [controlsVisible, setControlsVisible] = useState(true);
+  const [embedError, setEmbedError] = useState<string | null>(null);
   const hideTimer = useRef<ReturnType<typeof setTimeout>>();
 
   const effectiveStart = useMemo(
@@ -211,7 +216,35 @@ const SecureMediaPlayer = ({
 
   useEffect(() => {
     watchMilestonesRef.current = new Set();
+    setEmbedError(null);
   }, [videoUrl]);
+
+  // YouTube's IFrame API (enablejsapi=1) posts onError messages instead of
+  // firing a DOM error event -- without listening for these, a broken
+  // embed (e.g. "Error 153: Video player configuration error") just sits
+  // there showing YouTube's own unbranded error screen inside the iframe
+  // with no way for us to react to it. YT error codes: 2 = invalid param,
+  // 5 = HTML5 player error, 100 = video removed/private, 101/150 = owner
+  // disabled embedding. 153 isn't an officially documented code but is
+  // reported for the same "embedding blocked" class of failure.
+  useEffect(() => {
+    if (source.type !== 'youtube') return;
+    const handler = (e: MessageEvent) => {
+      if (typeof e.data !== 'string') return;
+      let payload: any;
+      try { payload = JSON.parse(e.data); } catch { return; }
+      if (payload?.event === 'onError') {
+        setLoading(false);
+        setEmbedError(
+          [101, 150].includes(payload.info)
+            ? 'The video owner has disabled playback on other websites.'
+            : 'This video could not be loaded.'
+        );
+      }
+    };
+    window.addEventListener('message', handler);
+    return () => window.removeEventListener('message', handler);
+  }, [source.type, videoUrl]);
 
   useEffect(() => {
     if (!isDirect || !videoRef.current) return;
@@ -559,7 +592,19 @@ const SecureMediaPlayer = ({
         footer={showControls ? footer : undefined}
       >
         {/* Video content */}
-        {isDirect ? (
+        {embedError ? (
+          <div className="w-full h-full flex items-center justify-center bg-black">
+            <div className="text-center text-white/70 px-6">
+              <AlertTriangle className="h-10 w-10 mx-auto mb-3 text-warning" />
+              <p className="text-sm mb-3">{embedError}</p>
+              <a href={videoUrl!} target="_blank" rel="noreferrer">
+                <Button variant="outline" size="sm" className="gap-1.5 bg-white/10 border-white/20 text-white hover:bg-white/20 hover:text-white">
+                  <ExternalLink className="h-3.5 w-3.5" /> Watch on YouTube
+                </Button>
+              </a>
+            </div>
+          </div>
+        ) : isDirect ? (
           <video
             ref={videoRef}
             src={source.embedUrl}

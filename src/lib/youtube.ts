@@ -39,7 +39,13 @@ export function getYoutubeEmbedUrl(
   p.set('rel', '0');
   p.set('playsinline', '1');
   p.set('enablejsapi', '1');
-  return `https://www.youtube.com/embed/${id}?${p.toString()}`;
+  // `origin` is required (not just recommended) once enablejsapi=1 is set --
+  // omitting it is a common real-world cause of YouTube's "Error 153: Video
+  // player configuration error". youtube-nocookie.com avoids the
+  // third-party-cookie-blocked embed failures that are the other common
+  // cause of the same error under strict browser privacy settings.
+  if (typeof window !== 'undefined') p.set('origin', window.location.origin);
+  return `https://www.youtube-nocookie.com/embed/${id}?${p.toString()}`;
 }
 
 /** Send a YT IFrame API command via postMessage (requires enablejsapi=1). */

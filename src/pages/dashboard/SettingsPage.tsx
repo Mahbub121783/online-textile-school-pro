@@ -14,7 +14,7 @@ import InstallAppCard from '@/components/InstallAppCard';
 import { useTheme } from '@/components/ThemeProvider';
 import { Progress } from '@/components/ui/progress';
 import { useProfileCompleteness } from '@/hooks/useProfileCompleteness';
-import { useCloudinaryUpload } from '@/hooks/useCloudinaryUpload';
+import { useFileUpload } from '@/hooks/useFileUpload';
 import LocationCapture from '@/components/LocationCapture';
 import { cldImg } from '@/lib/cloudinaryUrl';
 
@@ -30,7 +30,7 @@ const SettingsPage = () => {
   const { theme, setTheme } = useTheme();
   const { user, profile } = useAuth();
   const [saving, setSaving] = useState(false);
-  const { upload: uploadToCloudinary } = useCloudinaryUpload();
+  const { upload: uploadFile } = useFileUpload();
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [form, setForm] = useState({
     full_name: '',
@@ -144,8 +144,13 @@ const SettingsPage = () => {
 
     setAvatarUploading(true);
     try {
-      // Upload to Cloudinary using user ID as public_id (overwrites previous avatar, original quality preserved)
-      const result = await uploadToCloudinary(file, {
+      // Cloudinary (user ID as public_id, overwrites previous avatar) with
+      // automatic fallback to our own server's local storage if Cloudinary
+      // isn't configured/reachable -- previously called useCloudinaryUpload
+      // directly, which has no fallback, so avatar upload hard-failed with
+      // a raw "Edge Function returned a non-2xx status code" whenever no
+      // Cloudinary account was configured.
+      const result = await uploadFile(file, {
         publicId: `users/${user.id}/avatar`,
         folder: 'users',
         overwrite: true,
