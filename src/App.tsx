@@ -80,6 +80,7 @@ const AdminAppearance = lazy(() => import("./pages/admin/AdminAppearance"));
 const AdminCertificates = lazy(() => import("./pages/admin/AdminCertificates"));
 const AdminSetup = lazy(() => import("./pages/admin/AdminSetup"));
 const AdminOrders = lazy(() => import("./pages/admin/AdminOrders"));
+const AdminCampusOnboard = lazy(() => import("./pages/admin/AdminCampusOnboard"));
 const AdminPayment = lazy(() => import("./pages/admin/AdminPayment"));
 const AdminManagement = lazy(() => import("./pages/admin/AdminManagement"));
 const SystemControls = lazy(() => import("./pages/admin/SystemControls"));
@@ -125,6 +126,8 @@ const PrivacyPage = lazy(() => import("./pages/static/PrivacyPage"));
 const TermsPage = lazy(() => import("./pages/static/TermsPage"));
 const BecomeInstructor = lazy(() => import("./pages/static/BecomeInstructor"));
 const PublicRegistration = lazy(() => import("./pages/registration/PublicRegistration"));
+const CampusOnboardList = lazy(() => import("./pages/campus/CampusOnboardList"));
+const CampusOnboardRegister = lazy(() => import("./pages/campus/CampusOnboardRegister"));
 const AdminRegistrations = lazy(() => import("./pages/admin/AdminRegistrations"));
 const AdminSiteContent = lazy(() => import("./pages/admin/AdminSiteContent"));
 const AdminBatches = lazy(() => import("./pages/admin/AdminBatches"));
@@ -353,6 +356,7 @@ const AppRoutes = () => {
             <Route path="payment" element={<AdminPayment />} />
             <Route path="payment/:tab" element={<AdminPayment />} />
             <Route path="orders" element={<AdminOrders />} />
+            <Route path="campus-onboard" element={<AdminCampusOnboard />} />
             <Route path="ebooks" element={<AdminEbooks />} />
             <Route path="coupons" element={<AdminCoupons />} />
             <Route path="wallets" element={<AdminWallets />} />
@@ -432,6 +436,8 @@ const AppRoutes = () => {
           <Route path="/workshops" element={<WorkshopsPage />} />
           <Route path="/workshops/:slug" element={<WorkshopDetail />} />
           <Route path="/register" element={<PublicRegistration />} />
+          <Route path="/campus-onboard" element={<CampusOnboardList />} />
+          <Route path="/campus-onboard/register" element={<CampusOnboardRegister />} />
           <Route path="/verify-certificate" element={<VerifyCertificate />} />
           <Route path="/register/:slug" element={<PublicRegistration />} />
           {/* Forum */}

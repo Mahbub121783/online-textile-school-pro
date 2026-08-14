@@ -29,6 +29,7 @@ const { startQuizAttempt } = require('./startQuizAttempt');
 const { issueCertificate } = require('./issueCertificate');
 const { checkoutWallet, checkoutFree, checkoutAdminApprove, checkoutAdminReject } = require('./checkoutFinalize');
 const { adminWalletAdjust, adminApproveWithdrawal, adminRejectWithdrawal } = require('./walletAdmin');
+const { campusApprove, campusReject, campusProvisionSubdomain } = require('./campusOnboard');
 
 const router = express.Router();
 
@@ -70,6 +71,9 @@ router.post('/checkout-admin-reject', checkoutAdminReject);
 router.post('/admin-wallet-adjust', adminWalletAdjust);
 router.post('/admin-approve-withdrawal', adminApproveWithdrawal);
 router.post('/admin-reject-withdrawal', adminRejectWithdrawal);
+router.post('/campus-approve', campusApprove);
+router.post('/campus-reject', campusReject);
+router.post('/campus-provision-subdomain', campusProvisionSubdomain);
 
 // ebook-secure-access: GET for streaming (PDF.js range requests), POST for
 // generate_token -- same path, dispatched by method (matches the original

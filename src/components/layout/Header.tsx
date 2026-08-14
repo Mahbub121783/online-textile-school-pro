@@ -297,6 +297,7 @@ const Header = () => {
             <Link to="/workshops" className="px-2.5 py-1 text-[13px] text-foreground/80 hover:text-primary transition-colors whitespace-nowrap">Workshops</Link>
             <Link to="/class-videos" className="px-2.5 py-1 text-[13px] text-foreground/80 hover:text-primary transition-colors whitespace-nowrap font-medium">Class Videos</Link>
             <Link to="/practice" className="px-2.5 py-1 text-[13px] text-accent hover:text-accent-hover transition-colors whitespace-nowrap font-bold">🧠 Practice</Link>
+            <Link to="/campus-onboard" className="px-2.5 py-1 text-[13px] text-foreground/80 hover:text-primary transition-colors whitespace-nowrap">Campus Onboard</Link>
             <Link to="/blog" className="px-2.5 py-1 text-[13px] text-foreground/80 hover:text-primary transition-colors whitespace-nowrap">{t('nav.blog')}</Link>
             <Link to="/forum" className="px-2.5 py-1 text-[13px] text-foreground/80 hover:text-primary transition-colors whitespace-nowrap">{t('nav.forum')}</Link>
             <Link to="/about" className="px-2.5 py-1 text-[13px] text-foreground/80 hover:text-primary transition-colors whitespace-nowrap">{t('nav.about')}</Link>
@@ -357,6 +358,7 @@ const Header = () => {
               { label: 'Workshops', href: '/workshops' },
               { label: 'Class Videos', href: '/class-videos' },
               { label: '🧠 Practice Arena', href: '/practice' },
+              { label: 'Campus Onboard', href: '/campus-onboard' },
               { label: t('nav.blog'), href: '/blog' },
               { label: t('nav.forum'), href: '/forum' },
               { label: t('nav.about'), href: '/about' },
