@@ -13,6 +13,8 @@ const { workshopReminderCron } = require('./workshopReminderCron');
 const { unrepliedMessageReminder } = require('./unrepliedMessageReminder');
 const { internalCron } = require('./internalCron');
 const { validateDriveLink } = require('./validateDriveLink');
+const { sendSms } = require('./sendSms');
+const { metaCapi } = require('./metaCapi');
 
 const router = express.Router();
 
@@ -32,6 +34,8 @@ router.all('/workshop-reminder-cron', workshopReminderCron);
 router.all('/unreplied-message-reminder', unrepliedMessageReminder);
 router.all('/internal-cron', internalCron);
 router.post('/validate-drive-link', validateDriveLink);
+router.post('/send-sms', sendSms);
+router.post('/meta-capi', metaCapi);
 
 // ebook-secure-access: GET for streaming (PDF.js range requests), POST for
 // generate_token -- same path, dispatched by method (matches the original
