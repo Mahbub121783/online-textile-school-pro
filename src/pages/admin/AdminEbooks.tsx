@@ -85,7 +85,7 @@ const AdminEbooks = () => {
   const { data: ebooks = [], isLoading } = useQuery({
     queryKey: ['admin-ebooks', scope, userId],
     queryFn: async () => {
-      let q = supabase.from('ebooks').select('*, categories(name)').order('created_at', { ascending: false });
+      let q = supabase.from('ebooks').select('*, categories(name), ebook_secure_files(file_url)').order('created_at', { ascending: false });
       if (isInstructor && userId) q = q.eq('created_by', userId);
       const { data } = await q;
       return data || [];
@@ -195,7 +195,7 @@ const AdminEbooks = () => {
       discount_price: ebook.discount_price, author: ebook.author || '',
       sub_writers: ebook.sub_writers || [], cover_url: ebook.cover_url || '',
       gallery_urls: ebook.gallery_urls || [], meta_keywords: ebook.meta_keywords || '',
-      seo_keywords: ebook.seo_keywords || '', file_url: ebook.file_url || '',
+      seo_keywords: ebook.seo_keywords || '', file_url: ebook.ebook_secure_files?.[0]?.file_url || '',
       file_format: ebook.file_format || 'pdf', page_count: ebook.page_count,
       is_published: ebook.is_published || false,
     });
@@ -278,7 +278,9 @@ const AdminEbooks = () => {
         <div className="text-center py-12 text-muted-foreground">Loading...</div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {filtered.map((ebook: any) => (
+          {filtered.map((ebook: any) => {
+            const secureFileUrl = ebook.ebook_secure_files?.[0]?.file_url || '';
+            return (
             <Card key={ebook.id} className="overflow-hidden">
               <div className="aspect-[3/4] bg-muted relative">
                 <img src={ebook.cover_url || '/placeholder.svg'} alt={ebook.title} className="w-full h-full object-cover" />
@@ -287,10 +289,12 @@ const AdminEbooks = () => {
                     {ebook.is_published ? 'Published' : 'Draft'}
                   </Badge>
                 </div>
-                {/* Storage source badge for file_url */}
-                {ebook.file_url ? (
+                {/* Storage source badge -- the real file_url lives in
+                    ebook_secure_files (db/29's DRM fix keeps it out of the
+                    publicly-readable ebooks row), not ebook.file_url. */}
+                {secureFileUrl ? (
                   <div className="absolute top-2 left-2">
-                    <StorageBadge url={ebook.file_url} />
+                    <StorageBadge url={secureFileUrl} />
                   </div>
                 ) : (
                   <div className="absolute top-2 left-2">
@@ -307,7 +311,7 @@ const AdminEbooks = () => {
                   <Badge variant="outline" className="text-xs">{ebook.categories.name}</Badge>
                 )}
                 {/* Legacy warning */}
-                {ebook.file_url && isCloudinaryUrl(ebook.file_url) && (
+                {secureFileUrl && isCloudinaryUrl(secureFileUrl) && (
                   <div className="flex items-center gap-1 text-xs text-destructive">
                     <AlertTriangle className="h-3 w-3" />
                     <span>Legacy: Re-upload file to R2</span>
@@ -338,7 +342,8 @@ const AdminEbooks = () => {
                 </div>
               </CardContent>
             </Card>
-          ))}
+            );
+          })}
         </div>
       )}
 
