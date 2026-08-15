@@ -68,7 +68,16 @@ async function buildSelectClause(table, selectParam) {
     const embedMatch = EMBED_RE.exec(token);
     if (embedMatch) {
       const [, alias, name, constraint, inner] = embedMatch;
-      const rel = await resolveEmbed(table, name, constraint);
+      // `!inner`/`!left` are PostgREST join-TYPE hints (e.g.
+      // `assignment_submissions!inner(...)`), not a foreign-key constraint
+      // name -- treating "inner" as a literal constraint to look up always
+      // failed with "No relationship found for embed ... on table ...",
+      // confirmed live against AdminPlagiarism.tsx's exact query. Only a
+      // real `!constraint_name` (anything else) should be passed through as
+      // a disambiguation hint; a bare join-type hint falls back to normal
+      // name/column-based resolution.
+      const constraintHint = constraint === 'inner' || constraint === 'left' ? null : constraint;
+      const rel = await resolveEmbed(table, name, constraintHint);
       assertValidIdentifier(rel.targetTable);
       assertValidIdentifier(rel.localColumn);
       assertValidIdentifier(rel.foreignColumn);
@@ -236,6 +245,33 @@ function wantsSingleObject(req) {
 function preferReturn(req) {
   const prefer = req.headers.prefer || '';
   return prefer.includes('return=representation');
+}
+
+// The GET handler already branched on wantsSingleObject (real PostgREST's
+// contract for .single()/.maybeSingle(): respond with a bare object, not an
+// array, when the client sends `Accept: application/vnd.pgrst.object+json`)
+// -- but POST/PATCH/DELETE always sent back `result.rows` as a plain array
+// regardless of that header. supabase-js trusts the server to honor the
+// Accept header and does no reshaping itself, so every
+// `.insert(...).select().single()` (and the .update()/.delete() equivalents)
+// silently received an array where calling code expected an object --
+// `const { data: order } = await ...insert(...).select('id').single(); ...
+// order.id` resolved to `undefined` on a real array response, which then got
+// sent as a null FK/column value to the next query. Confirmed live: this
+// exact pattern in the admin "Grant Ebook Access" flow (StudentDetail.tsx)
+// failed with "null value in column order_id ... violates not-null
+// constraint" because `order.id` was undefined. This one shared helper fixes
+// every affected call site (113 occurrences across 79 files) at the root
+// instead of patching each one.
+function respondRows(req, res, rows, statusCode) {
+  if (!preferReturn(req)) return res.status(statusCode).json([]);
+  if (wantsSingleObject(req)) {
+    if (rows.length !== 1) {
+      return res.status(406).json({ code: 'PGRST116', message: 'Expected exactly one row', details: null, hint: null });
+    }
+    return res.status(statusCode).json(rows[0]);
+  }
+  return res.status(statusCode).json(rows);
 }
 
 // supabase-js (postgrest-js) parses a non-2xx response body directly as a
@@ -410,7 +446,7 @@ router.route('/:table')
       const sql = `INSERT INTO public."${table}" (${cols}) VALUES ${valueRows.join(', ')}${conflictClause} ${returning}`;
       const result = await withRequestContext(auth, (client) => client.query(sql, params));
 
-      res.status(201).json(preferReturn(req) ? result.rows : []);
+      respondRows(req, res, result.rows, 201);
     } catch (err) {
       sendPgError(res, err);
     }
@@ -435,7 +471,7 @@ router.route('/:table')
       const sql = `UPDATE public."${table}" SET ${setClause} ${where} ${returning}`;
       const result = await withRequestContext(auth, (client) => client.query(sql, params));
 
-      res.json(preferReturn(req) ? result.rows : []);
+      respondRows(req, res, result.rows, 200);
     } catch (err) {
       sendPgError(res, err);
     }
@@ -452,7 +488,7 @@ router.route('/:table')
       const sql = `DELETE FROM public."${table}" ${where} ${returning}`;
       const result = await withRequestContext(auth, (client) => client.query(sql, params));
 
-      res.json(preferReturn(req) ? result.rows : []);
+      respondRows(req, res, result.rows, 200);
     } catch (err) {
       sendPgError(res, err);
     }

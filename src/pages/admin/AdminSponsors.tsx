@@ -95,7 +95,8 @@ const AdminSponsors = () => {
   });
 
   const toggleActive = async (id: string, current: boolean) => {
-    await supabase.from('sponsors').update({ is_active: !current }).eq('id', id);
+    const { error } = await supabase.from('sponsors').update({ is_active: !current }).eq('id', id);
+    if (error) { toast.error(error.message); return; }
     qc.invalidateQueries({ queryKey: ['admin-sponsors'] });
   };
 

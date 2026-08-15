@@ -35,11 +35,13 @@ export default function AdminPopups() {
 
   const load = async () => {
     setLoading(true);
-    const { data } = await supabase.from('popups').select('id, name, type, is_active, layout, start_date, end_date, priority, created_at').order('created_at', { ascending: false });
+    const { data, error } = await supabase.from('popups').select('id, name, type, is_active, layout, start_date, end_date, priority, created_at').order('created_at', { ascending: false });
+    if (error) { toast.error(error.message); setLoading(false); return; }
     setPopups(data || []);
     if (data?.length) {
       const ids = data.map(p => p.id);
-      const { data: an } = await supabase.from('popup_analytics').select('popup_id, event_type').in('popup_id', ids);
+      const { data: an, error: anError } = await supabase.from('popup_analytics').select('popup_id, event_type').in('popup_id', ids);
+      if (anError) { toast.error(anError.message); setLoading(false); return; }
       const map: Record<string, { views: number; conversions: number }> = {};
       an?.forEach(row => {
         if (!map[row.popup_id]) map[row.popup_id] = { views: 0, conversions: 0 };
@@ -57,24 +59,28 @@ export default function AdminPopups() {
   const clearPopupCache = () => { try { delete (window as any).__popupCache; } catch {} };
 
   const toggleActive = async (id: string, value: boolean) => {
-    await supabase.from('popups').update({ is_active: value }).eq('id', id);
+    const { error } = await supabase.from('popups').update({ is_active: value }).eq('id', id);
+    if (error) { toast.error(error.message); return; }
     setPopups(p => p.map(x => x.id === id ? { ...x, is_active: value } : x));
     clearPopupCache();
     toast.success(value ? 'Popup activated' : 'Popup deactivated');
   };
 
   const remove = async (id: string) => {
-    await supabase.from('popups').delete().eq('id', id);
+    const { error } = await supabase.from('popups').delete().eq('id', id);
+    if (error) { toast.error(error.message); return; }
     setPopups(p => p.filter(x => x.id !== id));
     clearPopupCache();
     toast.success('Deleted');
   };
 
   const duplicate = async (id: string) => {
-    const { data } = await supabase.from('popups').select('*').eq('id', id).single();
+    const { data, error } = await supabase.from('popups').select('*').eq('id', id).single();
+    if (error) { toast.error(error.message); return; }
     if (!data) return;
     const { id: _, created_at: __, updated_at: ___, ...rest } = data;
-    await supabase.from('popups').insert({ ...rest, name: `${rest.name} (Copy)`, is_active: false });
+    const { error: insertError } = await supabase.from('popups').insert({ ...rest, name: `${rest.name} (Copy)`, is_active: false });
+    if (insertError) { toast.error(insertError.message); return; }
     clearPopupCache();
     toast.success('Duplicated');
     load();

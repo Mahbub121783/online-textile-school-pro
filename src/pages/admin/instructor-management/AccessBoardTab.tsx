@@ -94,16 +94,22 @@ const AccessBoardTab = () => {
 
   const resetPasswordMutation = useMutation({
     mutationFn: async (userId: string) => {
-      // Look up email from instructor_applications
-      const { data: app } = await supabase
+      const { data: app, error: appError } = await supabase
         .from('instructor_applications')
         .select('email')
         .eq('user_id', userId)
         .limit(1);
+      if (appError) throw appError;
       const email = (app as any)?.[0]?.email;
-      if (!email) throw new Error('Could not find instructor email. Please reset manually from Supabase Auth dashboard.');
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/auth/reset-password`,
+      if (!email) throw new Error('Could not find instructor email.');
+      // supabase.auth is a custom JWT client on this self-hosted backend
+      // (see src/integrations/supabase/client.ts), not real GoTrue -- it has
+      // no resetPasswordForEmail method at all, so this always threw
+      // "supabase.auth.resetPasswordForEmail is not a function" before ever
+      // reaching the email-lookup logic. The real password-reset flow is
+      // the same backend function ForgotPassword.tsx uses.
+      const { error } = await supabase.functions.invoke('password-reset-request', {
+        body: { email: email.toLowerCase() },
       });
       if (error) throw error;
       return email;

@@ -48,7 +48,8 @@ const AdminGradeConfig = () => {
   const { data: courses = [] } = useQuery({
     queryKey: ['courses-for-grades'],
     queryFn: async () => {
-      const { data } = await supabase.from('courses').select('id, title').eq('is_published', true).order('title');
+      const { data, error } = await supabase.from('courses').select('id, title').eq('is_published', true).order('title');
+      if (error) throw error;
       return data || [];
     },
     enabled: tab === 'assign',
@@ -59,7 +60,8 @@ const AdminGradeConfig = () => {
 
   const searchStudentsForGrade = async (q: string) => {
     if (q.length < 2) { setAssignResults([]); return; }
-    const { data } = await supabase.from('user_profiles').select('id, full_name, roll_id').or(`full_name.ilike.%${q}%,roll_id.ilike.%${q}%`).limit(10);
+    const { data, error } = await supabase.from('user_profiles').select('id, full_name, roll_id').or(`full_name.ilike.%${q}%,roll_id.ilike.%${q}%`).limit(10);
+    if (error) { toast.error(error.message); return; }
     setAssignResults(data || []);
   };
 

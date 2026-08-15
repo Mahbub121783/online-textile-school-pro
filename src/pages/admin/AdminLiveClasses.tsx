@@ -40,10 +40,11 @@ const AdminLiveClasses = () => {
   const { data: classes = [], isLoading } = useQuery({
     queryKey: ['admin-live-classes'],
     queryFn: async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('live_classes')
         .select('*, courses(title), batches(name), user_profiles:created_by(full_name)')
         .order('start_time', { ascending: false });
+      if (error) { toast.error(error.message); throw error; }
       return data ?? [];
     },
   });
@@ -201,14 +202,23 @@ const AdminLiveClasses = () => {
                                   userIds = (data || []).map((r: any) => r.user_id);
                                 }
                                 if (!userIds.length) { toast.error('No enrolled students found'); return; }
-                                // Get emails
-                                const emails: { id: string; email: string; name: string }[] = [];
-                                for (const uid of userIds) {
-                                  const { data: au } = await supabase.auth.admin?.getUserById?.(uid) || {} as any;
-                                  const email = (au as any)?.user?.email;
-                                  const { data: prof } = await supabase.from('user_profiles').select('full_name').eq('id', uid).single();
-                                  if (email) emails.push({ id: uid, email, name: prof?.full_name || 'Student' });
-                                }
+                                // supabase.auth is a custom JWT client on this self-hosted backend
+                                // (see src/integrations/supabase/client.ts), not real GoTrue -- it
+                                // has no `.admin` namespace at all, so `supabase.auth.admin?.getUserById?.()`
+                                // always silently evaluated to undefined via optional chaining, meaning
+                                // this button always sent to 0 students no matter what. The real
+                                // mechanism for an admin to look up other users' emails (auth.users
+                                // isn't exposed through the REST shim) is this dedicated endpoint,
+                                // already used by AdminUsers.tsx.
+                                const { data: authMap } = await supabase.functions.invoke('admin-list-user-auth', {
+                                  body: { userIds },
+                                });
+                                const { data: profs } = await supabase.from('user_profiles').select('id, full_name').in('id', userIds);
+                                const nameById: Record<string, string> = {};
+                                (profs || []).forEach((p: any) => { nameById[p.id] = p.full_name; });
+                                const emails: { id: string; email: string; name: string }[] = userIds
+                                  .map((uid) => ({ id: uid, email: (authMap as any)?.[uid]?.email, name: nameById[uid] || 'Student' }))
+                                  .filter((e) => !!e.email);
                                 let sent = 0;
                                 await Promise.all(emails.map(async (e) => {
                                   try {

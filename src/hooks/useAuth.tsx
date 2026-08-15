@@ -260,8 +260,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   // so when an admin granted/revoked a role, the AFFECTED user's own session
   // (sidebar, route guards, permissions) never found out until they manually
   // logged out and back in -- reported as "role change not reflecting live."
-  // Poll the current user's own data lightly (bypasses the 2min profileCache
-  // via refreshProfile) so a role change lands within ~30s without a reload.
+  // This 30s/focus poll stays as a fallback safety net (SSE connections can
+  // drop), but the SSE effect below is what makes it actually instant.
   useEffect(() => {
     if (!user) return;
     let cancelled = false;
@@ -271,6 +271,27 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => { cancelled = true; clearInterval(interval); window.removeEventListener('focus', tick); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
+
+  // True real-time push: now that this runs on our own Node+Postgres stack
+  // (not funneled through a third-party realtime-channel quota), a genuine
+  // server push is feasible. backend/src/realtime.js LISTENs for Postgres
+  // NOTIFYs (fired by triggers in db/49) and forwards them over SSE to this
+  // exact connection the moment an admin changes this user's roles/profile,
+  // instead of waiting up to 30s for the poll above to catch up.
+  useEffect(() => {
+    const token = (session as any)?.access_token;
+    if (!user || !token) return;
+    const apiBase = import.meta.env.VITE_SUPABASE_URL || 'https://api.onlinetextileschool.com';
+    const es = new EventSource(`${apiBase}/realtime/stream?token=${encodeURIComponent(token)}`);
+    es.addEventListener('roles_changed', () => refreshProfile());
+    es.addEventListener('profile_changed', () => refreshProfile());
+    es.addEventListener('notification', () => {
+      window.dispatchEvent(new CustomEvent('ots:notification'));
+    });
+    // EventSource retries automatically on drop/error -- no manual reconnect needed.
+    return () => es.close();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, (session as any)?.access_token]);
 
   const signOut = async () => {
     await supabase.auth.signOut();

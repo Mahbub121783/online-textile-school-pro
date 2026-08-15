@@ -120,8 +120,16 @@ export const RoleManagerDialog = ({ open, onOpenChange, userId, userName, curren
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['admin-users'] });
       qc.invalidateQueries({ queryKey: ['user-role-audit', userId] });
-      qc.invalidateQueries({ queryKey: ['admin-instructors'] });
-      qc.invalidateQueries({ queryKey: ['instructors'] });
+      // These are the REAL query keys the instructor-management tabs use
+      // (confirmed by reading each tab) -- 'admin-instructors'/'instructors'
+      // matched no query anywhere in the app, so granting/revoking a role
+      // never refreshed any of these tabs; they only caught up via the
+      // global 1-minute staleTime or a manual page revisit.
+      qc.invalidateQueries({ queryKey: ['instructor-applications'] });
+      qc.invalidateQueries({ queryKey: ['access-board-instructors'] });
+      qc.invalidateQueries({ queryKey: ['instructors-financial'] });
+      qc.invalidateQueries({ queryKey: ['comms-instructors'] });
+      qc.invalidateQueries({ queryKey: ['home-instructors'] });
       toast.success(`Updated ${diff.toAdd.length + diff.toRemove.length} role(s) for ${userName}`);
       onOpenChange(false);
     },

@@ -6,6 +6,7 @@ const { pool } = require('./db');
 const { router: authRouter } = require('./auth');
 const restRouter = require('./rest');
 const functionsRouter = require('./functions');
+const { router: realtimeRouter, startListener: startRealtimeListener } = require('./realtime');
 
 // The original Supabase edge-function gateway required at least the (public,
 // but non-empty) anon key on every call, which our self-host has no
@@ -63,10 +64,13 @@ app.get('/health/db', async (req, res) => {
 
 app.use('/auth/v1', authRouter);
 app.use('/rest/v1', restRouter);
+app.use('/realtime', realtimeRouter);
 app.use('/functions/v1/send-smtp-email', relayLimiter);
 app.use('/functions/v1/send-sms', relayLimiter);
 app.use('/functions/v1', functionsLimiter, functionsRouter);
 
 app.use((req, res) => res.status(404).json({ error: 'Not found' }));
+
+startRealtimeListener();
 
 module.exports = app;

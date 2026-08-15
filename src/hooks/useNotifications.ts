@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -15,16 +16,25 @@ interface Notification {
   created_at: string;
 }
 
-// Phase 1 (Free Tier 200-channel cap): notifications use 60s polling instead of
-// a persistent realtime channel. With 500 active users this means up to 500
-// req/min spread across the polling pool (~8 req/s) and ZERO realtime channels
-// for notifications, freeing the realtime quota for chat (the only feature that
-// truly needs sub-second freshness).
+// 60s polling stays as a fallback safety net (SSE connections can drop), but
+// useAuth.tsx's SSE effect pushes an 'ots:notification' window event the
+// instant a new row is inserted (see backend/src/realtime.js + db/49's
+// notify_realtime_new_notification trigger), so in practice this is now
+// near-instant rather than "up to 60s" -- this was previously polling-only
+// because it ran on Supabase's free-tier realtime-channel cap; now that this
+// is a self-hosted stack we own outright, that constraint no longer applies.
 const NOTIFICATIONS_POLL_MS = 60_000;
 
 export function useNotifications() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+
+  useEffect(() => {
+    if (!user) return;
+    const onPush = () => queryClient.invalidateQueries({ queryKey: ['notifications', user.id] });
+    window.addEventListener('ots:notification', onPush);
+    return () => window.removeEventListener('ots:notification', onPush);
+  }, [user?.id, queryClient]);
 
   const { data: notifications = [], isLoading } = useQuery<Notification[]>({
     queryKey: ['notifications', user?.id],

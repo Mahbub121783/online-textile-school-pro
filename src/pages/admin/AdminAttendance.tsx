@@ -26,10 +26,11 @@ const AdminAttendance = () => {
   const { data: liveClasses = [] } = useQuery({
     queryKey: ['live-classes-for-attendance'],
     queryFn: async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('live_classes')
         .select('id, title, start_time, course_id, courses(title)')
         .order('start_time', { ascending: false });
+      if (error) throw error;
       return data ?? [];
     },
   });
@@ -38,11 +39,12 @@ const AdminAttendance = () => {
     queryKey: ['attendance-records', selectedClass],
     enabled: !!selectedClass,
     queryFn: async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('attendance_records')
         .select('*, user_profiles:user_id(full_name, avatar_url, roll_id)')
         .eq('live_class_id', selectedClass)
         .order('created_at');
+      if (error) throw error;
       return data ?? [];
     },
   });

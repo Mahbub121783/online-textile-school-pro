@@ -77,7 +77,8 @@ const AdminBatches = () => {
     queryKey: ['student-search', searchStudent],
     queryFn: async () => {
       if (searchStudent.length < 2) return [];
-      const { data } = await supabase.from('user_profiles').select('id, full_name, roll_id, avatar_url').or(`full_name.ilike.%${searchStudent}%,roll_id.ilike.%${searchStudent}%`).limit(10);
+      const { data, error } = await supabase.from('user_profiles').select('id, full_name, roll_id, avatar_url').or(`full_name.ilike.%${searchStudent}%,roll_id.ilike.%${searchStudent}%`).limit(10);
+      if (error) throw error;
       return data || [];
     },
     enabled: searchStudent.length >= 2,
@@ -87,7 +88,8 @@ const AdminBatches = () => {
   const { data: allCourses = [] } = useQuery({
     queryKey: ['all-courses-list'],
     queryFn: async () => {
-      const { data } = await supabase.from('courses').select('id, title').order('title');
+      const { data, error } = await supabase.from('courses').select('id, title').order('title');
+      if (error) throw error;
       return data ?? [];
     },
   });
@@ -97,7 +99,8 @@ const AdminBatches = () => {
     queryKey: ['batch-courses', showCourses],
     queryFn: async () => {
       if (!showCourses) return [];
-      const { data } = await supabase.from('batch_courses' as any).select('*, courses:course_id(id, title)').eq('batch_id', showCourses);
+      const { data, error } = await supabase.from('batch_courses' as any).select('*, courses:course_id(id, title)').eq('batch_id', showCourses);
+      if (error) throw error;
       return (data || []) as any[];
     },
     enabled: !!showCourses,
