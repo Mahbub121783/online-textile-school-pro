@@ -53,7 +53,11 @@ BEGIN
   FROM public.campus_onboard_requests WHERE id = NEW.onboarded_campus_id;
 
   IF v_owner IS NOT NULL AND v_owner <> NEW.id THEN
-    v_student_name := COALESCE(NEW.full_name, 'A student');
+    -- COALESCE alone doesn't catch full_name being '' (common for
+    -- freshly-registered profiles) rather than NULL -- confirmed live: a
+    -- test notification rendered as " just registered under..." with the
+    -- name silently blank.
+    v_student_name := COALESCE(NULLIF(trim(NEW.full_name), ''), 'A student');
     INSERT INTO public.notifications (user_id, type, title, message, link)
     VALUES (v_owner, 'campus_student_linked', '👋 New Student Registered',
             v_student_name || ' just registered under ' || v_campus_name || ' on Online Textile School.',
