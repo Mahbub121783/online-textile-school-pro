@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
-import { CheckCircle, XCircle, Loader2, Globe, MapPin, Users, Eye, EyeOff, Pencil, Building2, ImagePlus } from 'lucide-react';
+import { CheckCircle, XCircle, Loader2, Globe, MapPin, Users, Eye, EyeOff, Pencil, Building2, ImagePlus, Unlink, Trash2 } from 'lucide-react';
 import { useFileUpload } from '@/hooks/useFileUpload';
 
 const slugify = (s: string) => s.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60);
@@ -40,6 +40,33 @@ const AdminCampusOnboard = () => {
     },
     refetchInterval: 20000,
     refetchIntervalInBackground: false,
+  });
+
+  // This hosting account has no live subdomain-delete API (confirmed by
+  // enumerating every uapi call it exposes -- only addsubdomain/changedocroot
+  // exist), so an admin removing one directly via cPanel's own UI leaves our
+  // tracking stale with no way to find out on its own. Self-heal on every
+  // page load by HEAD-checking each "live" subdomain.
+  useEffect(() => {
+    supabase.functions.invoke('campus-verify-subdomains', { body: {} }).then(({ data }: any) => {
+      if (data?.results?.some((r: any) => !r.reachable)) {
+        queryClient.invalidateQueries({ queryKey: ['admin-campus-onboard'] });
+      }
+    }).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const removeSubdomainMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { data, error } = await supabase.functions.invoke('campus-remove-subdomain', { body: { id } });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ['admin-campus-onboard'] });
+      toast.success(data?.liveRemoveOk ? 'Subdomain removed' : 'Tracking reset (removal isn\'t API-possible on this hosting tier — verify it\'s gone in cPanel too)');
+    },
+    onError: (e: any) => toast.error(e.message),
   });
 
   const approveMutation = useMutation({
@@ -94,6 +121,18 @@ const AdminCampusOnboard = () => {
     onSuccess: (_data, vars) => {
       queryClient.invalidateQueries({ queryKey: ['admin-campus-onboard'] });
       toast.success(vars.is_visible ? 'Campus is now visible on the public list' : 'Campus hidden from the public list');
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('campus_onboard_requests').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-campus-onboard'] });
+      toast.success('Campus request deleted');
     },
     onError: (e: any) => toast.error(e.message),
   });
@@ -202,9 +241,22 @@ const AdminCampusOnboard = () => {
                   </Button>
                 )}
                 {c.subdomain_provisioned && (
-                  <a href={`https://${c.subdomain_slug}.onlinetextileschool.com`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-primary text-sm hover:underline pt-2">
-                    <Globe className="h-3.5 w-3.5" /> {c.subdomain_slug}.onlinetextileschool.com (live)
-                  </a>
+                  <div className="flex items-center justify-between gap-2 pt-2">
+                    <a href={`https://${c.subdomain_slug}.onlinetextileschool.com`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-primary text-sm hover:underline min-w-0 truncate">
+                      <Globe className="h-3.5 w-3.5 shrink-0" /> <span className="truncate">{c.subdomain_slug}.onlinetextileschool.com (live)</span>
+                    </a>
+                    <Button
+                      size="sm" variant="ghost" className="text-destructive hover:text-destructive shrink-0 h-7 px-2"
+                      onClick={() => {
+                        if (confirm(`Remove ${c.subdomain_slug}.onlinetextileschool.com? This resets tracking; if it still exists in cPanel you'll need to delete it there too.`)) {
+                          removeSubdomainMutation.mutate(c.id);
+                        }
+                      }}
+                      disabled={removeSubdomainMutation.isPending}
+                    >
+                      {removeSubdomainMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Unlink className="h-3.5 w-3.5" />}
+                    </Button>
+                  </div>
                 )}
                 <div className="flex gap-2 pt-1">
                   <Button size="sm" variant="outline" className="flex-1" onClick={() => openEdit(c)}>
@@ -225,6 +277,17 @@ const AdminCampusOnboard = () => {
                       )}
                     </Button>
                   )}
+                  <Button
+                    size="sm" variant="outline" className="text-destructive hover:text-destructive px-2"
+                    onClick={() => {
+                      if (confirm(`Delete the campus request "${c.campus_name}"? This only removes the request/portfolio record, not any provisioned subdomain.`)) {
+                        deleteMutation.mutate(c.id);
+                      }
+                    }}
+                    disabled={deleteMutation.isPending}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
                 </div>
                 {c.is_visible === false && (
                   <Badge variant="outline" className="text-xs">Hidden from public</Badge>

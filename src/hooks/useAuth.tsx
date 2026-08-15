@@ -256,9 +256,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => { mounted = false; subscription.unsubscribe(); };
   }, []);
 
-  // EMERGENCY MODE: removed live user_roles subscription. Roles refresh on
-  // next sign-in / token-refresh / page reload, which is enough while the
-  // database is recovering from saturation.
+  // Roles/profile used to only refresh on sign-in/token-refresh/page reload,
+  // so when an admin granted/revoked a role, the AFFECTED user's own session
+  // (sidebar, route guards, permissions) never found out until they manually
+  // logged out and back in -- reported as "role change not reflecting live."
+  // Poll the current user's own data lightly (bypasses the 2min profileCache
+  // via refreshProfile) so a role change lands within ~30s without a reload.
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    const tick = () => { if (!cancelled) refreshProfile(); };
+    const interval = setInterval(tick, 30000);
+    window.addEventListener('focus', tick);
+    return () => { cancelled = true; clearInterval(interval); window.removeEventListener('focus', tick); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
 
   const signOut = async () => {
     await supabase.auth.signOut();

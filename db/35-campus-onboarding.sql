@@ -51,7 +51,7 @@ CREATE POLICY "Public reads approved campuses" ON public.campus_onboard_requests
 
 DROP POLICY IF EXISTS "Admins manage campus onboard requests" ON public.campus_onboard_requests;
 CREATE POLICY "Admins manage campus onboard requests" ON public.campus_onboard_requests
-  FOR UPDATE
+  FOR ALL
   USING (
     auth.role() = 'service_role'
     OR (auth.role() = 'authenticated' AND (has_role(auth.uid(), 'admin') OR has_role(auth.uid(), 'super_admin')))

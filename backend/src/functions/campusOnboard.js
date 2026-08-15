@@ -8,6 +8,7 @@
 // function -- confirmed by testing), so it's a distinct, explicit admin
 // action taken only after approval, never automatic.
 const { execFile } = require('child_process');
+const https = require('https');
 const jwt = require('jsonwebtoken');
 const { serviceQuery } = require('../db');
 
@@ -44,6 +45,22 @@ function runUapi(args) {
         reject(new Error(`uapi returned non-JSON output: ${stdout.slice(0, 300)}`));
       }
     });
+  });
+}
+
+// HEAD-checks a campus's live subdomain URL. Used to detect drift when a
+// subdomain was removed directly via cPanel's UI (which supports removal
+// even though uapi on this account doesn't expose SubDomain::delsubdomain --
+// confirmed by enumerating every uapi call this account has access to).
+function checkUrlReachable(url) {
+  return new Promise((resolve) => {
+    const req = https.request(url, { method: 'HEAD', timeout: 8000 }, (res) => {
+      res.resume();
+      resolve(res.statusCode < 500);
+    });
+    req.on('error', () => resolve(false));
+    req.on('timeout', () => { req.destroy(); resolve(false); });
+    req.end();
   });
 }
 
@@ -170,4 +187,71 @@ async function campusUpdate(req, res) {
   res.json({ success: true });
 }
 
-module.exports = { campusApprove, campusReject, campusProvisionSubdomain, campusUpdate };
+// POST /functions/v1/campus-remove-subdomain { id }
+// This account's uapi genuinely has no SubDomain::delsubdomain (verified by
+// listing every function it exposes) -- but cPanel's own browser UI can
+// still remove a subdomain (the admin confirmed doing exactly this), which
+// our tracking then has no way of finding out about on its own. This button
+// makes a best-effort live removal attempt (in case a future account
+// upgrade adds the API), but ALWAYS resets our own tracking regardless of
+// whether that call succeeds, since "remove it" means "stop tracking it as
+// live" either way.
+async function campusRemoveSubdomain(req, res) {
+  const adminId = requireAuth(req);
+  if (!adminId) return res.status(401).json({ error: 'Unauthorized' });
+  if (!(await isAdmin(adminId))) return res.status(403).json({ error: 'Admin only' });
+  const { id } = req.body || {};
+  if (!id) return res.status(400).json({ error: 'id required' });
+
+  const r = await serviceQuery('SELECT * FROM public.campus_onboard_requests WHERE id = $1', [id]);
+  const campus = r.rows[0];
+  if (!campus) return res.status(404).json({ error: 'Campus request not found' });
+
+  let liveRemoveOk = false;
+  let liveRemoveError = null;
+  if (campus.subdomain_slug) {
+    try {
+      await runUapi(['SubDomain', 'delsubdomain', `domain=${campus.subdomain_slug}.${ROOT_DOMAIN}`]);
+      liveRemoveOk = true;
+    } catch (err) {
+      liveRemoveError = err.message;
+    }
+  }
+
+  await serviceQuery(
+    "UPDATE public.campus_onboard_requests SET subdomain_provisioned=false, subdomain_provisioned_at=NULL, subdomain_error=$1 WHERE id=$2",
+    [liveRemoveOk ? null : `Removal via API not available on this hosting tier (${liveRemoveError || 'no delsubdomain function'}). Tracking has been reset -- verify it's actually removed in cPanel if you haven't already.`, id]
+  );
+
+  res.json({ success: true, liveRemoveOk, liveRemoveError });
+}
+
+// POST /functions/v1/campus-verify-subdomains
+// Self-heal: HEAD-checks every campus we believe has a live subdomain and
+// resets tracking for any that no longer resolve. Called from the admin
+// page on load so a manual cPanel deletion never leaves stale "live" state
+// showing to users who click through from the public campus list.
+async function campusVerifySubdomains(req, res) {
+  const adminId = requireAuth(req);
+  if (!adminId) return res.status(401).json({ error: 'Unauthorized' });
+  if (!(await isAdmin(adminId))) return res.status(403).json({ error: 'Admin only' });
+
+  const r = await serviceQuery(
+    "SELECT id, subdomain_slug FROM public.campus_onboard_requests WHERE status='approved' AND subdomain_provisioned=true"
+  );
+  const results = [];
+  for (const row of r.rows) {
+    const url = `https://${row.subdomain_slug}.${ROOT_DOMAIN}/`;
+    const reachable = await checkUrlReachable(url);
+    if (!reachable) {
+      await serviceQuery(
+        "UPDATE public.campus_onboard_requests SET subdomain_provisioned=false, subdomain_provisioned_at=NULL, subdomain_error=$1 WHERE id=$2",
+        ['Auto-detected: subdomain no longer resolves (likely removed via cPanel outside this system).', row.id]
+      );
+    }
+    results.push({ id: row.id, slug: row.subdomain_slug, reachable });
+  }
+  res.json({ success: true, results });
+}
+
+module.exports = { campusApprove, campusReject, campusProvisionSubdomain, campusUpdate, campusRemoveSubdomain, campusVerifySubdomains };
