@@ -17,6 +17,8 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 import { useEngagementTracking } from "@/hooks/useEngagementTracking";
 import { useStandaloneMode } from "@/hooks/useStandaloneMode";
 import { trackMetaEvent } from "@/lib/metaPixel";
+import { getCampusSubdomainSlug } from "@/lib/campusSubdomain";
+import CampusPortfolio from "./pages/campus/CampusPortfolio";
 import Index from "./pages/Index";
 
 // Lazy-loaded routes
@@ -499,23 +501,38 @@ const GlobalOverlays = () => {
   );
 };
 
+// A campus's provisioned subdomain points at this same site (no extra
+// deployment per campus -- see backend/src/functions/campusOnboard.js), so
+// when the app loads under a *.onlinetextileschool.com campus subdomain it
+// renders that campus's portfolio instead of the normal site, skipping
+// routing/auth entirely since the portfolio is a public, standalone page.
+const campusSlug = getCampusSubdomainSlug();
+
 const App = () => (
-  <PersistQueryClientProvider client={queryClient} persistOptions={persistOptions}>
-    <ThemeProvider>
-      <AuthProvider>
-        <CookieConsentProvider>
-          <TooltipProvider delayDuration={300}>
-            <Toaster />
-            <Sonner />
-            <BrowserRouter future={{ v7_relativeSplatPath: true }}>
-              <AppRoutes />
-              <GlobalOverlays />
-            </BrowserRouter>
-          </TooltipProvider>
-        </CookieConsentProvider>
-      </AuthProvider>
-    </ThemeProvider>
-  </PersistQueryClientProvider>
+  campusSlug ? (
+    <PersistQueryClientProvider client={queryClient} persistOptions={persistOptions}>
+      <ThemeProvider>
+        <CampusPortfolio slug={campusSlug} />
+      </ThemeProvider>
+    </PersistQueryClientProvider>
+  ) : (
+    <PersistQueryClientProvider client={queryClient} persistOptions={persistOptions}>
+      <ThemeProvider>
+        <AuthProvider>
+          <CookieConsentProvider>
+            <TooltipProvider delayDuration={300}>
+              <Toaster />
+              <Sonner />
+              <BrowserRouter future={{ v7_relativeSplatPath: true }}>
+                <AppRoutes />
+                <GlobalOverlays />
+              </BrowserRouter>
+            </TooltipProvider>
+          </CookieConsentProvider>
+        </AuthProvider>
+      </ThemeProvider>
+    </PersistQueryClientProvider>
+  )
 );
 
 export default App;

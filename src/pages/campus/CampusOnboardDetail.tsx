@@ -13,7 +13,7 @@ import { MapPin, Users, Building2, Globe, ArrowLeft, CheckCircle2 } from 'lucide
 
 const CampusOnboardDetail = () => {
   const { id } = useParams();
-  const { user, profile } = useAuth();
+  const { user, profile, refreshProfile } = useAuth();
   const queryClient = useQueryClient();
 
   const { data: campus, isLoading } = useQuery({
@@ -57,10 +57,10 @@ const CampusOnboardDetail = () => {
       const { error } = await supabase.from('user_profiles').update({ onboarded_campus_id: id }).eq('id', user.id);
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success('You are now registered under this campus');
+      await refreshProfile();
       queryClient.invalidateQueries({ queryKey: ['campus-registered-count', id] });
-      queryClient.invalidateQueries({ queryKey: ['auth-profile'] });
     },
     onError: (e: any) => toast.error(e.message),
   });

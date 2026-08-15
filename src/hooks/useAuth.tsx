@@ -68,6 +68,7 @@ interface AuthContextType {
   roles: string[];
   isSuperAdmin: boolean;
   signOut: () => Promise<void>;
+  refreshProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -80,6 +81,7 @@ const AuthContext = createContext<AuthContextType>({
   roles: [],
   isSuperAdmin: false,
   signOut: async () => {},
+  refreshProfile: async () => {},
 });
 
 // v3: invalidate older caches that may contain empty roles from transient DB failures
@@ -267,8 +269,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setAuthzLoading(false);
   };
 
+  // profile/roles are plain useState, not react-query -- so a component
+  // elsewhere doing queryClient.invalidateQueries() has no effect on them.
+  // Anything that updates the current user's own row (e.g. linking a
+  // campus, editing settings) needs this to see the change without a full
+  // page reload.
+  const refreshProfile = async () => {
+    if (!user) return;
+    profileCache.delete(user.id);
+    const d = await fetchUserData(user.id);
+    setProfile((prev: any) => d.profile ?? prev);
+    setRoles(d.roles);
+  };
+
   return (
-    <AuthContext.Provider value={{ user, session, loading, isReady, authzLoading, profile, roles, isSuperAdmin: roles.includes('super_admin'), signOut }}>
+    <AuthContext.Provider value={{ user, session, loading, isReady, authzLoading, profile, roles, isSuperAdmin: roles.includes('super_admin'), signOut, refreshProfile }}>
       {children}
     </AuthContext.Provider>
   );
