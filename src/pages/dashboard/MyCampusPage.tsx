@@ -17,6 +17,7 @@ const MyCampusPage = () => {
   const queryClient = useQueryClient();
   const [form, setForm] = useState<any>(null);
   const { upload: uploadFile, uploading: logoUploading } = useFileUpload();
+  const { upload: uploadCoverFile, uploading: coverUploading } = useFileUpload();
   const { upload: uploadGalleryFile, uploading: galleryUploading } = useFileUpload();
 
   const { data: campus, isLoading } = useQuery({
@@ -37,6 +38,7 @@ const MyCampusPage = () => {
           departments: (data.departments || []).join(', '),
           contact_name: data.contact_name, contact_email: data.contact_email, contact_phone: data.contact_phone || '',
           logo_url: data.logo_url || null,
+          cover_image_url: data.cover_image_url || null,
         });
       }
       return data;
@@ -118,6 +120,17 @@ const MyCampusPage = () => {
     }
   };
 
+  const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const result = await uploadCoverFile(file, { folder: 'campus-covers' });
+      setForm((p: any) => ({ ...p, cover_image_url: result.url }));
+    } catch (err: any) {
+      toast.error(err.message || 'Cover photo upload failed');
+    }
+  };
+
   const save = () => {
     saveMutation.mutate({
       ...form,
@@ -158,6 +171,14 @@ const MyCampusPage = () => {
       <Card>
         <CardHeader><CardTitle className="text-base">Hero & Details</CardTitle></CardHeader>
         <CardContent className="space-y-3">
+          <div className="space-y-1.5">
+            <Label>Cover Photo</Label>
+            <div className="w-full h-28 rounded-lg border overflow-hidden bg-muted/30 flex items-center justify-center">
+              {form.cover_image_url ? <img src={form.cover_image_url} alt="" className="w-full h-full object-cover" /> : <ImagePlus className="h-5 w-5 text-muted-foreground" />}
+            </div>
+            <Input type="file" accept="image/*" onChange={handleCoverUpload} disabled={coverUploading} className="text-xs" />
+            <p className="text-xs text-muted-foreground">Wide banner shown at the top of your public portfolio.</p>
+          </div>
           <div className="space-y-1.5">
             <Label>Logo</Label>
             <div className="flex items-center gap-3">

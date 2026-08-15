@@ -17,7 +17,7 @@ const CampusOnboardList = () => {
     queryFn: async () => {
       const { data } = await supabase
         .from('campus_onboard_requests')
-        .select('id, campus_name, area, facilities, student_count, subdomain_slug, subdomain_provisioned, logo_url')
+        .select('id, campus_name, area, facilities, student_count, subdomain_slug, subdomain_provisioned, logo_url, cover_image_url')
         .eq('status', 'approved')
         .order('created_at', { ascending: false });
       return data ?? [];
@@ -63,7 +63,15 @@ const CampusOnboardList = () => {
                 return (
                   <CardWrapper key={c.id} {...(wrapperProps as any)} className="group">
                     <Card className="hover:shadow-lg hover:-translate-y-0.5 transition-all h-full overflow-hidden">
-                      <div className="h-28 bg-gradient-to-br from-primary via-primary-dark to-accent flex items-center justify-center relative">
+                      <div
+                        className="h-28 flex items-center justify-center relative bg-cover bg-center"
+                        style={c.cover_image_url
+                          ? { backgroundImage: `linear-gradient(rgba(10,15,30,0.35),rgba(10,15,30,0.5)), url(${c.cover_image_url})` }
+                          : undefined}
+                      >
+                        {!c.cover_image_url && (
+                          <div className="absolute inset-0 bg-gradient-to-br from-primary via-primary-dark to-accent" />
+                        )}
                         {c.logo_url ? (
                           <img src={c.logo_url} alt={c.campus_name} className="w-16 h-16 rounded-xl object-cover border-2 border-white/40 shadow-lg" />
                         ) : (

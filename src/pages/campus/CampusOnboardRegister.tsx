@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useFileUpload } from '@/hooks/useFileUpload';
@@ -13,13 +14,14 @@ import UtilityBar from '@/components/layout/UtilityBar';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import BottomNav from '@/components/layout/BottomNav';
-import { CheckCircle, Loader2, ImagePlus, X } from 'lucide-react';
+import { CheckCircle, Loader2, ImagePlus, X, Clock, XCircle } from 'lucide-react';
 
 const slugify = (s: string) => s.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60);
 
 const CampusOnboardRegister = () => {
   const { user, profile, loading: authLoading } = useAuth();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   // Logo upload (and, previously, submission) go through auth-gated backend
   // endpoints -- an anonymous visitor could reach this form and get an
@@ -31,11 +33,43 @@ const CampusOnboardRegister = () => {
     }
   }, [authLoading, user, navigate]);
 
+  // Nothing previously stopped a signed-in user from submitting the same
+  // campus twice, or told them their request was already pending/rejected --
+  // they'd just see the blank form again every time they came back. Check
+  // for an existing request of theirs first and short-circuit to a status
+  // view instead.
+  const { data: existingRequest, isLoading: existingLoading } = useQuery({
+    queryKey: ['my-campus-request', user?.id],
+    enabled: !!user,
+    refetchInterval: 20000,
+    refetchIntervalInBackground: false,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('campus_onboard_requests')
+        .select('id, campus_name, status, rejection_reason, subdomain_slug')
+        .eq('submitted_by', user!.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  useEffect(() => {
+    if (existingRequest?.status === 'approved') {
+      navigate('/dashboard/campus');
+    }
+  }, [existingRequest, navigate]);
+
   const { upload: uploadFile, uploading: logoUploading } = useFileUpload();
+  const { upload: uploadCoverFile, uploading: coverUploading } = useFileUpload();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [coverUrl, setCoverUrl] = useState<string | null>(null);
+  const [resubmitting, setResubmitting] = useState(false);
   const [slugTouched, setSlugTouched] = useState(false);
   const [form, setForm] = useState({
     campusName: '', area: '', facilities: '', studentCount: '', departments: '',
@@ -65,6 +99,18 @@ const CampusOnboardRegister = () => {
     }
   };
 
+  const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const result = await uploadCoverFile(file, { folder: 'campus-covers' });
+      setCoverUrl(result.url);
+      toast.success('Cover photo uploaded');
+    } catch (err: any) {
+      toast.error(err.message || 'Cover photo upload failed');
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.campusName.trim() || !form.area.trim() || !form.contactName.trim() || !form.contactEmail.trim()) {
@@ -89,6 +135,7 @@ const CampusOnboardRegister = () => {
         student_count: form.studentCount ? parseInt(form.studentCount, 10) : null,
         departments,
         logo_url: logoUrl,
+        cover_image_url: coverUrl,
         contact_name: form.contactName,
         contact_email: form.contactEmail,
         contact_phone: form.contactPhone || null,
@@ -103,6 +150,8 @@ const CampusOnboardRegister = () => {
         throw error;
       }
       setSubmitted(true);
+      setResubmitting(false);
+      queryClient.invalidateQueries({ queryKey: ['my-campus-request', user?.id] });
       toast.success('Campus onboarding request submitted!');
     } catch (err: any) {
       toast.error(err.message || 'Failed to submit request');
@@ -110,7 +159,7 @@ const CampusOnboardRegister = () => {
     setSubmitting(false);
   };
 
-  if (authLoading || !user) {
+  if (authLoading || !user || existingLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -133,6 +182,37 @@ const CampusOnboardRegister = () => {
                 Your campus onboarding request has been received. Our admin team will review it and get back to you.
               </p>
               <Button onClick={() => navigate('/campus-onboard')}>View Campus Network</Button>
+            </CardContent>
+          </Card>
+        </main>
+        <Footer /><BottomNav />
+      </div>
+    );
+  }
+
+  if (existingRequest && existingRequest.status !== 'approved' && !resubmitting) {
+    const isPending = existingRequest.status === 'pending';
+    return (
+      <div className="min-h-screen flex flex-col">
+        <UtilityBar /><Header />
+        <main className="flex-1 flex items-center justify-center py-16">
+          <Card className="max-w-md w-full text-center">
+            <CardContent className="pt-8 pb-8 space-y-4">
+              <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto ${isPending ? 'bg-yellow-100 dark:bg-yellow-900/30' : 'bg-red-100 dark:bg-red-900/30'}`}>
+                {isPending ? <Clock className="w-8 h-8 text-yellow-600" /> : <XCircle className="w-8 h-8 text-red-600" />}
+              </div>
+              <h2 className="text-xl font-heading font-bold">
+                {isPending ? 'Your Request Is Under Review' : 'Request Not Approved'}
+              </h2>
+              <p className="text-muted-foreground text-sm">
+                {isPending
+                  ? `"${existingRequest.campus_name}" is pending admin review. You'll get a notification the moment it's decided.`
+                  : `"${existingRequest.campus_name}" wasn't approved.${existingRequest.rejection_reason ? ` Reason: ${existingRequest.rejection_reason}` : ''}`}
+              </p>
+              <div className="flex gap-2 justify-center">
+                <Button variant="outline" onClick={() => navigate('/campus-onboard')}>View Campus Network</Button>
+                {!isPending && <Button onClick={() => setResubmitting(true)}>Submit a New Request</Button>}
+              </div>
             </CardContent>
           </Card>
         </main>
@@ -174,6 +254,30 @@ const CampusOnboardRegister = () => {
                     </Button>
                   )}
                 </div>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Cover Photo</Label>
+              <div className="w-full h-32 rounded-xl border-2 border-dashed overflow-hidden bg-muted/30 flex items-center justify-center relative">
+                {coverUrl ? (
+                  <img src={coverUrl} alt="Cover" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="flex flex-col items-center text-muted-foreground text-xs gap-1">
+                    <ImagePlus className="h-5 w-5" /> Wide banner shown at the top of your public portfolio
+                  </div>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <input id="cover-upload-input" type="file" accept="image/*" className="hidden" onChange={handleCoverUpload} />
+                <Button type="button" variant="outline" size="sm" onClick={() => document.getElementById('cover-upload-input')?.click()} disabled={coverUploading}>
+                  {coverUploading ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <ImagePlus className="h-3.5 w-3.5 mr-1.5" />}
+                  {coverUrl ? 'Change Cover' : 'Upload Cover Photo'}
+                </Button>
+                {coverUrl && (
+                  <Button type="button" variant="ghost" size="sm" onClick={() => setCoverUrl(null)}>
+                    <X className="h-3.5 w-3.5" />
+                  </Button>
+                )}
               </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

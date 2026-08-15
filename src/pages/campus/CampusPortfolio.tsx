@@ -16,7 +16,7 @@ const CampusPortfolio = ({ slug }: Props) => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('campus_onboard_requests')
-        .select('id, campus_name, area, facilities, description, student_count, departments, logo_url, contact_email, contact_phone')
+        .select('id, campus_name, area, facilities, description, student_count, departments, logo_url, cover_image_url, contact_email, contact_phone')
         .eq('subdomain_slug', slug)
         .eq('status', 'approved')
         .maybeSingle();
@@ -77,17 +77,25 @@ const CampusPortfolio = ({ slug }: Props) => {
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
-      <div className="bg-gradient-to-br from-primary via-primary-dark to-accent text-primary-foreground py-16">
-        <div className="container mx-auto px-4 max-w-4xl text-center">
+      <div
+        className="relative text-primary-foreground py-20 sm:py-24 bg-cover bg-center"
+        style={campus.cover_image_url
+          ? { backgroundImage: `linear-gradient(rgba(10,15,30,0.55),rgba(10,15,30,0.72)), url(${campus.cover_image_url})` }
+          : undefined}
+      >
+        {!campus.cover_image_url && (
+          <div className="absolute inset-0 bg-gradient-to-br from-primary via-primary-dark to-accent" />
+        )}
+        <div className="relative container mx-auto px-4 max-w-4xl text-center">
           {campus.logo_url ? (
-            <img src={campus.logo_url} alt={campus.campus_name} className="w-24 h-24 rounded-2xl mx-auto mb-5 object-cover border-4 border-white/20 shadow-lg" />
+            <img src={campus.logo_url} alt={campus.campus_name} className="w-24 h-24 rounded-2xl mx-auto mb-5 object-cover border-4 border-white/30 shadow-xl" />
           ) : (
-            <div className="w-24 h-24 rounded-2xl mx-auto mb-5 bg-white/15 flex items-center justify-center">
+            <div className="w-24 h-24 rounded-2xl mx-auto mb-5 bg-white/15 backdrop-blur flex items-center justify-center border border-white/20">
               <Building2 className="h-10 w-10" />
             </div>
           )}
-          <h1 className="font-heading text-3xl md:text-4xl font-black mb-2">{campus.campus_name}</h1>
-          <p className="flex items-center justify-center gap-1.5 opacity-90">
+          <h1 className="font-heading text-3xl md:text-5xl font-black mb-3 drop-shadow-sm">{campus.campus_name}</h1>
+          <p className="flex items-center justify-center gap-1.5 opacity-90 text-base">
             <MapPin className="h-4 w-4" /> {campus.area}
           </p>
         </div>

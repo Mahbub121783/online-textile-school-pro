@@ -30,6 +30,7 @@ const AdminCampusOnboard = () => {
   const [editTarget, setEditTarget] = useState<any | null>(null);
   const [editForm, setEditForm] = useState<any>({});
   const { upload: uploadLogo, uploading: logoUploading } = useFileUpload();
+  const { upload: uploadCover, uploading: coverUploading } = useFileUpload();
 
   const { data: campuses = [], isLoading } = useQuery({
     queryKey: ['admin-campus-onboard'],
@@ -159,6 +160,7 @@ const AdminCampusOnboard = () => {
       departments: (c.departments || []).join(', '),
       contact_name: c.contact_name, contact_email: c.contact_email, contact_phone: c.contact_phone || '',
       logo_url: c.logo_url || null,
+      cover_image_url: c.cover_image_url || null,
     });
   };
   const saveEdit = () => {
@@ -178,6 +180,16 @@ const AdminCampusOnboard = () => {
       toast.error(err.message || 'Logo upload failed');
     }
   };
+  const handleEditCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const result = await uploadCover(file, { folder: 'campus-covers' });
+      setEditForm((p: any) => ({ ...p, cover_image_url: result.url }));
+    } catch (err: any) {
+      toast.error(err.message || 'Cover photo upload failed');
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -193,7 +205,10 @@ const AdminCampusOnboard = () => {
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {campuses.map((c: any) => (
-            <Card key={c.id}>
+            <Card key={c.id} className="overflow-hidden">
+              {c.cover_image_url && (
+                <div className="h-20 -mb-2 bg-cover bg-center" style={{ backgroundImage: `url(${c.cover_image_url})` }} />
+              )}
               <CardHeader className="pb-2">
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-center gap-2 min-w-0">
@@ -341,6 +356,13 @@ const AdminCampusOnboard = () => {
         <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Edit {editTarget?.campus_name}</DialogTitle></DialogHeader>
           <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label>Cover Photo</Label>
+              <div className="w-full h-24 rounded-lg border overflow-hidden bg-muted/30 flex items-center justify-center">
+                {editForm.cover_image_url ? <img src={editForm.cover_image_url} alt="" className="w-full h-full object-cover" /> : <ImagePlus className="h-5 w-5 text-muted-foreground" />}
+              </div>
+              <Input type="file" accept="image/*" onChange={handleEditCoverUpload} disabled={coverUploading} className="text-xs" />
+            </div>
             <div className="space-y-1.5">
               <Label>Logo</Label>
               <div className="flex items-center gap-3">

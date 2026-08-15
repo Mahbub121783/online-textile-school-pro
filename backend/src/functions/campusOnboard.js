@@ -115,14 +115,28 @@ async function campusApprove(req, res) {
   const campus = upd.rows[0];
   if (!campus) return res.status(404).json({ error: 'Request not found or already processed' });
 
+  const notifyOwner = async (extraMessage, subdomainError) => {
+    if (!campus.submitted_by) return;
+    const message = subdomainError
+      ? `${campus.campus_name} was approved, but automatic subdomain setup hit an error (${subdomainError}). An admin will retry it shortly.`
+      : `${campus.campus_name} is live at ${campus.subdomain_slug}.${ROOT_DOMAIN} — manage your portfolio from your dashboard.`;
+    await serviceQuery(
+      `INSERT INTO public.notifications (user_id, type, title, message, link)
+       VALUES ($1, 'campus_approved', '🎉 Campus Approved!', $2, '/dashboard/campus')`,
+      [campus.submitted_by, extraMessage || message]
+    ).catch(() => {});
+  };
+
   try {
     await provisionSubdomain(campus);
+    await notifyOwner();
     res.json({ success: true, subdomain: `${campus.subdomain_slug}.${ROOT_DOMAIN}` });
   } catch (err) {
     // Approval itself already succeeded and committed -- record the
     // provisioning failure so the admin can retry via campus-provision-subdomain
     // instead of leaving the request stuck.
     await serviceQuery('UPDATE public.campus_onboard_requests SET subdomain_error=$1 WHERE id=$2', [err.message, id]).catch(() => {});
+    await notifyOwner(null, err.message);
     res.json({ success: true, subdomainError: err.message });
   }
 }
@@ -134,10 +148,18 @@ async function campusReject(req, res) {
   if (!(await isAdmin(adminId))) return res.status(403).json({ error: 'Admin only' });
   const { id, reason } = req.body || {};
   if (!id) return res.status(400).json({ error: 'id required' });
-  await serviceQuery(
-    "UPDATE public.campus_onboard_requests SET status='rejected', rejection_reason=$1, reviewed_by=$2, reviewed_at=now() WHERE id=$3 AND status='pending'",
+  const upd = await serviceQuery(
+    "UPDATE public.campus_onboard_requests SET status='rejected', rejection_reason=$1, reviewed_by=$2, reviewed_at=now() WHERE id=$3 AND status='pending' RETURNING *",
     [reason || null, adminId, id]
   );
+  const campus = upd.rows[0];
+  if (campus?.submitted_by) {
+    await serviceQuery(
+      `INSERT INTO public.notifications (user_id, type, title, message, link)
+       VALUES ($1, 'campus_rejected', 'Campus Request Rejected', $2, '/campus-onboard/register')`,
+      [campus.submitted_by, `Your request for "${campus.campus_name}" was not approved.${reason ? ` Reason: ${reason}` : ''} You're welcome to review and resubmit.`]
+    ).catch(() => {});
+  }
   res.json({ success: true });
 }
 
@@ -174,7 +196,7 @@ async function campusProvisionSubdomain(req, res) {
 // them every time, while still being scoped to only their own campus.
 const EDITABLE_FIELDS = new Set([
   'campus_name', 'area', 'facilities', 'description', 'student_count',
-  'departments', 'logo_url', 'contact_name', 'contact_email', 'contact_phone',
+  'departments', 'logo_url', 'cover_image_url', 'contact_name', 'contact_email', 'contact_phone',
 ]);
 async function campusUpdate(req, res) {
   const userId = requireAuth(req);

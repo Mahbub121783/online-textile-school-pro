@@ -27,7 +27,7 @@ const CampusOnboardDetail = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('campus_onboard_requests')
-        .select('id, campus_name, area, facilities, student_count, description, subdomain_slug, subdomain_provisioned')
+        .select('id, campus_name, area, facilities, student_count, description, subdomain_slug, subdomain_provisioned, logo_url, cover_image_url')
         .eq('id', id!)
         .eq('status', 'approved')
         .maybeSingle();
@@ -136,12 +136,24 @@ const CampusOnboardDetail = () => {
     <div className="min-h-screen flex flex-col">
       <UtilityBar /><Header />
       <main className="flex-1 pb-14 lg:pb-0">
-        <div className="bg-secondary py-8">
-          <div className="container">
-            <Button asChild variant="ghost" size="sm" className="mb-3"><Link to="/campus-onboard"><ArrowLeft className="h-4 w-4 mr-1.5" /> Campus Network</Link></Button>
+        <div
+          className="relative py-8 bg-cover bg-center"
+          style={campus.cover_image_url
+            ? { backgroundImage: `linear-gradient(rgba(10,15,30,0.55),rgba(10,15,30,0.72)), url(${campus.cover_image_url})` }
+            : undefined}
+        >
+          {!campus.cover_image_url && <div className="absolute inset-0 bg-secondary" />}
+          <div className={`relative container ${campus.cover_image_url ? 'text-white' : ''}`}>
+            <Button asChild variant="ghost" size="sm" className={`mb-3 ${campus.cover_image_url ? 'hover:bg-white/10 text-white' : ''}`}>
+              <Link to="/campus-onboard"><ArrowLeft className="h-4 w-4 mr-1.5" /> Campus Network</Link>
+            </Button>
             <div className="flex items-center gap-3">
-              <Building2 className="h-8 w-8 text-primary" />
-              <h1 className="font-heading text-2xl md:text-3xl font-bold text-foreground">{campus.campus_name}</h1>
+              {campus.logo_url ? (
+                <img src={campus.logo_url} alt="" className="w-10 h-10 rounded-lg object-cover border border-white/20 shrink-0" />
+              ) : (
+                <Building2 className="h-8 w-8 text-primary shrink-0" />
+              )}
+              <h1 className="font-heading text-2xl md:text-3xl font-bold">{campus.campus_name}</h1>
             </div>
           </div>
         </div>
