@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -27,27 +27,32 @@ const AdminUsers = () => {
   const queryClient = useQueryClient();
   const { user: currentUser } = useAuth();
 
-  // Realtime: any role change in the system refreshes the user list
-  useEffect(() => {
-    const ch = supabase
-      .channel(`admin-users-roles-${Date.now()}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'user_roles' }, () => {
-        queryClient.invalidateQueries({ queryKey: ['admin-users'] });
-      })
-      .subscribe();
-    return () => { supabase.removeChannel(ch); };
-  }, [queryClient]);
-
   const { data: users, isLoading } = useQuery({
     queryKey: ['admin-users', search, roleFilter],
+    refetchInterval: 20000,
+    refetchIntervalInBackground: false,
     queryFn: async () => {
       let query = supabase.from('user_profiles').select('*').order('created_at', { ascending: false }).limit(100);
       if (search) query = query.ilike('full_name', `%${search}%`);
       const { data: profiles } = await query;
       const { data: allRoles } = await supabase.from('user_roles').select('*');
 
+      // Real signup email/last-login live in auth.users, which isn't
+      // exposed through the REST shim -- fetch it via a dedicated
+      // admin-only endpoint so the list can show real contact info
+      // instead of just the (often empty) profile phone field.
+      let authMap: Record<string, { email: string; last_sign_in_at: string | null }> = {};
+      if (profiles && profiles.length > 0) {
+        const { data: authData } = await supabase.functions.invoke('admin-list-user-auth', {
+          body: { userIds: profiles.map((p) => p.id) },
+        });
+        authMap = authData ?? {};
+      }
+
       const enriched = (profiles ?? []).map((p) => ({
         ...p,
+        email: authMap[p.id]?.email ?? null,
+        auth_last_sign_in_at: authMap[p.id]?.last_sign_in_at ?? null,
         roles: (allRoles ?? []).filter((r) => r.user_id === p.id).map((r) => r.role as string),
       }));
 
@@ -109,6 +114,7 @@ const AdminUsers = () => {
             <TableHeader>
               <TableRow>
                 <TableHead>Name</TableHead>
+                <TableHead>Contact</TableHead>
                 <TableHead>Roles</TableHead>
                 <TableHead>Profile</TableHead>
                 <TableHead>Status</TableHead>
@@ -128,7 +134,14 @@ const AdminUsers = () => {
                     <TableCell>
                       <div>
                         <p className="font-medium">{u.full_name || 'Unnamed'}</p>
-                        <p className="text-xs text-muted-foreground">{u.phone || u.id.slice(0, 8)}</p>
+                        <p className="text-xs text-muted-foreground">{u.username ? `@${u.username}` : u.id.slice(0, 8)}</p>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="text-xs space-y-0.5">
+                        <p className="font-mono truncate max-w-[180px]" title={u.email || ''}>{u.email || '—'}</p>
+                        <p className="text-muted-foreground">{u.phone || '—'}</p>
+                        {u.district && <p className="text-muted-foreground">{[u.upazila, u.district].filter(Boolean).join(', ')}</p>}
                       </div>
                     </TableCell>
                     <TableCell>
@@ -162,7 +175,9 @@ const AdminUsers = () => {
                       {u.created_at ? new Date(u.created_at).toLocaleDateString() : '—'}
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
-                      {u.last_login_at ? new Date(u.last_login_at).toLocaleString() : <span className="italic text-xs">Never</span>}
+                      {(u.last_login_at || u.auth_last_sign_in_at)
+                        ? new Date(u.last_login_at || u.auth_last_sign_in_at).toLocaleString()
+                        : <span className="italic text-xs">Never</span>}
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">
