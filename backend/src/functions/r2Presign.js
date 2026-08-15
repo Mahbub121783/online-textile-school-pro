@@ -1,11 +1,22 @@
-// Ported from supabase/functions/r2-presign/index.ts (Deno -> Node).
-// Actions ported: test, presign, complete, proxy-upload (the ones actually
-// used by the frontend). Chunked upload (large-file >4.5MB path) is NOT
-// ported yet -- Express's json limit is already raised to 10mb in app.js,
-// which covers most uploads; revisit chunked upload if a >10MB file breaks.
-const { S3Client, PutObjectCommand, ListObjectsV2Command, HeadObjectCommand } = require('@aws-sdk/client-s3');
+// Ported from supabase/functions/r2-presign/index.ts (Deno -> Node), plus a
+// real chunked-upload implementation (see below) that the original port was
+// missing -- any file over 4.5MB (most real ebook PDFs) went through
+// useFileUpload.ts's uploadToR2Chunked() path, which called actions this
+// file never implemented, always failing with "Invalid or not-yet-ported
+// action". Implemented as genuine S3 multipart upload against R2.
+const {
+  S3Client, PutObjectCommand, ListObjectsV2Command, HeadObjectCommand,
+  CreateMultipartUploadCommand, UploadPartCommand, CompleteMultipartUploadCommand, AbortMultipartUploadCommand,
+} = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const { serviceQuery } = require('../db');
+
+// In-memory part tracking for in-flight multipart uploads (uploadId -> state).
+// Chunks are uploaded sequentially by the frontend within one file's upload,
+// and this Node app runs as a single process on this hosting tier, so this
+// is safe; an upload that's abandoned mid-flight just leaks one small map
+// entry until the process restarts (not worth a DB table for this).
+const multipartState = new Map();
 
 function buildS3Client(account) {
   return new S3Client({
@@ -117,6 +128,88 @@ async function r2Presign(req, res) {
         return res.json({ url: publicUrl, source: 'r2', accountId: selectedAccount.id, fileKey });
       } catch (err) {
         return res.status(500).json({ error: 'Server-side upload to R2 failed: ' + err.message });
+      }
+    }
+
+    if (action === 'chunked-init') {
+      const { file_name, file_type, file_size } = req.body;
+      if (!file_name) return res.status(400).json({ error: 'file_name required' });
+      const selectedAccount = await selectAccount();
+      const fileKey = generateFileKey(file_name);
+      try {
+        const s3 = buildS3Client(selectedAccount);
+        const created = await s3.send(new CreateMultipartUploadCommand({
+          Bucket: selectedAccount.bucket_name,
+          Key: fileKey,
+          ContentType: file_type || 'application/octet-stream',
+        }));
+        multipartState.set(created.UploadId, { parts: [], accountId: selectedAccount.id, fileKey, fileSize: file_size });
+        return res.json({ uploadId: created.UploadId, fileKey, accountId: selectedAccount.id });
+      } catch (err) {
+        return res.status(500).json({ error: 'Failed to start chunked upload: ' + err.message });
+      }
+    }
+
+    if (action === 'chunked-upload') {
+      const { upload_id, file_key, account_id, chunk_index, chunk_base64 } = req.body;
+      if (!upload_id || !file_key || !account_id || chunk_base64 == null || chunk_index == null) {
+        return res.status(400).json({ error: 'upload_id, file_key, account_id, chunk_index and chunk_base64 required' });
+      }
+      const state = multipartState.get(upload_id);
+      if (!state) return res.status(400).json({ error: 'Unknown or expired upload session -- please retry the upload' });
+      try {
+        const accRes = await serviceQuery('SELECT * FROM public.cloudflare_r2_accounts WHERE id = $1', [account_id]);
+        const account = accRes.rows[0];
+        if (!account) return res.status(404).json({ error: 'Account not found' });
+        const s3 = buildS3Client(account);
+        const partNumber = chunk_index + 1;
+        const result = await s3.send(new UploadPartCommand({
+          Bucket: account.bucket_name,
+          Key: file_key,
+          UploadId: upload_id,
+          PartNumber: partNumber,
+          Body: Buffer.from(chunk_base64, 'base64'),
+        }));
+        state.parts.push({ PartNumber: partNumber, ETag: result.ETag });
+        return res.json({ success: true });
+      } catch (err) {
+        return res.status(500).json({ error: `Chunk ${chunk_index + 1} upload failed: ${err.message}` });
+      }
+    }
+
+    if (action === 'chunked-complete') {
+      const { upload_id, file_key, account_id } = req.body;
+      if (!upload_id || !file_key || !account_id) return res.status(400).json({ error: 'upload_id, file_key and account_id required' });
+      const state = multipartState.get(upload_id);
+      if (!state) return res.status(400).json({ error: 'Unknown or expired upload session -- please retry the upload' });
+      try {
+        const accRes = await serviceQuery('SELECT * FROM public.cloudflare_r2_accounts WHERE id = $1', [account_id]);
+        const account = accRes.rows[0];
+        if (!account) return res.status(404).json({ error: 'Account not found' });
+        const s3 = buildS3Client(account);
+        const sortedParts = [...state.parts].sort((a, b) => a.PartNumber - b.PartNumber);
+        await s3.send(new CompleteMultipartUploadCommand({
+          Bucket: account.bucket_name,
+          Key: file_key,
+          UploadId: upload_id,
+          MultipartUpload: { Parts: sortedParts },
+        }));
+        multipartState.delete(upload_id);
+        await updateRoundRobinAndCount(account);
+        const publicDomain = account.public_domain_url.replace(/\/+$/, '');
+        const publicUrl = `${publicDomain}/${file_key}`;
+        return res.json({ url: publicUrl, source: 'r2', accountId: account.id, fileKey: file_key });
+      } catch (err) {
+        multipartState.delete(upload_id);
+        try {
+          const accRes = await serviceQuery('SELECT * FROM public.cloudflare_r2_accounts WHERE id = $1', [account_id]);
+          const account = accRes.rows[0];
+          if (account) {
+            const s3 = buildS3Client(account);
+            await s3.send(new AbortMultipartUploadCommand({ Bucket: account.bucket_name, Key: file_key, UploadId: upload_id }));
+          }
+        } catch { /* best-effort cleanup */ }
+        return res.status(500).json({ error: `Failed to finalize upload: ${err.message}` });
       }
     }
 

@@ -15,7 +15,11 @@ const HEAVY_EXTENSIONS = new Set([
 ]);
 
 const PROXY_UPLOAD_MAX_BYTES = 4.5 * 1024 * 1024; // 4.5MB
-const CHUNK_SIZE = 4 * 1024 * 1024; // 4MB chunks for chunked proxy
+// S3/R2 multipart upload REQUIRES every part except the last to be >= 5MiB
+// (5,242,880 bytes) -- a value below that makes CompleteMultipartUpload fail
+// with "Your proposed upload is smaller than the minimum allowed object
+// size" on every multi-chunk upload, discovered via a live end-to-end test.
+const CHUNK_SIZE = 5 * 1024 * 1024; // 5MiB chunks for chunked proxy (S3 multipart minimum)
 
 function getFileExtension(fileName: string): string {
   return fileName.split('.').pop()?.toLowerCase() || '';
