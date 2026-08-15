@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -12,10 +13,12 @@ import { useCartStore } from '@/stores/cartStore';
 import { useAuth } from '@/hooks/useAuth';
 import { ensureStudentIdCard } from '@/lib/ensureStudentIdCard';
 import { trackMetaEvent } from '@/lib/metaPixel';
+import { invalidatePurchaseQueries } from '@/lib/invalidatePurchaseQueries';
 
 const PaymentSuccess = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [status, setStatus] = useState<'verifying' | 'success' | 'failed'>('verifying');
   const { clearCart } = useCartStore();
   const { user } = useAuth();
@@ -27,6 +30,7 @@ const PaymentSuccess = () => {
     } else {
       setStatus('success');
       clearCart();
+      invalidatePurchaseQueries(queryClient);
       // Fire Meta Purchase (no amount available — best-effort)
       try {
         trackMetaEvent('Purchase', { value: 0, currency: 'BDT' },
@@ -46,6 +50,7 @@ const PaymentSuccess = () => {
       if (data?.status === 'COMPLETED') {
         setStatus('success');
         clearCart();
+        invalidatePurchaseQueries(queryClient);
 
         // Fire Meta Purchase event with real order data
         try {

@@ -20,6 +20,7 @@ import BottomNav from '@/components/layout/BottomNav';
 import { Tag, CreditCard, Smartphone, Loader2, Wallet, Building2, ChevronRight, CalendarClock } from 'lucide-react';
 import { useWallet } from '@/hooks/useEnrollments';
 import { useConvertPrice } from '@/hooks/useCurrency';
+import { invalidatePurchaseQueries } from '@/lib/invalidatePurchaseQueries';
 
 const Checkout = () => {
   const { items, getTotal, clearCart } = useCartStore();
@@ -270,6 +271,7 @@ const Checkout = () => {
         } catch (e) { console.warn('admin notification skipped:', e); }
         clearCart();
         toast.success('Order placed! Your payment will be verified by admin.');
+        queryClient.invalidateQueries({ queryKey: ['my-orders'] });
         navigate('/dashboard/orders');
         return;
       }
@@ -287,9 +289,7 @@ const Checkout = () => {
 
       clearCart();
       toast.success('Order placed successfully!');
-      queryClient.invalidateQueries({ queryKey: ['enrollments'] });
-      queryClient.invalidateQueries({ queryKey: ['enrollment'] });
-      queryClient.invalidateQueries({ queryKey: ['purchased-ebooks-set'] });
+      invalidatePurchaseQueries(queryClient);
       navigate('/dashboard');
     } catch (err: any) {
       console.error('Checkout error:', err);
