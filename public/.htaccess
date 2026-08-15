@@ -1,4 +1,4 @@
-Options -MultiViews
+Options -MultiViews -Indexes
 RewriteEngine On
 
 # ── Cache-busting: never cache index.html ──
@@ -15,7 +15,7 @@ RewriteEngine On
   RewriteCond %{HTTP_USER_AGENT} (facebookexternalhit|Facebot|Twitterbot|LinkedInBot|WhatsApp|TelegramBot|Slackbot|Discordbot|Pinterest|redditbot|SkypeUriPreview|vkShare|W3C_Validator|Applebot|bingbot|Googlebot-Image) [NC]
   RewriteCond %{REQUEST_URI} !^/og-default\.png$
   RewriteCond %{REQUEST_URI} !\.(png|jpe?g|webp|gif|svg|ico|css|js|woff2?|ttf|json|xml|txt|pdf|mp4)$ [NC]
-  RewriteRule ^(.*)$ https://kaiiyssrwkapromkfidv.supabase.co/functions/v1/og-meta?path=/$1 [R=302,L]
+  RewriteRule ^(.*)$ https://api.onlinetextileschool.com/functions/v1/og-meta?path=/$1 [R=302,L]
 </IfModule>
 
 # ── Long-term cache for hashed Vite assets ──

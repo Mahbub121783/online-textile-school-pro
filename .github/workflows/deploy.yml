@@ -32,5 +32,13 @@ jobs:
           local-dir: ./dist/ 
           # Tomar specific domain folder path
           server-dir: ./onlinetextileschool.com/
-          # Optional: Purono file delete kore fresh deploy korte chaile nicher line-ti use koro
-          dangerous-clean-slate: true
+          # dangerous-clean-slate wipes the ENTIRE remote folder first, then
+          # re-uploads everything over FTP (which is slow, file-by-file, not
+          # atomic) -- for that whole window the docroot has no index.html,
+          # so LiteSpeed falls back to a public directory listing and the
+          # live site is effectively down. Incremental sync (this action's
+          # default without the flag) only touches changed/new files, so the
+          # previous working build keeps serving until each file is replaced
+          # -- no empty-docroot window. Orphaned old JS chunks accumulate
+          # over time but are harmless (unreferenced, never served).
+          dangerous-clean-slate: false
