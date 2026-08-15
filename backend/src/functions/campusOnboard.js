@@ -72,6 +72,13 @@ async function provisionSubdomain(campus) {
     `rootdomain=${ROOT_DOMAIN}`,
     `dir=${ROOT_DOMAIN}`, // reuse the main site's existing docroot -- no new deploy/process
   ]);
+  // A freshly-created subdomain has no SSL cert until cPanel's AutoSSL next
+  // runs its periodic scan, which can leave a window (observed live: several
+  // minutes) where the new subdomain shows a scary "connection not private"
+  // warning before it's browsable. Kick AutoSSL immediately instead of
+  // waiting -- fire-and-forget (account-wide cert scan can take a while;
+  // approval shouldn't block on it), best-effort only.
+  runUapi(['SSL', 'start_autossl_check']).catch(() => {});
   await serviceQuery(
     "UPDATE public.campus_onboard_requests SET subdomain_provisioned=true, subdomain_provisioned_at=now(), subdomain_error=NULL WHERE id=$1",
     [campus.id]

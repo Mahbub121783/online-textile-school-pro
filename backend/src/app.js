@@ -23,12 +23,21 @@ const ALLOWED_ORIGINS = [
   'https://onlinetextileschool.com',
   'http://localhost:8080',
 ];
+// Campus subdomains (campusSubdomain.ts / CampusPortfolio.tsx) are a
+// separate browser origin from the bare domain above, so their own fetches
+// to this API were being silently blocked by CORS -- the page had no way
+// to tell "campus not found" apart from "request blocked", so it always
+// showed the generic "not available" fallback. Every *.onlinetextileschool.com
+// subdomain needs to be allowed, not just www/apex.
+const CAMPUS_SUBDOMAIN_ORIGIN_RE = /^https:\/\/[a-z0-9-]+\.onlinetextileschool\.com$/;
 
 const app = express();
 app.use(cors({
   origin(origin, callback) {
     // Allow no-origin requests (curl, server-to-server) and any allowed origin.
-    if (!origin || ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
+    if (!origin || ALLOWED_ORIGINS.includes(origin) || CAMPUS_SUBDOMAIN_ORIGIN_RE.test(origin)) {
+      return callback(null, true);
+    }
     callback(new Error('Not allowed by CORS'));
   },
   credentials: true,
