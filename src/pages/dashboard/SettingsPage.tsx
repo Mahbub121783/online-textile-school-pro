@@ -7,16 +7,16 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { BD_DISTRICTS, BLOOD_GROUPS } from '@/lib/constants';
 import { toast } from '@/hooks/use-toast';
-import { Save, Sun, Moon, Monitor, Camera, CheckCircle2, AlertCircle, Lock } from 'lucide-react';
+import { Save, Sun, Moon, Monitor, CheckCircle2, AlertCircle, Lock } from 'lucide-react';
 import InstitutionalEmailWidget from '@/components/InstitutionalEmailWidget';
 import NotificationSettingsCard from '@/components/NotificationSettingsCard';
 import InstallAppCard from '@/components/InstallAppCard';
 import { useTheme } from '@/components/ThemeProvider';
 import { Progress } from '@/components/ui/progress';
 import { useProfileCompleteness } from '@/hooks/useProfileCompleteness';
-import { useFileUpload } from '@/hooks/useFileUpload';
 import LocationCapture from '@/components/LocationCapture';
 import { cldImg } from '@/lib/cloudinaryUrl';
+import ImageCropUpload from '@/components/shared/ImageCropUpload';
 
 const ROLE_OPTIONS = [
   { value: 'student', label: 'Student' },
@@ -30,8 +30,6 @@ const SettingsPage = () => {
   const { theme, setTheme } = useTheme();
   const { user, profile } = useAuth();
   const [saving, setSaving] = useState(false);
-  const { upload: uploadFile } = useFileUpload();
-  const [avatarUploading, setAvatarUploading] = useState(false);
   const [form, setForm] = useState({
     full_name: '',
     phone: '',
@@ -133,31 +131,11 @@ const SettingsPage = () => {
 
   const { percentage, incomplete, isComplete } = useProfileCompleteness(completenessProfile);
 
-  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !user) return;
-
-    if (file.size > 10 * 1024 * 1024) {
-      toast({ title: 'Error', description: 'Image must be under 10MB', variant: 'destructive' });
-      return;
-    }
-
-    setAvatarUploading(true);
+  const handleAvatarUploaded = async (url: string) => {
+    if (!user) return;
     try {
-      // Cloudinary (user ID as public_id, overwrites previous avatar) with
-      // automatic fallback to our own server's local storage if Cloudinary
-      // isn't configured/reachable -- previously called useCloudinaryUpload
-      // directly, which has no fallback, so avatar upload hard-failed with
-      // a raw "Edge Function returned a non-2xx status code" whenever no
-      // Cloudinary account was configured.
-      const result = await uploadFile(file, {
-        publicId: `users/${user.id}/avatar`,
-        folder: 'users',
-        overwrite: true,
-      });
-
       // Cache-bust by appending timestamp
-      const avatarUrl = `${result.url}?v=${Date.now()}`;
+      const avatarUrl = `${url}?v=${Date.now()}`;
 
       const { error } = await supabase
         .from('user_profiles')
@@ -166,22 +144,14 @@ const SettingsPage = () => {
       if (error) throw error;
 
       await supabase.from('media_library').upsert(
-        {
-          file_url: result.url,
-          file_name: file.name,
-          file_type: file.type || 'image/jpeg',
-          file_size: file.size,
-          uploaded_by: user.id,
-        },
+        { file_url: url, file_name: 'avatar.jpg', file_type: 'image/jpeg', uploaded_by: user.id },
         { onConflict: 'file_url' }
       );
 
       toast({ title: 'Avatar updated!' });
       window.location.reload();
     } catch (err: any) {
-      toast({ title: 'Upload failed', description: err?.message || 'Unknown error', variant: 'destructive' });
-    } finally {
-      setAvatarUploading(false);
+      toast({ title: 'Update failed', description: err?.message || 'Unknown error', variant: 'destructive' });
     }
   };
 
@@ -258,37 +228,18 @@ const SettingsPage = () => {
       {/* Avatar */}
       <div className="bg-card border rounded-xl p-6">
         <h3 className="font-heading font-bold mb-4">Profile Picture</h3>
-        <div className="flex items-center gap-5">
-          <div className="relative group">
-            <div className="w-20 h-20 rounded-full bg-muted flex items-center justify-center overflow-hidden border-2 border-border">
-              {profile?.avatar_url ? (
-                <img
-                  src={cldImg(profile.avatar_url, { w: 200, c: 'fill', g: 'auto' })}
-                  alt="Avatar"
-                  className="w-full h-full object-cover"
-                  onError={(e) => {
-                    const img = e.currentTarget;
-                    if (img.src !== profile.avatar_url) img.src = profile.avatar_url;
-                    else img.style.display = 'none';
-                  }}
-                />
-              ) : (
-                <span className="text-2xl font-heading font-bold text-muted-foreground">
-                  {profile?.full_name?.[0]?.toUpperCase() || 'U'}
-                </span>
-              )}
-            </div>
-            <label className="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer">
-              <Camera className="h-5 w-5 text-white" />
-              <input type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} disabled={avatarUploading} />
-            </label>
-          </div>
-          <div>
-            <p className="text-sm font-medium">Upload your photo</p>
-            <p className="text-xs text-muted-foreground">JPG or PNG, up to 10MB. Click the avatar to change.</p>
-            {avatarUploading && <p className="text-xs text-primary mt-1">Uploading…</p>}
-          </div>
-        </div>
+        <ImageCropUpload
+          value={profile?.avatar_url ? cldImg(profile.avatar_url, { w: 200, c: 'fill', g: 'auto' }) : null}
+          onChange={handleAvatarUploaded}
+          aspect={1}
+          shape="circle"
+          folder="users"
+          publicId={user ? `users/${user.id}/avatar` : undefined}
+          overwrite
+          label="Photo"
+          previewClassName="w-20 h-20"
+        />
+        <p className="text-xs text-muted-foreground mt-2">JPG or PNG. Drag to reposition and zoom before uploading.</p>
       </div>
 
       {/* Identity */}

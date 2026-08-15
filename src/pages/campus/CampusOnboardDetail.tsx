@@ -5,19 +5,23 @@ import { useAuth } from '@/hooks/useAuth';
 import { useFileUpload } from '@/hooks/useFileUpload';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { Progress } from '@/components/ui/progress';
 import { toast } from 'sonner';
 import UtilityBar from '@/components/layout/UtilityBar';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import BottomNav from '@/components/layout/BottomNav';
-import { MapPin, Users, Building2, Globe, ArrowLeft, CheckCircle2, Image as ImageIcon } from 'lucide-react';
+import GallerySlider from '@/components/campus/GallerySlider';
+import NoticeBoard from '@/components/campus/NoticeBoard';
+import { MapPin, Users, Building2, Globe, ArrowLeft, CheckCircle2, Image as ImageIcon, CalendarDays, Link as LinkIcon, Sparkles } from 'lucide-react';
 
 const CampusOnboardDetail = () => {
   const { id } = useParams();
   const { user, profile, refreshProfile } = useAuth();
   const queryClient = useQueryClient();
-  const { upload: uploadGalleryFile, uploading: galleryUploading } = useFileUpload();
+  const { upload: uploadGalleryFile, uploading: galleryUploading, progress: galleryProgress } = useFileUpload();
 
   const { data: campus, isLoading } = useQuery({
     queryKey: ['campus-onboard-detail', id],
@@ -27,7 +31,7 @@ const CampusOnboardDetail = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('campus_onboard_requests')
-        .select('id, campus_name, area, facilities, student_count, description, subdomain_slug, subdomain_provisioned, logo_url, cover_image_url')
+        .select('id, campus_name, area, facilities, student_count, description, subdomain_slug, subdomain_provisioned, logo_url, cover_image_url, established_year, website_url, full_address, campus_type, highlights')
         .eq('id', id!)
         .eq('status', 'approved')
         .maybeSingle();
@@ -153,13 +157,16 @@ const CampusOnboardDetail = () => {
               ) : (
                 <Building2 className="h-8 w-8 text-primary shrink-0" />
               )}
-              <h1 className="font-heading text-2xl md:text-3xl font-bold">{campus.campus_name}</h1>
+              <div>
+                <h1 className="font-heading text-2xl md:text-3xl font-bold">{campus.campus_name}</h1>
+                {campus.campus_type && <Badge variant="secondary" className="mt-1">{campus.campus_type}</Badge>}
+              </div>
             </div>
           </div>
         </div>
 
         <div className="container py-8 max-w-3xl">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
             <Card><CardContent className="pt-6 text-center">
               <MapPin className="h-5 w-5 mx-auto text-primary mb-1" />
               <p className="text-sm text-muted-foreground">Area</p>
@@ -170,6 +177,13 @@ const CampusOnboardDetail = () => {
               <p className="text-sm text-muted-foreground">Registered on OTS</p>
               <p className="font-semibold tabular-nums">{registeredCount ?? '—'} students</p>
             </CardContent></Card>
+            {campus.established_year && (
+              <Card><CardContent className="pt-6 text-center">
+                <CalendarDays className="h-5 w-5 mx-auto text-primary mb-1" />
+                <p className="text-sm text-muted-foreground">Established</p>
+                <p className="font-semibold tabular-nums">{campus.established_year}</p>
+              </CardContent></Card>
+            )}
             <Card><CardContent className="pt-6 text-center">
               <Globe className="h-5 w-5 mx-auto text-primary mb-1" />
               <p className="text-sm text-muted-foreground">Subdomain</p>
@@ -183,18 +197,41 @@ const CampusOnboardDetail = () => {
             </CardContent></Card>
           </div>
 
+          {campus.highlights && campus.highlights.length > 0 && (
+            <Card className="mb-4"><CardContent className="pt-6">
+              <h3 className="font-heading font-bold mb-2 flex items-center gap-2"><Sparkles className="h-4 w-4 text-primary" /> Highlights</h3>
+              <div className="flex flex-wrap gap-2">
+                {campus.highlights.map((h: string) => <Badge key={h} variant="outline">{h}</Badge>)}
+              </div>
+            </CardContent></Card>
+          )}
+          {campus.description && (
+            <Card className="mb-4"><CardContent className="pt-6">
+              <h3 className="font-heading font-bold mb-2">About</h3>
+              <p className="text-sm text-foreground/80 whitespace-pre-wrap">{campus.description}</p>
+            </CardContent></Card>
+          )}
           {campus.facilities && (
             <Card className="mb-4"><CardContent className="pt-6">
               <h3 className="font-heading font-bold mb-2">Facilities</h3>
               <p className="text-sm text-foreground/80">{campus.facilities}</p>
             </CardContent></Card>
           )}
-          {campus.description && (
-            <Card className="mb-6"><CardContent className="pt-6">
-              <h3 className="font-heading font-bold mb-2">About</h3>
-              <p className="text-sm text-foreground/80">{campus.description}</p>
+          {(campus.full_address || campus.website_url) && (
+            <Card className="mb-6"><CardContent className="pt-6 space-y-2">
+              <h3 className="font-heading font-bold mb-2">Contact & Location</h3>
+              {campus.full_address && (
+                <p className="flex items-start gap-2 text-sm text-foreground/80"><MapPin className="h-4 w-4 text-primary shrink-0 mt-0.5" /> {campus.full_address}</p>
+              )}
+              {campus.website_url && (
+                <a href={campus.website_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm text-primary hover:underline">
+                  <LinkIcon className="h-4 w-4 shrink-0" /> {campus.website_url}
+                </a>
+              )}
             </CardContent></Card>
           )}
+
+          <div className="mb-6"><NoticeBoard campusId={campus.id} mode="public" /></div>
 
           {user && (
             <Card className="mb-6">
@@ -223,16 +260,16 @@ const CampusOnboardDetail = () => {
                   <div className="space-y-1.5">
                     <p className="text-xs text-muted-foreground">You're a registered student here — add a photo for the campus's public portfolio.</p>
                     <Input type="file" accept="image/*" onChange={handleGalleryUpload} disabled={galleryUploading} className="text-xs max-w-xs" />
+                    {galleryUploading && (
+                      <div className="space-y-1 max-w-xs">
+                        <Progress value={galleryProgress} className="h-1.5" />
+                        <p className="text-xs text-muted-foreground">Uploading... {galleryProgress}%</p>
+                      </div>
+                    )}
                   </div>
                 )}
                 {gallery.length > 0 ? (
-                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 pt-1">
-                    {gallery.map((g: any) => (
-                      <div key={g.id} className="relative aspect-square rounded-lg overflow-hidden border">
-                        <img src={g.image_url} alt="" className="w-full h-full object-cover" />
-                      </div>
-                    ))}
-                  </div>
+                  <GallerySlider images={gallery} />
                 ) : (
                   <p className="text-xs text-muted-foreground">No photos yet.</p>
                 )}

@@ -8,17 +8,21 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Progress } from '@/components/ui/progress';
 import { toast } from 'sonner';
-import { Building2, ImagePlus, Loader2, Globe, Trash2, Image as ImageIcon } from 'lucide-react';
+import { Building2, Loader2, Globe, Image as ImageIcon } from 'lucide-react';
+import ImageCropUpload from '@/components/shared/ImageCropUpload';
+import GallerySlider from '@/components/campus/GallerySlider';
+import NoticeBoard from '@/components/campus/NoticeBoard';
+
+const CAMPUS_TYPES = ['University', 'College', 'Institute', 'Training Center', 'School'];
 
 const MyCampusPage = () => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [form, setForm] = useState<any>(null);
-  const { upload: uploadFile, uploading: logoUploading } = useFileUpload();
-  const { upload: uploadCoverFile, uploading: coverUploading } = useFileUpload();
-  const { upload: uploadGalleryFile, uploading: galleryUploading } = useFileUpload();
+  const { upload: uploadGalleryFile, uploading: galleryUploading, progress: galleryProgress } = useFileUpload();
 
   const { data: campus, isLoading } = useQuery({
     queryKey: ['my-owned-campus-full', user?.id],
@@ -39,6 +43,9 @@ const MyCampusPage = () => {
           contact_name: data.contact_name, contact_email: data.contact_email, contact_phone: data.contact_phone || '',
           logo_url: data.logo_url || null,
           cover_image_url: data.cover_image_url || null,
+          established_year: data.established_year ?? '', website_url: data.website_url || '',
+          full_address: data.full_address || '', campus_type: data.campus_type || '',
+          highlights: (data.highlights || []).join(', '),
         });
       }
       return data;
@@ -98,17 +105,6 @@ const MyCampusPage = () => {
     onError: (e: any) => toast.error(e.message),
   });
 
-  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    try {
-      const result = await uploadFile(file, { folder: 'campus-logos' });
-      setForm((p: any) => ({ ...p, logo_url: result.url }));
-    } catch (err: any) {
-      toast.error(err.message || 'Logo upload failed');
-    }
-  };
-
   const handleGalleryUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -120,22 +116,13 @@ const MyCampusPage = () => {
     }
   };
 
-  const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    try {
-      const result = await uploadCoverFile(file, { folder: 'campus-covers' });
-      setForm((p: any) => ({ ...p, cover_image_url: result.url }));
-    } catch (err: any) {
-      toast.error(err.message || 'Cover photo upload failed');
-    }
-  };
-
   const save = () => {
     saveMutation.mutate({
       ...form,
       student_count: form.student_count === '' ? null : parseInt(form.student_count, 10),
       departments: String(form.departments || '').split(',').map((d: string) => d.trim()).filter(Boolean),
+      established_year: form.established_year === '' ? null : parseInt(form.established_year, 10),
+      highlights: String(form.highlights || '').split(',').map((h: string) => h.trim()).filter(Boolean),
     });
   };
 
@@ -173,23 +160,26 @@ const MyCampusPage = () => {
         <CardContent className="space-y-3">
           <div className="space-y-1.5">
             <Label>Cover Photo</Label>
-            <div className="w-full h-28 rounded-lg border overflow-hidden bg-muted/30 flex items-center justify-center">
-              {form.cover_image_url ? <img src={form.cover_image_url} alt="" className="w-full h-full object-cover" /> : <ImagePlus className="h-5 w-5 text-muted-foreground" />}
-            </div>
-            <Input type="file" accept="image/*" onChange={handleCoverUpload} disabled={coverUploading} className="text-xs" />
+            <ImageCropUpload value={form.cover_image_url} onChange={(url) => setForm((p: any) => ({ ...p, cover_image_url: url }))} aspect={3} shape="banner" folder="campus-covers" label="Cover Photo" />
             <p className="text-xs text-muted-foreground">Wide banner shown at the top of your public portfolio.</p>
           </div>
           <div className="space-y-1.5">
             <Label>Logo</Label>
-            <div className="flex items-center gap-3">
-              <div className="w-16 h-16 rounded-lg border overflow-hidden bg-muted/30 flex items-center justify-center shrink-0">
-                {form.logo_url ? <img src={form.logo_url} alt="" className="w-full h-full object-cover" /> : <ImagePlus className="h-5 w-5 text-muted-foreground" />}
-              </div>
-              <Input type="file" accept="image/*" onChange={handleLogoUpload} disabled={logoUploading} className="text-xs" />
-            </div>
+            <ImageCropUpload value={form.logo_url} onChange={(url) => setForm((p: any) => ({ ...p, logo_url: url }))} aspect={1} shape="square" folder="campus-logos" label="Logo" />
           </div>
           <div className="space-y-1.5"><Label>Campus Name</Label><Input value={form.campus_name} onChange={(e) => setForm((p: any) => ({ ...p, campus_name: e.target.value }))} /></div>
           <div className="space-y-1.5"><Label>Area</Label><Input value={form.area} onChange={(e) => setForm((p: any) => ({ ...p, area: e.target.value }))} /></div>
+          <div className="space-y-1.5">
+            <Label>Campus Type</Label>
+            <Select value={form.campus_type || ''} onValueChange={(v) => setForm((p: any) => ({ ...p, campus_type: v }))}>
+              <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
+              <SelectContent>{CAMPUS_TYPES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5"><Label>Established Year</Label><Input type="number" value={form.established_year} onChange={(e) => setForm((p: any) => ({ ...p, established_year: e.target.value }))} /></div>
+          <div className="space-y-1.5"><Label>Website</Label><Input type="url" value={form.website_url} onChange={(e) => setForm((p: any) => ({ ...p, website_url: e.target.value }))} /></div>
+          <div className="space-y-1.5"><Label>Full Address</Label><Textarea rows={2} value={form.full_address} onChange={(e) => setForm((p: any) => ({ ...p, full_address: e.target.value }))} /></div>
+          <div className="space-y-1.5"><Label>Highlights (comma-separated)</Label><Input value={form.highlights} onChange={(e) => setForm((p: any) => ({ ...p, highlights: e.target.value }))} /></div>
           <div className="space-y-1.5"><Label>Student Count</Label><Input type="number" value={form.student_count} onChange={(e) => setForm((p: any) => ({ ...p, student_count: e.target.value }))} /></div>
           <div className="space-y-1.5"><Label>Departments (comma-separated)</Label><Input value={form.departments} onChange={(e) => setForm((p: any) => ({ ...p, departments: e.target.value }))} /></div>
           <div className="space-y-1.5"><Label>Facilities</Label><Textarea rows={3} value={form.facilities} onChange={(e) => setForm((p: any) => ({ ...p, facilities: e.target.value }))} /></div>
@@ -209,21 +199,27 @@ const MyCampusPage = () => {
         <CardContent className="space-y-3">
           <p className="text-xs text-muted-foreground">Photos added here (by you or students linked to this campus) show on your public portfolio.</p>
           <Input type="file" accept="image/*" onChange={handleGalleryUpload} disabled={galleryUploading} className="text-xs" />
-          {gallery.length > 0 && (
-            <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 pt-2">
-              {gallery.map((g: any) => (
-                <div key={g.id} className="relative aspect-square rounded-lg overflow-hidden border group">
-                  <img src={g.image_url} alt="" className="w-full h-full object-cover" />
-                  <button
-                    onClick={() => { if (confirm('Remove this photo?')) deleteGalleryImage.mutate(g.id); }}
-                    className="absolute top-1 right-1 bg-black/60 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </button>
-                </div>
-              ))}
+          {galleryUploading && (
+            <div className="space-y-1">
+              <Progress value={galleryProgress} className="h-1.5 max-w-[200px]" />
+              <p className="text-xs text-muted-foreground">Uploading... {galleryProgress}%</p>
             </div>
           )}
+          {gallery.length > 0 && (
+            <div className="pt-2">
+              <GallerySlider
+                images={gallery}
+                onDelete={(id) => { if (confirm('Remove this photo?')) deleteGalleryImage.mutate(id); }}
+                deletingId={deleteGalleryImage.isPending ? deleteGalleryImage.variables : null}
+              />
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="pt-6">
+          <NoticeBoard campusId={campus.id} mode="manage" />
         </CardContent>
       </Card>
     </div>

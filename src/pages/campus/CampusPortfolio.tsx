@@ -2,7 +2,9 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Building2, MapPin, Users, Mail, Phone, GraduationCap, Image as ImageIcon } from 'lucide-react';
+import GallerySlider from '@/components/campus/GallerySlider';
+import NoticeBoard from '@/components/campus/NoticeBoard';
+import { Building2, MapPin, Users, Mail, Phone, GraduationCap, Image as ImageIcon, CalendarDays, Link as LinkIcon, Sparkles } from 'lucide-react';
 
 interface Props {
   slug: string;
@@ -16,7 +18,7 @@ const CampusPortfolio = ({ slug }: Props) => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('campus_onboard_requests')
-        .select('id, campus_name, area, facilities, description, student_count, departments, logo_url, cover_image_url, contact_email, contact_phone')
+        .select('id, campus_name, area, facilities, description, student_count, departments, logo_url, cover_image_url, contact_email, contact_phone, established_year, website_url, full_address, campus_type, highlights')
         .eq('subdomain_slug', slug)
         .eq('status', 'approved')
         .maybeSingle();
@@ -98,11 +100,12 @@ const CampusPortfolio = ({ slug }: Props) => {
           <p className="flex items-center justify-center gap-1.5 opacity-90 text-base">
             <MapPin className="h-4 w-4" /> {campus.area}
           </p>
+          {campus.campus_type && <Badge variant="secondary" className="mt-3">{campus.campus_type}</Badge>}
         </div>
       </div>
 
       <main className="flex-1 container mx-auto px-4 max-w-4xl py-10 space-y-6">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
           <Card><CardContent className="pt-6 text-center">
             <Users className="h-6 w-6 mx-auto text-primary mb-1.5" />
             <p className="text-2xl font-heading font-black tabular-nums">{registeredCount ?? '—'}</p>
@@ -113,7 +116,23 @@ const CampusPortfolio = ({ slug }: Props) => {
             <p className="text-2xl font-heading font-black tabular-nums">{campus.departments?.length ?? 0}</p>
             <p className="text-sm text-muted-foreground">Departments</p>
           </CardContent></Card>
+          {campus.established_year && (
+            <Card><CardContent className="pt-6 text-center">
+              <CalendarDays className="h-6 w-6 mx-auto text-primary mb-1.5" />
+              <p className="text-2xl font-heading font-black tabular-nums">{campus.established_year}</p>
+              <p className="text-sm text-muted-foreground">Established</p>
+            </CardContent></Card>
+          )}
         </div>
+
+        {campus.highlights && campus.highlights.length > 0 && (
+          <Card><CardContent className="pt-6">
+            <h3 className="font-heading font-bold mb-3 flex items-center gap-2"><Sparkles className="h-4 w-4 text-primary" /> Highlights</h3>
+            <div className="flex flex-wrap gap-2">
+              {campus.highlights.map((h: string) => <Badge key={h} variant="outline">{h}</Badge>)}
+            </div>
+          </CardContent></Card>
+        )}
 
         {campus.departments && campus.departments.length > 0 && (
           <Card><CardContent className="pt-6">
@@ -124,16 +143,12 @@ const CampusPortfolio = ({ slug }: Props) => {
           </CardContent></Card>
         )}
 
+        <NoticeBoard campusId={campus.id} mode="public" />
+
         {gallery.length > 0 && (
           <Card><CardContent className="pt-6">
             <h3 className="font-heading font-bold mb-3 flex items-center gap-2"><ImageIcon className="h-4 w-4" /> Gallery</h3>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-              {gallery.map((g: any) => (
-                <div key={g.id} className="aspect-square rounded-lg overflow-hidden border">
-                  <img src={g.image_url} alt="" className="w-full h-full object-cover" />
-                </div>
-              ))}
-            </div>
+            <GallerySlider images={gallery} />
           </CardContent></Card>
         )}
 
@@ -151,14 +166,22 @@ const CampusPortfolio = ({ slug }: Props) => {
           </CardContent></Card>
         )}
 
-        {(campus.contact_email || campus.contact_phone) && (
+        {(campus.contact_email || campus.contact_phone || campus.website_url || campus.full_address) && (
           <Card><CardContent className="pt-6 space-y-2">
             <h3 className="font-heading font-bold mb-2">Contact</h3>
+            {campus.full_address && (
+              <p className="flex items-start gap-2 text-sm text-foreground/80"><MapPin className="h-4 w-4 text-primary shrink-0 mt-0.5" /> {campus.full_address}</p>
+            )}
             {campus.contact_email && (
               <p className="flex items-center gap-2 text-sm text-foreground/80"><Mail className="h-4 w-4 text-primary" /> {campus.contact_email}</p>
             )}
             {campus.contact_phone && (
               <p className="flex items-center gap-2 text-sm text-foreground/80"><Phone className="h-4 w-4 text-primary" /> {campus.contact_phone}</p>
+            )}
+            {campus.website_url && (
+              <a href={campus.website_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm text-primary hover:underline">
+                <LinkIcon className="h-4 w-4" /> {campus.website_url}
+              </a>
             )}
           </CardContent></Card>
         )}

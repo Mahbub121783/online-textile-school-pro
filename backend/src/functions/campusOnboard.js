@@ -197,6 +197,7 @@ async function campusProvisionSubdomain(req, res) {
 const EDITABLE_FIELDS = new Set([
   'campus_name', 'area', 'facilities', 'description', 'student_count',
   'departments', 'logo_url', 'cover_image_url', 'contact_name', 'contact_email', 'contact_phone',
+  'established_year', 'website_url', 'full_address', 'campus_type', 'highlights',
 ]);
 async function campusUpdate(req, res) {
   const userId = requireAuth(req);

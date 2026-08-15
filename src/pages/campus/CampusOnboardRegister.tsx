@@ -1,20 +1,23 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { useFileUpload } from '@/hooks/useFileUpload';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent } from '@/components/ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import ImageCropUpload from '@/components/shared/ImageCropUpload';
 import { toast } from 'sonner';
 import UtilityBar from '@/components/layout/UtilityBar';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import BottomNav from '@/components/layout/BottomNav';
-import { CheckCircle, Loader2, ImagePlus, X, Clock, XCircle } from 'lucide-react';
+import { CheckCircle, Loader2, Clock, XCircle } from 'lucide-react';
+
+const CAMPUS_TYPES = ['University', 'College', 'Institute', 'Training Center', 'School'];
 
 const slugify = (s: string) => s.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60);
 
@@ -62,9 +65,6 @@ const CampusOnboardRegister = () => {
     }
   }, [existingRequest, navigate]);
 
-  const { upload: uploadFile, uploading: logoUploading } = useFileUpload();
-  const { upload: uploadCoverFile, uploading: coverUploading } = useFileUpload();
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
@@ -75,6 +75,7 @@ const CampusOnboardRegister = () => {
     campusName: '', area: '', facilities: '', studentCount: '', departments: '',
     contactName: profile?.full_name || '', contactEmail: user?.email || '', contactPhone: profile?.phone || '',
     description: '', subdomainSlug: '',
+    establishedYear: '', websiteUrl: '', fullAddress: '', campusType: '', highlights: '',
   });
 
   // Auto-suggest a subdomain slug from the campus name, but only until the
@@ -86,30 +87,6 @@ const CampusOnboardRegister = () => {
   }, [form.campusName, slugTouched]);
 
   const update = (field: string, value: string) => setForm((p) => ({ ...p, [field]: value }));
-
-  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    try {
-      const result = await uploadFile(file, { folder: 'campus-logos' });
-      setLogoUrl(result.url);
-      toast.success('Logo uploaded');
-    } catch (err: any) {
-      toast.error(err.message || 'Logo upload failed');
-    }
-  };
-
-  const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    try {
-      const result = await uploadCoverFile(file, { folder: 'campus-covers' });
-      setCoverUrl(result.url);
-      toast.success('Cover photo uploaded');
-    } catch (err: any) {
-      toast.error(err.message || 'Cover photo upload failed');
-    }
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -128,6 +105,10 @@ const CampusOnboardRegister = () => {
         .split(',')
         .map((d) => d.trim())
         .filter(Boolean);
+      const highlights = form.highlights
+        .split(',')
+        .map((h) => h.trim())
+        .filter(Boolean);
       const { error } = await supabase.from('campus_onboard_requests').insert({
         campus_name: form.campusName,
         area: form.area,
@@ -142,6 +123,11 @@ const CampusOnboardRegister = () => {
         description: form.description || null,
         subdomain_slug: slug,
         submitted_by: user?.id || null,
+        established_year: form.establishedYear ? parseInt(form.establishedYear, 10) : null,
+        website_url: form.websiteUrl || null,
+        full_address: form.fullAddress || null,
+        campus_type: form.campusType || null,
+        highlights,
       });
       if (error) {
         if (String(error.message).toLowerCase().includes('unique')) {
@@ -234,51 +220,12 @@ const CampusOnboardRegister = () => {
           <form onSubmit={handleSubmit} className="bg-card border rounded-xl p-6 space-y-5">
             <div className="space-y-2">
               <Label>Campus Logo</Label>
-              <div className="flex items-center gap-4">
-                <div className="w-20 h-20 rounded-xl border-2 border-dashed flex items-center justify-center overflow-hidden bg-muted/30 shrink-0">
-                  {logoUrl ? (
-                    <img src={logoUrl} alt="Campus logo" className="w-full h-full object-cover" />
-                  ) : (
-                    <ImagePlus className="h-6 w-6 text-muted-foreground" />
-                  )}
-                </div>
-                <div className="flex gap-2">
-                  <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
-                  <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={logoUploading}>
-                    {logoUploading ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <ImagePlus className="h-3.5 w-3.5 mr-1.5" />}
-                    {logoUrl ? 'Change Logo' : 'Upload Logo'}
-                  </Button>
-                  {logoUrl && (
-                    <Button type="button" variant="ghost" size="sm" onClick={() => setLogoUrl(null)}>
-                      <X className="h-3.5 w-3.5" />
-                    </Button>
-                  )}
-                </div>
-              </div>
+              <ImageCropUpload value={logoUrl} onChange={setLogoUrl} aspect={1} shape="square" folder="campus-logos" label="Logo" />
             </div>
             <div className="space-y-2">
               <Label>Cover Photo</Label>
-              <div className="w-full h-32 rounded-xl border-2 border-dashed overflow-hidden bg-muted/30 flex items-center justify-center relative">
-                {coverUrl ? (
-                  <img src={coverUrl} alt="Cover" className="w-full h-full object-cover" />
-                ) : (
-                  <div className="flex flex-col items-center text-muted-foreground text-xs gap-1">
-                    <ImagePlus className="h-5 w-5" /> Wide banner shown at the top of your public portfolio
-                  </div>
-                )}
-              </div>
-              <div className="flex gap-2">
-                <input id="cover-upload-input" type="file" accept="image/*" className="hidden" onChange={handleCoverUpload} />
-                <Button type="button" variant="outline" size="sm" onClick={() => document.getElementById('cover-upload-input')?.click()} disabled={coverUploading}>
-                  {coverUploading ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <ImagePlus className="h-3.5 w-3.5 mr-1.5" />}
-                  {coverUrl ? 'Change Cover' : 'Upload Cover Photo'}
-                </Button>
-                {coverUrl && (
-                  <Button type="button" variant="ghost" size="sm" onClick={() => setCoverUrl(null)}>
-                    <X className="h-3.5 w-3.5" />
-                  </Button>
-                )}
-              </div>
+              <ImageCropUpload value={coverUrl} onChange={setCoverUrl} aspect={3} shape="banner" folder="campus-covers" label="Cover Photo" />
+              <p className="text-xs text-muted-foreground">Wide banner shown at the top of your public portfolio.</p>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2 sm:col-span-2">
@@ -309,6 +256,31 @@ const CampusOnboardRegister = () => {
               <div className="space-y-2 sm:col-span-2">
                 <Label>Departments</Label>
                 <Input value={form.departments} onChange={(e) => update('departments', e.target.value)} placeholder="Textile Engineering, Fashion Design, Wet Processing (comma-separated)" />
+              </div>
+              <div className="space-y-2">
+                <Label>Campus Type</Label>
+                <Select value={form.campusType} onValueChange={(v) => update('campusType', v)}>
+                  <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
+                  <SelectContent>
+                    {CAMPUS_TYPES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Established Year</Label>
+                <Input type="number" min="1800" max="2100" value={form.establishedYear} onChange={(e) => update('establishedYear', e.target.value)} placeholder="e.g. 2005" />
+              </div>
+              <div className="space-y-2 sm:col-span-2">
+                <Label>Website</Label>
+                <Input type="url" value={form.websiteUrl} onChange={(e) => update('websiteUrl', e.target.value)} placeholder="https://yourcampus.edu" />
+              </div>
+              <div className="space-y-2 sm:col-span-2">
+                <Label>Full Address</Label>
+                <Textarea value={form.fullAddress} onChange={(e) => update('fullAddress', e.target.value)} placeholder="Street, city, postal code..." rows={2} />
+              </div>
+              <div className="space-y-2 sm:col-span-2">
+                <Label>Highlights</Label>
+                <Input value={form.highlights} onChange={(e) => update('highlights', e.target.value)} placeholder="NAAC A+ Accredited, 100% Placement, Est. Alumni Network (comma-separated)" />
               </div>
               <div className="space-y-2 sm:col-span-2">
                 <Label>Facilities</Label>

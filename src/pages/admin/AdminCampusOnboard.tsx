@@ -8,10 +8,16 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
-import { CheckCircle, XCircle, Loader2, Globe, MapPin, Users, Eye, EyeOff, Pencil, Building2, ImagePlus, Unlink, Trash2 } from 'lucide-react';
-import { useFileUpload } from '@/hooks/useFileUpload';
+import { CheckCircle, XCircle, Loader2, Globe, MapPin, Users, Eye, EyeOff, Pencil, Building2, Unlink, Trash2, Image as ImageIcon } from 'lucide-react';
+import ImageCropUpload from '@/components/shared/ImageCropUpload';
+import GallerySlider from '@/components/campus/GallerySlider';
+import NoticeBoard from '@/components/campus/NoticeBoard';
+
+const CAMPUS_TYPES = ['University', 'College', 'Institute', 'Training Center', 'School'];
 
 const slugify = (s: string) => s.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60);
 
@@ -29,8 +35,6 @@ const AdminCampusOnboard = () => {
   const [approveSlug, setApproveSlug] = useState('');
   const [editTarget, setEditTarget] = useState<any | null>(null);
   const [editForm, setEditForm] = useState<any>({});
-  const { upload: uploadLogo, uploading: logoUploading } = useFileUpload();
-  const { upload: uploadCover, uploading: coverUploading } = useFileUpload();
 
   const { data: campuses = [], isLoading } = useQuery({
     queryKey: ['admin-campus-onboard'],
@@ -151,6 +155,27 @@ const AdminCampusOnboard = () => {
     onError: (e: any) => toast.error(e.message),
   });
 
+  const { data: editGallery = [] } = useQuery({
+    queryKey: ['campus-gallery', editTarget?.id],
+    enabled: !!editTarget?.id,
+    queryFn: async () => {
+      const { data, error } = await supabase.from('campus_gallery_images').select('*').eq('campus_id', editTarget!.id).order('created_at', { ascending: false });
+      if (error) throw error;
+      return data || [];
+    },
+  });
+  const deleteGalleryMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('campus_gallery_images').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['campus-gallery', editTarget?.id] });
+      toast.success('Photo removed');
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
   const openApprove = (c: any) => { setApproveTarget(c); setApproveSlug(c.subdomain_slug); };
   const openEdit = (c: any) => {
     setEditTarget(c);
@@ -161,6 +186,9 @@ const AdminCampusOnboard = () => {
       contact_name: c.contact_name, contact_email: c.contact_email, contact_phone: c.contact_phone || '',
       logo_url: c.logo_url || null,
       cover_image_url: c.cover_image_url || null,
+      established_year: c.established_year ?? '', website_url: c.website_url || '',
+      full_address: c.full_address || '', campus_type: c.campus_type || '',
+      highlights: (c.highlights || []).join(', '),
     });
   };
   const saveEdit = () => {
@@ -168,27 +196,9 @@ const AdminCampusOnboard = () => {
       ...editForm,
       student_count: editForm.student_count === '' ? null : parseInt(editForm.student_count, 10),
       departments: String(editForm.departments || '').split(',').map((d: string) => d.trim()).filter(Boolean),
+      established_year: editForm.established_year === '' ? null : parseInt(editForm.established_year, 10),
+      highlights: String(editForm.highlights || '').split(',').map((h: string) => h.trim()).filter(Boolean),
     });
-  };
-  const handleEditLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    try {
-      const result = await uploadLogo(file, { folder: 'campus-logos' });
-      setEditForm((p: any) => ({ ...p, logo_url: result.url }));
-    } catch (err: any) {
-      toast.error(err.message || 'Logo upload failed');
-    }
-  };
-  const handleEditCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    try {
-      const result = await uploadCover(file, { folder: 'campus-covers' });
-      setEditForm((p: any) => ({ ...p, cover_image_url: result.url }));
-    } catch (err: any) {
-      toast.error(err.message || 'Cover photo upload failed');
-    }
   };
 
   return (
@@ -355,33 +365,59 @@ const AdminCampusOnboard = () => {
       <Dialog open={!!editTarget} onOpenChange={(o) => !o && setEditTarget(null)}>
         <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Edit {editTarget?.campus_name}</DialogTitle></DialogHeader>
-          <div className="space-y-3">
-            <div className="space-y-1.5">
-              <Label>Cover Photo</Label>
-              <div className="w-full h-24 rounded-lg border overflow-hidden bg-muted/30 flex items-center justify-center">
-                {editForm.cover_image_url ? <img src={editForm.cover_image_url} alt="" className="w-full h-full object-cover" /> : <ImagePlus className="h-5 w-5 text-muted-foreground" />}
+          <Tabs defaultValue="details">
+            <TabsList className="grid grid-cols-3 w-full">
+              <TabsTrigger value="details">Details</TabsTrigger>
+              <TabsTrigger value="gallery">Gallery</TabsTrigger>
+              <TabsTrigger value="notices">Notices</TabsTrigger>
+            </TabsList>
+            <TabsContent value="details" className="space-y-3 pt-2">
+              <div className="space-y-1.5">
+                <Label>Cover Photo</Label>
+                <ImageCropUpload
+                  value={editForm.cover_image_url} onChange={(url) => setEditForm((p: any) => ({ ...p, cover_image_url: url }))}
+                  aspect={3} shape="banner" folder="campus-covers" label="Cover Photo"
+                />
               </div>
-              <Input type="file" accept="image/*" onChange={handleEditCoverUpload} disabled={coverUploading} className="text-xs" />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Logo</Label>
-              <div className="flex items-center gap-3">
-                <div className="w-14 h-14 rounded-lg border overflow-hidden bg-muted/30 flex items-center justify-center shrink-0">
-                  {editForm.logo_url ? <img src={editForm.logo_url} alt="" className="w-full h-full object-cover" /> : <ImagePlus className="h-5 w-5 text-muted-foreground" />}
-                </div>
-                <Input type="file" accept="image/*" onChange={handleEditLogoUpload} disabled={logoUploading} className="text-xs" />
+              <div className="space-y-1.5">
+                <Label>Logo</Label>
+                <ImageCropUpload
+                  value={editForm.logo_url} onChange={(url) => setEditForm((p: any) => ({ ...p, logo_url: url }))}
+                  aspect={1} shape="square" folder="campus-logos" label="Logo"
+                />
               </div>
-            </div>
-            <div className="space-y-1.5"><Label>Campus Name</Label><Input value={editForm.campus_name || ''} onChange={(e) => setEditForm((p: any) => ({ ...p, campus_name: e.target.value }))} /></div>
-            <div className="space-y-1.5"><Label>Area</Label><Input value={editForm.area || ''} onChange={(e) => setEditForm((p: any) => ({ ...p, area: e.target.value }))} /></div>
-            <div className="space-y-1.5"><Label>Student Count</Label><Input type="number" value={editForm.student_count} onChange={(e) => setEditForm((p: any) => ({ ...p, student_count: e.target.value }))} /></div>
-            <div className="space-y-1.5"><Label>Departments (comma-separated)</Label><Input value={editForm.departments || ''} onChange={(e) => setEditForm((p: any) => ({ ...p, departments: e.target.value }))} /></div>
-            <div className="space-y-1.5"><Label>Facilities</Label><Textarea rows={3} value={editForm.facilities || ''} onChange={(e) => setEditForm((p: any) => ({ ...p, facilities: e.target.value }))} /></div>
-            <div className="space-y-1.5"><Label>Description</Label><Textarea rows={3} value={editForm.description || ''} onChange={(e) => setEditForm((p: any) => ({ ...p, description: e.target.value }))} /></div>
-            <div className="space-y-1.5"><Label>Contact Name</Label><Input value={editForm.contact_name || ''} onChange={(e) => setEditForm((p: any) => ({ ...p, contact_name: e.target.value }))} /></div>
-            <div className="space-y-1.5"><Label>Contact Email</Label><Input value={editForm.contact_email || ''} onChange={(e) => setEditForm((p: any) => ({ ...p, contact_email: e.target.value }))} /></div>
-            <div className="space-y-1.5"><Label>Contact Phone</Label><Input value={editForm.contact_phone || ''} onChange={(e) => setEditForm((p: any) => ({ ...p, contact_phone: e.target.value }))} /></div>
-          </div>
+              <div className="space-y-1.5"><Label>Campus Name</Label><Input value={editForm.campus_name || ''} onChange={(e) => setEditForm((p: any) => ({ ...p, campus_name: e.target.value }))} /></div>
+              <div className="space-y-1.5"><Label>Area</Label><Input value={editForm.area || ''} onChange={(e) => setEditForm((p: any) => ({ ...p, area: e.target.value }))} /></div>
+              <div className="space-y-1.5">
+                <Label>Campus Type</Label>
+                <Select value={editForm.campus_type || ''} onValueChange={(v) => setEditForm((p: any) => ({ ...p, campus_type: v }))}>
+                  <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
+                  <SelectContent>{CAMPUS_TYPES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5"><Label>Established Year</Label><Input type="number" value={editForm.established_year} onChange={(e) => setEditForm((p: any) => ({ ...p, established_year: e.target.value }))} /></div>
+              <div className="space-y-1.5"><Label>Website</Label><Input type="url" value={editForm.website_url || ''} onChange={(e) => setEditForm((p: any) => ({ ...p, website_url: e.target.value }))} /></div>
+              <div className="space-y-1.5"><Label>Full Address</Label><Textarea rows={2} value={editForm.full_address || ''} onChange={(e) => setEditForm((p: any) => ({ ...p, full_address: e.target.value }))} /></div>
+              <div className="space-y-1.5"><Label>Highlights (comma-separated)</Label><Input value={editForm.highlights || ''} onChange={(e) => setEditForm((p: any) => ({ ...p, highlights: e.target.value }))} /></div>
+              <div className="space-y-1.5"><Label>Student Count</Label><Input type="number" value={editForm.student_count} onChange={(e) => setEditForm((p: any) => ({ ...p, student_count: e.target.value }))} /></div>
+              <div className="space-y-1.5"><Label>Departments (comma-separated)</Label><Input value={editForm.departments || ''} onChange={(e) => setEditForm((p: any) => ({ ...p, departments: e.target.value }))} /></div>
+              <div className="space-y-1.5"><Label>Facilities</Label><Textarea rows={3} value={editForm.facilities || ''} onChange={(e) => setEditForm((p: any) => ({ ...p, facilities: e.target.value }))} /></div>
+              <div className="space-y-1.5"><Label>Description</Label><Textarea rows={3} value={editForm.description || ''} onChange={(e) => setEditForm((p: any) => ({ ...p, description: e.target.value }))} /></div>
+              <div className="space-y-1.5"><Label>Contact Name</Label><Input value={editForm.contact_name || ''} onChange={(e) => setEditForm((p: any) => ({ ...p, contact_name: e.target.value }))} /></div>
+              <div className="space-y-1.5"><Label>Contact Email</Label><Input value={editForm.contact_email || ''} onChange={(e) => setEditForm((p: any) => ({ ...p, contact_email: e.target.value }))} /></div>
+              <div className="space-y-1.5"><Label>Contact Phone</Label><Input value={editForm.contact_phone || ''} onChange={(e) => setEditForm((p: any) => ({ ...p, contact_phone: e.target.value }))} /></div>
+            </TabsContent>
+            <TabsContent value="gallery" className="pt-2">
+              {editGallery.length > 0 ? (
+                <GallerySlider images={editGallery} onDelete={(id) => deleteGalleryMutation.mutate(id)} deletingId={deleteGalleryMutation.isPending ? deleteGalleryMutation.variables : null} />
+              ) : (
+                <p className="text-sm text-muted-foreground flex items-center gap-1.5"><ImageIcon className="h-4 w-4" /> No gallery photos yet.</p>
+              )}
+            </TabsContent>
+            <TabsContent value="notices" className="pt-2">
+              {editTarget && <NoticeBoard campusId={editTarget.id} mode="manage" />}
+            </TabsContent>
+          </Tabs>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditTarget(null)}>Cancel</Button>
             <Button onClick={saveEdit} disabled={updateMutation.isPending}>
