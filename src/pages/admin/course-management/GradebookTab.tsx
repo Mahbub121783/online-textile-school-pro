@@ -121,8 +121,17 @@ const GradebookTab = () => {
   const { data: quizAttempts = [] } = useQuery({
     queryKey: ['gradebook-quiz-attempts', courseFilter],
     queryFn: async () => {
+      // Filtering on an embedded relation's column (quizzes.course_id)
+      // isn't supported by this REST layer -- resolve matching quiz ids
+      // first when a specific course is selected.
+      let quizIds: string[] | null = null;
+      if (courseFilter !== 'all') {
+        const { data: quizzes } = await supabase.from('quizzes').select('id').eq('course_id', courseFilter);
+        quizIds = (quizzes || []).map((q: any) => q.id);
+        if (quizIds.length === 0) return [];
+      }
       let q = supabase.from('quiz_attempts').select('*, quizzes!quiz_attempts_quiz_id_fkey(course_id, title)');
-      if (courseFilter !== 'all') q = q.eq('quizzes.course_id', courseFilter);
+      if (quizIds) q = q.in('quiz_id', quizIds);
       const { data } = await q.limit(5000);
       return data ?? [];
     },
@@ -131,8 +140,14 @@ const GradebookTab = () => {
   const { data: submissions = [] } = useQuery({
     queryKey: ['gradebook-submissions', courseFilter],
     queryFn: async () => {
+      let assignmentIds: string[] | null = null;
+      if (courseFilter !== 'all') {
+        const { data: assignments } = await supabase.from('assignments').select('id').eq('course_id', courseFilter);
+        assignmentIds = (assignments || []).map((a: any) => a.id);
+        if (assignmentIds.length === 0) return [];
+      }
       let q = supabase.from('assignment_submissions').select('*, assignments!assignment_submissions_assignment_id_fkey(course_id, title, max_score)');
-      if (courseFilter !== 'all') q = q.eq('assignments.course_id', courseFilter);
+      if (assignmentIds) q = q.in('assignment_id', assignmentIds);
       const { data } = await q.limit(5000);
       return data ?? [];
     },

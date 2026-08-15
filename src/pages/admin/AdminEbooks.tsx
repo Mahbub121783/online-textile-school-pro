@@ -171,14 +171,23 @@ const AdminEbooks = () => {
     queryKey: ['ebook-stats', statsEbook?.id],
     enabled: !!statsEbook,
     queryFn: async () => {
-      const { data: orders } = await supabase
+      // Filtering on an embedded relation's columns (orders.status here)
+      // isn't supported by this REST layer and 400'd on every call --
+      // fetch order_items for this ebook, then their orders, and join
+      // client-side instead.
+      const { data: items } = await supabase
         .from('order_items')
-        .select('price, orders!inner(status, user_id)')
+        .select('price, order_id')
         .eq('item_type', 'ebook')
-        .eq('item_id', statsEbook.id)
-        .eq('orders.status', 'completed');
-      const revenue = (orders || []).reduce((s: number, o: any) => s + (o.price || 0), 0);
-      const uniqueBuyers = new Set((orders || []).map((o: any) => o.orders?.user_id)).size;
+        .eq('item_id', statsEbook.id);
+      const orderIds = [...new Set((items || []).map((i: any) => i.order_id))];
+      const { data: matchingOrders } = orderIds.length
+        ? await supabase.from('orders').select('id, status, user_id').in('id', orderIds).eq('status', 'completed')
+        : { data: [] as any[] };
+      const completedOrderIds = new Set((matchingOrders || []).map((o: any) => o.id));
+      const completedItems = (items || []).filter((i: any) => completedOrderIds.has(i.order_id));
+      const revenue = completedItems.reduce((s: number, i: any) => s + (i.price || 0), 0);
+      const uniqueBuyers = new Set((matchingOrders || []).map((o: any) => o.user_id)).size;
       const { count: viewCount } = await supabase
         .from('ebook_access_tokens')
         .select('id', { count: 'exact', head: true })

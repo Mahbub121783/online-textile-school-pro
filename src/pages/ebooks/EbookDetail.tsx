@@ -62,19 +62,22 @@ const EbookDetail = () => {
     enabled: !!ebook?.id && !!user,
     retry: 0,
     queryFn: async () => {
-      try {
-        const { data } = await supabase
-          .from('order_items')
-          .select('id, orders!inner(user_id, status)')
-          .eq('item_type', 'ebook')
-          .eq('item_id', ebook!.id)
-          .eq('orders.user_id', user!.id)
-          .eq('orders.status', 'completed')
-          .limit(1);
-        return (data?.length ?? 0) > 0;
-      } catch {
-        return false;
-      }
+      // See MyEbooks.tsx -- filtering on an embedded relation's columns
+      // (orders.user_id/status) isn't supported by this REST layer and
+      // 400'd on every call. Because this used try/catch around the whole
+      // thing, "purchased" always silently evaluated to false -- exactly
+      // why the same ebook could be bought repeatedly without the page
+      // ever recognizing an existing purchase.
+      const { data: orders } = await supabase.from('orders').select('id').eq('user_id', user!.id).eq('status', 'completed');
+      if (!orders?.length) return false;
+      const { data } = await supabase
+        .from('order_items')
+        .select('id')
+        .eq('item_type', 'ebook')
+        .eq('item_id', ebook!.id)
+        .in('order_id', orders.map((o: any) => o.id))
+        .limit(1);
+      return (data?.length ?? 0) > 0;
     },
   });
 
@@ -83,19 +86,16 @@ const EbookDetail = () => {
     enabled: !!ebook?.id && !!user && !isPurchased,
     retry: 0,
     queryFn: async () => {
-      try {
-        const { data } = await supabase
-          .from('order_items')
-          .select('id, orders!inner(user_id, status)')
-          .eq('item_type', 'ebook')
-          .eq('item_id', ebook!.id)
-          .eq('orders.user_id', user!.id)
-          .eq('orders.status', 'pending')
-          .limit(1);
-        return (data?.length ?? 0) > 0;
-      } catch {
-        return false;
-      }
+      const { data: orders } = await supabase.from('orders').select('id').eq('user_id', user!.id).eq('status', 'pending');
+      if (!orders?.length) return false;
+      const { data } = await supabase
+        .from('order_items')
+        .select('id')
+        .eq('item_type', 'ebook')
+        .eq('item_id', ebook!.id)
+        .in('order_id', orders.map((o: any) => o.id))
+        .limit(1);
+      return (data?.length ?? 0) > 0;
     },
   });
 

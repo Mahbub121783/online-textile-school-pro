@@ -136,19 +136,18 @@ const CourseDetail = () => {
     enabled: !!course?.id && !!user && !isEnrolled,
     retry: 0,
     queryFn: async () => {
-      try {
-        const { data } = await supabase
-          .from('order_items')
-          .select('id, orders!inner(user_id, status)')
-          .eq('item_type', 'course')
-          .eq('item_id', course!.id)
-          .eq('orders.user_id', user!.id)
-          .eq('orders.status', 'pending')
-          .limit(1);
-        return (data?.length ?? 0) > 0;
-      } catch {
-        return false;
-      }
+      // See MyEbooks.tsx -- filtering on an embedded relation's columns
+      // isn't supported by this REST layer and 400'd on every call.
+      const { data: orders } = await supabase.from('orders').select('id').eq('user_id', user!.id).eq('status', 'pending');
+      if (!orders?.length) return false;
+      const { data } = await supabase
+        .from('order_items')
+        .select('id')
+        .eq('item_type', 'course')
+        .eq('item_id', course!.id)
+        .in('order_id', orders.map((o: any) => o.id))
+        .limit(1);
+      return (data?.length ?? 0) > 0;
     },
   });
 

@@ -53,12 +53,16 @@ const EbookCatalog = () => {
     queryKey: ['purchased-ebooks-set', user?.id],
     enabled: !!user,
     queryFn: async () => {
+      // See MyEbooks.tsx -- the REST layer doesn't support filtering on an
+      // embedded relation's columns (orders.user_id/status here), so this
+      // always 400'd silently. Two plain queries instead.
+      const { data: orders } = await supabase.from('orders').select('id').eq('user_id', user!.id).eq('status', 'completed');
+      if (!orders?.length) return new Set<string>();
       const { data } = await supabase
         .from('order_items')
-        .select('item_id, orders!inner(user_id, status)')
+        .select('item_id')
         .eq('item_type', 'ebook')
-        .eq('orders.user_id', user!.id)
-        .eq('orders.status', 'completed');
+        .in('order_id', orders.map((o: any) => o.id));
       return new Set((data ?? []).map((d: any) => d.item_id));
     },
   });

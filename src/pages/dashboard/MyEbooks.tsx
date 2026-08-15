@@ -14,16 +14,31 @@ const MyEbooks = () => {
     queryKey: ['my-ebooks', user?.id],
     enabled: !!user,
     queryFn: async () => {
-      const { data: orderItems } = await supabase
-        .from('order_items')
-        .select('item_id, orders!inner(user_id, status)')
-        .eq('item_type', 'ebook')
-        .eq('orders.user_id', user!.id)
-        .eq('orders.status', 'completed');
+      // order_items.orders!inner(user_id,status) then .eq('orders.user_id', ...)
+      // is PostgREST's embedded-relation filter syntax -- this backend's REST
+      // shim doesn't support filtering ON an embedded resource's columns
+      // (only selecting through it), so it 400'd with "Invalid identifier"
+      // on every call. Worse, this file destructured { data } without
+      // checking { error }, so the failure was completely silent -- every
+      // purchase showed as "No eBooks yet" no matter what. Split into two
+      // plain, non-embedded queries instead.
+      const { data: orders, error: ordersError } = await supabase
+        .from('orders')
+        .select('id')
+        .eq('user_id', user!.id)
+        .eq('status', 'completed');
+      if (ordersError) throw ordersError;
+      if (!orders?.length) return [];
 
+      const { data: orderItems, error: itemsError } = await supabase
+        .from('order_items')
+        .select('item_id')
+        .eq('item_type', 'ebook')
+        .in('order_id', orders.map((o: any) => o.id));
+      if (itemsError) throw itemsError;
       if (!orderItems?.length) return [];
 
-      const ebookIds = orderItems.map((oi: any) => oi.item_id);
+      const ebookIds = [...new Set(orderItems.map((oi: any) => oi.item_id))];
       const { data: ebooks } = await supabase
         .from('ebooks')
         .select('id, title, slug, author, cover_url, page_count')
