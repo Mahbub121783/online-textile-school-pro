@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useCloudinaryUpload } from '@/hooks/useCloudinaryUpload';
 import { toast } from 'sonner';
+import { apiBase, getUploadAuthHeader, xhrUpload } from '@/lib/rawUpload';
 
 const IMAGE_EXTENSIONS = new Set([
   'jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'tiff', 'tif', 'bmp', 'ico',
@@ -38,19 +39,6 @@ function isHeavyFile(file: File): boolean {
   if (file.type.includes('zip') || file.type.includes('rar')) return true;
   if (file.type.includes('document') || file.type.includes('spreadsheet') || file.type.includes('presentation')) return true;
   return false;
-}
-
-function fileToBase64(file: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result as string;
-      const base64 = result.split(',')[1];
-      resolve(base64);
-    };
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
 }
 
 interface UploadResult {
@@ -97,8 +85,8 @@ export function useFileUpload() {
             folder: options?.folder,
             overwrite: options?.overwrite,
             silent: true,
+            onProgress: setProgress,
           });
-          setProgress(100);
           return {
             url: result.url,
             source: 'cloudinary',
@@ -107,6 +95,7 @@ export function useFileUpload() {
             accountId: result.accountId,
           };
         } catch (cloudinaryErr) {
+          setProgress(0);
           return await uploadToLocal(file);
         }
       }
@@ -125,69 +114,52 @@ export function useFileUpload() {
    * backend/src/functions/localUpload.js). Only used when Cloudinary fails.
    */
   const uploadToLocal = async (file: File): Promise<UploadResult> => {
-    const base64 = await fileToBase64(file);
-    const { data, error } = await supabase.functions.invoke('local-upload', {
-      body: { file_base64: base64, file_type: file.type || 'application/octet-stream' },
-    });
-    if (error) {
-      toast.error('Upload failed: ' + (error.message || 'Unknown error'));
-      throw new Error(error.message || 'Upload failed');
+    const headers: Record<string, string> = {
+      ...(await getUploadAuthHeader()),
+      'Content-Type': file.type || 'application/octet-stream',
+      'X-File-Type': file.type || 'application/octet-stream',
+    };
+    try {
+      const data = await xhrUpload(`${apiBase()}/functions/v1/uploads/local`, file, headers, setProgress);
+      toast.success('Uploaded (local storage)');
+      return { url: data.url, source: 'local' };
+    } catch (err: any) {
+      toast.error('Upload failed: ' + (err.message || 'Unknown error'));
+      throw err;
     }
-    if (data?.error) {
-      toast.error('Upload error: ' + data.error);
-      throw new Error(data.error);
-    }
-    setProgress(100);
-    toast.success('Uploaded (local storage)');
-    return { url: data.url, source: 'local' };
   };
 
   /**
-   * Reliable R2 upload: uses chunked server-side proxy for ALL sizes.
+   * Reliable R2 upload: uses a server-side proxy for ALL sizes -- raw binary
+   * via XHR (real upload.onprogress), not base64-in-JSON, so large files
+   * transfer faster and the progress bar reflects actual bytes sent.
    */
   const uploadToR2Reliable = async (file: File): Promise<UploadResult> => {
     if (file.size <= PROXY_UPLOAD_MAX_BYTES) {
-      return await uploadToR2Proxy(file);
+      return await uploadToR2Single(file);
     }
     return await uploadToR2Chunked(file);
   };
 
-  const uploadToR2Proxy = async (file: File): Promise<UploadResult> => {
-    setProgress(10);
-    const base64 = await fileToBase64(file);
-    setProgress(30);
-
-    const { data, error } = await supabase.functions.invoke('r2-presign', {
-      body: {
-        action: 'proxy-upload',
-        file_base64: base64,
-        file_name: file.name,
-        file_type: file.type || 'application/octet-stream',
-      },
-    });
-
-    if (error) {
-      toast.error('Upload failed: ' + (error.message || 'Unknown error'));
-      throw new Error(error.message || 'Upload failed');
-    }
-
-    if (data?.error) {
-      toast.error('Upload error: ' + data.error);
-      throw new Error(data.error);
-    }
-
-    setProgress(100);
-    toast.success('File uploaded to R2!');
-    return {
-      url: data.url,
-      source: 'r2',
-      accountId: data.accountId,
-      fileKey: data.fileKey,
+  const uploadToR2Single = async (file: File): Promise<UploadResult> => {
+    const headers: Record<string, string> = {
+      ...(await getUploadAuthHeader()),
+      'Content-Type': file.type || 'application/octet-stream',
+      'X-File-Name': encodeURIComponent(file.name),
+      'X-File-Type': file.type || 'application/octet-stream',
     };
+    try {
+      const data = await xhrUpload(`${apiBase()}/functions/v1/uploads/r2-single`, file, headers, setProgress);
+      toast.success('File uploaded to R2!');
+      return { url: data.url, source: 'r2', accountId: data.accountId, fileKey: data.fileKey };
+    } catch (err: any) {
+      toast.error('Upload failed: ' + (err.message || 'Unknown error'));
+      throw err;
+    }
   };
 
   const uploadToR2Chunked = async (file: File): Promise<UploadResult> => {
-    setProgress(2);
+    setProgress(1);
 
     const { data: initData, error: initError } = await supabase.functions.invoke('r2-presign', {
       body: {
@@ -205,35 +177,40 @@ export function useFileUpload() {
     }
 
     const { uploadId, fileKey, accountId } = initData;
-    setProgress(5);
+    setProgress(2);
 
+    const authHeader = await getUploadAuthHeader();
     const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+    let bytesDone = 0;
+
     for (let i = 0; i < totalChunks; i++) {
       const start = i * CHUNK_SIZE;
       const end = Math.min(start + CHUNK_SIZE, file.size);
       const chunk = file.slice(start, end);
-      const chunkBase64 = await fileToBase64(chunk);
+      const chunkSize = end - start;
 
-      const { data: chunkData, error: chunkError } = await supabase.functions.invoke('r2-presign', {
-        body: {
-          action: 'chunked-upload',
-          upload_id: uploadId,
-          file_key: fileKey,
-          account_id: accountId,
-          chunk_index: i,
-          chunk_base64: chunkBase64,
-          total_chunks: totalChunks,
-        },
-      });
-
-      if (chunkError || chunkData?.error) {
-        const msg = chunkData?.error || chunkError?.message || `Chunk ${i + 1} upload failed`;
+      try {
+        await xhrUpload(`${apiBase()}/functions/v1/uploads/r2-chunk`, chunk, {
+          ...authHeader,
+          'Content-Type': 'application/octet-stream',
+          'X-Upload-Id': uploadId,
+          'X-File-Key': fileKey,
+          'X-Account-Id': accountId,
+          'X-Chunk-Index': String(i),
+        }, (chunkPct) => {
+          const doneNow = bytesDone + (chunkPct / 100) * chunkSize;
+          // Cap at 99% until chunked-complete actually confirms the multipart
+          // upload is assembled server-side -- "100%" should mean "done and
+          // verified", not just "the last byte left the browser".
+          setProgress(Math.min(99, Math.round((doneNow / file.size) * 100)));
+        });
+      } catch (err: any) {
+        const msg = err.message || `Chunk ${i + 1} upload failed`;
         toast.error(msg);
         throw new Error(msg);
       }
 
-      const pct = Math.round(5 + ((i + 1) / totalChunks) * 85);
-      setProgress(pct);
+      bytesDone += chunkSize;
     }
 
     const { data: finalData, error: finalError } = await supabase.functions.invoke('r2-presign', {

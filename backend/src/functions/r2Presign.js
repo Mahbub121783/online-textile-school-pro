@@ -9,7 +9,19 @@ const {
   CreateMultipartUploadCommand, UploadPartCommand, CompleteMultipartUploadCommand, AbortMultipartUploadCommand,
 } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
+const jwt = require('jsonwebtoken');
 const { serviceQuery } = require('../db');
+
+function requireUser(req) {
+  const header = req.headers.authorization || '';
+  const token = header.startsWith('Bearer ') ? header.slice(7) : null;
+  if (!token) return null;
+  try {
+    return jwt.verify(token, process.env.JWT_SECRET).sub;
+  } catch {
+    return null;
+  }
+}
 
 // In-memory part tracking for in-flight multipart uploads (uploadId -> state).
 // Chunks are uploaded sequentially by the frontend within one file's upload,
@@ -112,25 +124,6 @@ async function r2Presign(req, res) {
       }
     }
 
-    if (action === 'proxy-upload') {
-      const { file_base64, file_name, file_type } = req.body;
-      if (!file_base64 || !file_name) return res.status(400).json({ error: 'file_base64 and file_name required' });
-      const selectedAccount = await selectAccount();
-      const fileKey = generateFileKey(file_name);
-      try {
-        const s3 = buildS3Client(selectedAccount);
-        const fileBytes = Buffer.from(file_base64, 'base64');
-        const contentType = file_type || 'application/octet-stream';
-        await s3.send(new PutObjectCommand({ Bucket: selectedAccount.bucket_name, Key: fileKey, Body: fileBytes, ContentType: contentType }));
-        await updateRoundRobinAndCount(selectedAccount);
-        const publicDomain = selectedAccount.public_domain_url.replace(/\/+$/, '');
-        const publicUrl = `${publicDomain}/${fileKey}`;
-        return res.json({ url: publicUrl, source: 'r2', accountId: selectedAccount.id, fileKey });
-      } catch (err) {
-        return res.status(500).json({ error: 'Server-side upload to R2 failed: ' + err.message });
-      }
-    }
-
     if (action === 'chunked-init') {
       const { file_name, file_type, file_size } = req.body;
       if (!file_name) return res.status(400).json({ error: 'file_name required' });
@@ -147,33 +140,6 @@ async function r2Presign(req, res) {
         return res.json({ uploadId: created.UploadId, fileKey, accountId: selectedAccount.id });
       } catch (err) {
         return res.status(500).json({ error: 'Failed to start chunked upload: ' + err.message });
-      }
-    }
-
-    if (action === 'chunked-upload') {
-      const { upload_id, file_key, account_id, chunk_index, chunk_base64 } = req.body;
-      if (!upload_id || !file_key || !account_id || chunk_base64 == null || chunk_index == null) {
-        return res.status(400).json({ error: 'upload_id, file_key, account_id, chunk_index and chunk_base64 required' });
-      }
-      const state = multipartState.get(upload_id);
-      if (!state) return res.status(400).json({ error: 'Unknown or expired upload session -- please retry the upload' });
-      try {
-        const accRes = await serviceQuery('SELECT * FROM public.cloudflare_r2_accounts WHERE id = $1', [account_id]);
-        const account = accRes.rows[0];
-        if (!account) return res.status(404).json({ error: 'Account not found' });
-        const s3 = buildS3Client(account);
-        const partNumber = chunk_index + 1;
-        const result = await s3.send(new UploadPartCommand({
-          Bucket: account.bucket_name,
-          Key: file_key,
-          UploadId: upload_id,
-          PartNumber: partNumber,
-          Body: Buffer.from(chunk_base64, 'base64'),
-        }));
-        state.parts.push({ PartNumber: partNumber, ETag: result.ETag });
-        return res.json({ success: true });
-      } catch (err) {
-        return res.status(500).json({ error: `Chunk ${chunk_index + 1} upload failed: ${err.message}` });
       }
     }
 
@@ -220,4 +186,83 @@ async function r2Presign(req, res) {
   }
 }
 
-module.exports = { r2Presign };
+// Raw-binary upload endpoints (mounted under /functions/v1/uploads with
+// express.raw()) -- replace the old base64-in-JSON 'proxy-upload' and
+// 'chunked-upload' actions above. Sending the actual file bytes instead of a
+// base64 string wrapped in JSON avoids the 33% size inflation and the
+// JSON.parse-of-a-huge-string cost on every request, and lets the frontend
+// track real upload progress via XMLHttpRequest's upload.onprogress (fetch,
+// which supabase-js's functions.invoke() uses internally, has no reliable
+// upload-progress API).
+
+async function r2UploadSingle(req, res) {
+  try {
+    const userId = requireUser(req);
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+    const fileName = decodeURIComponent(req.headers['x-file-name'] || '');
+    const fileType = req.headers['x-file-type'] || 'application/octet-stream';
+    const buffer = req.body;
+    if (!fileName || !Buffer.isBuffer(buffer) || !buffer.length) {
+      return res.status(400).json({ error: 'x-file-name header and a non-empty body are required' });
+    }
+
+    const selectedAccount = await selectAccount();
+    const fileKey = generateFileKey(fileName);
+    try {
+      const s3 = buildS3Client(selectedAccount);
+      await s3.send(new PutObjectCommand({ Bucket: selectedAccount.bucket_name, Key: fileKey, Body: buffer, ContentType: fileType }));
+      await updateRoundRobinAndCount(selectedAccount);
+      const publicDomain = selectedAccount.public_domain_url.replace(/\/+$/, '');
+      return res.json({ url: `${publicDomain}/${fileKey}`, source: 'r2', accountId: selectedAccount.id, fileKey });
+    } catch (err) {
+      return res.status(500).json({ error: 'Server-side upload to R2 failed: ' + err.message });
+    }
+  } catch (err) {
+    console.error('r2-upload-single error:', err);
+    res.status(500).json({ error: err.message || 'Internal error' });
+  }
+}
+
+async function r2UploadChunk(req, res) {
+  try {
+    const userId = requireUser(req);
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+    const uploadId = req.headers['x-upload-id'];
+    const fileKey = req.headers['x-file-key'];
+    const accountId = req.headers['x-account-id'];
+    const chunkIndex = parseInt(req.headers['x-chunk-index'], 10);
+    const buffer = req.body;
+    if (!uploadId || !fileKey || !accountId || Number.isNaN(chunkIndex) || !Buffer.isBuffer(buffer) || !buffer.length) {
+      return res.status(400).json({ error: 'x-upload-id, x-file-key, x-account-id, x-chunk-index headers and a non-empty body are required' });
+    }
+
+    const state = multipartState.get(uploadId);
+    if (!state) return res.status(400).json({ error: 'Unknown or expired upload session -- please retry the upload' });
+
+    try {
+      const accRes = await serviceQuery('SELECT * FROM public.cloudflare_r2_accounts WHERE id = $1', [accountId]);
+      const account = accRes.rows[0];
+      if (!account) return res.status(404).json({ error: 'Account not found' });
+      const s3 = buildS3Client(account);
+      const partNumber = chunkIndex + 1;
+      const result = await s3.send(new UploadPartCommand({
+        Bucket: account.bucket_name,
+        Key: fileKey,
+        UploadId: uploadId,
+        PartNumber: partNumber,
+        Body: buffer,
+      }));
+      state.parts.push({ PartNumber: partNumber, ETag: result.ETag });
+      return res.json({ success: true });
+    } catch (err) {
+      return res.status(500).json({ error: `Chunk ${chunkIndex + 1} upload failed: ${err.message}` });
+    }
+  } catch (err) {
+    console.error('r2-upload-chunk error:', err);
+    res.status(500).json({ error: err.message || 'Internal error' });
+  }
+}
+
+module.exports = { r2Presign, r2UploadSingle, r2UploadChunk };

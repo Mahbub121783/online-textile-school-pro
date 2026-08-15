@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { apiBase, getUploadAuthHeader, xhrUpload } from '@/lib/rawUpload';
 
 interface UploadResult {
   url: string;
@@ -18,6 +19,8 @@ interface UploadOptions {
    * retry via a fallback path, where surfacing this failure would wrongly
    * read as "your upload failed" even though it's about to succeed anyway. */
   silent?: boolean;
+  /** Real-time upload percentage (0-100), driven by XHR's upload.onprogress. */
+  onProgress?: (pct: number) => void;
 }
 
 export function useCloudinaryUpload() {
@@ -36,29 +39,26 @@ export function useCloudinaryUpload() {
     };
   };
 
-  const fileToBase64 = (file: File): Promise<string> => new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = String(reader.result || '');
-      resolve(result.split(',')[1] || '');
-    };
-    reader.onerror = () => reject(reader.error || new Error('Failed to read file'));
-    reader.readAsDataURL(file);
-  });
-
   const upload = async (file: File, options?: UploadOptions): Promise<UploadResult> => {
     setUploading(true);
     try {
-      const base64 = await fileToBase64(file);
-      return await invokeUpload({
-        action: 'upload',
-        file_base64: base64,
-        file_name: file.name,
-        file_type: file.type,
-        public_id: options?.publicId,
-        folder: options?.folder,
-        overwrite: options?.overwrite,
-      });
+      const headers: Record<string, string> = {
+        ...(await getUploadAuthHeader()),
+        'Content-Type': file.type || 'application/octet-stream',
+        'X-File-Type': file.type || 'application/octet-stream',
+      };
+      if (options?.publicId) headers['X-Public-Id'] = encodeURIComponent(options.publicId);
+      if (options?.folder) headers['X-Folder'] = encodeURIComponent(options.folder);
+      if (options?.overwrite === false) headers['X-Overwrite'] = 'false';
+
+      const data = await xhrUpload(`${apiBase()}/functions/v1/uploads/cloudinary`, file, headers, options?.onProgress);
+      return {
+        url: data.url,
+        publicId: data.publicId,
+        source: data.source,
+        fallbackUrl: data.fallbackUrl,
+        accountId: data.accountId,
+      };
     } catch (err: any) {
       if (!options?.silent) toast.error('Upload failed: ' + (err.message || 'Unknown error'));
       throw err;

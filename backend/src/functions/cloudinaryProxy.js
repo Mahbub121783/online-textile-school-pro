@@ -72,55 +72,6 @@ async function handleTest(body) {
   }
 }
 
-async function handleUpload(body) {
-  const { file_base64, file_type, public_id, folder: folderOverride, overwrite } = body;
-  if (!file_base64) return { status: 400, body: { error: 'file_base64 required' } };
-
-  let category = 'images';
-  if (file_type?.startsWith('video/')) category = 'video';
-  else if (file_type === 'application/pdf' || file_type?.includes('document')) category = 'documents';
-
-  const account = await getAccount(category);
-  if (!account) return { status: 400, body: { error: 'No active Cloudinary accounts configured' } };
-
-  try {
-    const timestamp = Math.floor(Date.now() / 1000).toString();
-    const folder = folderOverride || 'uploads';
-
-    const signParams = { folder, timestamp };
-    if (public_id) {
-      signParams.public_id = public_id;
-      signParams.overwrite = overwrite === false ? 'false' : 'true';
-      signParams.invalidate = 'true';
-      signParams.unique_filename = 'false';
-      signParams.use_filename = 'false';
-    }
-
-    const signature = buildSignedParams(signParams, account.api_secret);
-    const mimeType = file_type || 'application/octet-stream';
-    const dataUri = `data:${mimeType};base64,${file_base64}`;
-
-    const formData = new URLSearchParams({ file: dataUri, api_key: account.api_key, timestamp, signature, ...signParams });
-
-    const res = await fetch(`https://api.cloudinary.com/v1_1/${account.cloud_name}/auto/upload`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: formData,
-    });
-    const result = await res.json();
-
-    if (result.error) {
-      console.error('Cloudinary upload error:', result.error);
-      return { status: 500, body: { error: result.error.message || 'Upload failed' } };
-    }
-
-    return { status: 200, body: { url: result.secure_url, publicId: result.public_id, source: 'cloudinary', fallbackUrl: result.secure_url, accountId: account.id } };
-  } catch (err) {
-    console.error('Cloudinary upload error:', err);
-    return { status: 500, body: { error: err.message || 'Upload failed' } };
-  }
-}
-
 async function handleFetchUrl(body) {
   const { remote_url, file_name, file_type, folder: folderOverride, public_id } = body;
   if (!remote_url) return { status: 400, body: { error: 'remote_url required' } };
@@ -167,6 +118,72 @@ async function handleFetchUrl(body) {
   }
 }
 
+// Raw-binary counterpart to handleUpload() above (mounted under
+// /functions/v1/uploads/cloudinary with express.raw()). The base64 data-URI
+// path used by handleUpload() inflates payload size ~33% and JSON.parses the
+// whole thing server-side; sending real multipart/form-data with the raw
+// buffer avoids both and lets the frontend track real progress via XHR.
+async function handleUploadRaw(req, res) {
+  const userId = requireUser(req);
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+  const buffer = req.body;
+  if (!Buffer.isBuffer(buffer) || !buffer.length) return res.status(400).json({ error: 'A non-empty file body is required' });
+
+  const fileType = req.headers['x-file-type'] || 'application/octet-stream';
+  const publicId = req.headers['x-public-id'] ? decodeURIComponent(req.headers['x-public-id']) : undefined;
+  const folderOverride = req.headers['x-folder'] ? decodeURIComponent(req.headers['x-folder']) : undefined;
+  const overwrite = req.headers['x-overwrite'];
+
+  let category = 'images';
+  if (fileType.startsWith('video/')) category = 'video';
+  else if (fileType === 'application/pdf' || fileType.includes('document')) category = 'documents';
+
+  const account = await getAccount(category);
+  if (!account) return res.status(400).json({ error: 'No active Cloudinary accounts configured' });
+
+  try {
+    const timestamp = Math.floor(Date.now() / 1000).toString();
+    const folder = folderOverride || 'uploads';
+
+    const signParams = { folder, timestamp };
+    if (publicId) {
+      signParams.public_id = publicId;
+      signParams.overwrite = overwrite === 'false' ? 'false' : 'true';
+      signParams.invalidate = 'true';
+      signParams.unique_filename = 'false';
+      signParams.use_filename = 'false';
+    }
+    const signature = buildSignedParams(signParams, account.api_secret);
+
+    // node-fetch v2 (imported as `fetch` above) only understands the
+    // `form-data` npm package for multipart bodies, not the native
+    // FormData/Blob globals -- use Node's own built-in fetch (global since
+    // Node 18) here instead, which handles them correctly.
+    const form = new FormData();
+    form.append('file', new Blob([buffer], { type: fileType }));
+    form.append('api_key', account.api_key);
+    form.append('signature', signature);
+    Object.entries(signParams).forEach(([k, v]) => form.append(k, String(v)));
+
+    const cRes = await globalThis.fetch(`https://api.cloudinary.com/v1_1/${account.cloud_name}/auto/upload`, {
+      method: 'POST',
+      body: form,
+    });
+    const result = await cRes.json();
+
+    if (result.error) {
+      console.error('Cloudinary raw upload error:', result.error);
+      return res.status(500).json({ error: result.error.message || 'Upload failed' });
+    }
+
+    return res.json({ url: result.secure_url, publicId: result.public_id, source: 'cloudinary', fallbackUrl: result.secure_url, accountId: account.id });
+  } catch (err) {
+    console.error('Cloudinary raw upload error:', err);
+    res.status(500).json({ error: err.message || 'Upload failed' });
+  }
+}
+
 async function cloudinaryProxy(req, res) {
   try {
     const userId = requireUser(req);
@@ -177,7 +194,6 @@ async function cloudinaryProxy(req, res) {
 
     let result;
     if (action === 'test') result = await handleTest(body);
-    else if (action === 'upload') result = await handleUpload(body);
     else if (action === 'fetch-url') result = await handleFetchUrl(body);
     else return res.status(400).json({ error: 'Invalid action' });
 
@@ -188,4 +204,4 @@ async function cloudinaryProxy(req, res) {
   }
 }
 
-module.exports = { cloudinaryProxy };
+module.exports = { cloudinaryProxy, handleUploadRaw };

@@ -27,18 +27,21 @@ function requireUser(req) {
   }
 }
 
-async function localUpload(req, res) {
+// Raw-binary local-storage upload, mounted under
+// /functions/v1/uploads/local with express.raw() -- avoids the base64 +
+// JSON-body overhead so this fallback path doesn't die around the same size
+// where the global express.json() limit and base64 inflation collide.
+async function localUploadRaw(req, res) {
   try {
     const userId = requireUser(req);
     if (!userId) return res.status(401).json({ error: 'Unauthorized' });
 
-    const { file_base64, file_type } = req.body || {};
-    if (!file_base64) return res.status(400).json({ error: 'file_base64 required' });
-
-    const ext = ALLOWED_TYPES[(file_type || '').toLowerCase()];
+    const fileType = (req.headers['x-file-type'] || '').toLowerCase();
+    const ext = ALLOWED_TYPES[fileType];
     if (!ext) return res.status(400).json({ error: 'Only image uploads are allowed via local storage (jpeg/png/gif/webp/svg/bmp)' });
 
-    const buffer = Buffer.from(file_base64, 'base64');
+    const buffer = req.body;
+    if (!Buffer.isBuffer(buffer) || !buffer.length) return res.status(400).json({ error: 'A non-empty file body is required' });
     if (buffer.length > MAX_BYTES) return res.status(400).json({ error: 'Image exceeds 8MB local-storage limit' });
 
     const now = new Date();
@@ -56,4 +59,4 @@ async function localUpload(req, res) {
   }
 }
 
-module.exports = { localUpload };
+module.exports = { localUploadRaw };

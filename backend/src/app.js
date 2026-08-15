@@ -6,6 +6,7 @@ const { pool } = require('./db');
 const { router: authRouter } = require('./auth');
 const restRouter = require('./rest');
 const functionsRouter = require('./functions');
+const uploadsRouter = require('./functions/uploadsRouter');
 const { router: realtimeRouter, startListener: startRealtimeListener } = require('./realtime');
 
 // The original Supabase edge-function gateway required at least the (public,
@@ -65,11 +66,28 @@ app.get('/health/db', async (req, res) => {
 app.use('/auth/v1', authRouter);
 app.use('/rest/v1', restRouter);
 app.use('/realtime', realtimeRouter);
+app.use('/functions/v1/uploads', uploadsRouter);
 app.use('/functions/v1/send-smtp-email', relayLimiter);
 app.use('/functions/v1/send-sms', relayLimiter);
 app.use('/functions/v1', functionsLimiter, functionsRouter);
 
 app.use((req, res) => res.status(404).json({ error: 'Not found' }));
+
+// express.json()'s body-size limit and express.raw()'s per-route limits
+// (uploadsRouter.js) both throw a PayloadTooLargeError that, left
+// unhandled, falls through to Express's default HTML error page -- which
+// breaks any client doing res.json() on the response, turning a clear
+// "file too large" into a confusing JSON-parse error instead.
+app.use((err, req, res, next) => {
+  if (err && err.type === 'entity.too.large') {
+    return res.status(413).json({ error: 'File is too large.' });
+  }
+  if (err) {
+    console.error('Unhandled request error:', err);
+    return res.status(500).json({ error: err.message || 'Internal error' });
+  }
+  next();
+});
 
 startRealtimeListener();
 
