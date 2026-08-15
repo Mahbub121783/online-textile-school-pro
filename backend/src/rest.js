@@ -276,6 +276,25 @@ const RPC_BLOCKLIST = new Set([
   'credit_wallet', 'debit_wallet',
 ]);
 
+// node-postgres serializes a bare JS array as a Postgres array literal
+// (`{a,b,c}`), not JSON text -- fine for a real `uuid[]`/`text[]` SQL
+// parameter, but wrong for a `jsonb` parameter that happens to hold an
+// array (e.g. qb_submit_exam's `_answers jsonb`, an array of answer
+// objects), which then fails with "invalid input syntax for type json".
+// A plain object is never valid as a bare Postgres scalar/array parameter
+// at all, so it must always mean a json/jsonb argument. Only stringify
+// arrays whose elements are themselves objects -- a plain scalar array
+// (uuid[]/text[]/int[]) must stay a real JS array for node-pg to encode
+// as a native Postgres array.
+function coerceRpcParam(value) {
+  if (value === null || typeof value !== 'object') return value;
+  if (Array.isArray(value)) {
+    const hasObjectElements = value.some((v) => v !== null && typeof v === 'object' && !Array.isArray(v));
+    return hasObjectElements ? JSON.stringify(value) : value;
+  }
+  return JSON.stringify(value);
+}
+
 router.post('/rpc/:fn', async (req, res) => {
   try {
     const fn = assertValidIdentifier(req.params.fn);
@@ -283,7 +302,7 @@ router.post('/rpc/:fn', async (req, res) => {
     const auth = readAuth(req);
     const args = req.body && typeof req.body === 'object' ? req.body : {};
     const argNames = Object.keys(args);
-    const params = argNames.map((k) => args[k]);
+    const params = argNames.map((k) => coerceRpcParam(args[k]));
     const namedArgs = argNames.map((k, i) => `"${k}" := $${i + 1}`).join(', ');
 
     const result = await withRequestContext(auth, (client) =>

@@ -34,12 +34,17 @@ export function useSettings() {
         throw err;
       }
     },
-    staleTime: 60 * 60 * 1000,   // 1h — site settings change rarely
+    // Was 1h with all refetch triggers off -- an admin changing a site
+    // setting (banner text, contact info, feature toggle...) wouldn't see
+    // it reflected anywhere, including their own other tabs, for up to an
+    // hour. 3 minutes is still a meaningful cache (this hook is used
+    // platform-wide) while keeping edits visible in a reasonable time.
+    staleTime: 3 * 60 * 1000,
     gcTime: 2 * 60 * 60 * 1000,
     retry: 0,
-    refetchOnMount: false,
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
   });
 }
 

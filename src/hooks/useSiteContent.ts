@@ -15,6 +15,11 @@ export function useSiteContent(pageKey: string) {
       });
       return map;
     },
-    staleTime: 10 * 60 * 1000,
+    // Was 10min -- CMS content an admin just edited in AdminSiteContent.tsx
+    // should show up for visitors (and the admin's own other tabs) sooner
+    // than that. refetchOnMount/WindowFocus are inherited from the
+    // QueryClient defaults (App.tsx), so this now only bounds how often an
+    // already-mounted, still-focused page re-polls.
+    staleTime: 2 * 60 * 1000,
   });
 }

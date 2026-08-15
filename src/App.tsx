@@ -189,7 +189,18 @@ const AdminQuestionBank = lazy(() => import("./pages/admin/AdminQuestionBank"));
 
 import { isPreviewOrEmbedded } from '@/lib/previewMode';
 
-// Free-tier optimized QueryClient: aggressive in-memory caching + cross-reload persistence
+// Free-tier optimized QueryClient: in-memory caching + cross-reload persistence.
+//
+// This used to be staleTime: 10min + refetchOnMount/WindowFocus/Reconnect
+// all false -- meaning once a query was cached, NOTHING (navigating back to
+// the page, switching browser tabs, reconnecting) would refresh it for up
+// to 10 minutes, and the cache was also persisted across full page reloads.
+// That was the single biggest cause of "amar update instant dekha jay na" --
+// an admin approving/editing something in one tab and checking it
+// elsewhere (or even the same page, navigated away and back) would keep
+// seeing old data for up to 10 minutes. staleTime alone (not the refetch
+// flags) is enough to protect the DB from being hammered on rapid
+// re-renders, so only that needs to stay conservative.
 const ONE_MIN = 60 * 1000;
 const ONE_HOUR = 60 * ONE_MIN;
 const ONE_DAY = 24 * ONE_HOUR;
@@ -197,11 +208,11 @@ const ONE_DAY = 24 * ONE_HOUR;
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 10 * ONE_MIN,         // treat data as fresh for 10 minutes
+      staleTime: ONE_MIN,               // treat data as fresh for 1 minute
       gcTime: ONE_DAY,                  // keep unused queries in memory for 24h
-      refetchOnWindowFocus: false,
-      refetchOnReconnect: false,
-      refetchOnMount: false,            // never auto-refetch when remounting if cached
+      refetchOnWindowFocus: true,       // switching back to the tab re-syncs stale data
+      refetchOnReconnect: true,
+      refetchOnMount: true,             // visiting/revisiting a page re-syncs stale data
       retry: isPreviewOrEmbedded ? 0 : 1,
     },
   },
