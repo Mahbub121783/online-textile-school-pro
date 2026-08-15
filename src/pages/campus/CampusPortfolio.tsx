@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Building2, MapPin, Users, Mail, Phone, GraduationCap } from 'lucide-react';
+import { Building2, MapPin, Users, Mail, Phone, GraduationCap, Image as ImageIcon } from 'lucide-react';
 
 interface Props {
   slug: string;
@@ -37,6 +37,22 @@ const CampusPortfolio = ({ slug }: Props) => {
         .eq('onboarded_campus_id', campus!.id);
       if (error) throw error;
       return count ?? 0;
+    },
+  });
+
+  const { data: gallery = [] } = useQuery({
+    queryKey: ['campus-gallery', campus?.id],
+    enabled: !!campus?.id,
+    refetchInterval: 30000,
+    refetchIntervalInBackground: false,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('campus_gallery_images')
+        .select('id, image_url')
+        .eq('campus_id', campus!.id)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return data || [];
     },
   });
 
@@ -96,6 +112,19 @@ const CampusPortfolio = ({ slug }: Props) => {
             <h3 className="font-heading font-bold mb-3">Departments</h3>
             <div className="flex flex-wrap gap-2">
               {campus.departments.map((d: string) => <Badge key={d} variant="secondary">{d}</Badge>)}
+            </div>
+          </CardContent></Card>
+        )}
+
+        {gallery.length > 0 && (
+          <Card><CardContent className="pt-6">
+            <h3 className="font-heading font-bold mb-3 flex items-center gap-2"><ImageIcon className="h-4 w-4" /> Gallery</h3>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {gallery.map((g: any) => (
+                <div key={g.id} className="aspect-square rounded-lg overflow-hidden border">
+                  <img src={g.image_url} alt="" className="w-full h-full object-cover" />
+                </div>
+              ))}
             </div>
           </CardContent></Card>
         )}

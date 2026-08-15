@@ -7,7 +7,7 @@ import UtilityBar from '@/components/layout/UtilityBar';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import BottomNav from '@/components/layout/BottomNav';
-import { MapPin, Users, Building2, Plus, School } from 'lucide-react';
+import { MapPin, Users, Building2, Plus, School, ArrowUpRight } from 'lucide-react';
 
 const CampusOnboardList = () => {
   const { data: campuses = [], isLoading } = useQuery({
@@ -17,7 +17,7 @@ const CampusOnboardList = () => {
     queryFn: async () => {
       const { data } = await supabase
         .from('campus_onboard_requests')
-        .select('id, campus_name, area, facilities, student_count, subdomain_slug, subdomain_provisioned')
+        .select('id, campus_name, area, facilities, student_count, subdomain_slug, subdomain_provisioned, logo_url')
         .eq('status', 'approved')
         .order('created_at', { ascending: false });
       return data ?? [];
@@ -52,32 +52,44 @@ const CampusOnboardList = () => {
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {campuses.map((c: any) => (
-                <Link key={c.id} to={`/campus-onboard/${c.id}`}>
-                  <Card className="hover:shadow-md transition-shadow h-full">
-                    <CardContent className="pt-6 space-y-3">
-                      <div className="flex items-center gap-2">
-                        <Building2 className="h-5 w-5 text-primary shrink-0" />
-                        <h3 className="font-heading font-bold text-lg leading-tight">{c.campus_name}</h3>
+              {campuses.map((c: any) => {
+                // A live campus goes straight to its own subdomain portfolio;
+                // one still awaiting subdomain setup falls back to the
+                // internal detail page (nothing to link out to yet).
+                const CardWrapper = c.subdomain_provisioned ? 'a' : Link;
+                const wrapperProps = c.subdomain_provisioned
+                  ? { href: `https://${c.subdomain_slug}.onlinetextileschool.com`, target: '_blank', rel: 'noopener noreferrer' }
+                  : { to: `/campus-onboard/${c.id}` };
+                return (
+                  <CardWrapper key={c.id} {...(wrapperProps as any)} className="group">
+                    <Card className="hover:shadow-lg hover:-translate-y-0.5 transition-all h-full overflow-hidden">
+                      <div className="h-28 bg-gradient-to-br from-primary via-primary-dark to-accent flex items-center justify-center relative">
+                        {c.logo_url ? (
+                          <img src={c.logo_url} alt={c.campus_name} className="w-16 h-16 rounded-xl object-cover border-2 border-white/40 shadow-lg" />
+                        ) : (
+                          <div className="w-16 h-16 rounded-xl bg-white/15 flex items-center justify-center">
+                            <Building2 className="h-7 w-7 text-primary-foreground" />
+                          </div>
+                        )}
+                        {c.subdomain_provisioned && (
+                          <ArrowUpRight className="h-4 w-4 text-primary-foreground/80 absolute top-3 right-3 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                        )}
                       </div>
-                      <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                        <MapPin className="h-3.5 w-3.5 shrink-0" /> {c.area}
-                      </div>
-                      {c.student_count != null && (
+                      <CardContent className="pt-4 space-y-2">
+                        <h3 className="font-heading font-bold text-lg leading-tight truncate">{c.campus_name}</h3>
                         <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                          <Users className="h-3.5 w-3.5 shrink-0" /> {c.student_count} students
+                          <MapPin className="h-3.5 w-3.5 shrink-0" /> {c.area}
                         </div>
-                      )}
-                      {c.facilities && <p className="text-sm text-foreground/80 line-clamp-2">{c.facilities}</p>}
-                      {c.subdomain_provisioned && (
-                        <span className="text-xs text-primary hover:underline block">
-                          {c.subdomain_slug}.onlinetextileschool.com
-                        </span>
-                      )}
-                    </CardContent>
-                  </Card>
-                </Link>
-              ))}
+                        {c.student_count != null && (
+                          <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                            <Users className="h-3.5 w-3.5 shrink-0" /> {c.student_count} students
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </CardWrapper>
+                );
+              })}
             </div>
           )}
         </div>

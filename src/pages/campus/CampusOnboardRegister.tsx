@@ -18,8 +18,19 @@ import { CheckCircle, Loader2, ImagePlus, X } from 'lucide-react';
 const slugify = (s: string) => s.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60);
 
 const CampusOnboardRegister = () => {
-  const { user, profile } = useAuth();
+  const { user, profile, loading: authLoading } = useAuth();
   const navigate = useNavigate();
+
+  // Logo upload (and, previously, submission) go through auth-gated backend
+  // endpoints -- an anonymous visitor could reach this form and get an
+  // unexplained "Unauthorized" the moment they tried to upload a logo.
+  // Require sign-in up front instead, matching EbookReader.tsx's pattern.
+  useEffect(() => {
+    if (!authLoading && !user) {
+      navigate('/auth/login?redirect=/campus-onboard/register');
+    }
+  }, [authLoading, user, navigate]);
+
   const { upload: uploadFile, uploading: logoUploading } = useFileUpload();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -98,6 +109,14 @@ const CampusOnboardRegister = () => {
     }
     setSubmitting(false);
   };
+
+  if (authLoading || !user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   if (submitted) {
     return (

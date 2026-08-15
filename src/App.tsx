@@ -187,6 +187,7 @@ const PracticeResult = lazy(() => import("./pages/practice/PracticeResult"));
 const PracticeHistory = lazy(() => import("./pages/practice/PracticeHistory"));
 const PracticeLeaderboard = lazy(() => import("./pages/practice/PracticeLeaderboard"));
 const PracticeCredits = lazy(() => import("./pages/practice/PracticeCredits"));
+const MyCampusPage = lazy(() => import("./pages/dashboard/MyCampusPage"));
 const AdminQuestionBank = lazy(() => import("./pages/admin/AdminQuestionBank"));
 
 import { isPreviewOrEmbedded } from '@/lib/previewMode';
@@ -326,6 +327,7 @@ const AppRoutes = () => {
             <Route path="mail" element={<MailPage />} />
             <Route path="workshops" element={<MyWorkshopsPage />} />
             <Route path="practice" element={<DashboardPracticePage />} />
+            <Route path="campus" element={<MyCampusPage />} />
             <Route path="settings" element={<SettingsPage />} />
           </Route>
           {/* Instructor Portal */}

@@ -2,19 +2,22 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useFileUpload } from '@/hooks/useFileUpload';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import UtilityBar from '@/components/layout/UtilityBar';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import BottomNav from '@/components/layout/BottomNav';
-import { MapPin, Users, Building2, Globe, ArrowLeft, CheckCircle2 } from 'lucide-react';
+import { MapPin, Users, Building2, Globe, ArrowLeft, CheckCircle2, Image as ImageIcon } from 'lucide-react';
 
 const CampusOnboardDetail = () => {
   const { id } = useParams();
   const { user, profile, refreshProfile } = useAuth();
   const queryClient = useQueryClient();
+  const { upload: uploadGalleryFile, uploading: galleryUploading } = useFileUpload();
 
   const { data: campus, isLoading } = useQuery({
     queryKey: ['campus-onboard-detail', id],
@@ -50,6 +53,45 @@ const CampusOnboardDetail = () => {
   });
 
   const isLinked = profile?.onboarded_campus_id === id;
+
+  const { data: gallery = [] } = useQuery({
+    queryKey: ['campus-gallery', id],
+    enabled: !!id,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('campus_gallery_images')
+        .select('*')
+        .eq('campus_id', id!)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+  const addGalleryImage = useMutation({
+    mutationFn: async (url: string) => {
+      const { error } = await supabase.from('campus_gallery_images').insert({
+        campus_id: id, image_url: url, uploaded_by: user!.id,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['campus-gallery', id] });
+      toast.success('Photo added to the campus gallery');
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const handleGalleryUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const result = await uploadGalleryFile(file, { folder: 'campus-gallery' });
+      addGalleryImage.mutate(result.url);
+    } catch (err: any) {
+      toast.error(err.message || 'Photo upload failed');
+    }
+  };
 
   const linkMutation = useMutation({
     mutationFn: async () => {
@@ -143,7 +185,7 @@ const CampusOnboardDetail = () => {
           )}
 
           {user && (
-            <Card>
+            <Card className="mb-6">
               <CardContent className="pt-6 text-center space-y-3">
                 {isLinked ? (
                   <p className="flex items-center justify-center gap-2 text-emerald-600 font-medium">
@@ -156,6 +198,31 @@ const CampusOnboardDetail = () => {
                       {linkMutation.isPending ? 'Linking...' : "I'm a student here"}
                     </Button>
                   </>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {(gallery.length > 0 || isLinked) && (
+            <Card>
+              <CardContent className="pt-6 space-y-3">
+                <h3 className="font-heading font-bold flex items-center gap-2"><ImageIcon className="h-4 w-4" /> Campus Gallery</h3>
+                {isLinked && (
+                  <div className="space-y-1.5">
+                    <p className="text-xs text-muted-foreground">You're a registered student here — add a photo for the campus's public portfolio.</p>
+                    <Input type="file" accept="image/*" onChange={handleGalleryUpload} disabled={galleryUploading} className="text-xs max-w-xs" />
+                  </div>
+                )}
+                {gallery.length > 0 ? (
+                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 pt-1">
+                    {gallery.map((g: any) => (
+                      <div key={g.id} className="relative aspect-square rounded-lg overflow-hidden border">
+                        <img src={g.image_url} alt="" className="w-full h-full object-cover" />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground">No photos yet.</p>
                 )}
               </CardContent>
             </Card>

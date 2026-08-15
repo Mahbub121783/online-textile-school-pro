@@ -1,4 +1,4 @@
-import { BookOpen, LayoutDashboard, Library, Wallet, Settings, LogOut, FileQuestion, ClipboardList, Award, Users, FileText, Bell, ShoppingCart, Heart, Trophy, MessageSquare, ClipboardCheck, GraduationCap, FolderKanban, BarChart3, CalendarCheck, FlaskConical, Briefcase, Mail, AtSign, Presentation, Brain } from 'lucide-react';
+import { BookOpen, LayoutDashboard, Library, Wallet, Settings, LogOut, FileQuestion, ClipboardList, Award, Users, FileText, Bell, ShoppingCart, Heart, Trophy, MessageSquare, ClipboardCheck, GraduationCap, FolderKanban, BarChart3, CalendarCheck, FlaskConical, Briefcase, Mail, AtSign, Presentation, Brain, Building2 } from 'lucide-react';
 import ProfileCompletenessWidget from '@/components/ProfileCompletenessWidget';
 import { NavLink } from '@/components/NavLink';
 import { useLocation } from 'react-router-dom';
@@ -82,13 +82,34 @@ export function DashboardSidebar() {
   });
   const mailApproved = emailReq?.status === 'approved';
 
+  // "Campus Onboard" only appears for a user who has an approved campus
+  // request of their own -- their gateway to managing its hero/details/
+  // gallery from their own dashboard instead of needing an admin.
+  const { data: ownedCampus } = useQuery({
+    queryKey: ['my-owned-campus', user?.id],
+    enabled: !!user,
+    refetchInterval: 30000,
+    refetchIntervalInBackground: false,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('campus_onboard_requests')
+        .select('id')
+        .eq('submitted_by', user!.id)
+        .eq('status', 'approved')
+        .limit(1)
+        .maybeSingle();
+      return data;
+    },
+  });
+
   // Insert EduMail (always, once enrolled) + Mail (only once approved)
   const visibleEnrolledItems = hasPurchasedCourse
     ? enrolledOnlyItems.filter((i) => i.title !== 'Mail' || mailApproved)
     : [];
+  const campusItems = ownedCampus ? [{ title: 'Campus Onboard', url: '/dashboard/campus', icon: Building2 }] : [];
   const navItems = hasPurchasedCourse
-    ? [...baseNavItems.slice(0, 22), ...visibleEnrolledItems, ...baseNavItems.slice(22)]
-    : baseNavItems;
+    ? [...baseNavItems.slice(0, 22), ...visibleEnrolledItems, ...campusItems, ...baseNavItems.slice(22)]
+    : [...baseNavItems, ...campusItems];
 
   const isActive = (path: string) =>
     path === '/dashboard' ? location.pathname === '/dashboard' : location.pathname.startsWith(path);

@@ -168,19 +168,25 @@ async function campusProvisionSubdomain(req, res) {
 }
 
 // POST /functions/v1/campus-update { id, ...fields }
-// Deep-edit capability for admins/super_admins -- correct any detail on an
-// already-submitted (pending, approved, or rejected) campus request,
-// including its public subdomain-portfolio content.
+// Deep-edit capability for admins/super_admins AND the campus's own
+// requester (submitted_by) -- an approved campus's contact can correct
+// their own hero/details/gallery without needing an admin to do it for
+// them every time, while still being scoped to only their own campus.
 const EDITABLE_FIELDS = new Set([
   'campus_name', 'area', 'facilities', 'description', 'student_count',
   'departments', 'logo_url', 'contact_name', 'contact_email', 'contact_phone',
 ]);
 async function campusUpdate(req, res) {
-  const adminId = requireAuth(req);
-  if (!adminId) return res.status(401).json({ error: 'Unauthorized' });
-  if (!(await isAdmin(adminId))) return res.status(403).json({ error: 'Admin only' });
+  const userId = requireAuth(req);
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
   const { id, ...fields } = req.body || {};
   if (!id) return res.status(400).json({ error: 'id required' });
+
+  const ownerCheck = await serviceQuery('SELECT submitted_by FROM public.campus_onboard_requests WHERE id = $1', [id]);
+  const campusRow = ownerCheck.rows[0];
+  if (!campusRow) return res.status(404).json({ error: 'Campus request not found' });
+  const isOwner = campusRow.submitted_by === userId;
+  if (!isOwner && !(await isAdmin(userId))) return res.status(403).json({ error: 'Admin or campus owner only' });
 
   const cols = Object.keys(fields).filter((k) => EDITABLE_FIELDS.has(k));
   if (cols.length === 0) return res.status(400).json({ error: 'No editable fields provided' });
