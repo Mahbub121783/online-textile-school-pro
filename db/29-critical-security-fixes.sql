@@ -361,8 +361,12 @@ BEGIN
     INSERT INTO public.ebook_secure_files (ebook_id, file_url, updated_at)
     VALUES (NEW.id, NEW.file_url, now())
     ON CONFLICT (ebook_id) DO UPDATE SET file_url = EXCLUDED.file_url, updated_at = now();
+    -- Must run AFTER the ebooks row itself is committed (see db/43) --
+    -- a BEFORE trigger's NEW.id doesn't exist in ebooks yet, so the FK
+    -- above would fail. Null out file_url via a follow-up UPDATE instead
+    -- of mutating NEW; the IF guard above stops it from recursing.
+    UPDATE public.ebooks SET file_url = NULL WHERE id = NEW.id AND file_url IS NOT NULL;
     PERFORM set_config('request.jwt.claim.role', COALESCE(_prev_role, ''), true);
-    NEW.file_url := NULL;
   END IF;
   RETURN NEW;
 END;
@@ -370,7 +374,7 @@ $function$;
 
 DROP TRIGGER IF EXISTS trg_ebooks_extract_file_url ON public.ebooks;
 CREATE TRIGGER trg_ebooks_extract_file_url
-BEFORE INSERT OR UPDATE ON public.ebooks
+AFTER INSERT OR UPDATE ON public.ebooks
 FOR EACH ROW EXECUTE FUNCTION public.tg_ebooks_extract_file_url();
 
 -- Backfilled rows above already have file_url copied out -- null it from
