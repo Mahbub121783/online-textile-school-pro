@@ -1,4 +1,4 @@
-import { LayoutDashboard, Users, BookOpen, Image, Activity, LogOut, GraduationCap, Tag, Wallet, FileText, PenTool, ImageIcon, Menu, Palette, Video, HelpCircle, ClipboardList, Award, Settings, ChevronDown, BarChart3, UserCog, CheckSquare, DollarSign, Shield, MessageSquare, Wrench, Mail, CreditCard, ReceiptText, Cloud, Bell, ShoppingCart, HardDrive, Crown, Server, ClipboardEdit, Send, Calendar, Layers, Star, AlertTriangle, FolderKanban, Briefcase, FlaskConical, Presentation, Brain, Sparkles, Trophy, Radio, Globe } from 'lucide-react';
+import { LayoutDashboard, Users, BookOpen, Image, Activity, LogOut, GraduationCap, Tag, Wallet, FileText, PenTool, ImageIcon, Menu, Palette, Video, HelpCircle, ClipboardList, Award, Settings, ChevronDown, BarChart3, UserCog, CheckSquare, DollarSign, Shield, MessageSquare, Wrench, Mail, CreditCard, ReceiptText, Cloud, Bell, ShoppingCart, HardDrive, Crown, Server, ClipboardEdit, Send, Calendar, Layers, Star, AlertTriangle, FolderKanban, Briefcase, FlaskConical, Presentation, Brain, Sparkles, Trophy, Radio, Globe, Shirt } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
@@ -16,6 +16,7 @@ const topItems = [
   { title: 'Users', url: '/admin/users', icon: Users },
   { title: 'Students', url: '/admin/students', icon: GraduationCap },
   { title: 'Campus Onboard', url: '/admin/campus-onboard', icon: Globe },
+  { title: 'Fabric Library', url: '/admin/fabric-library', icon: Shirt },
 ];
 
 const instructorSubItems = [

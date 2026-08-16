@@ -11,6 +11,7 @@ node_modules
 dist
 dist-ssr
 *.local
+*.tsbuildinfo
 
 # Backend secrets (DB password, JWT secret) -- never commit, only .env.example
 backend/.env

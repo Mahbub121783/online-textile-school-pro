@@ -31,6 +31,15 @@ export function useCampusRealtime(campusId?: string) {
       queryClient.invalidateQueries({ queryKey: ['campus-portfolio'] });
       queryClient.invalidateQueries({ queryKey: ['my-owned-campus-full'] });
     });
+    es.addEventListener('fabric_library_changed', () => {
+      queryClient.invalidateQueries({ queryKey: ['fabric-library', campusId] });
+    });
+    es.addEventListener('fabric_distribution_changed', () => {
+      queryClient.invalidateQueries({ queryKey: ['fabric-distributions', campusId] });
+    });
+    es.addEventListener('fabric_gallery_changed', () => {
+      queryClient.invalidateQueries({ queryKey: ['fabric-library-photos', campusId] });
+    });
 
     return () => es.close();
   }, [campusId, queryClient]);

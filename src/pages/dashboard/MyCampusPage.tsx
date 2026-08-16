@@ -15,6 +15,7 @@ import { Building2, Loader2, Globe, Image as ImageIcon } from 'lucide-react';
 import ImageCropUpload from '@/components/shared/ImageCropUpload';
 import GallerySlider from '@/components/campus/GallerySlider';
 import NoticeBoard from '@/components/campus/NoticeBoard';
+import FabricLibrarySection from '@/components/campus/FabricLibrarySection';
 import OwnershipTransferCard from '@/components/campus/OwnershipTransferCard';
 import { useCampusRealtime } from '@/hooks/useCampusRealtime';
 
@@ -149,98 +150,121 @@ const MyCampusPage = () => {
   }
 
   return (
-    <div className="space-y-6 max-w-2xl">
-      <div className="flex items-center justify-between">
+    <div className="space-y-6 max-w-6xl mx-auto">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-heading font-bold">Campus Onboard</h1>
+          <h1 className="text-xl sm:text-2xl font-heading font-bold">Campus Onboard</h1>
           <p className="text-sm text-muted-foreground mt-1">Manage your campus's public portfolio.</p>
         </div>
         <a
           href={`https://${campus.subdomain_slug}.onlinetextileschool.com`}
           target="_blank" rel="noopener noreferrer"
-          className="flex items-center gap-1.5 text-primary text-sm hover:underline"
+          className="flex items-center gap-1.5 text-primary text-sm hover:underline shrink-0"
         >
           <Globe className="h-4 w-4" /> View live portfolio
         </a>
       </div>
 
-      <Card>
-        <CardHeader><CardTitle className="text-base">Hero & Details</CardTitle></CardHeader>
-        <CardContent className="space-y-3">
-          <div className="space-y-1.5">
-            <Label>Cover Photo</Label>
-            <ImageCropUpload value={form.cover_image_url} onChange={(url) => setForm((p: any) => ({ ...p, cover_image_url: url }))} aspect={3} shape="banner" folder="campus-covers" label="Cover Photo" />
-            <p className="text-xs text-muted-foreground">Wide banner shown at the top of your public portfolio.</p>
-          </div>
-          <div className="space-y-1.5">
-            <Label>Logo</Label>
-            <ImageCropUpload value={form.logo_url} onChange={(url) => setForm((p: any) => ({ ...p, logo_url: url }))} aspect={1} shape="square" folder="campus-logos" label="Logo" />
-          </div>
-          <div className="space-y-1.5"><Label>Campus Name</Label><Input value={form.campus_name} onChange={(e) => setForm((p: any) => ({ ...p, campus_name: e.target.value }))} /></div>
-          <div className="space-y-1.5"><Label>Area</Label><Input value={form.area} onChange={(e) => setForm((p: any) => ({ ...p, area: e.target.value }))} /></div>
-          <div className="space-y-1.5">
-            <Label>Campus Type</Label>
-            <Select value={form.campus_type || ''} onValueChange={(v) => setForm((p: any) => ({ ...p, campus_type: v }))}>
-              <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
-              <SelectContent>{CAMPUS_TYPES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1.5"><Label>Established Year</Label><Input type="number" value={form.established_year} onChange={(e) => setForm((p: any) => ({ ...p, established_year: e.target.value }))} /></div>
-          <div className="space-y-1.5"><Label>Website</Label><Input type="url" value={form.website_url} onChange={(e) => setForm((p: any) => ({ ...p, website_url: e.target.value }))} /></div>
-          <div className="space-y-1.5"><Label>Full Address</Label><Textarea rows={2} value={form.full_address} onChange={(e) => setForm((p: any) => ({ ...p, full_address: e.target.value }))} /></div>
-          <div className="space-y-1.5"><Label>Highlights (comma-separated)</Label><Input value={form.highlights} onChange={(e) => setForm((p: any) => ({ ...p, highlights: e.target.value }))} /></div>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+        <div className="lg:col-span-2 space-y-6">
+          <Card>
+            <CardHeader><CardTitle className="text-base">Hero & Details</CardTitle></CardHeader>
+            <CardContent className="space-y-5">
+              <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-4 items-start">
+                <div className="space-y-1.5">
+                  <Label>Cover Photo</Label>
+                  <ImageCropUpload value={form.cover_image_url} onChange={(url) => setForm((p: any) => ({ ...p, cover_image_url: url }))} aspect={3} shape="banner" folder="campus-covers" label="Cover Photo" />
+                  <p className="text-xs text-muted-foreground">Wide banner shown at the top of your public portfolio.</p>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Logo</Label>
+                  <ImageCropUpload value={form.logo_url} onChange={(url) => setForm((p: any) => ({ ...p, logo_url: url }))} aspect={1} shape="square" folder="campus-logos" label="Logo" previewClassName="w-24 h-24" />
+                </div>
+              </div>
 
-          <div className="border-t pt-3"><Label className="text-sm font-semibold">Principal / Vice Chancellor</Label></div>
-          <ImageCropUpload value={form.principal_photo_url} onChange={(url) => setForm((p: any) => ({ ...p, principal_photo_url: url }))} aspect={1} shape="circle" folder="campus-principal" label="Photo" previewClassName="w-16 h-16" />
-          <div className="space-y-1.5"><Label>Name</Label><Input value={form.principal_name} onChange={(e) => setForm((p: any) => ({ ...p, principal_name: e.target.value }))} /></div>
-          <div className="space-y-1.5"><Label>Designation</Label><Input value={form.principal_designation} onChange={(e) => setForm((p: any) => ({ ...p, principal_designation: e.target.value }))} placeholder="Principal / Vice Chancellor" /></div>
-          <div className="space-y-1.5"><Label>Phone</Label><Input value={form.principal_phone} onChange={(e) => setForm((p: any) => ({ ...p, principal_phone: e.target.value }))} /></div>
-          <div className="space-y-1.5"><Label>Email</Label><Input type="email" value={form.principal_email} onChange={(e) => setForm((p: any) => ({ ...p, principal_email: e.target.value }))} /></div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5"><Label>Campus Name</Label><Input value={form.campus_name} onChange={(e) => setForm((p: any) => ({ ...p, campus_name: e.target.value }))} /></div>
+                <div className="space-y-1.5"><Label>Area</Label><Input value={form.area} onChange={(e) => setForm((p: any) => ({ ...p, area: e.target.value }))} /></div>
+                <div className="space-y-1.5">
+                  <Label>Campus Type</Label>
+                  <Select value={form.campus_type || ''} onValueChange={(v) => setForm((p: any) => ({ ...p, campus_type: v }))}>
+                    <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
+                    <SelectContent>{CAMPUS_TYPES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5"><Label>Established Year</Label><Input type="number" value={form.established_year} onChange={(e) => setForm((p: any) => ({ ...p, established_year: e.target.value }))} /></div>
+                <div className="space-y-1.5"><Label>Website</Label><Input type="url" value={form.website_url} onChange={(e) => setForm((p: any) => ({ ...p, website_url: e.target.value }))} /></div>
+                <div className="space-y-1.5"><Label>Student Count</Label><Input type="number" value={form.student_count} onChange={(e) => setForm((p: any) => ({ ...p, student_count: e.target.value }))} /></div>
+                <div className="space-y-1.5 sm:col-span-2"><Label>Departments (comma-separated)</Label><Input value={form.departments} onChange={(e) => setForm((p: any) => ({ ...p, departments: e.target.value }))} /></div>
+                <div className="space-y-1.5 sm:col-span-2"><Label>Highlights (comma-separated)</Label><Input value={form.highlights} onChange={(e) => setForm((p: any) => ({ ...p, highlights: e.target.value }))} /></div>
+                <div className="space-y-1.5 sm:col-span-2"><Label>Full Address</Label><Textarea rows={2} value={form.full_address} onChange={(e) => setForm((p: any) => ({ ...p, full_address: e.target.value }))} /></div>
+                <div className="space-y-1.5 sm:col-span-2"><Label>Facilities</Label><Textarea rows={3} value={form.facilities} onChange={(e) => setForm((p: any) => ({ ...p, facilities: e.target.value }))} /></div>
+                <div className="space-y-1.5 sm:col-span-2"><Label>Description</Label><Textarea rows={3} value={form.description} onChange={(e) => setForm((p: any) => ({ ...p, description: e.target.value }))} /></div>
+                <div className="space-y-1.5"><Label>Contact Name</Label><Input value={form.contact_name} onChange={(e) => setForm((p: any) => ({ ...p, contact_name: e.target.value }))} /></div>
+                <div className="space-y-1.5"><Label>Contact Email</Label><Input value={form.contact_email} onChange={(e) => setForm((p: any) => ({ ...p, contact_email: e.target.value }))} /></div>
+                <div className="space-y-1.5"><Label>Contact Phone</Label><Input value={form.contact_phone} onChange={(e) => setForm((p: any) => ({ ...p, contact_phone: e.target.value }))} /></div>
+              </div>
+            </CardContent>
+          </Card>
 
-          <div className="space-y-1.5"><Label>Student Count</Label><Input type="number" value={form.student_count} onChange={(e) => setForm((p: any) => ({ ...p, student_count: e.target.value }))} /></div>
-          <div className="space-y-1.5"><Label>Departments (comma-separated)</Label><Input value={form.departments} onChange={(e) => setForm((p: any) => ({ ...p, departments: e.target.value }))} /></div>
-          <div className="space-y-1.5"><Label>Facilities</Label><Textarea rows={3} value={form.facilities} onChange={(e) => setForm((p: any) => ({ ...p, facilities: e.target.value }))} /></div>
-          <div className="space-y-1.5"><Label>Description</Label><Textarea rows={3} value={form.description} onChange={(e) => setForm((p: any) => ({ ...p, description: e.target.value }))} /></div>
-          <div className="space-y-1.5"><Label>Contact Name</Label><Input value={form.contact_name} onChange={(e) => setForm((p: any) => ({ ...p, contact_name: e.target.value }))} /></div>
-          <div className="space-y-1.5"><Label>Contact Email</Label><Input value={form.contact_email} onChange={(e) => setForm((p: any) => ({ ...p, contact_email: e.target.value }))} /></div>
-          <div className="space-y-1.5"><Label>Contact Phone</Label><Input value={form.contact_phone} onChange={(e) => setForm((p: any) => ({ ...p, contact_phone: e.target.value }))} /></div>
-          <Button onClick={save} disabled={saveMutation.isPending} className="w-full">
+          <Card>
+            <CardHeader><CardTitle className="text-base">Principal / Vice Chancellor</CardTitle></CardHeader>
+            <CardContent className="space-y-4">
+              <ImageCropUpload value={form.principal_photo_url} onChange={(url) => setForm((p: any) => ({ ...p, principal_photo_url: url }))} aspect={1} shape="circle" folder="campus-principal" label="Photo" previewClassName="w-20 h-20" />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5"><Label>Name</Label><Input value={form.principal_name} onChange={(e) => setForm((p: any) => ({ ...p, principal_name: e.target.value }))} /></div>
+                <div className="space-y-1.5"><Label>Designation</Label><Input value={form.principal_designation} onChange={(e) => setForm((p: any) => ({ ...p, principal_designation: e.target.value }))} placeholder="Principal / Vice Chancellor" /></div>
+                <div className="space-y-1.5"><Label>Phone</Label><Input value={form.principal_phone} onChange={(e) => setForm((p: any) => ({ ...p, principal_phone: e.target.value }))} /></div>
+                <div className="space-y-1.5"><Label>Email</Label><Input type="email" value={form.principal_email} onChange={(e) => setForm((p: any) => ({ ...p, principal_email: e.target.value }))} /></div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Button onClick={save} disabled={saveMutation.isPending} className="w-full sm:w-auto">
             {saveMutation.isPending && <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />}
             Save Changes
           </Button>
-        </CardContent>
-      </Card>
+        </div>
 
-      <Card>
-        <CardHeader><CardTitle className="text-base flex items-center gap-2"><ImageIcon className="h-4 w-4" /> Gallery</CardTitle></CardHeader>
-        <CardContent className="space-y-3">
-          <p className="text-xs text-muted-foreground">Photos added here (by you or students linked to this campus) show on your public portfolio.</p>
-          <Input type="file" accept="image/*" onChange={handleGalleryUpload} disabled={galleryUploading} className="text-xs" />
-          {galleryUploading && (
-            <div className="space-y-1">
-              <Progress value={galleryProgress} className="h-1.5 max-w-[200px]" />
-              <p className="text-xs text-muted-foreground">Uploading... {galleryProgress}%</p>
-            </div>
-          )}
-          {gallery.length > 0 && (
-            <div className="pt-2">
-              <GallerySlider
-                images={gallery}
-                onDelete={(id) => { if (confirm('Remove this photo?')) deleteGalleryImage.mutate(id); }}
-                deletingId={deleteGalleryImage.isPending ? deleteGalleryImage.variables : null}
-              />
-            </div>
-          )}
-        </CardContent>
-      </Card>
+        <div className="space-y-6">
+          <Card>
+            <CardHeader><CardTitle className="text-base flex items-center gap-2"><ImageIcon className="h-4 w-4" /> Gallery</CardTitle></CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-xs text-muted-foreground">Photos added here (by you or students linked to this campus) show on your public portfolio.</p>
+              <Input type="file" accept="image/*" onChange={handleGalleryUpload} disabled={galleryUploading} className="text-xs" />
+              {galleryUploading && (
+                <div className="space-y-1">
+                  <Progress value={galleryProgress} className="h-1.5 max-w-[200px]" />
+                  <p className="text-xs text-muted-foreground">Uploading... {galleryProgress}%</p>
+                </div>
+              )}
+              {gallery.length > 0 && (
+                <div className="pt-2">
+                  <GallerySlider
+                    images={gallery}
+                    onDelete={(id) => { if (confirm('Remove this photo?')) deleteGalleryImage.mutate(id); }}
+                    deletingId={deleteGalleryImage.isPending ? deleteGalleryImage.variables : null}
+                  />
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
-      <Card>
-        <CardContent className="pt-6">
-          <NoticeBoard campusId={campus.id} mode="manage" />
-        </CardContent>
-      </Card>
+          <Card>
+            <CardContent className="pt-6">
+              <NoticeBoard campusId={campus.id} mode="manage" />
+            </CardContent>
+          </Card>
 
-      <OwnershipTransferCard campus={campus} />
+          <Card>
+            <CardContent className="pt-6">
+              <FabricLibrarySection campusId={campus.id} mode="manage" />
+            </CardContent>
+          </Card>
+
+          <OwnershipTransferCard campus={campus} />
+        </div>
+      </div>
     </div>
   );
 };

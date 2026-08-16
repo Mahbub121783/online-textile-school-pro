@@ -30,6 +30,7 @@ const { checkoutWallet, checkoutFree, checkoutAdminApprove, checkoutAdminReject 
 const { adminWalletAdjust, adminApproveWithdrawal, adminRejectWithdrawal } = require('./walletAdmin');
 const { campusApprove, campusReject, campusProvisionSubdomain, campusUpdate, campusRemoveSubdomain, campusVerifySubdomains, campusTransferLookup, campusTransferApprove } = require('./campusOnboard');
 const { adminListUserAuth } = require('./adminUserDetails');
+const { fabricHangerCreate, fabricHangerUpdate, fabricStockReceive, fabricDistribute, fabricLibraryStart, fabricLibrarySetStatus, fabricLibraryUpdate } = require('./fabricLibrary');
 
 const router = express.Router();
 
@@ -79,6 +80,13 @@ router.post('/campus-verify-subdomains', campusVerifySubdomains);
 router.post('/campus-transfer-lookup', campusTransferLookup);
 router.post('/campus-transfer-approve', campusTransferApprove);
 router.post('/admin-list-user-auth', adminListUserAuth);
+router.post('/fabric-hanger-create', fabricHangerCreate);
+router.post('/fabric-hanger-update', fabricHangerUpdate);
+router.post('/fabric-stock-receive', fabricStockReceive);
+router.post('/fabric-distribute', fabricDistribute);
+router.post('/fabric-library-start', fabricLibraryStart);
+router.post('/fabric-library-set-status', fabricLibrarySetStatus);
+router.post('/fabric-library-update', fabricLibraryUpdate);
 
 // ebook-secure-access: GET for streaming (PDF.js range requests), POST for
 // generate_token -- same path, dispatched by method (matches the original

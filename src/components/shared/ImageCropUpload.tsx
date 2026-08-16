@@ -76,21 +76,37 @@ const ImageCropUpload = ({
     }
   };
 
-  const previewShapeClass = shape === 'circle' ? 'rounded-full' : shape === 'banner' ? 'rounded-xl w-full h-32' : 'rounded-xl w-20 h-20';
+  const isBanner = shape === 'banner';
+  const previewShapeClass = shape === 'circle' ? 'rounded-full' : isBanner ? 'rounded-xl w-full aspect-[3/1]' : 'rounded-xl w-20 h-20';
+
+  const preview = (
+    <div className={cn('relative border-2 border-dashed flex items-center justify-center overflow-hidden bg-muted/30', isBanner ? 'w-full' : 'shrink-0', previewShapeClass, previewClassName)}>
+      {value ? <img src={value} alt={label} className="w-full h-full object-cover" /> : <ImagePlus className="h-6 w-6 text-muted-foreground" />}
+    </div>
+  );
+
+  const trigger = (
+    <>
+      <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={onFileSelected} />
+      <Button type="button" variant="outline" size="sm" onClick={() => inputRef.current?.click()}>
+        <ImagePlus className="h-3.5 w-3.5 mr-1.5" /> {value ? `Change ${label}` : `Upload ${label}`}
+      </Button>
+    </>
+  );
 
   return (
     <div className={className}>
-      <div className="flex items-center gap-4">
-        <div className={cn('border-2 border-dashed flex items-center justify-center overflow-hidden bg-muted/30 shrink-0', previewShapeClass, previewClassName)}>
-          {value ? <img src={value} alt={label} className="w-full h-full object-cover" /> : <ImagePlus className="h-6 w-6 text-muted-foreground" />}
+      {isBanner ? (
+        <div className="space-y-2">
+          {preview}
+          {trigger}
         </div>
-        <div>
-          <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={onFileSelected} />
-          <Button type="button" variant="outline" size="sm" onClick={() => inputRef.current?.click()}>
-            <ImagePlus className="h-3.5 w-3.5 mr-1.5" /> {value ? `Change ${label}` : `Upload ${label}`}
-          </Button>
+      ) : (
+        <div className="flex items-center gap-4">
+          {preview}
+          <div>{trigger}</div>
         </div>
-      </div>
+      )}
 
       <Dialog open={!!pendingSrc} onOpenChange={(o) => !o && !uploading && closeCropDialog()}>
         <DialogContent className="max-w-lg">

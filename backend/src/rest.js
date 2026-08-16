@@ -310,6 +310,11 @@ const RPC_BLOCKLIST = new Set([
   // here too as defense in depth -- every legitimate use case now goes
   // through backend/src/functions/checkoutFinalize.js instead.
   'credit_wallet', 'debit_wallet',
+  // fabric_hanger_adjust_stock: same shape as credit_wallet/debit_wallet --
+  // the SQL function is already service_role-origin-gated (db/56), block it
+  // here too as defense in depth. Only reachable via the fabric-distribute
+  // and fabric-stock-receive backend routes.
+  'fabric_hanger_adjust_stock',
 ]);
 
 // node-postgres serializes a bare JS array as a Postgres array literal

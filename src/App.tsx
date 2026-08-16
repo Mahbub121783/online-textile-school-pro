@@ -83,6 +83,7 @@ const AdminCertificates = lazy(() => import("./pages/admin/AdminCertificates"));
 const AdminSetup = lazy(() => import("./pages/admin/AdminSetup"));
 const AdminOrders = lazy(() => import("./pages/admin/AdminOrders"));
 const AdminCampusOnboard = lazy(() => import("./pages/admin/AdminCampusOnboard"));
+const AdminFabricLibrary = lazy(() => import("./pages/admin/AdminFabricLibrary"));
 const AdminPayment = lazy(() => import("./pages/admin/AdminPayment"));
 const AdminManagement = lazy(() => import("./pages/admin/AdminManagement"));
 const SystemControls = lazy(() => import("./pages/admin/SystemControls"));
@@ -129,6 +130,7 @@ const TermsPage = lazy(() => import("./pages/static/TermsPage"));
 const BecomeInstructor = lazy(() => import("./pages/static/BecomeInstructor"));
 const PublicRegistration = lazy(() => import("./pages/registration/PublicRegistration"));
 const CampusOnboardList = lazy(() => import("./pages/campus/CampusOnboardList"));
+const FabricLibraryHub = lazy(() => import("./pages/FabricLibraryHub"));
 const CampusOnboardRegister = lazy(() => import("./pages/campus/CampusOnboardRegister"));
 const CampusOnboardDetail = lazy(() => import("./pages/campus/CampusOnboardDetail"));
 const AdminRegistrations = lazy(() => import("./pages/admin/AdminRegistrations"));
@@ -373,6 +375,7 @@ const AppRoutes = () => {
             <Route path="payment/:tab" element={<AdminPayment />} />
             <Route path="orders" element={<AdminOrders />} />
             <Route path="campus-onboard" element={<AdminCampusOnboard />} />
+            <Route path="fabric-library" element={<AdminFabricLibrary />} />
             <Route path="ebooks" element={<AdminEbooks />} />
             <Route path="coupons" element={<AdminCoupons />} />
             <Route path="wallets" element={<AdminWallets />} />
@@ -453,6 +456,7 @@ const AppRoutes = () => {
           <Route path="/workshops/:slug" element={<WorkshopDetail />} />
           <Route path="/register" element={<PublicRegistration />} />
           <Route path="/campus-onboard" element={<CampusOnboardList />} />
+          <Route path="/fabric-library" element={<FabricLibraryHub />} />
           <Route path="/campus-onboard/register" element={<CampusOnboardRegister />} />
           <Route path="/campus-onboard/:id" element={<CampusOnboardDetail />} />
           <Route path="/verify-certificate" element={<VerifyCertificate />} />

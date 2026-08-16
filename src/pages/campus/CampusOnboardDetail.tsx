@@ -19,6 +19,7 @@ import NoticeBoard from '@/components/campus/NoticeBoard';
 import CampusLeadershipCard from '@/components/campus/CampusLeadershipCard';
 import CampusInstructorsSection from '@/components/campus/CampusInstructorsSection';
 import CampusStudentsSection from '@/components/campus/CampusStudentsSection';
+import FabricLibrarySection from '@/components/campus/FabricLibrarySection';
 import { useCampusRealtime } from '@/hooks/useCampusRealtime';
 import { MapPin, Users, Building2, Globe, ArrowLeft, CheckCircle2, Image as ImageIcon, CalendarDays, Link as LinkIcon, Sparkles, GraduationCap } from 'lucide-react';
 
@@ -235,12 +236,13 @@ const CampusOnboardDetail = () => {
           )}
 
           <Tabs defaultValue="overview">
-            <TabsList className="grid grid-cols-5 w-full">
+            <TabsList className="grid grid-cols-6 w-full">
               <TabsTrigger value="overview">Overview</TabsTrigger>
               <TabsTrigger value="instructors">Instructors</TabsTrigger>
               <TabsTrigger value="students">Students</TabsTrigger>
               <TabsTrigger value="gallery">Gallery</TabsTrigger>
               <TabsTrigger value="notices">Notices</TabsTrigger>
+              <TabsTrigger value="fabric-library">Fabric Library</TabsTrigger>
             </TabsList>
 
             <TabsContent value="overview" className="space-y-4 pt-4">
@@ -321,6 +323,12 @@ const CampusOnboardDetail = () => {
             <TabsContent value="notices" className="pt-4">
               <Card><CardContent className="pt-6">
                 <NoticeBoard campusId={campus.id} mode="public" />
+              </CardContent></Card>
+            </TabsContent>
+
+            <TabsContent value="fabric-library" className="pt-4">
+              <Card><CardContent className="pt-6">
+                <FabricLibrarySection campusId={campus.id} mode="public" />
               </CardContent></Card>
             </TabsContent>
           </Tabs>
