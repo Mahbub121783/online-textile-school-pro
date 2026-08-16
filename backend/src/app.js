@@ -34,12 +34,23 @@ const ALLOWED_ORIGINS = [
 const CAMPUS_SUBDOMAIN_ORIGIN_RE = /^https:\/\/[a-z0-9-]+\.onlinetextileschool\.com$/;
 
 const app = express();
+// This app always runs behind cPanel/Apache's reverse proxy (Passenger),
+// which sets X-Forwarded-For -- without telling Express to trust it,
+// express-rate-limit can't tell real client IPs apart and silently falls
+// back to keying every single visitor's rate limit off the proxy's own
+// local IP, meaning the entire site's traffic shares ONE limiter bucket
+// (confirmed live: 39 ERR_ERL_UNEXPECTED_X_FORWARDED_FOR warnings in the
+// log). `1` trusts exactly one hop (the local Apache proxy), not an
+// arbitrary chain, so a client can't spoof X-Forwarded-For to fake a
+// different rate-limit identity.
+app.set('trust proxy', 1);
 app.use(cors({
   origin(origin, callback) {
     // Allow no-origin requests (curl, server-to-server) and any allowed origin.
     if (!origin || ALLOWED_ORIGINS.includes(origin) || CAMPUS_SUBDOMAIN_ORIGIN_RE.test(origin)) {
       return callback(null, true);
     }
+    console.warn('[cors] rejected origin:', origin);
     callback(new Error('Not allowed by CORS'));
   },
   credentials: true,

@@ -31,6 +31,11 @@ const NoticeBoard = ({ campusId, mode }: NoticeBoardProps) => {
   const { data: notices = [], isLoading } = useQuery({
     queryKey: ['campus-notices', campusId, mode],
     enabled: !!campusId,
+    // Push (useCampusRealtime) invalidates this instantly on a real change;
+    // this interval is only the fallback for clients where SSE didn't
+    // connect (blocked by a proxy, EventSource unsupported, etc).
+    refetchInterval: 45000,
+    refetchIntervalInBackground: false,
     queryFn: async () => {
       let query = supabase.from('campus_notices').select('*').eq('campus_id', campusId).order('created_at', { ascending: false });
       if (mode === 'public') query = query.eq('is_active', true);

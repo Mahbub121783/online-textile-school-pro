@@ -16,6 +16,7 @@ import ImageCropUpload from '@/components/shared/ImageCropUpload';
 import GallerySlider from '@/components/campus/GallerySlider';
 import NoticeBoard from '@/components/campus/NoticeBoard';
 import OwnershipTransferCard from '@/components/campus/OwnershipTransferCard';
+import { useCampusRealtime } from '@/hooks/useCampusRealtime';
 
 const CAMPUS_TYPES = ['University', 'College', 'Institute', 'Training Center', 'School'];
 
@@ -59,6 +60,8 @@ const MyCampusPage = () => {
   const { data: gallery = [] } = useQuery({
     queryKey: ['campus-gallery', campus?.id],
     enabled: !!campus?.id,
+    refetchInterval: 45000,
+    refetchIntervalInBackground: false,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('campus_gallery_images')
@@ -69,6 +72,8 @@ const MyCampusPage = () => {
       return data || [];
     },
   });
+
+  useCampusRealtime(campus?.id);
 
   const saveMutation = useMutation({
     mutationFn: async (fields: any) => {

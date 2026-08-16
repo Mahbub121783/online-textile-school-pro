@@ -23,6 +23,11 @@ export function useCampusPeople(campusId?: string) {
   return useQuery({
     queryKey: ['campus-people', campusId],
     enabled: !!campusId,
+    // Push (useCampusRealtime) invalidates this instantly on a real change;
+    // this interval is only the fallback for clients where SSE didn't
+    // connect (blocked by a proxy, EventSource unsupported, etc).
+    refetchInterval: 45000,
+    refetchIntervalInBackground: false,
     queryFn: async () => {
       const { data: profiles, error } = await supabase
         .from('user_profiles')

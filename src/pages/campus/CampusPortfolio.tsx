@@ -8,6 +8,7 @@ import NoticeBoard from '@/components/campus/NoticeBoard';
 import CampusLeadershipCard from '@/components/campus/CampusLeadershipCard';
 import CampusInstructorsSection from '@/components/campus/CampusInstructorsSection';
 import CampusStudentsSection from '@/components/campus/CampusStudentsSection';
+import { useCampusRealtime } from '@/hooks/useCampusRealtime';
 import { Building2, MapPin, Users, Mail, Phone, GraduationCap, Image as ImageIcon, CalendarDays, Link as LinkIcon, Sparkles } from 'lucide-react';
 
 interface Props {
@@ -61,6 +62,8 @@ const CampusPortfolio = ({ slug }: Props) => {
       return data || [];
     },
   });
+
+  useCampusRealtime(campus?.id);
 
   if (isLoading) {
     return <div className="min-h-screen flex items-center justify-center text-muted-foreground">Loading...</div>;

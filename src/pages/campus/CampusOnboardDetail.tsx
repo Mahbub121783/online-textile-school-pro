@@ -19,12 +19,14 @@ import NoticeBoard from '@/components/campus/NoticeBoard';
 import CampusLeadershipCard from '@/components/campus/CampusLeadershipCard';
 import CampusInstructorsSection from '@/components/campus/CampusInstructorsSection';
 import CampusStudentsSection from '@/components/campus/CampusStudentsSection';
+import { useCampusRealtime } from '@/hooks/useCampusRealtime';
 import { MapPin, Users, Building2, Globe, ArrowLeft, CheckCircle2, Image as ImageIcon, CalendarDays, Link as LinkIcon, Sparkles, GraduationCap } from 'lucide-react';
 
 const CampusOnboardDetail = () => {
   const { id } = useParams();
   const { user, profile, roles, refreshProfile } = useAuth();
   const isInstructor = roles?.includes('instructor');
+  useCampusRealtime(id);
   const queryClient = useQueryClient();
   const { upload: uploadGalleryFile, uploading: galleryUploading, progress: galleryProgress } = useFileUpload();
 
@@ -66,6 +68,8 @@ const CampusOnboardDetail = () => {
   const { data: gallery = [] } = useQuery({
     queryKey: ['campus-gallery', id],
     enabled: !!id,
+    refetchInterval: 45000,
+    refetchIntervalInBackground: false,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('campus_gallery_images')
