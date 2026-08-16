@@ -15,6 +15,7 @@ import { Building2, Loader2, Globe, Image as ImageIcon } from 'lucide-react';
 import ImageCropUpload from '@/components/shared/ImageCropUpload';
 import GallerySlider from '@/components/campus/GallerySlider';
 import NoticeBoard from '@/components/campus/NoticeBoard';
+import OwnershipTransferCard from '@/components/campus/OwnershipTransferCard';
 
 const CAMPUS_TYPES = ['University', 'College', 'Institute', 'Training Center', 'School'];
 
@@ -46,6 +47,9 @@ const MyCampusPage = () => {
           established_year: data.established_year ?? '', website_url: data.website_url || '',
           full_address: data.full_address || '', campus_type: data.campus_type || '',
           highlights: (data.highlights || []).join(', '),
+          principal_name: data.principal_name || '', principal_designation: data.principal_designation || '',
+          principal_photo_url: data.principal_photo_url || null,
+          principal_phone: data.principal_phone || '', principal_email: data.principal_email || '',
         });
       }
       return data;
@@ -180,6 +184,14 @@ const MyCampusPage = () => {
           <div className="space-y-1.5"><Label>Website</Label><Input type="url" value={form.website_url} onChange={(e) => setForm((p: any) => ({ ...p, website_url: e.target.value }))} /></div>
           <div className="space-y-1.5"><Label>Full Address</Label><Textarea rows={2} value={form.full_address} onChange={(e) => setForm((p: any) => ({ ...p, full_address: e.target.value }))} /></div>
           <div className="space-y-1.5"><Label>Highlights (comma-separated)</Label><Input value={form.highlights} onChange={(e) => setForm((p: any) => ({ ...p, highlights: e.target.value }))} /></div>
+
+          <div className="border-t pt-3"><Label className="text-sm font-semibold">Principal / Vice Chancellor</Label></div>
+          <ImageCropUpload value={form.principal_photo_url} onChange={(url) => setForm((p: any) => ({ ...p, principal_photo_url: url }))} aspect={1} shape="circle" folder="campus-principal" label="Photo" previewClassName="w-16 h-16" />
+          <div className="space-y-1.5"><Label>Name</Label><Input value={form.principal_name} onChange={(e) => setForm((p: any) => ({ ...p, principal_name: e.target.value }))} /></div>
+          <div className="space-y-1.5"><Label>Designation</Label><Input value={form.principal_designation} onChange={(e) => setForm((p: any) => ({ ...p, principal_designation: e.target.value }))} placeholder="Principal / Vice Chancellor" /></div>
+          <div className="space-y-1.5"><Label>Phone</Label><Input value={form.principal_phone} onChange={(e) => setForm((p: any) => ({ ...p, principal_phone: e.target.value }))} /></div>
+          <div className="space-y-1.5"><Label>Email</Label><Input type="email" value={form.principal_email} onChange={(e) => setForm((p: any) => ({ ...p, principal_email: e.target.value }))} /></div>
+
           <div className="space-y-1.5"><Label>Student Count</Label><Input type="number" value={form.student_count} onChange={(e) => setForm((p: any) => ({ ...p, student_count: e.target.value }))} /></div>
           <div className="space-y-1.5"><Label>Departments (comma-separated)</Label><Input value={form.departments} onChange={(e) => setForm((p: any) => ({ ...p, departments: e.target.value }))} /></div>
           <div className="space-y-1.5"><Label>Facilities</Label><Textarea rows={3} value={form.facilities} onChange={(e) => setForm((p: any) => ({ ...p, facilities: e.target.value }))} /></div>
@@ -222,6 +234,8 @@ const MyCampusPage = () => {
           <NoticeBoard campusId={campus.id} mode="manage" />
         </CardContent>
       </Card>
+
+      <OwnershipTransferCard campus={campus} />
     </div>
   );
 };

@@ -155,6 +155,32 @@ const AdminCampusOnboard = () => {
     onError: (e: any) => toast.error(e.message),
   });
 
+  const approveTransferMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.functions.invoke('campus-transfer-approve', { body: { id } });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-campus-onboard'] });
+      toast.success('Ownership transferred');
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const rejectTransferMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('campus_onboard_requests').update({
+        pending_owner_id: null, ownership_transfer_status: null, ownership_transfer_requested_at: null,
+      }).eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-campus-onboard'] });
+      toast.success('Transfer request rejected');
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
   const { data: editGallery = [] } = useQuery({
     queryKey: ['campus-gallery', editTarget?.id],
     enabled: !!editTarget?.id,
@@ -189,6 +215,9 @@ const AdminCampusOnboard = () => {
       established_year: c.established_year ?? '', website_url: c.website_url || '',
       full_address: c.full_address || '', campus_type: c.campus_type || '',
       highlights: (c.highlights || []).join(', '),
+      principal_name: c.principal_name || '', principal_designation: c.principal_designation || '',
+      principal_photo_url: c.principal_photo_url || null,
+      principal_phone: c.principal_phone || '', principal_email: c.principal_email || '',
     });
   };
   const saveEdit = () => {
@@ -317,6 +346,15 @@ const AdminCampusOnboard = () => {
                 {c.is_visible === false && (
                   <Badge variant="outline" className="text-xs">Hidden from public</Badge>
                 )}
+                {c.pending_owner_id && (
+                  <div className="border rounded-lg p-2 bg-amber-50 dark:bg-amber-900/20 flex items-center justify-between gap-2">
+                    <p className="text-xs text-amber-800 dark:text-amber-400">Ownership transfer requested</p>
+                    <div className="flex gap-1">
+                      <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => approveTransferMutation.mutate(c.id)} disabled={approveTransferMutation.isPending}>Approve</Button>
+                      <Button size="sm" variant="ghost" className="h-6 px-2 text-xs text-destructive hover:text-destructive" onClick={() => rejectTransferMutation.mutate(c.id)} disabled={rejectTransferMutation.isPending}>Reject</Button>
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
           ))}
@@ -399,6 +437,14 @@ const AdminCampusOnboard = () => {
               <div className="space-y-1.5"><Label>Website</Label><Input type="url" value={editForm.website_url || ''} onChange={(e) => setEditForm((p: any) => ({ ...p, website_url: e.target.value }))} /></div>
               <div className="space-y-1.5"><Label>Full Address</Label><Textarea rows={2} value={editForm.full_address || ''} onChange={(e) => setEditForm((p: any) => ({ ...p, full_address: e.target.value }))} /></div>
               <div className="space-y-1.5"><Label>Highlights (comma-separated)</Label><Input value={editForm.highlights || ''} onChange={(e) => setEditForm((p: any) => ({ ...p, highlights: e.target.value }))} /></div>
+
+              <div className="border-t pt-3"><Label className="text-sm font-semibold">Principal / Vice Chancellor</Label></div>
+              <ImageCropUpload value={editForm.principal_photo_url} onChange={(url) => setEditForm((p: any) => ({ ...p, principal_photo_url: url }))} aspect={1} shape="circle" folder="campus-principal" label="Photo" previewClassName="w-16 h-16" />
+              <div className="space-y-1.5"><Label>Name</Label><Input value={editForm.principal_name || ''} onChange={(e) => setEditForm((p: any) => ({ ...p, principal_name: e.target.value }))} /></div>
+              <div className="space-y-1.5"><Label>Designation</Label><Input value={editForm.principal_designation || ''} onChange={(e) => setEditForm((p: any) => ({ ...p, principal_designation: e.target.value }))} /></div>
+              <div className="space-y-1.5"><Label>Phone</Label><Input value={editForm.principal_phone || ''} onChange={(e) => setEditForm((p: any) => ({ ...p, principal_phone: e.target.value }))} /></div>
+              <div className="space-y-1.5"><Label>Email</Label><Input type="email" value={editForm.principal_email || ''} onChange={(e) => setEditForm((p: any) => ({ ...p, principal_email: e.target.value }))} /></div>
+
               <div className="space-y-1.5"><Label>Student Count</Label><Input type="number" value={editForm.student_count} onChange={(e) => setEditForm((p: any) => ({ ...p, student_count: e.target.value }))} /></div>
               <div className="space-y-1.5"><Label>Departments (comma-separated)</Label><Input value={editForm.departments || ''} onChange={(e) => setEditForm((p: any) => ({ ...p, departments: e.target.value }))} /></div>
               <div className="space-y-1.5"><Label>Facilities</Label><Textarea rows={3} value={editForm.facilities || ''} onChange={(e) => setEditForm((p: any) => ({ ...p, facilities: e.target.value }))} /></div>

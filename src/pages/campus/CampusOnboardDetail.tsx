@@ -8,6 +8,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import UtilityBar from '@/components/layout/UtilityBar';
 import Header from '@/components/layout/Header';
@@ -15,11 +16,15 @@ import Footer from '@/components/layout/Footer';
 import BottomNav from '@/components/layout/BottomNav';
 import GallerySlider from '@/components/campus/GallerySlider';
 import NoticeBoard from '@/components/campus/NoticeBoard';
-import { MapPin, Users, Building2, Globe, ArrowLeft, CheckCircle2, Image as ImageIcon, CalendarDays, Link as LinkIcon, Sparkles } from 'lucide-react';
+import CampusLeadershipCard from '@/components/campus/CampusLeadershipCard';
+import CampusInstructorsSection from '@/components/campus/CampusInstructorsSection';
+import CampusStudentsSection from '@/components/campus/CampusStudentsSection';
+import { MapPin, Users, Building2, Globe, ArrowLeft, CheckCircle2, Image as ImageIcon, CalendarDays, Link as LinkIcon, Sparkles, GraduationCap } from 'lucide-react';
 
 const CampusOnboardDetail = () => {
   const { id } = useParams();
-  const { user, profile, refreshProfile } = useAuth();
+  const { user, profile, roles, refreshProfile } = useAuth();
+  const isInstructor = roles?.includes('instructor');
   const queryClient = useQueryClient();
   const { upload: uploadGalleryFile, uploading: galleryUploading, progress: galleryProgress } = useFileUpload();
 
@@ -31,7 +36,7 @@ const CampusOnboardDetail = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('campus_onboard_requests')
-        .select('id, campus_name, area, facilities, student_count, description, subdomain_slug, subdomain_provisioned, logo_url, cover_image_url, established_year, website_url, full_address, campus_type, highlights')
+        .select('id, campus_name, area, facilities, student_count, description, subdomain_slug, subdomain_provisioned, logo_url, cover_image_url, established_year, website_url, full_address, campus_type, highlights, principal_name, principal_designation, principal_photo_url, principal_phone, principal_email')
         .eq('id', id!)
         .eq('status', 'approved')
         .maybeSingle();
@@ -197,41 +202,12 @@ const CampusOnboardDetail = () => {
             </CardContent></Card>
           </div>
 
-          {campus.highlights && campus.highlights.length > 0 && (
-            <Card className="mb-4"><CardContent className="pt-6">
-              <h3 className="font-heading font-bold mb-2 flex items-center gap-2"><Sparkles className="h-4 w-4 text-primary" /> Highlights</h3>
-              <div className="flex flex-wrap gap-2">
-                {campus.highlights.map((h: string) => <Badge key={h} variant="outline">{h}</Badge>)}
-              </div>
-            </CardContent></Card>
-          )}
-          {campus.description && (
-            <Card className="mb-4"><CardContent className="pt-6">
-              <h3 className="font-heading font-bold mb-2">About</h3>
-              <p className="text-sm text-foreground/80 whitespace-pre-wrap">{campus.description}</p>
-            </CardContent></Card>
-          )}
-          {campus.facilities && (
-            <Card className="mb-4"><CardContent className="pt-6">
-              <h3 className="font-heading font-bold mb-2">Facilities</h3>
-              <p className="text-sm text-foreground/80">{campus.facilities}</p>
-            </CardContent></Card>
-          )}
-          {(campus.full_address || campus.website_url) && (
-            <Card className="mb-6"><CardContent className="pt-6 space-y-2">
-              <h3 className="font-heading font-bold mb-2">Contact & Location</h3>
-              {campus.full_address && (
-                <p className="flex items-start gap-2 text-sm text-foreground/80"><MapPin className="h-4 w-4 text-primary shrink-0 mt-0.5" /> {campus.full_address}</p>
-              )}
-              {campus.website_url && (
-                <a href={campus.website_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm text-primary hover:underline">
-                  <LinkIcon className="h-4 w-4 shrink-0" /> {campus.website_url}
-                </a>
-              )}
-            </CardContent></Card>
-          )}
-
-          <div className="mb-6"><NoticeBoard campusId={campus.id} mode="public" /></div>
+          <div className="mb-6">
+            <CampusLeadershipCard
+              name={campus.principal_name} designation={campus.principal_designation}
+              photoUrl={campus.principal_photo_url} phone={campus.principal_phone} email={campus.principal_email}
+            />
+          </div>
 
           {user && (
             <Card className="mb-6">
@@ -242,9 +218,11 @@ const CampusOnboardDetail = () => {
                   </p>
                 ) : (
                   <>
-                    <p className="text-sm text-muted-foreground">Studying at {campus.campus_name}? Link your OTS account so you're counted here.</p>
+                    <p className="text-sm text-muted-foreground">
+                      {isInstructor ? `Teaching at ${campus.campus_name}?` : `Studying at ${campus.campus_name}?`} Link your OTS account so you're counted here.
+                    </p>
                     <Button onClick={() => linkMutation.mutate()} disabled={linkMutation.isPending}>
-                      {linkMutation.isPending ? 'Linking...' : "I'm a student here"}
+                      {linkMutation.isPending ? 'Linking...' : isInstructor ? 'I teach here' : "I'm a student here"}
                     </Button>
                   </>
                 )}
@@ -252,30 +230,96 @@ const CampusOnboardDetail = () => {
             </Card>
           )}
 
-          {(gallery.length > 0 || isLinked) && (
-            <Card>
-              <CardContent className="pt-6 space-y-3">
-                <h3 className="font-heading font-bold flex items-center gap-2"><ImageIcon className="h-4 w-4" /> Campus Gallery</h3>
-                {isLinked && (
-                  <div className="space-y-1.5">
-                    <p className="text-xs text-muted-foreground">You're a registered student here — add a photo for the campus's public portfolio.</p>
-                    <Input type="file" accept="image/*" onChange={handleGalleryUpload} disabled={galleryUploading} className="text-xs max-w-xs" />
-                    {galleryUploading && (
-                      <div className="space-y-1 max-w-xs">
-                        <Progress value={galleryProgress} className="h-1.5" />
-                        <p className="text-xs text-muted-foreground">Uploading... {galleryProgress}%</p>
-                      </div>
-                    )}
+          <Tabs defaultValue="overview">
+            <TabsList className="grid grid-cols-5 w-full">
+              <TabsTrigger value="overview">Overview</TabsTrigger>
+              <TabsTrigger value="instructors">Instructors</TabsTrigger>
+              <TabsTrigger value="students">Students</TabsTrigger>
+              <TabsTrigger value="gallery">Gallery</TabsTrigger>
+              <TabsTrigger value="notices">Notices</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="overview" className="space-y-4 pt-4">
+              {campus.highlights && campus.highlights.length > 0 && (
+                <Card><CardContent className="pt-6">
+                  <h3 className="font-heading font-bold mb-2 flex items-center gap-2"><Sparkles className="h-4 w-4 text-primary" /> Highlights</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {campus.highlights.map((h: string) => <Badge key={h} variant="outline">{h}</Badge>)}
                   </div>
-                )}
-                {gallery.length > 0 ? (
-                  <GallerySlider images={gallery} />
-                ) : (
-                  <p className="text-xs text-muted-foreground">No photos yet.</p>
-                )}
-              </CardContent>
-            </Card>
-          )}
+                </CardContent></Card>
+              )}
+              {campus.description && (
+                <Card><CardContent className="pt-6">
+                  <h3 className="font-heading font-bold mb-2">About</h3>
+                  <p className="text-sm text-foreground/80 whitespace-pre-wrap">{campus.description}</p>
+                </CardContent></Card>
+              )}
+              {campus.facilities && (
+                <Card><CardContent className="pt-6">
+                  <h3 className="font-heading font-bold mb-2">Facilities</h3>
+                  <p className="text-sm text-foreground/80">{campus.facilities}</p>
+                </CardContent></Card>
+              )}
+              {(campus.full_address || campus.website_url) && (
+                <Card><CardContent className="pt-6 space-y-2">
+                  <h3 className="font-heading font-bold mb-2">Contact & Location</h3>
+                  {campus.full_address && (
+                    <p className="flex items-start gap-2 text-sm text-foreground/80"><MapPin className="h-4 w-4 text-primary shrink-0 mt-0.5" /> {campus.full_address}</p>
+                  )}
+                  {campus.website_url && (
+                    <a href={campus.website_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm text-primary hover:underline">
+                      <LinkIcon className="h-4 w-4 shrink-0" /> {campus.website_url}
+                    </a>
+                  )}
+                </CardContent></Card>
+              )}
+            </TabsContent>
+
+            <TabsContent value="instructors" className="pt-4">
+              <Card><CardContent className="pt-6">
+                <h3 className="font-heading font-bold mb-4 flex items-center gap-2"><GraduationCap className="h-4 w-4" /> Instructors</h3>
+                <CampusInstructorsSection campusId={campus.id} />
+              </CardContent></Card>
+            </TabsContent>
+
+            <TabsContent value="students" className="pt-4">
+              <Card><CardContent className="pt-6">
+                <h3 className="font-heading font-bold mb-4 flex items-center gap-2"><Users className="h-4 w-4" /> Students</h3>
+                <CampusStudentsSection campusId={campus.id} />
+              </CardContent></Card>
+            </TabsContent>
+
+            <TabsContent value="gallery" className="pt-4">
+              <Card>
+                <CardContent className="pt-6 space-y-3">
+                  <h3 className="font-heading font-bold flex items-center gap-2"><ImageIcon className="h-4 w-4" /> Campus Gallery</h3>
+                  {isLinked && (
+                    <div className="space-y-1.5">
+                      <p className="text-xs text-muted-foreground">You're a registered {isInstructor ? 'instructor' : 'student'} here — add a photo for the campus's public portfolio.</p>
+                      <Input type="file" accept="image/*" onChange={handleGalleryUpload} disabled={galleryUploading} className="text-xs max-w-xs" />
+                      {galleryUploading && (
+                        <div className="space-y-1 max-w-xs">
+                          <Progress value={galleryProgress} className="h-1.5" />
+                          <p className="text-xs text-muted-foreground">Uploading... {galleryProgress}%</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {gallery.length > 0 ? (
+                    <GallerySlider images={gallery} />
+                  ) : (
+                    <p className="text-xs text-muted-foreground">No photos yet.</p>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="notices" className="pt-4">
+              <Card><CardContent className="pt-6">
+                <NoticeBoard campusId={campus.id} mode="public" />
+              </CardContent></Card>
+            </TabsContent>
+          </Tabs>
         </div>
       </main>
       <Footer /><BottomNav />

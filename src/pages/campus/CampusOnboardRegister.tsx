@@ -76,7 +76,9 @@ const CampusOnboardRegister = () => {
     contactName: profile?.full_name || '', contactEmail: user?.email || '', contactPhone: profile?.phone || '',
     description: '', subdomainSlug: '',
     establishedYear: '', websiteUrl: '', fullAddress: '', campusType: '', highlights: '',
+    principalName: '', principalDesignation: '', principalPhone: '', principalEmail: '',
   });
+  const [principalPhotoUrl, setPrincipalPhotoUrl] = useState<string | null>(null);
 
   // Auto-suggest a subdomain slug from the campus name, but only until the
   // registrant actually edits the slug field themselves.
@@ -92,6 +94,10 @@ const CampusOnboardRegister = () => {
     e.preventDefault();
     if (!form.campusName.trim() || !form.area.trim() || !form.contactName.trim() || !form.contactEmail.trim()) {
       toast.error('Please fill in all required fields');
+      return;
+    }
+    if (!logoUrl) {
+      toast.error('A campus logo is required');
       return;
     }
     const slug = slugify(form.subdomainSlug || form.campusName);
@@ -128,9 +134,18 @@ const CampusOnboardRegister = () => {
         full_address: form.fullAddress || null,
         campus_type: form.campusType || null,
         highlights,
+        principal_name: form.principalName || null,
+        principal_designation: form.principalDesignation || null,
+        principal_photo_url: principalPhotoUrl,
+        principal_phone: form.principalPhone || null,
+        principal_email: form.principalEmail || null,
       });
       if (error) {
-        if (String(error.message).toLowerCase().includes('unique')) {
+        const msg = String(error.message).toLowerCase();
+        if (msg.includes('unique_active_name')) {
+          throw new Error('A campus with this name is already registered or pending review.');
+        }
+        if (msg.includes('unique')) {
           throw new Error('That subdomain name is already taken. Please choose another.');
         }
         throw error;
@@ -219,7 +234,7 @@ const CampusOnboardRegister = () => {
         <div className="container py-8 max-w-2xl">
           <form onSubmit={handleSubmit} className="bg-card border rounded-xl p-6 space-y-5">
             <div className="space-y-2">
-              <Label>Campus Logo</Label>
+              <Label>Campus Logo *</Label>
               <ImageCropUpload value={logoUrl} onChange={setLogoUrl} aspect={1} shape="square" folder="campus-logos" label="Logo" />
             </div>
             <div className="space-y-2">
@@ -281,6 +296,29 @@ const CampusOnboardRegister = () => {
               <div className="space-y-2 sm:col-span-2">
                 <Label>Highlights</Label>
                 <Input value={form.highlights} onChange={(e) => update('highlights', e.target.value)} placeholder="NAAC A+ Accredited, 100% Placement, Est. Alumni Network (comma-separated)" />
+              </div>
+              <div className="space-y-2 sm:col-span-2 border-t pt-4">
+                <Label className="text-sm font-semibold">Principal / Vice Chancellor</Label>
+                <p className="text-xs text-muted-foreground -mt-1">Optional here — can also be added later from your campus dashboard.</p>
+              </div>
+              <div className="space-y-2 sm:col-span-2">
+                <ImageCropUpload value={principalPhotoUrl} onChange={setPrincipalPhotoUrl} aspect={1} shape="circle" folder="campus-principal" label="Photo" previewClassName="w-16 h-16" />
+              </div>
+              <div className="space-y-2">
+                <Label>Name</Label>
+                <Input value={form.principalName} onChange={(e) => update('principalName', e.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <Label>Designation</Label>
+                <Input value={form.principalDesignation} onChange={(e) => update('principalDesignation', e.target.value)} placeholder="Principal / Vice Chancellor" />
+              </div>
+              <div className="space-y-2">
+                <Label>Phone</Label>
+                <Input value={form.principalPhone} onChange={(e) => update('principalPhone', e.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <Label>Email</Label>
+                <Input type="email" value={form.principalEmail} onChange={(e) => update('principalEmail', e.target.value)} />
               </div>
               <div className="space-y-2 sm:col-span-2">
                 <Label>Facilities</Label>

@@ -198,6 +198,7 @@ const EDITABLE_FIELDS = new Set([
   'campus_name', 'area', 'facilities', 'description', 'student_count',
   'departments', 'logo_url', 'cover_image_url', 'contact_name', 'contact_email', 'contact_phone',
   'established_year', 'website_url', 'full_address', 'campus_type', 'highlights',
+  'principal_name', 'principal_designation', 'principal_photo_url', 'principal_phone', 'principal_email',
 ]);
 async function campusUpdate(req, res) {
   const userId = requireAuth(req);
@@ -290,4 +291,67 @@ async function campusVerifySubdomains(req, res) {
   res.json({ success: true, results });
 }
 
-module.exports = { campusApprove, campusReject, campusProvisionSubdomain, campusUpdate, campusRemoveSubdomain, campusVerifySubdomains };
+// POST /functions/v1/campus-transfer-lookup { campus_id, email }
+// The campus owner searches for the user they want to hand ownership to.
+// user_profiles has no email column (email lives on auth.users), and a
+// plain user can't query auth.users directly, so this is a narrow,
+// scoped-to-your-own-campus lookup rather than opening auth.users generally.
+async function campusTransferLookup(req, res) {
+  const userId = requireAuth(req);
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+  const { campus_id, email } = req.body || {};
+  if (!campus_id || !email) return res.status(400).json({ error: 'campus_id and email required' });
+
+  const campusRes = await serviceQuery('SELECT submitted_by FROM public.campus_onboard_requests WHERE id = $1', [campus_id]);
+  const campus = campusRes.rows[0];
+  if (!campus) return res.status(404).json({ error: 'Campus not found' });
+  if (campus.submitted_by !== userId && !(await isAdmin(userId))) return res.status(403).json({ error: 'Only the current owner or an admin can look up a transfer target' });
+
+  const r = await serviceQuery(
+    `SELECT u.id, p.full_name, p.avatar_url FROM auth.users u
+     JOIN public.user_profiles p ON p.id = u.id
+     WHERE lower(u.email) = lower($1)`,
+    [String(email).trim()]
+  );
+  const target = r.rows[0];
+  if (!target) return res.status(404).json({ error: 'No account found with that email' });
+  if (target.id === campus.submitted_by) return res.status(400).json({ error: 'That user already owns this campus' });
+  res.json({ id: target.id, full_name: target.full_name, avatar_url: target.avatar_url });
+}
+
+// POST /functions/v1/campus-transfer-approve { id }
+// Admin-only: finalizes a pending ownership transfer by actually
+// reassigning submitted_by. Regular owners can never do this directly --
+// campus_onboard_requests' RLS policy only lets them update a row while
+// submitted_by keeps equaling their own uid, so this has to run as
+// service_role via a dedicated, admin-gated endpoint.
+async function campusTransferApprove(req, res) {
+  const adminId = requireAuth(req);
+  if (!adminId) return res.status(401).json({ error: 'Unauthorized' });
+  if (!(await isAdmin(adminId))) return res.status(403).json({ error: 'Admin only' });
+  const { id } = req.body || {};
+  if (!id) return res.status(400).json({ error: 'id required' });
+
+  const r = await serviceQuery('SELECT * FROM public.campus_onboard_requests WHERE id = $1', [id]);
+  const campus = r.rows[0];
+  if (!campus) return res.status(404).json({ error: 'Campus request not found' });
+  if (!campus.pending_owner_id) return res.status(400).json({ error: 'No pending ownership transfer for this campus' });
+
+  await serviceQuery(
+    `UPDATE public.campus_onboard_requests
+     SET submitted_by = pending_owner_id, pending_owner_id = NULL, ownership_transfer_status = NULL, ownership_transfer_note = NULL, ownership_transfer_requested_at = NULL
+     WHERE id = $1`,
+    [id]
+  );
+  await serviceQuery(
+    `INSERT INTO public.notifications (user_id, type, title, message, link)
+     VALUES ($1, 'campus_ownership_transferred', '🏫 You Now Own This Campus', $2, '/dashboard/campus')`,
+    [campus.pending_owner_id, `Ownership of ${campus.campus_name} has been transferred to you.`]
+  ).catch(() => {});
+  res.json({ success: true });
+}
+
+module.exports = {
+  campusApprove, campusReject, campusProvisionSubdomain, campusUpdate, campusRemoveSubdomain, campusVerifySubdomains,
+  campusTransferLookup, campusTransferApprove,
+};

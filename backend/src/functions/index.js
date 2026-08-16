@@ -28,7 +28,7 @@ const { startQuizAttempt } = require('./startQuizAttempt');
 const { issueCertificate } = require('./issueCertificate');
 const { checkoutWallet, checkoutFree, checkoutAdminApprove, checkoutAdminReject } = require('./checkoutFinalize');
 const { adminWalletAdjust, adminApproveWithdrawal, adminRejectWithdrawal } = require('./walletAdmin');
-const { campusApprove, campusReject, campusProvisionSubdomain, campusUpdate, campusRemoveSubdomain, campusVerifySubdomains } = require('./campusOnboard');
+const { campusApprove, campusReject, campusProvisionSubdomain, campusUpdate, campusRemoveSubdomain, campusVerifySubdomains, campusTransferLookup, campusTransferApprove } = require('./campusOnboard');
 const { adminListUserAuth } = require('./adminUserDetails');
 
 const router = express.Router();
@@ -76,6 +76,8 @@ router.post('/campus-provision-subdomain', campusProvisionSubdomain);
 router.post('/campus-update', campusUpdate);
 router.post('/campus-remove-subdomain', campusRemoveSubdomain);
 router.post('/campus-verify-subdomains', campusVerifySubdomains);
+router.post('/campus-transfer-lookup', campusTransferLookup);
+router.post('/campus-transfer-approve', campusTransferApprove);
 router.post('/admin-list-user-auth', adminListUserAuth);
 
 // ebook-secure-access: GET for streaming (PDF.js range requests), POST for
