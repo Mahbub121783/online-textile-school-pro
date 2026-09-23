@@ -11,6 +11,7 @@ const FeaturedCourses = lazy(() => import('@/components/features/home/FeaturedCo
 const EbookShowcase = lazy(() => import('@/components/features/home/EbookShowcase'));
 const InstructorSpotlight = lazy(() => import('@/components/features/home/InstructorSpotlight'));
 const TestimonialsSection = lazy(() => import('@/components/features/home/TestimonialsSection'));
+const VerifyStudentCTA = lazy(() => import('@/components/features/home/VerifyStudentCTA'));
 const FeaturedWorkshops = lazy(() => import('@/components/features/home/FeaturedWorkshops'));
 const UpcomingEvents = lazy(() => import('@/components/features/home/UpcomingEvents'));
 const LearningPathsPreview = lazy(() => import('@/components/features/home/LearningPathsPreview'));
@@ -77,6 +78,7 @@ const Index = () => {
         <LazySection><ClassVideosShowcase /></LazySection>
         <LazySection><InstructorSpotlight /></LazySection>
         <LazySection><TestimonialsSection /></LazySection>
+        <LazySection><VerifyStudentCTA /></LazySection>
         <LazySection><FeaturedWorkshops /></LazySection>
         <LazySection><SponsorsSection /></LazySection>
       </main>

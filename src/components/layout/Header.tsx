@@ -181,6 +181,9 @@ const Header = () => {
 
           {/* Right nav */}
           <nav className="hidden lg:flex items-center gap-1 shrink-0">
+            <Link to="/verify-student" className="px-3 py-2 text-sm font-medium text-foreground hover:text-primary transition-colors whitespace-nowrap">
+              Verify Student
+            </Link>
             <Link to="/become-instructor" className="px-3 py-2 text-sm font-medium text-foreground hover:text-primary transition-colors whitespace-nowrap">
               Become Instructor
             </Link>
@@ -359,6 +362,7 @@ const Header = () => {
               { label: 'Class Videos', href: '/class-videos' },
               { label: '🧠 Practice Arena', href: '/practice' },
               { label: 'Campus Onboard', href: '/campus-onboard' },
+              { label: 'Verify Student', href: '/verify-student' },
               { label: t('nav.blog'), href: '/blog' },
               { label: t('nav.forum'), href: '/forum' },
               { label: t('nav.about'), href: '/about' },

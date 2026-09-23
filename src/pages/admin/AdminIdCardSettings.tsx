@@ -28,6 +28,7 @@ export default function AdminIdCardSettings() {
     authority_position: '',
     signature_url: '',
     logo_url: '',
+    seal_url: '',
     card_bg_color: '#1a365d',
   });
 
@@ -40,6 +41,7 @@ export default function AdminIdCardSettings() {
         authority_position: settings.authority_position || '',
         signature_url: settings.signature_url || '',
         logo_url: settings.logo_url || '',
+        seal_url: (settings as any).seal_url || '',
         card_bg_color: settings.card_bg_color || '#1a365d',
       });
     }
@@ -61,7 +63,7 @@ export default function AdminIdCardSettings() {
     onError: (e: any) => toast.error(e.message),
   });
 
-  const handleImageUpload = async (field: 'logo_url' | 'signature_url', file: File) => {
+  const handleImageUpload = async (field: 'logo_url' | 'signature_url' | 'seal_url', file: File) => {
     const result = await upload(file);
     if (result?.url) {
       setForm(f => ({ ...f, [field]: result.url }));
@@ -129,6 +131,17 @@ export default function AdminIdCardSettings() {
                 <label className="cursor-pointer">
                   <Button variant="outline" size="sm" className="gap-1" asChild><span><Upload className="h-3.5 w-3.5" /> Upload Signature</span></Button>
                   <input type="file" accept="image/*" className="hidden" onChange={e => e.target.files?.[0] && handleImageUpload('signature_url', e.target.files[0])} />
+                </label>
+              </div>
+            </div>
+            <div>
+              <Label>Official Seal / Stamp</Label>
+              <p className="text-xs text-muted-foreground mb-1.5">Round institutional seal, used on enrollment letters (not the ID card). PNG with transparent background recommended.</p>
+              <div className="flex items-center gap-3">
+                {form.seal_url && <img src={form.seal_url} className="h-14 w-14 object-contain border rounded" alt="Seal" />}
+                <label className="cursor-pointer">
+                  <Button variant="outline" size="sm" className="gap-1" asChild><span><Upload className="h-3.5 w-3.5" /> Upload Seal</span></Button>
+                  <input type="file" accept="image/*" className="hidden" onChange={e => e.target.files?.[0] && handleImageUpload('seal_url', e.target.files[0])} />
                 </label>
               </div>
             </div>

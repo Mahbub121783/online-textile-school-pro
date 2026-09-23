@@ -5,11 +5,14 @@ import otsLogoUrl from '@/assets/OTS_LOGO.png';
 export interface IdCardData {
   studentName: string;
   rollId: string;
+  department: string;
+  academicYear: string;
   bloodGroup: string;
   dateOfBirth: string;
   address: string;
   photoUrl: string | null;
   cardNumber: string;
+  issuedOn: string;
   validUntil: string;
 }
 
@@ -203,7 +206,7 @@ export async function renderIdCard(
   const fieldX = photoX + photoW + 55;
   const labelW = 200;
   const valueX = fieldX + labelW;
-  const rowH = 50;
+  const rowH = 37;
   const startY = photoY;
   const maxValW = CARD_W - valueX - 40;
 
@@ -211,6 +214,8 @@ export async function renderIdCard(
   const fields = [
     { label: 'NAME', value: data.studentName },
     { label: 'ROLL', value: data.rollId },
+    { label: 'DEPARTMENT', value: data.department || '—' },
+    { label: 'ACADEMIC YEAR', value: data.academicYear || '—' },
     { label: 'BLOOD GROUP', value: data.bloodGroup || '—' },
     { label: 'DATE OF BIRTH', value: data.dateOfBirth || '—' },
     { label: 'ADDRESS', value: data.address || '—' },
@@ -219,27 +224,28 @@ export async function renderIdCard(
   fields.forEach((f, i) => {
     const y = startY + i * rowH;
 
-    // Label — 20px bold slate
-    ctx.font = 'bold 20px "Segoe UI", Arial, sans-serif';
+    // Label — 17px bold slate
+    ctx.font = 'bold 17px "Segoe UI", Arial, sans-serif';
     ctx.fillStyle = '#64748b';
-    ctx.fillText(f.label + ' :', fieldX, y + 22);
+    ctx.fillText(f.label + ' :', fieldX, y + 18);
 
-    // Value — 24px bold dark
-    ctx.font = 'bold 24px "Segoe UI", Arial, sans-serif';
+    // Value — 20px bold dark
+    ctx.font = 'bold 20px "Segoe UI", Arial, sans-serif';
     ctx.fillStyle = '#1e293b';
-    ctx.fillText(truncate(ctx, f.value, maxValW), valueX, y + 22);
+    ctx.fillText(truncate(ctx, f.value, maxValW), valueX, y + 18);
   });
 
   // ══════════════════════════════════════════
   // FOOTER — Validity + Signature (between body and barcode bar)
   // ══════════════════════════════════════════
 
-  // Valid Until — 15px below photo bottom, left-aligned under photo
+  // Issued / Valid Until — stacked, 15px below photo bottom, left-aligned under photo
   const validY = photoY + photoH + 15;
-  ctx.font = 'bold 28px "Segoe UI", Arial, sans-serif';
+  ctx.font = 'bold 21px "Segoe UI", Arial, sans-serif';
   ctx.fillStyle = primary;
   ctx.textAlign = 'left';
-  ctx.fillText(`Valid Until: ${data.validUntil}`, photoX, validY + 22);
+  ctx.fillText(`Issued: ${data.issuedOn}`, photoX, validY + 18);
+  ctx.fillText(`Valid Until: ${data.validUntil}`, photoX, validY + 44);
 
   // Signature — aspect-ratio aware fit, sits ABOVE the line
   const sigCenterX = CARD_W - 170;

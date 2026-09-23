@@ -72,14 +72,20 @@ export default function StudentIdCard({ userId }: Props) {
   });
 
   const cardData: IdCardData | null = targetProfile && idCard ? {
-    studentName: targetProfile.full_name || 'Student',
-    rollId: targetProfile.roll_id || '—',
+    studentName: targetProfile.full_name?.trim() || 'Student',
+    rollId: targetProfile.roll_id?.trim() || '—',
+    department: (targetProfile as any).department?.trim() || (targetProfile as any).campus?.trim() || '—',
+    academicYear: (() => {
+      const y = new Date(idCard.valid_from).getFullYear();
+      return `${y}–${y + 1}`;
+    })(),
     bloodGroup: targetProfile.blood_group || '—',
     dateOfBirth: targetProfile.date_of_birth ? format(new Date(targetProfile.date_of_birth), 'dd MMM yyyy') : '—',
     address: [targetProfile.upazila, targetProfile.district].filter(Boolean).join(', ') || '—',
     photoUrl: targetProfile.avatar_url || null,
     cardNumber: idCard.card_number,
-    validUntil: format(new Date(idCard.valid_until), 'MMMM yyyy'),
+    issuedOn: format(new Date(idCard.created_at || idCard.valid_from), 'dd MMM yyyy'),
+    validUntil: format(new Date(idCard.valid_until), 'dd MMM yyyy'),
   } : null;
 
   useEffect(() => {
