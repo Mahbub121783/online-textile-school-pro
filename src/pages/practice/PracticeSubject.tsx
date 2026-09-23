@@ -51,18 +51,21 @@ const PracticeSubject = () => {
     queryKey: ['qb-subject-counts', subject?.id, selectedTopic],
     enabled: !!subject?.id,
     staleTime: 30 * 60 * 1000,
-    retry: 0,
+    retry: 2,
     refetchOnMount: false,
     refetchOnWindowFocus: false,
     queryFn: async () => {
       // 3 counts via the safe RPC (qb_questions itself is staff-only now --
-      // see db/58) instead of pulling every question row.
+      // see db/58) instead of pulling every question row. Uses allSettled
+      // (not all) so one transient RPC failure doesn't zero out -- and
+      // falsely lock -- all three difficulties at once.
       const countFor = (difficulty: 'basic' | 'intermediate' | 'advanced') =>
         supabase.rpc('qb_count_exam_questions', { _subject_id: subject!.id, _difficulty: difficulty, _topic_id: selectedTopic || null });
-      const [{ data: b }, { data: i }, { data: a }] = await Promise.all([
+      const [b, i, a] = await Promise.allSettled([
         countFor('basic'), countFor('intermediate'), countFor('advanced'),
       ]);
-      return { basic: b ?? 0, intermediate: i ?? 0, advanced: a ?? 0 };
+      const val = (r: typeof b) => (r.status === 'fulfilled' ? r.value.data ?? 0 : 0);
+      return { basic: val(b), intermediate: val(i), advanced: val(a) };
     },
   });
 
