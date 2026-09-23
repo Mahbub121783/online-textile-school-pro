@@ -26,3 +26,6 @@ backend/.env
 *.njsproj
 *.sln
 *.sw?
+
+# Local scratch scripts (SSH/psql helpers, not part of the app)
+.scratch/
