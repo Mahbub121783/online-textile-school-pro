@@ -88,6 +88,7 @@ const WalletPage = () => {
         payment_method: topupMethod,
         transaction_id: topupTxId.trim(),
         account_number: sendMoneyNumber || '',
+        status: 'pending',
       });
       if (error) throw error;
 

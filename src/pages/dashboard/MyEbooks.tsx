@@ -39,10 +39,11 @@ const MyEbooks = () => {
       if (!orderItems?.length) return [];
 
       const ebookIds = [...new Set(orderItems.map((oi: any) => oi.item_id))];
-      const { data: ebooks } = await supabase
+      const { data: ebooks, error: ebooksError } = await supabase
         .from('ebooks')
         .select('id, title, slug, author, cover_url, page_count')
         .in('id', ebookIds);
+      if (ebooksError) throw ebooksError;
       return ebooks ?? [];
     },
   });

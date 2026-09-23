@@ -27,7 +27,7 @@ export default function CategoriesTab() {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Category | null>(null);
-  const [form, setForm] = useState({ name: '', slug: '', icon_url: '', sort_order: 0, parent_id: '' as string });
+  const [form, setForm] = useState({ name: '', slug: '', icon_url: '', sort_order: 0 as number | '', parent_id: '' as string });
 
   const { data: cats, isLoading } = useQuery({
     queryKey: ['admin-categories'],
@@ -46,7 +46,7 @@ export default function CategoriesTab() {
         name: form.name,
         slug: form.slug || slugify(form.name),
         icon_url: form.icon_url || null,
-        sort_order: form.sort_order,
+        sort_order: Number(form.sort_order) || 0,
         parent_id: form.parent_id ? Number(form.parent_id) : null,
       };
       if (editing) {
@@ -152,7 +152,7 @@ export default function CategoriesTab() {
                 </SelectContent>
               </Select>
             </div>
-            <div><Label>Sort order</Label><Input type="number" value={form.sort_order} onChange={(e) => setForm({ ...form, sort_order: parseInt(e.target.value) || 0 })} /></div>
+            <div><Label>Sort order</Label><Input type="number" value={form.sort_order} onChange={(e) => { const v = e.target.value; setForm({ ...form, sort_order: v === '' ? '' : parseInt(v) }); }} /></div>
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>

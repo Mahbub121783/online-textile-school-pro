@@ -60,6 +60,8 @@ const AdminCoupons = () => {
   const saveMutation = useMutation({
     mutationFn: async (coupon: any) => {
       const { id, created_at, used_count, ...rest } = coupon;
+      rest.discount_value = Number(rest.discount_value) || 0;
+      rest.min_order_amount = Number(rest.min_order_amount) || 0;
       if (!rest.valid_until) rest.valid_until = null;
       if (!rest.max_discount_amount) rest.max_discount_amount = null;
       if (!rest.usage_limit) rest.usage_limit = null;
@@ -81,7 +83,11 @@ const AdminCoupons = () => {
       setDialogOpen(false); setEditCoupon(null);
       toast.success('Coupon saved');
     },
-    onError: (e: any) => toast.error(e.message?.includes('duplicate') ? 'Code already exists' : 'Failed to save'),
+    onError: (e: any) => {
+      const msg = e?.message || e?.details || '';
+      if (msg.includes('duplicate')) toast.error('Code already exists');
+      else toast.error(msg ? `Failed to save: ${msg}` : 'Failed to save');
+    },
   });
 
   const deleteMutation = useMutation({
@@ -201,10 +207,10 @@ const AdminCoupons = () => {
                     </SelectContent>
                   </Select>
                 </div>
-                <div><Label>Value</Label><Input type="number" value={editCoupon.discount_value} onChange={(e) => setEditCoupon({ ...editCoupon, discount_value: parseFloat(e.target.value) || 0 })} /></div>
+                <div><Label>Value</Label><Input type="number" value={editCoupon.discount_value} onChange={(e) => { const v = e.target.value; setEditCoupon({ ...editCoupon, discount_value: v === '' ? '' : parseFloat(v) }); }} /></div>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <div><Label>Min Order (৳)</Label><Input type="number" value={editCoupon.min_order_amount ?? 0} onChange={(e) => setEditCoupon({ ...editCoupon, min_order_amount: parseFloat(e.target.value) || 0 })} /></div>
+                <div><Label>Min Order (৳)</Label><Input type="number" value={editCoupon.min_order_amount ?? ''} onChange={(e) => { const v = e.target.value; setEditCoupon({ ...editCoupon, min_order_amount: v === '' ? '' : parseFloat(v) }); }} /></div>
                 <div><Label>Max Discount (৳)</Label><Input type="number" value={editCoupon.max_discount_amount ?? ''} onChange={(e) => setEditCoupon({ ...editCoupon, max_discount_amount: e.target.value ? parseFloat(e.target.value) : null })} placeholder="No limit" /></div>
               </div>
               <div className="grid grid-cols-2 gap-3">

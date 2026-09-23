@@ -20,7 +20,7 @@ export default function AdminClassVideoCategories() {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<VideoCategory | null>(null);
-  const [form, setForm] = useState({ name: '', slug: '', description: '', icon: '', cover_url: '', sort_order: 0, is_active: true });
+  const [form, setForm] = useState({ name: '', slug: '', description: '', icon: '', cover_url: '', sort_order: 0 as number | '', is_active: true });
 
   const { data: cats, isLoading } = useQuery({
     queryKey: ['admin-video-categories'],
@@ -33,7 +33,7 @@ export default function AdminClassVideoCategories() {
 
   const save = useMutation({
     mutationFn: async () => {
-      const payload = { ...form, slug: form.slug || slugify(form.name) };
+      const payload = { ...form, slug: form.slug || slugify(form.name), sort_order: Number(form.sort_order) || 0 };
       if (editing) {
         const { error } = await supabase.from('video_categories').update(payload).eq('id', editing.id);
         if (error) throw error;
@@ -124,7 +124,7 @@ export default function AdminClassVideoCategories() {
             <div><Label>Icon (emoji)</Label><Input value={form.icon} onChange={(e) => setForm({ ...form, icon: e.target.value })} placeholder="🧶" /></div>
             <div><Label>Description</Label><Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={2} /></div>
             <div><Label>Cover image URL</Label><Input value={form.cover_url} onChange={(e) => setForm({ ...form, cover_url: e.target.value })} /></div>
-            <div><Label>Sort order</Label><Input type="number" value={form.sort_order} onChange={(e) => setForm({ ...form, sort_order: parseInt(e.target.value) || 0 })} /></div>
+            <div><Label>Sort order</Label><Input type="number" value={form.sort_order} onChange={(e) => { const v = e.target.value; setForm({ ...form, sort_order: v === '' ? '' : parseInt(v) }); }} /></div>
             <div className="flex items-center gap-2"><Switch checked={form.is_active} onCheckedChange={(v) => setForm({ ...form, is_active: v })} /><Label>Active</Label></div>
           </div>
           <DialogFooter>

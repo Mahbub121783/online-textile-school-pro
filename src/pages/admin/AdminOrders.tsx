@@ -112,18 +112,12 @@ const AdminOrders = () => {
       // by RLS the way the old direct client calls here silently were
       // (referral_rewards UPDATE and ebook_access_tokens INSERT both
       // required service_role and had no admin branch until this fix).
+      // checkout-admin-approve's finalizeOrder() now inserts the
+      // notification row itself (see backend/src/functions/checkoutFinalize.js)
+      // -- it fans out to email + push automatically (db/59 + notify.js), so
+      // this used to also insert its own duplicate notification/email here.
       const { error } = await supabase.functions.invoke('checkout-admin-approve', { body: { orderId } });
       if (error) throw error;
-
-      // Send approval notification + email
-      const { createNotificationWithEmail, NOTIFICATION_TYPES } = await import('@/lib/notifications');
-      await createNotificationWithEmail({
-        userId: order.user_id,
-        type: NOTIFICATION_TYPES.ORDER_APPROVED,
-        title: 'Order Approved ✅',
-        message: `Your order #${orderId.slice(0, 8)} has been approved. Your items are now accessible!`,
-        link: '/dashboard/orders',
-      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-orders'] });
@@ -138,17 +132,11 @@ const AdminOrders = () => {
       const order = orders.find((o: any) => o.id === orderId);
       if (!order) throw new Error('Order not found');
 
+      // checkout-admin-reject now always inserts the notification row itself
+      // (see checkoutFinalize.js) and it auto-fans-out to email + push --
+      // this used to also insert its own duplicate notification/email here.
       const { error } = await supabase.functions.invoke('checkout-admin-reject', { body: { orderId, reason } });
       if (error) throw error;
-
-      const { createNotificationWithEmail, NOTIFICATION_TYPES } = await import('@/lib/notifications');
-      await createNotificationWithEmail({
-        userId: order.user_id,
-        type: NOTIFICATION_TYPES.ORDER_REJECTED,
-        title: 'Order Rejected ❌',
-        message: `Your order #${orderId.slice(0, 8)} was rejected. Reason: ${reason || 'Not specified'}`,
-        link: '/dashboard/orders',
-      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-orders'] });

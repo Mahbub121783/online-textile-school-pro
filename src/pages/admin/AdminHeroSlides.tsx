@@ -218,6 +218,7 @@ const AdminHeroSlides = () => {
       if (rest.title_color === '') rest.title_color = null;
       if (rest.subtitle_color === '') rest.subtitle_color = null;
       if (rest.countdown_target === '') rest.countdown_target = null;
+      rest.sort_order = Number(rest.sort_order) || 0;
       if (id) {
         const { error } = await supabase.from('hero_slides').update(rest).eq('id', id);
         if (error) throw error;
@@ -449,7 +450,7 @@ const AdminHeroSlides = () => {
                   </div>
                   <div className="flex items-center gap-2">
                     <Label>Order:</Label>
-                    <Input type="number" className="w-16 h-8" value={editSlide.sort_order ?? 0} onChange={e => set('sort_order', parseInt(e.target.value) || 0)} />
+                    <Input type="number" className="w-16 h-8" value={editSlide.sort_order ?? 0} onChange={e => { const v = e.target.value; set('sort_order', v === '' ? '' : parseInt(v)); }} />
                   </div>
                 </div>
 

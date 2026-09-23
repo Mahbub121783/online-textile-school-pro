@@ -17,15 +17,16 @@ const InvoicesPage = () => {
   const siteName = settingsMap?.site_name || 'Online Textile School';
   const [downloading, setDownloading] = useState<string | null>(null);
 
-  const { data: invoices, isLoading } = useQuery({
+  const { data: invoices, isLoading, isError } = useQuery({
     queryKey: ['my-invoices', user?.id],
     queryFn: async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('invoices')
         .select('id, user_id, order_id, invoice_number, subtotal, discount_amount, coupon_code, total, billing_name, billing_email, billing_phone, billing_district, payment_method, payment_status, paid_at, created_at')
         .eq('user_id', user!.id)
         .order('created_at', { ascending: false })
         .limit(100);
+      if (error) throw error;
       return data ?? [];
     },
     enabled: !!user,
@@ -249,6 +250,8 @@ const InvoicesPage = () => {
               <TableBody>
                 {isLoading ? (
                   <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Loading...</TableCell></TableRow>
+                ) : isError ? (
+                  <TableRow><TableCell colSpan={8} className="text-center py-8 text-destructive">Failed to load invoices. Please try again.</TableCell></TableRow>
                 ) : invoices?.length === 0 ? (
                   <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">No invoices yet.</TableCell></TableRow>
                 ) : (

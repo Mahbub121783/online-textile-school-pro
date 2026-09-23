@@ -117,7 +117,7 @@ const BadgesTab = () => {
                     <SelectContent>{TIERS.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
-                <div><Label>Sort order</Label><Input type="number" value={modal.sort_order || 0} onChange={(e) => setModal({ ...modal, sort_order: parseInt(e.target.value) || 0 })} /></div>
+                <div><Label>Sort order</Label><Input type="number" value={modal.sort_order ?? 0} onChange={(e) => { const v = e.target.value; setModal({ ...modal, sort_order: v === '' ? '' : parseInt(v) }); }} /></div>
               </div>
               <div>
                 <Label>Criteria (JSON)</Label>

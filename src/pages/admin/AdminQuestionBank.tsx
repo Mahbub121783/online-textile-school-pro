@@ -174,7 +174,7 @@ const AdminQuestionBank = () => {
   const [aiSubject, setAiSubject] = useState('');
   const [aiTopic, setAiTopic] = useState('');
   const [aiDiff, setAiDiff] = useState<Diff>('basic');
-  const [aiCount, setAiCount] = useState(10);
+  const [aiCount, setAiCount] = useState<number | ''>(10);
   const [aiLang, setAiLang] = useState<'en' | 'bn'>('en');
   const [aiBusy, setAiBusy] = useState(false);
   const [aiDrafts, setAiDrafts] = useState<any[]>([]);
@@ -213,7 +213,7 @@ const AdminQuestionBank = () => {
           subject_name: aiSubjectName,
           topic: aiTopic || undefined,
           difficulty: aiDiff,
-          count: aiCount,
+          count: Number(aiCount) || 1,
           language: aiLang,
           test: testMode,
         }),
@@ -479,7 +479,7 @@ const AdminQuestionBank = () => {
               </div>
               <div>
                 <Label>Count (1-50)</Label>
-                <Input type="number" value={aiCount} onChange={(e) => setAiCount(Math.max(1, Math.min(50, parseInt(e.target.value) || 1)))} min={1} max={50} />
+                <Input type="number" value={aiCount} onChange={(e) => { const v = e.target.value; setAiCount(v === '' ? '' : Math.max(1, Math.min(50, parseInt(v) || 1))); }} min={1} max={50} />
               </div>
             </div>
             <div className="flex flex-wrap gap-2 items-end">
@@ -672,7 +672,7 @@ const AdminQuestionBank = () => {
               <div className="grid grid-cols-3 gap-3">
                 <div><Label>Icon (emoji)</Label><Input value={subjectModal.icon || ''} onChange={(e) => setSubjectModal({ ...subjectModal, icon: e.target.value })} placeholder="🧠" /></div>
                 <div><Label>Color (hex)</Label><Input value={subjectModal.color || ''} onChange={(e) => setSubjectModal({ ...subjectModal, color: e.target.value })} placeholder="#0ea5e9" /></div>
-                <div><Label>Sort</Label><Input type="number" value={subjectModal.sort_order || 0} onChange={(e) => setSubjectModal({ ...subjectModal, sort_order: parseInt(e.target.value) || 0 })} /></div>
+                <div><Label>Sort</Label><Input type="number" value={subjectModal.sort_order ?? 0} onChange={(e) => { const v = e.target.value; setSubjectModal({ ...subjectModal, sort_order: v === '' ? '' : parseInt(v) }); }} /></div>
               </div>
               <div className="flex items-center gap-2"><Switch checked={subjectModal.is_active ?? true} onCheckedChange={(v) => setSubjectModal({ ...subjectModal, is_active: v })} /><Label>Active</Label></div>
             </div>
@@ -754,7 +754,7 @@ const AdminQuestionBank = () => {
 
               <div><Label>Explanation</Label><Textarea rows={2} value={questionModal.explanation || ''} onChange={(e) => setQuestionModal({ ...questionModal, explanation: e.target.value })} /></div>
               <div className="grid grid-cols-2 gap-3">
-                <div><Label>Points</Label><Input type="number" value={questionModal.points || 1} onChange={(e) => setQuestionModal({ ...questionModal, points: parseInt(e.target.value) || 1 })} /></div>
+                <div><Label>Points</Label><Input type="number" value={questionModal.points ?? 1} onChange={(e) => { const v = e.target.value; setQuestionModal({ ...questionModal, points: v === '' ? '' : parseInt(v) }); }} /></div>
                 <div className="flex items-center gap-2 mt-6"><Switch checked={questionModal.is_active ?? true} onCheckedChange={(v) => setQuestionModal({ ...questionModal, is_active: v })} /><Label>Active</Label></div>
               </div>
             </div>

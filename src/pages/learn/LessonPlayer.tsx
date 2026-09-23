@@ -35,7 +35,7 @@ const LessonPlayer = () => {
     enabled: !!courseSlug,
   });
 
-  const { data: isEnrolled } = useIsEnrolled(course?.id);
+  const { data: isEnrolled, isLoading: enrollmentLoading } = useIsEnrolled(course?.id);
 
   const { data: sections = [] } = useQuery({
     queryKey: ['course-curriculum', course?.id],
@@ -97,7 +97,18 @@ const LessonPlayer = () => {
     },
   });
 
-  const resources: { name: string; url: string; type: string }[] = Array.isArray(currentLesson?.resources) ? currentLesson.resources : [];
+  // Two separate material sources: per-lesson `lessons.resources` and
+  // per-topic `course_sections.materials` (added via the instructor's
+  // Curriculum Builder "+ Material" button, e.g. a shared Google Drive
+  // link for the whole topic) -- the latter was being saved but never
+  // rendered anywhere on the student side. Both are shown together here.
+  const currentSection = sections.find((s: any) => s.lessons.some((l: any) => l.id === lessonId));
+  const lessonResources: { name: string; url: string; type: string }[] = Array.isArray(currentLesson?.resources) ? currentLesson.resources : [];
+  const topicMaterials: { name: string; url: string; type: string }[] = Array.isArray(currentSection?.materials) ? currentSection.materials : [];
+  const resources = [
+    ...lessonResources.map((r) => ({ ...r, scope: 'lesson' as const })),
+    ...topicMaterials.map((r) => ({ ...r, scope: 'topic' as const })),
+  ];
   const isDripped = currentLesson?.scheduled_unlock_at && new Date(currentLesson.scheduled_unlock_at) > new Date();
 
   // Q&A discussions
@@ -256,7 +267,21 @@ const LessonPlayer = () => {
   if (authLoading) return <div className="min-h-screen flex items-center justify-center animate-pulse">Loading...</div>;
   if (!user) return <Navigate to={`/auth/login?redirect=/learn/${courseSlug}/${lessonId}`} replace />;
 
-  
+  // The database now correctly restricts full lesson content to enrolled
+  // students (plus is_preview lessons, visible to everyone) -- this is just
+  // the matching frontend UX: a logged-in-but-not-enrolled visitor gets a
+  // clear message and a way back to the course page, instead of a
+  // confusing empty/broken player once the RLS-filtered data comes back empty.
+  if (course && !enrollmentLoading && isEnrolled === false && currentLesson && !currentLesson.is_preview) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4 text-center px-4">
+        <Lock className="h-10 w-10 text-muted-foreground" />
+        <p className="text-lg font-medium">You're not enrolled in this course</p>
+        <p className="text-muted-foreground text-sm max-w-sm">Enroll in "{course.title}" to access this lesson.</p>
+        <Button onClick={() => navigate(`/courses/${courseSlug}`)}>Go to Course Page</Button>
+      </div>
+    );
+  }
 
   const hasQuizzes = linkedQuizzes.length > 0;
   const hasAssignments = linkedAssignments.length > 0;
@@ -413,7 +438,10 @@ const LessonPlayer = () => {
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium truncate">{r.name}</p>
-                          <Badge variant="outline" className="text-[10px] mt-0.5">{r.type}</Badge>
+                          <div className="flex items-center gap-1 mt-0.5">
+                            <Badge variant="outline" className="text-[10px]">{r.type}</Badge>
+                            {r.scope === 'topic' && <Badge variant="secondary" className="text-[10px]">Topic Material</Badge>}
+                          </div>
                         </div>
                         <a href={r.url} target="_blank" rel="noreferrer">
                           <Button variant="outline" size="sm" className="text-xs gap-1">
@@ -623,6 +651,19 @@ const LessonPlayer = () => {
                             </button>
                           );
                         })}
+                        {Array.isArray(section.materials) && section.materials.map((mat: any, mIdx: number) => (
+                          <a
+                            key={`mat-${mIdx}`}
+                            href={mat.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="flex items-center gap-2 w-full px-2 py-1.5 rounded text-xs text-left transition-colors hover:bg-muted text-muted-foreground"
+                          >
+                            <FileText className="h-3.5 w-3.5 shrink-0 text-green-600" />
+                            <span className="truncate">{mat.name}</span>
+                            <ExternalLink className="h-3 w-3 ml-auto shrink-0 opacity-60" />
+                          </a>
+                        ))}
                       </div>
                     </CollapsibleContent>
                   </Collapsible>

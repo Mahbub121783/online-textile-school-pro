@@ -16,7 +16,7 @@ import { toast } from 'sonner';
 
 const emptyForm = {
   name: '', designation: '', department: '', bio: '', photo_url: '',
-  email: '', phone: '', specialization: '', sort_order: 0, is_active: true,
+  email: '', phone: '', specialization: '', sort_order: 0 as number | '', is_active: true,
 };
 
 const AdminFaculty = () => {
@@ -141,7 +141,7 @@ const AdminFaculty = () => {
               <div><Label>Phone</Label><Input value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} /></div>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div><Label>Sort Order</Label><Input type="number" value={form.sort_order} onChange={e => setForm(p => ({ ...p, sort_order: parseInt(e.target.value) || 0 }))} /></div>
+              <div><Label>Sort Order</Label><Input type="number" value={form.sort_order} onChange={e => { const v = e.target.value; setForm(p => ({ ...p, sort_order: v === '' ? '' : parseInt(v) })); }} /></div>
               <div className="flex items-center gap-2 pt-6"><Switch checked={form.is_active} onCheckedChange={v => setForm(p => ({ ...p, is_active: v }))} /><Label>Active</Label></div>
             </div>
           </div>

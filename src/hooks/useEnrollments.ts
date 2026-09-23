@@ -54,26 +54,17 @@ export function useLessonProgress(courseId: string | undefined) {
     retry: 0,
     queryFn: async () => {
       try {
+        // One nested-embed round trip instead of 3 sequential ones
+        // (course_sections -> lessons -> lesson_progress). No explicit
+        // user_id filter needed on the embedded lesson_progress -- it's
+        // RLS-scoped to `user_id = auth.uid()` (db/05-bootstrap-policies.sql),
+        // so the DB only ever returns this user's own rows either way.
         const { data: sections } = await supabase
           .from('course_sections')
-          .select('id')
+          .select('lessons(lesson_progress(*))')
           .eq('course_id', courseId!);
         if (!sections?.length) return [];
-
-        const sectionIds = sections.map((s) => s.id);
-        const { data: lessons } = await supabase
-          .from('lessons')
-          .select('id')
-          .in('section_id', sectionIds);
-        if (!lessons?.length) return [];
-
-        const lessonIds = lessons.map((l) => l.id);
-        const { data } = await supabase
-          .from('lesson_progress')
-          .select('*')
-          .eq('user_id', user!.id)
-          .in('lesson_id', lessonIds);
-        return data ?? [];
+        return (sections as any[]).flatMap((s) => (s.lessons ?? []).flatMap((l: any) => l.lesson_progress ?? []));
       } catch {
         return [];
       }
@@ -98,29 +89,18 @@ export function useMarkLessonComplete() {
         }, { onConflict: 'user_id,lesson_id' });
       if (error) throw error;
 
-      // 2. Recalculate enrollment progress_pct
+      // 2. Recalculate enrollment progress_pct -- one nested-embed round
+      // trip instead of 3 sequential ones, same technique as useLessonProgress above.
       const { data: sections } = await supabase
         .from('course_sections')
-        .select('id')
+        .select('lessons(id, lesson_progress(completed))')
         .eq('course_id', courseId);
       if (!sections?.length) return;
 
-      const sectionIds = sections.map((s) => s.id);
-      const { data: allLessons } = await supabase
-        .from('lessons')
-        .select('id')
-        .in('section_id', sectionIds);
-      if (!allLessons?.length) return;
+      const allLessons = (sections as any[]).flatMap((s) => s.lessons ?? []);
+      if (!allLessons.length) return;
 
-      const lessonIds = allLessons.map((l) => l.id);
-      const { data: completed } = await supabase
-        .from('lesson_progress')
-        .select('lesson_id')
-        .eq('user_id', user!.id)
-        .eq('completed', true)
-        .in('lesson_id', lessonIds);
-
-      const completedCount = completed?.length ?? 0;
+      const completedCount = allLessons.filter((l: any) => l.lesson_progress?.[0]?.completed).length;
       const totalCount = allLessons.length;
       const progressPct = Math.round((completedCount / totalCount) * 100);
 

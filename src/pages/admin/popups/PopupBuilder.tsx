@@ -140,6 +140,9 @@ export function PopupBuilder({ open, onClose, popupId, onSaved }: Props) {
     setSaving(true);
     const payload: any = {
       ...form,
+      trigger_value: Number(form.trigger_value) || 0,
+      frequency_value: Number(form.frequency_value) || 1,
+      priority: Number(form.priority) || 0,
       start_date: form.start_date || null,
       end_date: form.end_date || null,
       countdown_target_date: form.countdown_target_date || null,
@@ -396,7 +399,7 @@ export function PopupBuilder({ open, onClose, popupId, onSaved }: Props) {
                     </SelectContent>
                   </Select>
                 </div>
-                <div><Label>Trigger value</Label><Input type="number" value={form.trigger_value} onChange={e => set('trigger_value', parseInt(e.target.value) || 0)} /></div>
+                <div><Label>Trigger value</Label><Input type="number" value={form.trigger_value} onChange={e => { const v = e.target.value; set('trigger_value', v === '' ? '' : parseInt(v)); }} /></div>
                 <div>
                   <Label>Frequency</Label>
                   <Select value={form.frequency} onValueChange={v => set('frequency', v)}>
@@ -409,7 +412,7 @@ export function PopupBuilder({ open, onClose, popupId, onSaved }: Props) {
                   </Select>
                 </div>
                 {form.frequency === 'every_n_days' && (
-                  <div><Label>Days</Label><Input type="number" value={form.frequency_value || 1} onChange={e => set('frequency_value', parseInt(e.target.value) || 1)} /></div>
+                  <div><Label>Days</Label><Input type="number" value={form.frequency_value ?? 1} onChange={e => { const v = e.target.value; set('frequency_value', v === '' ? '' : parseInt(v)); }} /></div>
                 )}
                 <div><Label>Start date</Label><Input type="datetime-local" value={form.start_date} onChange={e => set('start_date', e.target.value)} /></div>
                 <div><Label>End date</Label><Input type="datetime-local" value={form.end_date} onChange={e => set('end_date', e.target.value)} /></div>
@@ -511,7 +514,7 @@ export function PopupBuilder({ open, onClose, popupId, onSaved }: Props) {
                     </SelectContent>
                   </Select>
                 </div>
-                <div><Label>Priority</Label><Input type="number" value={form.priority} onChange={e => set('priority', parseInt(e.target.value) || 0)} /></div>
+                <div><Label>Priority</Label><Input type="number" value={form.priority} onChange={e => { const v = e.target.value; set('priority', v === '' ? '' : parseInt(v)); }} /></div>
               </div>
               <div className="space-y-2">
                 <div className="flex items-center justify-between">

@@ -55,18 +55,14 @@ const PracticeSubject = () => {
     refetchOnMount: false,
     refetchOnWindowFocus: false,
     queryFn: async () => {
-      // 3 cheap head-counts instead of pulling every question row.
-      const baseFilter = (qb: any) => {
-        let q = qb.eq('subject_id', subject!.id).eq('is_active', true);
-        if (selectedTopic) q = q.eq('topic_id', selectedTopic);
-        return q;
-      };
-      const [b, i, a] = await Promise.all([
-        baseFilter(supabase.from('qb_questions').select('id', { count: 'exact', head: true })).eq('difficulty', 'basic'),
-        baseFilter(supabase.from('qb_questions').select('id', { count: 'exact', head: true })).eq('difficulty', 'intermediate'),
-        baseFilter(supabase.from('qb_questions').select('id', { count: 'exact', head: true })).eq('difficulty', 'advanced'),
+      // 3 counts via the safe RPC (qb_questions itself is staff-only now --
+      // see db/58) instead of pulling every question row.
+      const countFor = (difficulty: 'basic' | 'intermediate' | 'advanced') =>
+        supabase.rpc('qb_count_exam_questions', { _subject_id: subject!.id, _difficulty: difficulty, _topic_id: selectedTopic || null });
+      const [{ data: b }, { data: i }, { data: a }] = await Promise.all([
+        countFor('basic'), countFor('intermediate'), countFor('advanced'),
       ]);
-      return { basic: b.count ?? 0, intermediate: i.count ?? 0, advanced: a.count ?? 0 };
+      return { basic: b ?? 0, intermediate: i ?? 0, advanced: a ?? 0 };
     },
   });
 

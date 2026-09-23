@@ -33,11 +33,12 @@ const TranscriptPage = () => {
   const { data: enrollments = [] } = useQuery({
     queryKey: ['enrollments-transcript', user?.id],
     queryFn: async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('enrollments')
         .select('*, courses(title)')
         .eq('user_id', user!.id)
         .not('completed_at', 'is', null);
+      if (error) throw error;
       return data ?? [];
     },
     enabled: !!user?.id,

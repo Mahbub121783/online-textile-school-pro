@@ -18,7 +18,7 @@ import { toast } from 'sonner';
 
 const emptyForm = {
   title: '', description: '', course_id: '', simulation_url: '',
-  type: 'iframe', instructions: '', is_published: false, sort_order: 0,
+  type: 'iframe', instructions: '', is_published: false, sort_order: 0 as number | '',
 };
 
 const AdminVirtualLabs = () => {
@@ -59,7 +59,7 @@ const AdminVirtualLabs = () => {
         type: form.type,
         instructions: form.instructions || null,
         is_published: form.is_published,
-        sort_order: form.sort_order,
+        sort_order: Number(form.sort_order) || 0,
         created_by: user?.id,
       };
       if (editing) {
@@ -180,7 +180,7 @@ const AdminVirtualLabs = () => {
             </div>
             <div><Label>Instructions</Label><Textarea value={form.instructions} onChange={e => setForm(p => ({ ...p, instructions: e.target.value }))} rows={2} /></div>
             <div className="grid grid-cols-2 gap-3">
-              <div><Label>Sort Order</Label><Input type="number" value={form.sort_order} onChange={e => setForm(p => ({ ...p, sort_order: parseInt(e.target.value) || 0 }))} /></div>
+              <div><Label>Sort Order</Label><Input type="number" value={form.sort_order} onChange={e => { const v = e.target.value; setForm(p => ({ ...p, sort_order: v === '' ? '' : parseInt(v) })); }} /></div>
               <div className="flex items-center gap-2 pt-6"><Switch checked={form.is_published} onCheckedChange={v => setForm(p => ({ ...p, is_published: v }))} /><Label>Published</Label></div>
             </div>
           </div>

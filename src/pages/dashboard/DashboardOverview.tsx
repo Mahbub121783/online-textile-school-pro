@@ -7,9 +7,16 @@ import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useMemo } from 'react';
+import { lazy, Suspense, useMemo } from 'react';
 import ProfileCompletenessWidget from '@/components/ProfileCompletenessWidget';
-import StudentIdCard from '@/components/student/StudentIdCard';
+// Lazy: pulls in jsPDF + JsBarcode (see src/lib/idCardRenderer.ts), which
+// otherwise loaded eagerly on every single dashboard visit -- the most
+// visited page for every logged-in student -- even though most visits never
+// touch "download ID card".
+const StudentIdCard = lazy(() => import('@/components/student/StudentIdCard'));
+// Lazy for the same reason -- pulls in jsPDF + qrcode, only needed if the
+// student actually clicks a download button.
+const EnrollmentLetters = lazy(() => import('@/components/student/EnrollmentLetters'));
 import AcademicCalendarWidget from './AcademicCalendarWidget';
 import GpaWidget from './GpaWidget';
 import PracticeWidget from './PracticeWidget';
@@ -27,10 +34,11 @@ const DashboardOverview = () => {
     enabled: !!user,
     staleTime: 5 * 60 * 1000,
     queryFn: async () => {
-      const { count } = await supabase
+      const { count, error } = await supabase
         .from('certificates')
         .select('id', { count: 'exact', head: true })
         .eq('user_id', user!.id);
+      if (error) throw error;
       return count ?? 0;
     },
   });
@@ -40,10 +48,11 @@ const DashboardOverview = () => {
     enabled: !!user,
     staleTime: 5 * 60 * 1000,
     queryFn: async () => {
-      const { count } = await supabase
+      const { count, error } = await supabase
         .from('referral_rewards')
         .select('id', { count: 'exact', head: true })
         .eq('referrer_id', user!.id);
+      if (error) throw error;
       return count ?? 0;
     },
   });
@@ -53,13 +62,14 @@ const DashboardOverview = () => {
     queryKey: ['upcoming-installments', user?.id],
     enabled: !!user,
     queryFn: async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('installment_payments')
         .select('*, payment_plans(course_id, courses(title))')
         .eq('user_id', user!.id)
         .eq('status', 'pending')
         .order('due_date')
         .limit(3);
+      if (error) throw error;
       return (data ?? []) as any[];
     },
   });
@@ -143,7 +153,14 @@ const DashboardOverview = () => {
       </div>
 
       {/* Student ID Card */}
-      <StudentIdCard />
+      <Suspense fallback={<Skeleton className="h-40 w-full rounded-xl" />}>
+        <StudentIdCard />
+      </Suspense>
+
+      {/* Enrollment Verification Letters */}
+      <Suspense fallback={<Skeleton className="h-24 w-full rounded-xl" />}>
+        <EnrollmentLetters />
+      </Suspense>
 
       <div className="bg-card border rounded-xl p-6">
         <h3 className="font-heading font-bold text-lg mb-4">Continue Learning</h3>

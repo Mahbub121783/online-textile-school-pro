@@ -17,15 +17,26 @@ interface MaterialUploadModalProps {
   open: boolean;
   onClose: () => void;
   onSave: (material: Material) => void;
+  /** When set, the modal edits this existing material instead of creating a new one. */
+  material?: Material;
 }
 
-const MaterialUploadModal = ({ open, onClose, onSave }: MaterialUploadModalProps) => {
-  const [mode, setMode] = useState<'upload' | 'link'>('upload');
-  const [name, setName] = useState('');
-  const [url, setUrl] = useState('');
-  const [type, setType] = useState('pdf');
+const MaterialUploadModal = ({ open, onClose, onSave, material }: MaterialUploadModalProps) => {
+  const isEditing = !!material;
+  // Editing always starts on the URL field -- re-triggering a fresh file
+  // upload isn't required just to fix a name/type/link, and there's no way
+  // to know which mode a material was originally added with anyway.
+  const [mode, setMode] = useState<'upload' | 'link'>(isEditing ? 'link' : 'upload');
+  const [name, setName] = useState(material?.name ?? '');
+  const [url, setUrl] = useState(material?.url ?? '');
+  const [type, setType] = useState(material?.type ?? 'pdf');
 
-  const reset = () => { setName(''); setUrl(''); setType('pdf'); setMode('upload'); };
+  const reset = () => {
+    setName(material?.name ?? '');
+    setUrl(material?.url ?? '');
+    setType(material?.type ?? 'pdf');
+    setMode(isEditing ? 'link' : 'upload');
+  };
 
   const handleSave = () => {
     if (!name.trim() || !url.trim()) return;
@@ -38,7 +49,7 @@ const MaterialUploadModal = ({ open, onClose, onSave }: MaterialUploadModalProps
     <Dialog open={open} onOpenChange={(v) => { if (!v) { reset(); onClose(); } }}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Add Material</DialogTitle>
+          <DialogTitle>{isEditing ? 'Edit Material' : 'Add Material'}</DialogTitle>
         </DialogHeader>
 
         <div className="flex gap-2">
@@ -87,7 +98,7 @@ const MaterialUploadModal = ({ open, onClose, onSave }: MaterialUploadModalProps
         </div>
 
         <Button onClick={handleSave} disabled={!name.trim() || !url.trim()} className="w-full">
-          Add Material
+          {isEditing ? 'Save Changes' : 'Add Material'}
         </Button>
       </DialogContent>
     </Dialog>

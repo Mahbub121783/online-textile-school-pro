@@ -29,7 +29,7 @@ const AdminWallets = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('wallets')
-        .select('*, user_profiles!wallets_user_id_fkey(full_name, phone)')
+        .select('*, user_profiles!wallets_user_id_fkey(full_name, phone, roll_id)')
         .order('updated_at', { ascending: false });
       if (error) throw error;
       return data ?? [];
@@ -64,18 +64,49 @@ const AdminWallets = () => {
     },
   });
 
-  // Fetch user profiles for top-up requests
+  // Fetch user profiles (name/phone/roll) for top-up & withdrawal request rows
   const { data: userProfiles = [] } = useQuery({
     queryKey: ['admin-user-profiles-for-topups'],
     queryFn: async () => {
-      const { data } = await supabase.from('user_profiles').select('id, full_name, phone');
+      const { data } = await supabase.from('user_profiles').select('id, full_name, phone, roll_id');
       return data ?? [];
+    },
+  });
+
+  // Real signup email lives in auth.users, not exposed through the REST
+  // shim -- fetch it via the same admin-only endpoint AdminUsers.tsx uses,
+  // so search can match by email (not just the profile's display name).
+  const { data: authEmailMap = {} } = useQuery({
+    queryKey: ['admin-wallet-auth-emails', userProfiles.map((p: any) => p.id).join(',')],
+    enabled: userProfiles.length > 0,
+    queryFn: async () => {
+      const ids = userProfiles.map((p: any) => p.id).filter(Boolean);
+      const map: Record<string, { email: string }> = {};
+      for (let i = 0; i < ids.length; i += 200) {
+        const chunk = ids.slice(i, i + 200);
+        const { data } = await supabase.functions.invoke('admin-list-user-auth', { body: { userIds: chunk } });
+        Object.assign(map, data ?? {});
+      }
+      return map;
     },
   });
 
   const getUserName = (userId: string) => {
     const p = userProfiles.find((u: any) => u.id === userId) as any;
     return p?.full_name || 'Unknown';
+  };
+
+  const matchesSearch = (userId: string | null | undefined, profileFromRow?: any) => {
+    if (!search) return true;
+    const q = search.toLowerCase();
+    const p = profileFromRow || userProfiles.find((u: any) => u.id === userId) || {};
+    const email = (authEmailMap as any)[userId || '']?.email?.toLowerCase() ?? '';
+    return (
+      (p.full_name?.toLowerCase() ?? '').includes(q) ||
+      (p.phone?.toLowerCase() ?? '').includes(q) ||
+      (p.roll_id?.toLowerCase() ?? '').includes(q) ||
+      email.includes(q)
+    );
   };
 
   const walletMutation = useMutation({
@@ -160,11 +191,8 @@ const AdminWallets = () => {
     }
   };
 
-  const filtered = wallets.filter((w: any) => {
-    if (!search) return true;
-    const name = (w.user_profiles as any)?.full_name?.toLowerCase() ?? '';
-    return name.includes(search.toLowerCase());
-  });
+  const filtered = wallets.filter((w: any) => matchesSearch(w.user_id, w.user_profiles));
+  const filteredTopupRequests = topupRequests.filter((r: any) => matchesSearch(r.user_id));
 
   const totalBalance = wallets.reduce((sum: number, w: any) => sum + Number(w.balance ?? 0), 0);
   const pendingTopups = topupRequests.filter((r: any) => r.status === 'pending');
@@ -192,6 +220,11 @@ const AdminWallets = () => {
         </Card>
       </div>
 
+      <div className="relative max-w-sm">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input placeholder="Search by name, email, phone or roll ID..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-10" />
+      </div>
+
       <Tabs defaultValue="wallets">
         <TabsList>
           <TabsTrigger value="wallets">All Wallets</TabsTrigger>
@@ -203,13 +236,6 @@ const AdminWallets = () => {
 
         {/* All Wallets Tab */}
         <TabsContent value="wallets" className="space-y-4">
-          <div className="flex gap-3 items-center">
-            <div className="relative flex-1 max-w-sm">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input placeholder="Search by name..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-10" />
-            </div>
-          </div>
-
           <Card>
             <CardContent className="p-0">
               <Table>
@@ -311,6 +337,8 @@ const AdminWallets = () => {
             <CardContent>
               {topupRequests.length === 0 ? (
                 <p className="text-center py-8 text-muted-foreground">No top-up requests yet.</p>
+              ) : filteredTopupRequests.length === 0 ? (
+                <p className="text-center py-8 text-muted-foreground">No top-up requests match your search.</p>
               ) : (
                 <Table>
                   <TableHeader>
@@ -325,7 +353,7 @@ const AdminWallets = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {topupRequests.map((r: any) => (
+                    {filteredTopupRequests.map((r: any) => (
                       <TableRow key={r.id}>
                         <TableCell className="text-sm">{format(new Date(r.created_at), 'dd MMM yyyy HH:mm')}</TableCell>
                         <TableCell className="font-medium">{getUserName(r.user_id)}</TableCell>
@@ -375,7 +403,7 @@ const AdminWallets = () => {
 
         {/* Withdrawal Requests Tab */}
         <TabsContent value="withdrawals">
-          <WithdrawalRequestsTab />
+          <WithdrawalRequestsTab search={search} />
         </TabsContent>
       </Tabs>
     </div>
@@ -383,7 +411,7 @@ const AdminWallets = () => {
 };
 
 // Withdrawal requests from wallet_transactions
-const WithdrawalRequestsTab = () => {
+const WithdrawalRequestsTab = ({ search }: { search: string }) => {
   const queryClient = useQueryClient();
 
   const { data: withdrawals = [] } = useQuery({
@@ -391,11 +419,39 @@ const WithdrawalRequestsTab = () => {
     queryFn: async () => {
       const { data } = await supabase
         .from('wallet_transactions')
-        .select('*, wallets!inner(user_id, user_profiles!wallets_user_id_fkey(full_name))')
+        .select('*, wallets!inner(user_id, user_profiles!wallets_user_id_fkey(full_name, phone, roll_id))')
         .eq('type', 'withdrawal_request')
         .order('created_at', { ascending: false });
       return data ?? [];
     },
+  });
+
+  const { data: authEmailMap = {} } = useQuery({
+    queryKey: ['admin-wallet-auth-emails', 'withdrawals', withdrawals.map((w: any) => w.wallets?.user_id).join(',')],
+    enabled: withdrawals.length > 0,
+    queryFn: async () => {
+      const ids = Array.from(new Set(withdrawals.map((w: any) => w.wallets?.user_id).filter(Boolean)));
+      const map: Record<string, { email: string }> = {};
+      for (let i = 0; i < ids.length; i += 200) {
+        const chunk = ids.slice(i, i + 200);
+        const { data } = await supabase.functions.invoke('admin-list-user-auth', { body: { userIds: chunk } });
+        Object.assign(map, data ?? {});
+      }
+      return map;
+    },
+  });
+
+  const filteredWithdrawals = withdrawals.filter((tx: any) => {
+    if (!search) return true;
+    const q = search.toLowerCase();
+    const p = tx.wallets?.user_profiles || {};
+    const email = (authEmailMap as any)[tx.wallets?.user_id]?.email?.toLowerCase() ?? '';
+    return (
+      (p.full_name?.toLowerCase() ?? '').includes(q) ||
+      (p.phone?.toLowerCase() ?? '').includes(q) ||
+      (p.roll_id?.toLowerCase() ?? '').includes(q) ||
+      email.includes(q)
+    );
   });
 
   const approveWithdrawal = async (tx: any) => {
@@ -419,6 +475,8 @@ const WithdrawalRequestsTab = () => {
       <CardContent>
         {withdrawals.length === 0 ? (
           <p className="text-center py-8 text-muted-foreground">No withdrawal requests.</p>
+        ) : filteredWithdrawals.length === 0 ? (
+          <p className="text-center py-8 text-muted-foreground">No withdrawal requests match your search.</p>
         ) : (
           <Table>
             <TableHeader>
@@ -431,7 +489,7 @@ const WithdrawalRequestsTab = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {withdrawals.map((tx: any) => (
+              {filteredWithdrawals.map((tx: any) => (
                 <TableRow key={tx.id}>
                   <TableCell className="text-sm">{format(new Date(tx.created_at), 'dd MMM yyyy HH:mm')}</TableCell>
                   <TableCell className="font-medium">{(tx.wallets as any)?.user_profiles?.full_name || 'Unknown'}</TableCell>

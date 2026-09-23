@@ -1,6 +1,64 @@
 import { Link } from 'react-router-dom';
-import { Brain, Trophy, Zap, ArrowRight, Flame } from 'lucide-react';
+import { Brain, Trophy, Zap, ArrowRight, Flame, Crown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+
+const MEDAL_COLORS = ['text-amber-300', 'text-slate-300', 'text-orange-400'];
+
+const TopThreeWidget = () => {
+  const { data: rows = [] } = useQuery({
+    queryKey: ['home-practice-top3'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('qb_leaderboard_cache')
+        .select('*')
+        .eq('period', 'all_time')
+        .is('subject_id', null)
+        .is('difficulty', null)
+        .order('total_points', { ascending: false })
+        .limit(3);
+      const userIds = (data ?? []).map((r: any) => r.user_id);
+      if (userIds.length === 0) return [];
+      const { data: profiles } = await supabase.from('user_profiles').select('id, full_name, roll_id').in('id', userIds);
+      const pmap = new Map((profiles ?? []).map((p: any) => [p.id, p]));
+      return (data ?? []).map((r: any) => ({ ...r, profile: pmap.get(r.user_id) }));
+    },
+    staleTime: 5 * 60 * 1000,
+    refetchInterval: 5 * 60 * 1000,
+  });
+
+  return (
+    <Link
+      to="/practice/leaderboard"
+      className="hidden md:block w-64 rounded-2xl bg-white/10 backdrop-blur border border-white/20 p-5 hover:bg-white/15 transition-colors"
+    >
+      <div className="flex items-center gap-2 mb-4 text-xs font-bold uppercase tracking-wider opacity-90">
+        <Trophy className="h-4 w-4" /> Top Performers
+      </div>
+      {rows.length === 0 ? (
+        <div className="text-center py-2">
+          <Crown className="h-6 w-6 mx-auto mb-2 opacity-60" />
+          <p className="text-sm font-semibold">Be the first!</p>
+          <p className="text-[11px] opacity-70 mt-1">Take a practice exam and claim the #1 spot.</p>
+        </div>
+      ) : (
+      <div className="space-y-3">
+        {rows.map((r: any, i: number) => (
+          <div key={r.user_id} className="flex items-center gap-2.5">
+            <Crown className={`h-4 w-4 shrink-0 ${MEDAL_COLORS[i]}`} />
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold truncate">{r.profile?.full_name || 'Student'}</p>
+              <p className="text-[11px] opacity-70 truncate">{r.profile?.roll_id || '—'}</p>
+            </div>
+            <span className="text-xs font-bold opacity-90 shrink-0">{Number(r.total_points).toLocaleString()}</span>
+          </div>
+        ))}
+      </div>
+      )}
+    </Link>
+  );
+};
 
 const PracticeArenaCTA = () => {
   return (
@@ -46,6 +104,7 @@ const PracticeArenaCTA = () => {
                 </Button>
               </div>
             </div>
+            <TopThreeWidget />
           </div>
         </div>
       </div>

@@ -24,15 +24,16 @@ const AttendancePage = () => {
   const [dateRange, setDateRange] = useState<DateRange>('all');
   const [courseFilter, setCourseFilter] = useState<string>('all');
 
-  const { data: records = [], isLoading } = useQuery({
+  const { data: records = [], isLoading, isError } = useQuery({
     queryKey: ['my-attendance', user?.id],
     queryFn: async () => {
       if (!user) return [];
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('attendance_records')
         .select('*, live_classes(title, course_id, scheduled_at, courses:course_id(title))')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
+      if (error) throw error;
       return (data || []) as any[];
     },
     enabled: !!user,
@@ -239,6 +240,8 @@ const AttendancePage = () => {
         <CardContent>
           {isLoading ? (
             <TableSkeleton rows={5} columns={4} />
+          ) : isError ? (
+            <p className="text-center py-8 text-destructive">Failed to load attendance records. Please try again.</p>
           ) : filtered.length === 0 ? (
             <p className="text-center py-8 text-muted-foreground">No attendance records found.</p>
           ) : (

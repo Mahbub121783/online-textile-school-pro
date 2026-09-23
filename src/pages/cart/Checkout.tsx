@@ -21,6 +21,7 @@ import { Tag, CreditCard, Smartphone, Loader2, Wallet, Building2, ChevronRight, 
 import { useWallet } from '@/hooks/useEnrollments';
 import { useConvertPrice } from '@/hooks/useCurrency';
 import { invalidatePurchaseQueries } from '@/lib/invalidatePurchaseQueries';
+import { extractFunctionErrorMessage } from '@/lib/extractFunctionError';
 
 const Checkout = () => {
   const { items, getTotal, clearCart } = useCartStore();
@@ -293,7 +294,21 @@ const Checkout = () => {
       navigate('/dashboard');
     } catch (err: any) {
       console.error('Checkout error:', err);
-      toast.error(err.message || 'Failed to place order');
+      const realMessage = await extractFunctionErrorMessage(err, 'Failed to place order');
+      // The server recomputes the order total from the live catalog +
+      // coupon at submit time (never trusts what the client displayed) --
+      // if a coupon was applied earlier but has since expired, hit its
+      // usage limit, or been deleted/deactivated by an admin, the
+      // recomputed total no longer matches what this page showed and the
+      // order is rejected. Without clearing it here, every retry creates a
+      // new order and fails identically forever, since nothing ever
+      // invalidates the stale client-side appliedCoupon state.
+      if (appliedCoupon && /order total is not zero|coupon/i.test(realMessage)) {
+        removeCoupon();
+        toast.error('Your coupon is no longer valid and has been removed. Please review the total and try again.');
+      } else {
+        toast.error(realMessage);
+      }
     }
     setSubmitting(false);
   };

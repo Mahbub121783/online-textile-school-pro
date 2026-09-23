@@ -5,11 +5,23 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
-import { Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Loader2, CheckCircle2, AlertCircle, Download, Plus, X, Pencil } from 'lucide-react';
 import RichTextEditor from './RichTextEditor';
 import MediaUploader from './MediaUploader';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+
+interface LessonResource { name: string; url: string; type: string }
+
+// datetime-local inputs need "YYYY-MM-DDTHH:mm" (no timezone); the stored
+// value is a real ISO timestamptz -- converted back to ISO on save below.
+const isoToLocalInput = (iso: string) => {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
 
 const DRIVE_URL_REGEX = /^https:\/\/(drive|docs)\.google\.com\/.+/i;
 
@@ -30,10 +42,42 @@ const LessonModal = ({ open, onClose, onSave, lesson }: LessonModalProps) => {
     is_preview: lesson?.is_preview || false,
     lesson_type: lesson?.lesson_type || 'video',
     resource_url: lesson?.resource_url || '',
+    resources: (Array.isArray(lesson?.resources) ? lesson.resources : []) as LessonResource[],
+    live_class_url: lesson?.live_class_url || '',
+    live_class_platform: lesson?.live_class_platform || 'zoom',
+    scheduled_unlock_at: isoToLocalInput(lesson?.scheduled_unlock_at || ''),
   });
 
   const [driveLinkStatus, setDriveLinkStatus] = useState<'idle' | 'checking' | 'valid' | 'invalid'>('idle');
   const [driveLinkError, setDriveLinkError] = useState('');
+
+  // Multiple named resources shown to students in the lesson's "Materials"
+  // tab (src/pages/learn/LessonPlayer.tsx) -- distinct from resource_url
+  // above, which is a single generic attachment shown on the Overview tab.
+  const [resourceForm, setResourceForm] = useState<LessonResource>({ name: '', url: '', type: 'pdf' });
+  const [editingResourceIdx, setEditingResourceIdx] = useState<number | null>(null);
+
+  const saveResource = () => {
+    if (!resourceForm.name.trim() || !resourceForm.url.trim()) { toast.error('Name and URL required'); return; }
+    setForm((p) => {
+      const resources = [...p.resources];
+      if (editingResourceIdx !== null) resources[editingResourceIdx] = resourceForm;
+      else resources.push(resourceForm);
+      return { ...p, resources };
+    });
+    setResourceForm({ name: '', url: '', type: 'pdf' });
+    setEditingResourceIdx(null);
+  };
+
+  const editResource = (idx: number) => {
+    setResourceForm(form.resources[idx]);
+    setEditingResourceIdx(idx);
+  };
+
+  const removeResource = (idx: number) => {
+    setForm((p) => ({ ...p, resources: p.resources.filter((_, i) => i !== idx) }));
+    if (editingResourceIdx === idx) { setResourceForm({ name: '', url: '', type: 'pdf' }); setEditingResourceIdx(null); }
+  };
 
   const update = (field: string, value: any) => {
     setForm((p) => ({ ...p, [field]: value }));
@@ -70,7 +114,10 @@ const LessonModal = ({ open, onClose, onSave, lesson }: LessonModalProps) => {
       toast.error(driveLinkError || 'Fix the Drive link before saving');
       return;
     }
-    onSave(form);
+    onSave({
+      ...form,
+      scheduled_unlock_at: form.scheduled_unlock_at ? new Date(form.scheduled_unlock_at).toISOString() : null,
+    });
     onClose();
   };
 
@@ -163,6 +210,79 @@ const LessonModal = ({ open, onClose, onSave, lesson }: LessonModalProps) => {
           <div className="space-y-2">
             <Label>Attachments / Resources</Label>
             <MediaUploader value={form.resource_url} onChange={(v) => update('resource_url', v)} accept="*/*" label="Upload Attachment" />
+          </div>
+
+          <div className="space-y-2 border-t pt-4">
+            <Label>Materials (shown to students in the lesson's Materials tab)</Label>
+            <div className="grid grid-cols-[1fr_1fr_auto_auto] gap-2 items-end">
+              <div>
+                <Input value={resourceForm.name} onChange={(e) => setResourceForm((p) => ({ ...p, name: e.target.value }))} className="h-9" placeholder="Name, e.g. Lecture Slides" />
+              </div>
+              <div>
+                <Input value={resourceForm.url} onChange={(e) => setResourceForm((p) => ({ ...p, url: e.target.value }))} className="h-9" placeholder="https://..." />
+              </div>
+              <Select value={resourceForm.type} onValueChange={(v) => setResourceForm((p) => ({ ...p, type: v }))}>
+                <SelectTrigger className="h-9 w-24"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="pdf">PDF</SelectItem>
+                  <SelectItem value="doc">Doc</SelectItem>
+                  <SelectItem value="slides">Slides</SelectItem>
+                  <SelectItem value="link">Link</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button type="button" size="sm" className="h-9" onClick={saveResource} disabled={!resourceForm.name.trim() || !resourceForm.url.trim()}>
+                {editingResourceIdx !== null ? 'Save' : <Plus className="h-4 w-4" />}
+              </Button>
+            </div>
+            {form.resources.length === 0 ? (
+              <p className="text-xs text-muted-foreground text-center py-3">No materials added yet.</p>
+            ) : (
+              <div className="space-y-1">
+                {form.resources.map((r, i) => (
+                  <div key={i} className={`flex items-center gap-2 p-2 border rounded-md text-sm ${editingResourceIdx === i ? 'border-primary' : ''}`}>
+                    <Download className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <span className="font-medium truncate flex-1">{r.name}</span>
+                    <Badge variant="outline" className="text-[10px]">{r.type}</Badge>
+                    <Button type="button" variant="ghost" size="icon" className="h-6 w-6" onClick={() => editResource(i)}>
+                      <Pencil className="h-3 w-3" />
+                    </Button>
+                    <Button type="button" variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => removeResource(i)}>
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="grid grid-cols-2 gap-4 border-t pt-4">
+            <div className="space-y-2">
+              <Label>Live Class URL (optional)</Label>
+              <Input value={form.live_class_url} onChange={(e) => update('live_class_url', e.target.value)} placeholder="https://meet.google.com/..." />
+            </div>
+            <div className="space-y-2">
+              <Label>Live Class Platform</Label>
+              <Select value={form.live_class_platform} onValueChange={(v) => update('live_class_platform', v)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="zoom">Zoom</SelectItem>
+                  <SelectItem value="google_meet">Google Meet</SelectItem>
+                  <SelectItem value="custom">Custom</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Drip Schedule -- unlocks at (optional, leave blank to unlock immediately)</Label>
+            <div className="flex items-center gap-2">
+              <Input type="datetime-local" value={form.scheduled_unlock_at} onChange={(e) => update('scheduled_unlock_at', e.target.value)} className="max-w-xs" />
+              {form.scheduled_unlock_at && (
+                <Button type="button" variant="ghost" size="sm" className="text-xs" onClick={() => update('scheduled_unlock_at', '')}>
+                  Clear
+                </Button>
+              )}
+            </div>
           </div>
 
           <div className="flex items-center gap-6 pt-2">

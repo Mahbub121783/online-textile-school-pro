@@ -31,7 +31,7 @@ interface SponsorForm {
   tier: string;
   description: string;
   is_active: boolean;
-  sort_order: number;
+  sort_order: number | '';
 }
 
 const emptyForm: SponsorForm = {
@@ -62,7 +62,7 @@ const AdminSponsors = () => {
       if (!f.logo_url.trim()) throw new Error('Logo is required');
       if (f.website_url && !/^https?:\/\/.+/.test(f.website_url)) throw new Error('Website URL must start with http:// or https://');
 
-      const payload = { ...f, created_by: user?.id };
+      const payload = { ...f, sort_order: Number(f.sort_order) || 0, created_by: user?.id };
       if (editId) {
         const { error } = await supabase.from('sponsors').update(payload).eq('id', editId);
         if (error) throw error;
@@ -223,7 +223,7 @@ const AdminSponsors = () => {
             <div className="flex items-center gap-4">
               <div>
                 <Label>Sort Order</Label>
-                <Input type="number" value={form.sort_order} onChange={e => setForm(f => ({ ...f, sort_order: parseInt(e.target.value) || 0 }))} className="w-24" />
+                <Input type="number" value={form.sort_order} onChange={e => { const v = e.target.value; setForm(f => ({ ...f, sort_order: v === '' ? '' : parseInt(v) })); }} className="w-24" />
               </div>
               <div className="flex items-center gap-2 pt-5">
                 <Switch checked={form.is_active} onCheckedChange={v => setForm(f => ({ ...f, is_active: v }))} />

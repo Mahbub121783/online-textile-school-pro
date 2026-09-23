@@ -60,10 +60,7 @@ const PracticeExam = () => {
         navigate(`/practice/result/${sessionId}`);
         return;
       }
-      const { data: qs } = await supabase
-        .from('qb_questions')
-        .select('id, question_text, question_type, options, points')
-        .in('id', session.question_ids);
+      const { data: qs } = await supabase.rpc('qb_get_exam_questions', { _ids: session.question_ids });
       const ordered = (session.question_ids as string[])
         .map((id) => (qs ?? []).find((q: any) => q.id === id))
         .filter(Boolean) as any[];

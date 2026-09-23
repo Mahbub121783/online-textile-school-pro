@@ -22,7 +22,7 @@ function slugify(s: string) {
 const EMPTY = {
   title: '', slug: '', description: '', category_id: '',
   video_url: '', video_platform: 'upload' as 'upload' | 'drive' | 'youtube',
-  clip_start_seconds: 0, clip_end_seconds: null as number | null,
+  clip_start_seconds: 0 as number | '', clip_end_seconds: null as number | null,
   duration_seconds: null as number | null, tags: '' as string,
   visibility: 'public' as 'public' | 'logged_in' | 'paid',
   required_course_id: '', is_published: true, is_featured: false,
@@ -198,7 +198,7 @@ export default function AdminClassVideos() {
               <div>
                 <Label>Clip start (sec)</Label>
                 <Input type="number" min={0} value={form.clip_start_seconds}
-                  onChange={(e) => setForm({ ...form, clip_start_seconds: parseInt(e.target.value) || 0 })} />
+                  onChange={(e) => { const v = e.target.value; setForm({ ...form, clip_start_seconds: v === '' ? '' : parseInt(v) }); }} />
               </div>
               <div>
                 <Label>Clip end (sec)</Label>

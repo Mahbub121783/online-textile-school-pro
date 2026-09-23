@@ -22,7 +22,7 @@ const CurriculumBuilder = ({ courseId }: CurriculumBuilderProps) => {
   const [quizModal, setQuizModal] = useState<{ open: boolean; sectionId: string; quiz?: any; questions?: any[] }>({ open: false, sectionId: '' });
   const [assignmentModal, setAssignmentModal] = useState<{ open: boolean; sectionId: string; assignment?: any }>({ open: false, sectionId: '' });
   const [pickerModal, setPickerModal] = useState<{ open: boolean; type: 'lesson' | 'quiz' | 'assignment'; sectionId: string }>({ open: false, type: 'lesson', sectionId: '' });
-  const [materialModal, setMaterialModal] = useState<{ open: boolean; sectionId: string }>({ open: false, sectionId: '' });
+  const [materialModal, setMaterialModal] = useState<{ open: boolean; sectionId: string; index?: number; material?: any }>({ open: false, sectionId: '' });
   const [editingTitle, setEditingTitle] = useState<string | null>(null);
   const [dragSectionIdx, setDragSectionIdx] = useState<number | null>(null);
   const [dragLesson, setDragLesson] = useState<{ sectionId: string; idx: number } | null>(null);
@@ -178,6 +178,15 @@ const CurriculumBuilder = ({ courseId }: CurriculumBuilderProps) => {
     materials.splice(index, 1);
     await supabase.from('course_sections').update({ materials }).eq('id', sectionId);
     refetch();
+  };
+
+  const updateMaterial = async (sectionId: string, index: number, material: { name: string; url: string; type: string }) => {
+    const section = sections.find((s: any) => s.id === sectionId);
+    const materials = [...(section?.materials || [])];
+    materials[index] = material;
+    await supabase.from('course_sections').update({ materials }).eq('id', sectionId);
+    refetch();
+    toast.success('Material updated');
   };
 
   // --- Reordering (drag & drop) ---
@@ -374,6 +383,9 @@ const CurriculumBuilder = ({ courseId }: CurriculumBuilderProps) => {
                         <FileText className="h-4 w-4 text-green-600 shrink-0" />
                         <span className="flex-1 text-sm font-medium truncate">{mat.name}</span>
                         <span className="text-xs text-muted-foreground uppercase">{mat.type}</span>
+                        <Button size="icon" variant="ghost" className="h-7 w-7 opacity-0 group-hover:opacity-100" onClick={() => setMaterialModal({ open: true, sectionId: section.id, index: idx, material: mat })}>
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
                         <Button size="icon" variant="ghost" className="h-7 w-7 opacity-0 group-hover:opacity-100" onClick={() => removeMaterial(section.id, idx)}>
                           <X className="h-3.5 w-3.5 text-destructive" />
                         </Button>
@@ -430,7 +442,12 @@ const CurriculumBuilder = ({ courseId }: CurriculumBuilderProps) => {
         <MaterialUploadModal
           open={materialModal.open}
           onClose={() => setMaterialModal({ open: false, sectionId: '' })}
-          onSave={(mat) => addMaterial(materialModal.sectionId, mat)}
+          material={materialModal.material}
+          onSave={(mat) =>
+            materialModal.index !== undefined
+              ? updateMaterial(materialModal.sectionId, materialModal.index, mat)
+              : addMaterial(materialModal.sectionId, mat)
+          }
         />
       )}
 

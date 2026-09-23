@@ -66,17 +66,10 @@ const AdminResearchPapers = () => {
     mutationFn: async (updates: any) => {
       const { error } = await supabase.from('research_papers').update(updates).eq('id', selectedPaper.id);
       if (error) throw error;
-
-      // Notify author on status change
-      if (updates.status && selectedPaper.submitted_by) {
-        await supabase.from('notifications').insert({
-          user_id: selectedPaper.submitted_by,
-          type: 'research',
-          title: `Paper Status: ${updates.status.replace('_', ' ')}`,
-          message: `Your paper "${selectedPaper.title}" status changed to ${updates.status.replace('_', ' ')}.`,
-          link: '/dashboard/my-research',
-        });
-      }
+      // Author notification is sent once, from onSuccess below (which has
+      // the better per-status message + email) -- this used to also insert
+      // its own separate, plainer notification row for the same status
+      // change, which would now mean two emails per status change.
     },
     onSuccess: (_, variables: any) => {
       queryClient.invalidateQueries({ queryKey: ['admin-research-papers'] });
