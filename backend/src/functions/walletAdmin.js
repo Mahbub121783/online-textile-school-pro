@@ -75,6 +75,11 @@ async function adminApproveWithdrawal(req, res) {
   }
 
   await serviceQuery('DELETE FROM public.wallet_transactions WHERE id = $1', [transactionId]);
+  await serviceQuery(
+    `INSERT INTO public.notifications (user_id, type, title, message, link)
+     VALUES ($1, 'withdrawal_approved', 'Withdrawal Approved', $2, '/dashboard/wallet')`,
+    [tx.user_id, `Your withdrawal request of ${tx.amount} has been approved and processed.`]
+  ).catch((e) => console.warn('withdrawal-approved notification failed:', e.message));
   res.json({ success: true });
 }
 
@@ -87,7 +92,23 @@ async function adminRejectWithdrawal(req, res) {
   const { transactionId } = req.body || {};
   if (!transactionId) return res.status(400).json({ error: 'transactionId required' });
 
+  const txRes = await serviceQuery(
+    `SELECT wt.*, w.user_id FROM public.wallet_transactions wt
+     JOIN public.wallets w ON w.id = wt.wallet_id
+     WHERE wt.id = $1 AND wt.type = 'withdrawal_request'`,
+    [transactionId]
+  );
+  const tx = txRes.rows[0];
+
   await serviceQuery("DELETE FROM public.wallet_transactions WHERE id = $1 AND type = 'withdrawal_request'", [transactionId]);
+
+  if (tx) {
+    await serviceQuery(
+      `INSERT INTO public.notifications (user_id, type, title, message, link)
+       VALUES ($1, 'withdrawal_rejected', 'Withdrawal Rejected', $2, '/dashboard/wallet')`,
+      [tx.user_id, `Your withdrawal request of ${tx.amount} was rejected. Please contact support for details.`]
+    ).catch((e) => console.warn('withdrawal-rejected notification failed:', e.message));
+  }
   res.json({ success: true });
 }
 

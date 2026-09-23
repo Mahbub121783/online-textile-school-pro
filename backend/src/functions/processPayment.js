@@ -3,7 +3,7 @@
 // `serviceQuery` (elevated context), auth via our own JWT instead of supabase-js.
 const fetch = require('node-fetch');
 const jwt = require('jsonwebtoken');
-const { serviceQuery } = require('../db');
+const { serviceQuery, withRequestContext } = require('../db');
 const { sendSmtpEmail } = require('./sendSmtpEmail');
 const { computeRealOrderTotal } = require('./checkoutFinalize');
 
@@ -45,20 +45,52 @@ async function verifyAndCompleteUddoktaPay(invoiceId, apiKey) {
     body: JSON.stringify({ invoice_id: invoiceId }),
   });
   const verifyData = await verifyRes.json();
-  if (verifyData.status !== 'COMPLETED') return { status: verifyData.status || 'PENDING' };
+  if (verifyData.status !== 'COMPLETED') {
+    // A genuine terminal failure (not just still-pending) previously left
+    // the user with zero indication anything went wrong -- the order just
+    // sat 'pending' forever with no email/push/in-app notice.
+    if (verifyData.status && verifyData.status !== 'PENDING') {
+      const orderRes = await serviceQuery(
+        "SELECT user_id FROM public.orders WHERE payment_reference = $1 AND status = 'pending'",
+        [invoiceId]
+      );
+      const uid = orderRes.rows[0]?.user_id;
+      if (uid) {
+        await serviceQuery(
+          `INSERT INTO public.notifications (user_id, type, title, message, link)
+           VALUES ($1, 'order_failed', 'Payment Failed', $2, '/dashboard/orders')`,
+          [uid, `Your payment could not be completed (status: ${verifyData.status}). Please try again or contact support.`]
+        ).catch((e) => console.warn('order-failed notification failed:', e.message));
+      }
+    }
+    return { status: verifyData.status || 'PENDING' };
+  }
 
-  const orderRes = await serviceQuery('SELECT * FROM public.orders WHERE payment_reference = $1', [invoiceId]);
-  const order = orderRes.rows[0];
-  if (!order || order.status === 'completed') return { status: 'COMPLETED', invoice_id: invoiceId };
+  // The webhook and the browser's own 'verify' call (or a retried webhook)
+  // can race here -- both reach this point concurrently, and without a row
+  // lock both would see status !== 'completed' and both fan out enrollments/
+  // instructor revenue-share credit for the same one real payment. Lock the
+  // order row for the check-then-complete step specifically (the rest of the
+  // fan-out below only ever runs once we're the caller that actually won
+  // that race and committed the 'completed' status).
+  const { order, discount, realTotal, validCouponId, priced, alreadyDone } = await withRequestContext(
+    { role: 'service_role' },
+    async (client) => {
+      const orderRes = await client.query('SELECT * FROM public.orders WHERE payment_reference = $1 FOR UPDATE', [invoiceId]);
+      const ord = orderRes.rows[0];
+      if (!ord || ord.status === 'completed') return { alreadyDone: true };
 
-  // Recompute the real total/discount from the live catalog + coupon state
-  // rather than trusting order_items.price (client-set at checkout time).
-  const { discount, total: realTotal, validCouponId, priced } = await computeRealOrderTotal(order);
+      const { discount: d, total: t, validCouponId: vc, priced: p } = await computeRealOrderTotal(ord);
 
-  await serviceQuery(
-    "UPDATE public.orders SET status = 'completed', payment_reference = $1, total = $2, discount_amount = $3 WHERE id = $4",
-    [invoiceId, realTotal, discount, order.id]
+      await client.query(
+        "UPDATE public.orders SET status = 'completed', payment_reference = $1, total = $2, discount_amount = $3 WHERE id = $4",
+        [invoiceId, t, d, ord.id]
+      );
+      return { order: ord, discount: d, realTotal: t, validCouponId: vc, priced: p, alreadyDone: false };
+    }
   );
+  if (alreadyDone) return { status: 'COMPLETED', invoice_id: invoiceId };
+
   await serviceQuery(
     "UPDATE public.invoices SET payment_status = 'paid', paid_at = now(), total = $1, discount_amount = $2 WHERE order_id = $3",
     [realTotal, discount, order.id]
@@ -73,7 +105,7 @@ async function verifyAndCompleteUddoktaPay(invoiceId, apiKey) {
 
   const userRes = await serviceQuery('SELECT email FROM auth.users WHERE id = $1', [order.user_id]);
   const userEmail = userRes.rows[0]?.email;
-  const profRes = await serviceQuery('SELECT full_name, referred_by FROM public.user_profiles WHERE id = $1', [order.user_id]);
+  const profRes = await serviceQuery('SELECT full_name FROM public.user_profiles WHERE id = $1', [order.user_id]);
   const userName = profRes.rows[0]?.full_name || 'Student';
   const siteUrl = process.env.SITE_URL || 'https://www.onlinetextileschool.com';
 
@@ -127,17 +159,30 @@ async function verifyAndCompleteUddoktaPay(invoiceId, apiKey) {
     }
   }
 
-  const referredBy = profRes.rows[0]?.referred_by;
-  if (referredBy) {
-    const upd = await serviceQuery(
-      "UPDATE public.referral_rewards SET status = 'credited', reward_amount = 50, credited_at = now() WHERE referred_id = $1 AND status = 'pending' RETURNING id",
-      [order.user_id]
-    );
-    if (upd.rows.length > 0) {
-      await serviceQuery('SELECT public.credit_wallet($1, $2, $3, $4)', [
-        referredBy, 50, `Referral reward for order ${String(order.id).slice(0, 8)}`, order.id,
-      ]).catch((e) => console.warn('referral credit_wallet failed:', e.message));
-    }
+  // See the matching fix in checkoutFinalize.js: use referral_rewards.referrer_id
+  // (immutable, service_role-write-only) instead of the mutable, client-PATCHable
+  // user_profiles.referred_by, which let a user redirect their own referral
+  // credit to any account.
+  const referralUpd = await serviceQuery(
+    "UPDATE public.referral_rewards SET status = 'credited', reward_amount = 50, credited_at = now() WHERE referred_id = $1 AND status = 'pending' RETURNING referrer_id",
+    [order.user_id]
+  );
+  if (referralUpd.rows.length > 0) {
+    await serviceQuery('SELECT public.credit_wallet($1, $2, $3, $4)', [
+      referralUpd.rows[0].referrer_id, 50, `Referral reward for order ${String(order.id).slice(0, 8)}`, order.id,
+    ]).catch((e) => console.warn('referral credit_wallet failed:', e.message));
+  }
+
+  // This path already sends its own specific emails above (payment_received
+  // + per-item enrollment_confirmation/ebook_purchase) -- already_emailed
+  // suppresses the generic auto-email while still getting push + the
+  // dashboard bell row via the same notify.js fan-out as every other event.
+  if (userEmail) {
+    await serviceQuery(
+      `INSERT INTO public.notifications (user_id, type, title, message, link, metadata)
+       VALUES ($1, 'order_completed', 'Payment Received', $2, '/dashboard/orders', $3)`,
+      [order.user_id, `Your payment for order #${String(order.id).slice(0, 8)} was received.`, JSON.stringify({ already_emailed: true })]
+    ).catch((e) => console.warn('order-completed notification failed:', e.message));
   }
 
   return { status: 'COMPLETED', invoice_id: invoiceId };

@@ -42,6 +42,7 @@ async function pushSubscribe(req, res) {
     );
     res.json({ ok: true });
   } catch (e) {
+    console.error('[push] pushSubscribe failed:', e.message);
     res.status(500).json({ error: String(e.message || e) });
   }
 }
@@ -57,12 +58,27 @@ async function pushUnsubscribe(req, res) {
     await serviceQuery('DELETE FROM public.push_subscriptions WHERE user_id = $1 AND endpoint = $2', [userId, endpoint]);
     res.json({ ok: true });
   } catch (e) {
+    console.error('[push] pushUnsubscribe failed:', e.message);
     res.status(500).json({ error: String(e.message || e) });
   }
 }
 
+async function isAdmin(userId) {
+  const r = await serviceQuery("SELECT (has_role($1,'admin') OR has_role($1,'super_admin')) AS ok", [userId]);
+  return !!r.rows[0]?.ok;
+}
+
+// No requireUser check existed here at all (unlike pushSubscribe/
+// pushUnsubscribe above) -- anyone could POST an arbitrary title/body to any
+// known user_id's push subscription under the site's trusted identity, a
+// phishing vector, not just cost abuse. Nothing in the frontend currently
+// calls this route, so admin-only is the safe, non-breaking lockdown.
 async function pushSend(req, res) {
   try {
+    const callerId = requireUser(req);
+    if (!callerId) return res.status(401).json({ error: 'unauthorized' });
+    if (!(await isAdmin(callerId))) return res.status(403).json({ error: 'Admin only' });
+
     const body = req.body || {};
     if (!body?.payload?.title) return res.status(400).json({ error: 'missing payload.title' });
     if (!VAPID_PRIVATE) return res.status(500).json({ error: 'Push notifications not configured (VAPID_PRIVATE_KEY missing)' });

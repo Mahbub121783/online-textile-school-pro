@@ -38,6 +38,49 @@ async function isJsonColumn(table, column) {
   return map.get(table)?.has(column) ?? false;
 }
 
+// Cache of function names (public schema) that return a set (RETURNS TABLE(...)
+// / RETURNS SETOF ...), as opposed to a single scalar/jsonb value.
+let setReturningFnCache = null;
+
+async function loadSetReturningFunctions() {
+  if (setReturningFnCache) return setReturningFnCache;
+  // Only functions returning a row/composite set (RETURNS TABLE(...), or
+  // RETURNS SETOF some_composite_type) need the `SELECT * FROM fn()` fix --
+  // a plain `RETURNS SETOF uuid`/`text`/etc. scalar set is already handled
+  // correctly by the existing `SELECT fn() AS result` path (one row per
+  // element, real scalar value each time), so it's deliberately excluded
+  // here to avoid turning a working array-of-scalars response into an
+  // array-of-single-key-objects for any such function added later.
+  const { rows } = await pool.query(`
+    SELECT p.proname
+    FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+    JOIN pg_type t ON t.oid = p.prorettype
+    WHERE n.nspname = 'public' AND p.proretset = true
+      AND (
+        t.typtype = 'c'
+        OR (t.typname = 'record' AND p.proargmodes IS NOT NULL AND p.proargmodes && ARRAY['o','t']::"char"[])
+      )
+  `);
+  setReturningFnCache = new Set(rows.map((r) => r.proname));
+  return setReturningFnCache;
+}
+
+// A table/set-returning function (e.g. RETURNS TABLE(id uuid, name text))
+// called as `SELECT public.fn() AS result` collapses each row into an
+// opaque anonymous composite-type value (postgres prints it as
+// "(val1,val2,...)") instead of named JSON columns -- node-pg can't parse
+// an unregistered composite type, so callers received a raw string with no
+// field access at all. Confirmed live: qb_get_exam_questions (every exam
+// loaded zero questions -- `qs.find(q => q.id === id)` always missed since
+// `q` was a string, not an object) and qb_subject_question_counts (every
+// admin subject card showed 0/0/0). The real fix is calling these as
+// `SELECT * FROM public.fn()` instead, which yields proper named columns.
+async function isSetReturningFunction(fn) {
+  const set = await loadSetReturningFunctions();
+  return set.has(fn);
+}
+
 // Normalizes a single value for binding as a `pg` query param: JSON.stringify
 // it if (and only if) the target column is a json/jsonb column and the value
 // is a real object/array that still needs serializing (already-a-string and
@@ -159,4 +202,4 @@ async function resolveEmbed(table, hint, constraintHint) {
   return { targetTable: r.local_table, localColumn: r.foreign_column, foreignColumn: r.local_column, isArray: true };
 }
 
-module.exports = { resolveEmbed, loadRelationships, serializeForColumn, resolveConflictWhere };
+module.exports = { resolveEmbed, loadRelationships, serializeForColumn, resolveConflictWhere, isSetReturningFunction };

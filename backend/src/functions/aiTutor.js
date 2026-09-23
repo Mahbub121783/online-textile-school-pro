@@ -7,7 +7,28 @@
 // and died with the old Supabase project); admins add real Groq/OpenAI/
 // Mistral/Gemini keys via the same panel instead.
 const fetch = require('node-fetch');
+const jwt = require('jsonwebtoken');
 const { serviceQuery } = require('../db');
+
+// Verifies the caller's own identity for the personalized-context branch --
+// never trusts a client-supplied user_id (previously req.body.user_id was
+// used as-is to pull that PERSON's enrolled courses/progress/quiz scores
+// into the AI's context and to write ai_chat_history rows, letting anyone
+// pass an arbitrary victim's user_id and have their private academic data
+// reflected back in the response). Chat itself stays usable anonymously
+// (no Authorization header -> no personalized context), matching the
+// existing public-assistant UX; only the personalization/history-write
+// path requires the id to be real and self-owned.
+function verifiedUserId(req) {
+  const header = req.headers.authorization || '';
+  const token = header.startsWith('Bearer ') ? header.slice(7) : null;
+  if (!token) return null;
+  try {
+    return jwt.verify(token, process.env.JWT_SECRET).sub;
+  } catch {
+    return null;
+  }
+}
 
 const PROVIDER_ENDPOINTS = {
   lovable: 'https://ai.gateway.lovable.dev/v1/chat/completions',
@@ -264,7 +285,8 @@ async function aiTutor(req, res) {
   const startTime = Date.now();
 
   try {
-    const { messages, user_id, session_id } = req.body || {};
+    const { messages, session_id } = req.body || {};
+    const user_id = verifiedUserId(req);
     if (!Array.isArray(messages)) return res.status(400).json({ error: 'messages array required' });
 
     if (Math.random() < 0.01) {

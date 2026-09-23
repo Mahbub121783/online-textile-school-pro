@@ -117,6 +117,26 @@ router.post('/token', async (req, res) => {
   }
 });
 
+// POST /auth/v1/refresh -- silently renews the session's expiry while the
+// user is still active (called periodically by the frontend, see
+// authClient.ts refreshSession()). A token that never gets renewed expires
+// naturally after JWT_EXPIRE, giving an auto-logout-after-inactivity effect
+// instead of every session lasting the full JWT_EXPIRE regardless of use.
+router.post('/refresh', async (req, res) => {
+  const auth = readAuth(req);
+  if (!auth.sub) return res.status(401).json({ error: 'Not authenticated' });
+  const r = await pool.query(
+    'SELECT id, email, created_at, banned_until FROM auth.users WHERE id = $1',
+    [auth.sub]
+  );
+  const row = r.rows[0];
+  if (!row) return res.status(404).json({ error: 'User not found' });
+  if (row.banned_until && new Date(row.banned_until) > new Date()) {
+    return res.status(403).json({ error: 'Account suspended' });
+  }
+  res.json({ access_token: signToken(row), token_type: 'bearer', user: publicUser(row) });
+});
+
 // GET /auth/v1/user
 router.get('/user', async (req, res) => {
   const auth = readAuth(req);

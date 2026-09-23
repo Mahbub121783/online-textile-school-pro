@@ -10,9 +10,34 @@
 // same relationship lessons' own RLS policy relies on). quizzes has
 // `pass_percentage`, not `passing_score` (same mismatch found earlier while
 // porting ai-tutor's platform-context query).
+const jwt = require('jsonwebtoken');
 const { serviceQuery } = require('../db');
 
+function requireUser(req) {
+  const header = req.headers.authorization || '';
+  const token = header.startsWith('Bearer ') ? header.slice(7) : null;
+  if (!token) return null;
+  try {
+    return jwt.verify(token, process.env.JWT_SECRET).sub;
+  } catch {
+    return null;
+  }
+}
+
+async function isAdmin(userId) {
+  const r = await serviceQuery("SELECT (has_role($1,'admin') OR has_role($1,'super_admin')) AS ok", [userId]);
+  return !!r.rows[0]?.ok;
+}
+
+// This is described in the header comment as an admin-only "Rebuild Index"
+// action but never actually checked -- anyone could trigger repeated full
+// scans of courses/lessons/quizzes/ebooks and batched upserts with no auth
+// at all. Add the same requireUser/isAdmin gate every other admin action
+// in this codebase uses.
 async function aiIndexBuilder(req, res) {
+  const callerId = requireUser(req);
+  if (!callerId) return res.status(401).json({ error: 'Unauthorized' });
+  if (!(await isAdmin(callerId))) return res.status(403).json({ error: 'Admin only' });
   try {
     const entries = [];
 

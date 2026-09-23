@@ -28,9 +28,10 @@ const { startQuizAttempt } = require('./startQuizAttempt');
 const { issueCertificate } = require('./issueCertificate');
 const { checkoutWallet, checkoutFree, checkoutAdminApprove, checkoutAdminReject } = require('./checkoutFinalize');
 const { adminWalletAdjust, adminApproveWithdrawal, adminRejectWithdrawal } = require('./walletAdmin');
-const { campusApprove, campusReject, campusProvisionSubdomain, campusUpdate, campusRemoveSubdomain, campusVerifySubdomains, campusTransferLookup, campusTransferApprove } = require('./campusOnboard');
+const { campusApprove, campusReject, campusProvisionSubdomain, campusUpdate, campusRemoveSubdomain, campusVerifySubdomains, campusTransferLookup, campusTransferApprove, campusVerify } = require('./campusOnboard');
 const { adminListUserAuth } = require('./adminUserDetails');
 const { fabricHangerCreate, fabricHangerUpdate, fabricStockReceive, fabricDistribute, fabricLibraryStart, fabricLibrarySetStatus, fabricLibraryUpdate } = require('./fabricLibrary');
+const { verifyStudent } = require('./verifyStudent');
 
 const router = express.Router();
 
@@ -79,6 +80,7 @@ router.post('/campus-remove-subdomain', campusRemoveSubdomain);
 router.post('/campus-verify-subdomains', campusVerifySubdomains);
 router.post('/campus-transfer-lookup', campusTransferLookup);
 router.post('/campus-transfer-approve', campusTransferApprove);
+router.post('/campus-verify', campusVerify);
 router.post('/admin-list-user-auth', adminListUserAuth);
 router.post('/fabric-hanger-create', fabricHangerCreate);
 router.post('/fabric-hanger-update', fabricHangerUpdate);
@@ -87,6 +89,7 @@ router.post('/fabric-distribute', fabricDistribute);
 router.post('/fabric-library-start', fabricLibraryStart);
 router.post('/fabric-library-set-status', fabricLibrarySetStatus);
 router.post('/fabric-library-update', fabricLibraryUpdate);
+router.get('/verify-student', verifyStudent);
 
 // ebook-secure-access: GET for streaming (PDF.js range requests), POST for
 // generate_token -- same path, dispatched by method (matches the original

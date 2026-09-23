@@ -199,6 +199,7 @@ const EDITABLE_FIELDS = new Set([
   'departments', 'logo_url', 'cover_image_url', 'contact_name', 'contact_email', 'contact_phone',
   'established_year', 'website_url', 'full_address', 'campus_type', 'highlights',
   'principal_name', 'principal_designation', 'principal_photo_url', 'principal_phone', 'principal_email',
+  'verification_doc_url',
 ]);
 async function campusUpdate(req, res) {
   const userId = requireAuth(req);
@@ -221,6 +222,34 @@ async function campusUpdate(req, res) {
     `UPDATE public.campus_onboard_requests SET ${setClause} WHERE id = $1`,
     [id, ...values]
   );
+  res.json({ success: true });
+}
+
+// POST /functions/v1/campus-verify { id, verified }
+// Admin-only -- is_verified/verified_at aren't in campusUpdate's
+// EDITABLE_FIELDS allowlist on purpose (an owner uploading their own
+// verification_doc_url can't self-verify), mirroring campusApprove.
+async function campusVerify(req, res) {
+  const adminId = requireAuth(req);
+  if (!adminId) return res.status(401).json({ error: 'Unauthorized' });
+  if (!(await isAdmin(adminId))) return res.status(403).json({ error: 'Admin only' });
+  const { id, verified } = req.body || {};
+  if (!id) return res.status(400).json({ error: 'id required' });
+
+  const upd = await serviceQuery(
+    "UPDATE public.campus_onboard_requests SET is_verified=$1, verified_at=CASE WHEN $1 THEN now() ELSE NULL END WHERE id=$2 RETURNING submitted_by, campus_name",
+    [!!verified, id]
+  );
+  const campus = upd.rows[0];
+  if (!campus) return res.status(404).json({ error: 'Campus request not found' });
+
+  if (campus.submitted_by && verified) {
+    await serviceQuery(
+      `INSERT INTO public.notifications (user_id, type, title, message, link)
+       VALUES ($1, 'campus_verified', '✅ Campus Verified', $2, '/dashboard/campus')`,
+      [campus.submitted_by, `${campus.campus_name} has been verified by Online Textile School.`]
+    ).catch(() => {});
+  }
   res.json({ success: true });
 }
 
@@ -353,5 +382,5 @@ async function campusTransferApprove(req, res) {
 
 module.exports = {
   campusApprove, campusReject, campusProvisionSubdomain, campusUpdate, campusRemoveSubdomain, campusVerifySubdomains,
-  campusTransferLookup, campusTransferApprove,
+  campusTransferLookup, campusTransferApprove, campusVerify,
 };

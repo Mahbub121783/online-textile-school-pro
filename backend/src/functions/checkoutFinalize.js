@@ -69,6 +69,13 @@ async function computeRealOrderTotal(order) {
   const priced = [];
   for (const item of items) {
     let realPrice = Number(item.price) || 0;
+    // A negative price on any item type (most exploitably 'tokens'/
+    // 'practice_credits', which have no catalog row to recompute against)
+    // drags the whole order's subtotal down, letting a real paid course/
+    // ebook item in the same order clear checkout-free or wallet-checkout
+    // for a fraction of its price. No legitimate order ever has a negative
+    // line item, so reject the whole order outright.
+    if (realPrice < 0) { const e = new Error('Invalid order item price'); e.status = 400; throw e; }
     if (item.item_type === 'course') {
       const r = await serviceQuery('SELECT price, discount_price, instructor_id, revenue_share_pct, title, slug FROM public.courses WHERE id = $1', [item.item_id]);
       const c = r.rows[0];
@@ -179,19 +186,30 @@ async function finalizeOrder({ orderId, callerUserId, admin, chargeWallet }) {
     await serviceQuery('UPDATE public.coupons SET used_count = COALESCE(used_count, 0) + 1 WHERE id = $1', [validCouponId]).catch(() => {});
   }
 
-  const profRes = await serviceQuery('SELECT referred_by FROM public.user_profiles WHERE id = $1', [order.user_id]);
-  const referredBy = profRes.rows[0]?.referred_by;
-  if (referredBy) {
-    const upd = await serviceQuery(
-      "UPDATE public.referral_rewards SET status = 'credited', reward_amount = 50, credited_at = now() WHERE referred_id = $1 AND status = 'pending' RETURNING id",
-      [order.user_id]
-    );
-    if (upd.rows.length > 0) {
-      await serviceQuery('SELECT public.credit_wallet($1, $2, $3, $4)', [
-        referredBy, 50, `Referral reward for order ${String(orderId).slice(0, 8)}`, orderId,
-      ]).catch((e) => console.warn('referral credit_wallet failed:', e.message));
-    }
+  // Determine the reward recipient from referral_rewards.referrer_id (set at
+  // signup, service_role-write-only -- db/05) rather than the mutable,
+  // client-PATCHable user_profiles.referred_by column. Reading the latter let
+  // a user redirect their own referral credit to any account (including a
+  // second account of their own) by PATCHing their own profile right before
+  // completing a cheap order.
+  const upd = await serviceQuery(
+    "UPDATE public.referral_rewards SET status = 'credited', reward_amount = 50, credited_at = now() WHERE referred_id = $1 AND status = 'pending' RETURNING referrer_id",
+    [order.user_id]
+  );
+  if (upd.rows.length > 0) {
+    await serviceQuery('SELECT public.credit_wallet($1, $2, $3, $4)', [
+      upd.rows[0].referrer_id, 50, `Referral reward for order ${String(orderId).slice(0, 8)}`, orderId,
+    ]).catch((e) => console.warn('referral credit_wallet failed:', e.message));
   }
+
+  // Wallet-pay/free-checkout/admin-approve previously completed silently --
+  // no email, no push, no in-app row. The insert alone (via db/59's trigger
+  // + backend/src/notify.js) now fans this out to both automatically.
+  await serviceQuery(
+    `INSERT INTO public.notifications (user_id, type, title, message, link)
+     VALUES ($1, 'order_completed', 'Order Confirmed', $2, '/dashboard/orders')`,
+    [order.user_id, `Your order #${String(orderId).slice(0, 8)} has been confirmed.`]
+  ).catch((e) => console.warn('order-completed notification failed:', e.message));
 
   return { alreadyCompleted: false, total };
 }
@@ -261,13 +279,13 @@ async function checkoutAdminReject(req, res) {
     "UPDATE public.invoices SET payment_status = 'rejected' WHERE order_id = $1",
     [orderId]
   ).catch(() => {});
-  if (reason) {
-    await serviceQuery(
-      `INSERT INTO public.notifications (user_id, type, title, message, link)
-       SELECT user_id, 'order', 'Order Rejected', $2, '/dashboard/orders' FROM public.orders WHERE id = $1`,
-      [orderId, `Your order was rejected: ${reason}`]
-    ).catch(() => {});
-  }
+  // Always notify on rejection (order failed) -- previously silent unless
+  // an admin happened to type a reason.
+  await serviceQuery(
+    `INSERT INTO public.notifications (user_id, type, title, message, link)
+     SELECT user_id, 'order_rejected', 'Order Rejected', $2, '/dashboard/orders' FROM public.orders WHERE id = $1`,
+    [orderId, reason ? `Your order was rejected: ${reason}` : 'Your order could not be approved. Please contact support.']
+  ).catch((e) => console.warn('order-rejected notification failed:', e.message));
   res.json({ success: true });
 }
 

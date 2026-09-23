@@ -23,6 +23,11 @@ function requireUser(req) {
   }
 }
 
+async function isAdmin(userId) {
+  const r = await serviceQuery("SELECT (has_role($1,'admin') OR has_role($1,'super_admin')) AS ok", [userId]);
+  return !!r.rows[0]?.ok;
+}
+
 // In-memory part tracking for in-flight multipart uploads (uploadId -> state).
 // Chunks are uploaded sequentially by the frontend within one file's upload,
 // and this Node app runs as a single process on this hosting tier, so this
@@ -72,6 +77,16 @@ async function updateRoundRobinAndCount(account) {
 async function r2Presign(req, res) {
   try {
     const { action } = req.body || {};
+
+    // Every action here either hands out real, working upload credentials to
+    // the live R2 bucket or probes/manages account config -- none of it was
+    // ever meant to be reachable anonymously (unlike r2UploadSingle/
+    // r2UploadChunk below, which already correctly call requireUser).
+    const callerId = requireUser(req);
+    if (!callerId) return res.status(401).json({ error: 'Unauthorized' });
+    if (action === 'test' && !(await isAdmin(callerId))) {
+      return res.status(403).json({ error: 'Admin only' });
+    }
 
     if (action === 'test') {
       const { account_id } = req.body;

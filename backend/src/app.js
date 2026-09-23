@@ -1,9 +1,11 @@
 const express = require('express');
+const compression = require('compression');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 const path = require('path');
 const { pool } = require('./db');
 const { router: authRouter } = require('./auth');
+const googleOAuthRouter = require('./functions/googleOAuth');
 const restRouter = require('./rest');
 const functionsRouter = require('./functions');
 const uploadsRouter = require('./functions/uploadsRouter');
@@ -19,6 +21,13 @@ const { router: realtimeRouter, startListener: startRealtimeListener } = require
 // gateway-level throttle.
 const functionsLimiter = rateLimit({ windowMs: 60 * 1000, limit: 30, standardHeaders: true, legacyHeaders: false });
 const relayLimiter = rateLimit({ windowMs: 60 * 1000, limit: 8, standardHeaders: true, legacyHeaders: false });
+// /auth/v1 (login/signup) and /rest/v1 (the generic table API) had NO rate
+// limiting at all -- unlimited password-brute-force and unlimited account
+// creation from a single IP. authLimiter is deliberately tight (this is the
+// brute-force target); restLimiter is generous since normal page loads
+// legitimately fire many REST calls per navigation.
+const authLimiter = rateLimit({ windowMs: 60 * 1000, limit: 20, standardHeaders: true, legacyHeaders: false });
+const restLimiter = rateLimit({ windowMs: 60 * 1000, limit: 300, standardHeaders: true, legacyHeaders: false });
 
 const ALLOWED_ORIGINS = [
   'https://www.onlinetextileschool.com',
@@ -44,6 +53,11 @@ const app = express();
 // arbitrary chain, so a client can't spoof X-Forwarded-For to fake a
 // different rate-limit identity.
 app.set('trust proxy', 1);
+// Every REST/RPC response ships as uncompressed JSON otherwise -- gzip
+// noticeably shrinks the nested-jsonb payloads rest.js's embedded selects
+// produce (course_sections+lessons, orders+order_items, etc.), directly
+// cutting time-to-render on data-heavy pages.
+app.use(compression());
 app.use(cors({
   origin(origin, callback) {
     // Allow no-origin requests (curl, server-to-server) and any allowed origin.
@@ -54,6 +68,12 @@ app.use(cors({
     callback(new Error('Not allowed by CORS'));
   },
   credentials: true,
+  // api.onlinetextileschool.com and onlinetextileschool.com are different
+  // origins, so without this the browser silently drops the Content-Range
+  // response header before supabase-js ever sees it -- postgrest-js reads
+  // the count out of that header, so `count: 'exact'` would still resolve
+  // to null even after rest.js started sending it correctly.
+  exposedHeaders: ['Content-Range'],
 }));
 app.use(express.json({ limit: '10mb' }));
 // Local file-manager image hosting (fallback path alongside Cloudinary/R2) --
@@ -74,8 +94,9 @@ app.get('/health/db', async (req, res) => {
   }
 });
 
-app.use('/auth/v1', authRouter);
-app.use('/rest/v1', restRouter);
+app.use('/auth/v1', authLimiter, authRouter);
+app.use('/auth/v1/google', googleOAuthRouter);
+app.use('/rest/v1', restLimiter, restRouter);
 app.use('/realtime', realtimeRouter);
 app.use('/functions/v1/uploads', uploadsRouter);
 app.use('/functions/v1/send-smtp-email', relayLimiter);

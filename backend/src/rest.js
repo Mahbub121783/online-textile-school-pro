@@ -1,7 +1,7 @@
 const express = require('express');
 const { withRequestContext } = require('./db');
 const { readAuth } = require('./auth');
-const { resolveEmbed, serializeForColumn, resolveConflictWhere } = require('./relationships');
+const { resolveEmbed, serializeForColumn, resolveConflictWhere, isSetReturningFunction } = require('./relationships');
 
 // ============================================================
 // PostgREST-subset query layer. Implements exactly the operator set the
@@ -315,6 +315,13 @@ const RPC_BLOCKLIST = new Set([
   // here too as defense in depth. Only reachable via the fabric-distribute
   // and fabric-stock-receive backend routes.
   'fabric_hanger_adjust_stock',
+  // issue_workshop_certificate: takes an explicit _user_id param with no
+  // auth.uid()=_user_id check of its own (only the wrapper
+  // claim_my_workshop_certificate binds to the caller) -- any authenticated
+  // user could force-issue a certificate + notification onto an arbitrary
+  // registered user. Block the raw function; claim_my_workshop_certificate
+  // is the intended client-facing entry point and is not blocklisted.
+  'issue_workshop_certificate',
 ]);
 
 // node-postgres serializes a bare JS array as a Postgres array literal
@@ -342,9 +349,21 @@ router.post('/rpc/:fn', async (req, res) => {
     if (RPC_BLOCKLIST.has(fn)) return res.status(403).json({ message: 'Function not callable via RPC' });
     const auth = readAuth(req);
     const args = req.body && typeof req.body === 'object' ? req.body : {};
-    const argNames = Object.keys(args);
+    const argNames = Object.keys(args).map(assertValidIdentifier);
     const params = argNames.map((k) => coerceRpcParam(args[k]));
     const namedArgs = argNames.map((k, i) => `"${k}" := $${i + 1}`).join(', ');
+
+    // A table/set-returning function (RETURNS TABLE(...) / RETURNS SETOF ...)
+    // must be called via `SELECT * FROM fn()` -- wrapping it as
+    // `SELECT fn() AS result` collapses each row into an opaque anonymous
+    // composite value node-pg can't parse into named fields. See
+    // relationships.js's isSetReturningFunction for the live bugs this caused.
+    if (await isSetReturningFunction(fn)) {
+      const result = await withRequestContext(auth, (client) =>
+        client.query(`SELECT * FROM public.${fn}(${namedArgs})`, params)
+      );
+      return res.json(result.rows);
+    }
 
     const result = await withRequestContext(auth, (client) =>
       client.query(`SELECT public.${fn}(${namedArgs}) AS result`, params)
@@ -363,9 +382,31 @@ router.route('/:table')
       const params = [];
       const where = buildWhere(req.query, params);
       const order = buildOrder(req.query.order);
+
+      // supabase-js's `.select(col, { count: 'exact', head: true })` sends
+      // `Prefer: count=exact` (and `head: true` sends a real HTTP HEAD
+      // request) -- this was never implemented at all, so every
+      // count-only query anywhere in the app (dashboards, admin list
+      // pagination, "N records" stat tiles) silently got back count: null
+      // with no error, always rendering as 0/blank.
+      const prefer = req.headers.prefer || '';
+      const wantsCount = prefer.includes('count=exact');
+      let totalCount = null;
+      if (wantsCount) {
+        const countSql = `SELECT count(*)::int AS n FROM public."${table}" ${where}`;
+        const countResult = await withRequestContext(auth, (client) => client.query(countSql, [...params]));
+        totalCount = countResult.rows[0]?.n ?? 0;
+      }
+
+      if (req.method === 'HEAD') {
+        if (wantsCount) res.set('Content-Range', `*/${totalCount}`);
+        return res.status(200).end();
+      }
+
       const select = await buildSelectClause(table, req.query.select);
 
       let limitClause = '';
+      let rangeFrom = req.query.offset ? Number(req.query.offset) : 0;
       if (req.query.limit) {
         params.push(Number(req.query.limit));
         limitClause += ` LIMIT $${params.length}`;
@@ -378,6 +419,7 @@ router.route('/:table')
       const rangeHeader = req.headers.range;
       if (!req.query.limit && rangeHeader) {
         const [from, to] = rangeHeader.split('-').map(Number);
+        rangeFrom = from;
         params.push(to - from + 1);
         limitClause += ` LIMIT $${params.length}`;
         params.push(from);
@@ -386,6 +428,12 @@ router.route('/:table')
 
       const sql = `SELECT ${select} FROM public."${table}" ${where} ${order} ${limitClause}`;
       const result = await withRequestContext(auth, (client) => client.query(sql, params));
+
+      if (wantsCount) {
+        res.set('Content-Range', result.rows.length
+          ? `${rangeFrom}-${rangeFrom + result.rows.length - 1}/${totalCount}`
+          : `*/${totalCount}`);
+      }
 
       if (wantsSingleObject(req)) {
         if (result.rows.length !== 1) {
