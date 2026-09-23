@@ -11,10 +11,11 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Progress } from '@/components/ui/progress';
 import { toast } from 'sonner';
-import { Building2, Loader2, Globe, Image as ImageIcon } from 'lucide-react';
+import { Building2, Loader2, Globe, Image as ImageIcon, BadgeCheck, FileText } from 'lucide-react';
 import ImageCropUpload from '@/components/shared/ImageCropUpload';
 import GallerySlider from '@/components/campus/GallerySlider';
 import NoticeBoard from '@/components/campus/NoticeBoard';
+import CampusEvents from '@/components/campus/CampusEvents';
 import FabricLibrarySection from '@/components/campus/FabricLibrarySection';
 import OwnershipTransferCard from '@/components/campus/OwnershipTransferCard';
 import { useCampusRealtime } from '@/hooks/useCampusRealtime';
@@ -26,6 +27,7 @@ const MyCampusPage = () => {
   const queryClient = useQueryClient();
   const [form, setForm] = useState<any>(null);
   const { upload: uploadGalleryFile, uploading: galleryUploading, progress: galleryProgress } = useFileUpload();
+  const { upload: uploadDocFile, uploading: docUploading, progress: docProgress } = useFileUpload();
 
   const { data: campus, isLoading } = useQuery({
     queryKey: ['my-owned-campus-full', user?.id],
@@ -88,6 +90,30 @@ const MyCampusPage = () => {
     },
     onError: (e: any) => toast.error(e.message),
   });
+
+  const saveDocMutation = useMutation({
+    mutationFn: async (url: string) => {
+      const { error } = await supabase.functions.invoke('campus-update', { body: { id: campus.id, verification_doc_url: url } });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['my-owned-campus-full'] });
+      toast.success('Verification document uploaded');
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const handleDocUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    try {
+      const result = await uploadDocFile(file, { folder: 'campus-verification' });
+      saveDocMutation.mutate(result.url);
+    } catch (err: any) {
+      toast.error(err.message || 'Upload failed');
+    }
+  };
 
   const addGalleryImage = useMutation({
     mutationFn: async (url: string) => {
@@ -251,8 +277,37 @@ const MyCampusPage = () => {
           </Card>
 
           <Card>
+            <CardHeader><CardTitle className="text-base flex items-center gap-2"><BadgeCheck className="h-4 w-4" /> Verification</CardTitle></CardHeader>
+            <CardContent className="space-y-3">
+              {campus.is_verified ? (
+                <p className="flex items-center gap-2 text-sm text-primary font-medium"><BadgeCheck className="h-4 w-4" /> Verified by Online Textile School</p>
+              ) : (
+                <p className="text-xs text-muted-foreground">Upload a verification document (accreditation, registration certificate, etc.) for OTS to review and verify your campus.</p>
+              )}
+              {campus.verification_doc_url && (
+                <a href={campus.verification_doc_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-primary text-xs hover:underline">
+                  <FileText className="h-3.5 w-3.5" /> View uploaded document
+                </a>
+              )}
+              <Input type="file" onChange={handleDocUpload} disabled={docUploading} className="text-xs" />
+              {docUploading && (
+                <div className="space-y-1">
+                  <Progress value={docProgress} className="h-1.5 max-w-[200px]" />
+                  <p className="text-xs text-muted-foreground">Uploading... {docProgress}%</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
             <CardContent className="pt-6">
               <NoticeBoard campusId={campus.id} mode="manage" />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="pt-6">
+              <CampusEvents campusId={campus.id} mode="manage" />
             </CardContent>
           </Card>
 

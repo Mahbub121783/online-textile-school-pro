@@ -213,7 +213,10 @@ const FabricLibrarySection = ({ campusId, mode }: FabricLibrarySectionProps) => 
           {distributions.map((d: any) => (
             <div key={d.id} className="flex items-center justify-between gap-2 border rounded-lg px-3 py-2 text-sm">
               <div className="min-w-0">
-                <p className="font-medium truncate">{d.quantity}x {d.hanger?.name || 'Fabric hanger'}</p>
+                <p className="font-medium truncate flex items-center gap-1.5 flex-wrap">
+                  {d.quantity}x {d.hanger?.name || 'Fabric hanger'}
+                  {d.hanger?.fabric_type && <Badge variant="outline" className="text-[10px]">{d.hanger.fabric_type}</Badge>}
+                </p>
                 <p className="text-xs text-muted-foreground">Sent {format(new Date(d.distributed_at), 'dd MMM yyyy')}{d.received_at ? ` · Received ${format(new Date(d.received_at), 'dd MMM yyyy')}` : ''}</p>
               </div>
               {mode === 'manage' && !d.received_at && (

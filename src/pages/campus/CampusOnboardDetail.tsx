@@ -20,8 +20,10 @@ import CampusLeadershipCard from '@/components/campus/CampusLeadershipCard';
 import CampusInstructorsSection from '@/components/campus/CampusInstructorsSection';
 import CampusStudentsSection from '@/components/campus/CampusStudentsSection';
 import FabricLibrarySection from '@/components/campus/FabricLibrarySection';
+import CampusReviews from '@/components/campus/CampusReviews';
+import CampusEvents from '@/components/campus/CampusEvents';
 import { useCampusRealtime } from '@/hooks/useCampusRealtime';
-import { MapPin, Users, Building2, Globe, ArrowLeft, CheckCircle2, Image as ImageIcon, CalendarDays, Link as LinkIcon, Sparkles, GraduationCap } from 'lucide-react';
+import { MapPin, Users, Building2, Globe, ArrowLeft, CheckCircle2, Image as ImageIcon, CalendarDays, Link as LinkIcon, Sparkles, GraduationCap, BadgeCheck, Star } from 'lucide-react';
 
 const CampusOnboardDetail = () => {
   const { id } = useParams();
@@ -39,12 +41,25 @@ const CampusOnboardDetail = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('campus_onboard_requests')
-        .select('id, campus_name, area, facilities, student_count, description, subdomain_slug, subdomain_provisioned, logo_url, cover_image_url, established_year, website_url, full_address, campus_type, highlights, principal_name, principal_designation, principal_photo_url, principal_phone, principal_email')
+        .select('id, campus_name, area, facilities, student_count, description, subdomain_slug, subdomain_provisioned, logo_url, cover_image_url, established_year, website_url, full_address, campus_type, highlights, principal_name, principal_designation, principal_photo_url, principal_phone, principal_email, is_verified')
         .eq('id', id!)
         .eq('status', 'approved')
         .maybeSingle();
       if (error) throw error;
       return data;
+    },
+  });
+
+  const { data: reviewStats } = useQuery({
+    queryKey: ['campus-reviews-stats', id],
+    enabled: !!id,
+    refetchInterval: 45000,
+    refetchIntervalInBackground: false,
+    queryFn: async () => {
+      const { data, error } = await supabase.from('campus_reviews').select('rating').eq('campus_id', id!);
+      if (error) throw error;
+      const ratings = (data || []).map((r: any) => r.rating);
+      return { avg: ratings.length ? ratings.reduce((a: number, b: number) => a + b, 0) / ratings.length : 0, count: ratings.length };
     },
   });
 
@@ -168,7 +183,10 @@ const CampusOnboardDetail = () => {
                 <Building2 className="h-8 w-8 text-primary shrink-0" />
               )}
               <div>
-                <h1 className="font-heading text-2xl md:text-3xl font-bold">{campus.campus_name}</h1>
+                <h1 className="font-heading text-2xl md:text-3xl font-bold flex items-center gap-2">
+                  {campus.campus_name}
+                  {campus.is_verified && <BadgeCheck className="h-5 w-5 text-primary shrink-0" />}
+                </h1>
                 {campus.campus_type && <Badge variant="secondary" className="mt-1">{campus.campus_type}</Badge>}
               </div>
             </div>
@@ -192,6 +210,13 @@ const CampusOnboardDetail = () => {
                 <CalendarDays className="h-5 w-5 mx-auto text-primary mb-1" />
                 <p className="text-sm text-muted-foreground">Established</p>
                 <p className="font-semibold tabular-nums">{campus.established_year}</p>
+              </CardContent></Card>
+            )}
+            {reviewStats && reviewStats.count > 0 && (
+              <Card><CardContent className="pt-6 text-center">
+                <Star className="h-5 w-5 mx-auto text-primary mb-1" />
+                <p className="text-sm text-muted-foreground">Avg Rating</p>
+                <p className="font-semibold tabular-nums">{reviewStats.avg.toFixed(1)} ({reviewStats.count})</p>
               </CardContent></Card>
             )}
             <Card><CardContent className="pt-6 text-center">
@@ -236,14 +261,18 @@ const CampusOnboardDetail = () => {
           )}
 
           <Tabs defaultValue="overview">
-            <TabsList className="grid grid-cols-6 w-full">
-              <TabsTrigger value="overview">Overview</TabsTrigger>
-              <TabsTrigger value="instructors">Instructors</TabsTrigger>
-              <TabsTrigger value="students">Students</TabsTrigger>
-              <TabsTrigger value="gallery">Gallery</TabsTrigger>
-              <TabsTrigger value="notices">Notices</TabsTrigger>
-              <TabsTrigger value="fabric-library">Fabric Library</TabsTrigger>
-            </TabsList>
+            <div className="w-full overflow-x-auto">
+              <TabsList className="inline-flex h-auto w-max gap-1">
+                <TabsTrigger value="overview" className="shrink-0">Overview</TabsTrigger>
+                <TabsTrigger value="instructors" className="shrink-0">Instructors</TabsTrigger>
+                <TabsTrigger value="students" className="shrink-0">Students</TabsTrigger>
+                <TabsTrigger value="gallery" className="shrink-0">Gallery</TabsTrigger>
+                <TabsTrigger value="notices" className="shrink-0">Notices</TabsTrigger>
+                <TabsTrigger value="fabric-library" className="shrink-0">Fabric Library</TabsTrigger>
+                <TabsTrigger value="reviews" className="shrink-0">Reviews</TabsTrigger>
+                <TabsTrigger value="events" className="shrink-0">Events</TabsTrigger>
+              </TabsList>
+            </div>
 
             <TabsContent value="overview" className="space-y-4 pt-4">
               {campus.highlights && campus.highlights.length > 0 && (
@@ -329,6 +358,18 @@ const CampusOnboardDetail = () => {
             <TabsContent value="fabric-library" className="pt-4">
               <Card><CardContent className="pt-6">
                 <FabricLibrarySection campusId={campus.id} mode="public" />
+              </CardContent></Card>
+            </TabsContent>
+
+            <TabsContent value="reviews" className="pt-4">
+              <Card><CardContent className="pt-6">
+                <CampusReviews campusId={campus.id} />
+              </CardContent></Card>
+            </TabsContent>
+
+            <TabsContent value="events" className="pt-4">
+              <Card><CardContent className="pt-6">
+                <CampusEvents campusId={campus.id} mode="public" />
               </CardContent></Card>
             </TabsContent>
           </Tabs>

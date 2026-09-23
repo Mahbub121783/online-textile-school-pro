@@ -12,10 +12,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
-import { CheckCircle, XCircle, Loader2, Globe, MapPin, Users, Eye, EyeOff, Pencil, Building2, Unlink, Trash2, Image as ImageIcon } from 'lucide-react';
+import { CheckCircle, XCircle, Loader2, Globe, MapPin, Users, Eye, EyeOff, Pencil, Building2, Unlink, Trash2, Image as ImageIcon, BadgeCheck, FileText } from 'lucide-react';
 import ImageCropUpload from '@/components/shared/ImageCropUpload';
 import GallerySlider from '@/components/campus/GallerySlider';
 import NoticeBoard from '@/components/campus/NoticeBoard';
+import CampusEvents from '@/components/campus/CampusEvents';
 
 const CAMPUS_TYPES = ['University', 'College', 'Institute', 'Training Center', 'School'];
 
@@ -155,6 +156,18 @@ const AdminCampusOnboard = () => {
     onError: (e: any) => toast.error(e.message),
   });
 
+  const verifyMutation = useMutation({
+    mutationFn: async ({ id, verified }: { id: string; verified: boolean }) => {
+      const { error } = await supabase.functions.invoke('campus-verify', { body: { id, verified } });
+      if (error) throw error;
+    },
+    onSuccess: (_d, vars) => {
+      queryClient.invalidateQueries({ queryKey: ['admin-campus-onboard'] });
+      toast.success(vars.verified ? 'Campus verified' : 'Verification removed');
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
   const approveTransferMutation = useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase.functions.invoke('campus-transfer-approve', { body: { id } });
@@ -256,7 +269,10 @@ const AdminCampusOnboard = () => {
                     ) : (
                       <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center shrink-0"><Building2 className="h-4 w-4 text-muted-foreground" /></div>
                     )}
-                    <CardTitle className="text-base truncate">{c.campus_name}</CardTitle>
+                    <CardTitle className="text-base truncate flex items-center gap-1.5">
+                      {c.campus_name}
+                      {c.is_verified && <BadgeCheck className="h-4 w-4 text-primary shrink-0" />}
+                    </CardTitle>
                   </div>
                   <Badge className={`${statusColors[c.status]} capitalize shrink-0`}>{c.status}</Badge>
                 </div>
@@ -309,6 +325,22 @@ const AdminCampusOnboard = () => {
                       disabled={removeSubdomainMutation.isPending}
                     >
                       {removeSubdomainMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Unlink className="h-3.5 w-3.5" />}
+                    </Button>
+                  </div>
+                )}
+                {c.status === 'approved' && (
+                  <div className="flex items-center justify-between gap-2 pt-1">
+                    {c.verification_doc_url ? (
+                      <a href={c.verification_doc_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-primary text-xs hover:underline min-w-0 truncate">
+                        <FileText className="h-3.5 w-3.5 shrink-0" /> Verification document
+                      </a>
+                    ) : <span />}
+                    <Button
+                      size="sm" variant={c.is_verified ? 'outline' : 'default'} className="shrink-0"
+                      onClick={() => verifyMutation.mutate({ id: c.id, verified: !c.is_verified })}
+                      disabled={verifyMutation.isPending}
+                    >
+                      <BadgeCheck className="h-3.5 w-3.5 mr-1.5" /> {c.is_verified ? 'Unverify' : 'Verify'}
                     </Button>
                   </div>
                 )}
@@ -404,10 +436,11 @@ const AdminCampusOnboard = () => {
         <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Edit {editTarget?.campus_name}</DialogTitle></DialogHeader>
           <Tabs defaultValue="details">
-            <TabsList className="grid grid-cols-3 w-full">
+            <TabsList className="grid grid-cols-4 w-full">
               <TabsTrigger value="details">Details</TabsTrigger>
               <TabsTrigger value="gallery">Gallery</TabsTrigger>
               <TabsTrigger value="notices">Notices</TabsTrigger>
+              <TabsTrigger value="events">Events</TabsTrigger>
             </TabsList>
             <TabsContent value="details" className="space-y-3 pt-2">
               <div className="space-y-1.5">
@@ -462,6 +495,9 @@ const AdminCampusOnboard = () => {
             </TabsContent>
             <TabsContent value="notices" className="pt-2">
               {editTarget && <NoticeBoard campusId={editTarget.id} mode="manage" />}
+            </TabsContent>
+            <TabsContent value="events" className="pt-2">
+              {editTarget && <CampusEvents campusId={editTarget.id} mode="manage" />}
             </TabsContent>
           </Tabs>
           <DialogFooter>

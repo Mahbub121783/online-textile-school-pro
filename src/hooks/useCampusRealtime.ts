@@ -40,6 +40,12 @@ export function useCampusRealtime(campusId?: string) {
     es.addEventListener('fabric_gallery_changed', () => {
       queryClient.invalidateQueries({ queryKey: ['fabric-library-photos', campusId] });
     });
+    es.addEventListener('reviews_changed', () => {
+      queryClient.invalidateQueries({ queryKey: ['campus-reviews', campusId] });
+    });
+    es.addEventListener('events_changed', () => {
+      queryClient.invalidateQueries({ queryKey: ['campus-events', campusId] });
+    });
 
     return () => es.close();
   }, [campusId, queryClient]);

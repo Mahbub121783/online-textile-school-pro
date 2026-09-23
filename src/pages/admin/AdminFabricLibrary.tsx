@@ -12,6 +12,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import ImageCropUpload from '@/components/shared/ImageCropUpload';
 import FabricLibrarySection from '@/components/campus/FabricLibrarySection';
+import { useFabricAdminRealtime } from '@/hooks/useFabricAdminRealtime';
+import { FABRIC_CATEGORIES } from '@/lib/fabricCategories';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { Shirt, Loader2, Plus, Pencil, PackagePlus, Send, Building2, MapPin } from 'lucide-react';
@@ -24,6 +26,8 @@ const statusColors: Record<string, string> = {
 
 const AdminFabricLibrary = () => {
   const queryClient = useQueryClient();
+  useFabricAdminRealtime(true);
+  const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
 
   // ---------------------------------------------------------------
   // Data
@@ -195,7 +199,26 @@ const AdminFabricLibrary = () => {
         </TabsList>
 
         <TabsContent value="inventory" className="pt-4 space-y-4">
-          <div className="flex justify-end">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex flex-wrap gap-1.5">
+              <Badge
+                variant={categoryFilter === null ? 'default' : 'outline'}
+                className="cursor-pointer"
+                onClick={() => setCategoryFilter(null)}
+              >
+                All
+              </Badge>
+              {FABRIC_CATEGORIES.map((c) => (
+                <Badge
+                  key={c}
+                  variant={categoryFilter === c ? 'default' : 'outline'}
+                  className="cursor-pointer"
+                  onClick={() => setCategoryFilter(c)}
+                >
+                  {c}
+                </Badge>
+              ))}
+            </div>
             <Button size="sm" onClick={openCreateHanger}><Plus className="h-3.5 w-3.5 mr-1.5" /> Add Hanger Type</Button>
           </div>
           {hangersLoading ? (
@@ -204,7 +227,7 @@ const AdminFabricLibrary = () => {
             <p className="text-center py-8 text-muted-foreground text-sm">No fabric hangers in the catalog yet.</p>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {hangers.map((h: any) => (
+              {hangers.filter((h: any) => !categoryFilter || h.fabric_type === categoryFilter).map((h: any) => (
                 <Card key={h.id}>
                   <CardContent className="pt-6 space-y-2">
                     <div className="flex items-start gap-3">
@@ -315,7 +338,13 @@ const AdminFabricLibrary = () => {
           <div className="space-y-3">
             <ImageCropUpload value={hangerForm.image_url} onChange={(url) => setHangerForm((p: any) => ({ ...p, image_url: url }))} aspect={1} shape="square" folder="fabric-hangers" label="Photo" />
             <div className="space-y-1.5"><Label>Name</Label><Input value={hangerForm.name} onChange={(e) => setHangerForm((p: any) => ({ ...p, name: e.target.value }))} /></div>
-            <div className="space-y-1.5"><Label>Fabric Type</Label><Input value={hangerForm.fabric_type} onChange={(e) => setHangerForm((p: any) => ({ ...p, fabric_type: e.target.value }))} placeholder="e.g. Cotton, Denim, Silk" /></div>
+            <div className="space-y-1.5">
+              <Label>Fabric Type</Label>
+              <Select value={hangerForm.fabric_type || undefined} onValueChange={(v) => setHangerForm((p: any) => ({ ...p, fabric_type: v }))}>
+                <SelectTrigger><SelectValue placeholder="Select a category" /></SelectTrigger>
+                <SelectContent>{FABRIC_CATEGORIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
             <div className="space-y-1.5"><Label>Code</Label><Input value={hangerForm.code} onChange={(e) => setHangerForm((p: any) => ({ ...p, code: e.target.value }))} /></div>
             <div className="space-y-1.5"><Label>Description</Label><Textarea rows={3} value={hangerForm.description} onChange={(e) => setHangerForm((p: any) => ({ ...p, description: e.target.value }))} /></div>
           </div>

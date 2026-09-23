@@ -1,15 +1,23 @@
+import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import UtilityBar from '@/components/layout/UtilityBar';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import BottomNav from '@/components/layout/BottomNav';
-import { MapPin, Users, Building2, Plus, School, ArrowUpRight } from 'lucide-react';
+import { MapPin, Users, Building2, Plus, School, ArrowUpRight, Search, BadgeCheck } from 'lucide-react';
 
 const CampusOnboardList = () => {
+  const [search, setSearch] = useState('');
+  const [areaFilter, setAreaFilter] = useState('all');
+  const [typeFilter, setTypeFilter] = useState('all');
+  const [sortBy, setSortBy] = useState('newest');
+
   const { data: campuses = [], isLoading } = useQuery({
     queryKey: ['campus-onboard-approved'],
     refetchInterval: 30000,
@@ -17,12 +25,34 @@ const CampusOnboardList = () => {
     queryFn: async () => {
       const { data } = await supabase
         .from('campus_onboard_requests')
-        .select('id, campus_name, area, facilities, student_count, subdomain_slug, subdomain_provisioned, logo_url, cover_image_url')
+        .select('id, campus_name, area, facilities, student_count, subdomain_slug, subdomain_provisioned, logo_url, cover_image_url, campus_type, is_verified, created_at')
         .eq('status', 'approved')
         .order('created_at', { ascending: false });
       return data ?? [];
     },
   });
+
+  const areas = useMemo(
+    () => Array.from(new Set(campuses.map((c: any) => c.area).filter(Boolean))).sort(),
+    [campuses]
+  );
+  const types = useMemo(
+    () => Array.from(new Set(campuses.map((c: any) => c.campus_type).filter(Boolean))).sort(),
+    [campuses]
+  );
+
+  const visibleCampuses = useMemo(() => {
+    let list = campuses;
+    const q = search.trim().toLowerCase();
+    if (q) list = list.filter((c: any) => c.campus_name?.toLowerCase().includes(q) || c.area?.toLowerCase().includes(q));
+    if (areaFilter !== 'all') list = list.filter((c: any) => c.area === areaFilter);
+    if (typeFilter !== 'all') list = list.filter((c: any) => c.campus_type === typeFilter);
+    const sorted = [...list];
+    if (sortBy === 'name') sorted.sort((a: any, b: any) => (a.campus_name || '').localeCompare(b.campus_name || ''));
+    else if (sortBy === 'students') sorted.sort((a: any, b: any) => (b.student_count || 0) - (a.student_count || 0));
+    else sorted.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    return sorted;
+  }, [campuses, search, areaFilter, typeFilter, sortBy]);
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -41,6 +71,36 @@ const CampusOnboardList = () => {
         </div>
 
         <div className="container py-8">
+          {campuses.length > 0 && (
+            <div className="flex flex-col sm:flex-row gap-3 mb-6">
+              <div className="relative flex-1">
+                <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                <Input placeholder="Search by name or area..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
+              </div>
+              <Select value={areaFilter} onValueChange={setAreaFilter}>
+                <SelectTrigger className="w-full sm:w-40"><SelectValue placeholder="Area" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Areas</SelectItem>
+                  {areas.map((a: string) => <SelectItem key={a} value={a}>{a}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <Select value={typeFilter} onValueChange={setTypeFilter}>
+                <SelectTrigger className="w-full sm:w-44"><SelectValue placeholder="Type" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Types</SelectItem>
+                  {types.map((t: string) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <Select value={sortBy} onValueChange={setSortBy}>
+                <SelectTrigger className="w-full sm:w-40"><SelectValue placeholder="Sort" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="newest">Newest</SelectItem>
+                  <SelectItem value="name">Name A–Z</SelectItem>
+                  <SelectItem value="students">Most Students</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           {isLoading ? (
             <p className="text-center text-muted-foreground py-16">Loading...</p>
           ) : campuses.length === 0 ? (
@@ -50,9 +110,11 @@ const CampusOnboardList = () => {
               <p className="text-muted-foreground text-sm mt-1">Be the first to bring your campus into the network.</p>
               <Button asChild className="mt-4"><Link to="/campus-onboard/register">Register Your Campus</Link></Button>
             </div>
+          ) : visibleCampuses.length === 0 ? (
+            <p className="text-center text-muted-foreground py-16">No campuses match your search/filters.</p>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {campuses.map((c: any) => {
+              {visibleCampuses.map((c: any) => {
                 // A live campus goes straight to its own subdomain portfolio;
                 // one still awaiting subdomain setup falls back to the
                 // internal detail page (nothing to link out to yet).
@@ -84,7 +146,10 @@ const CampusOnboardList = () => {
                         )}
                       </div>
                       <CardContent className="pt-4 space-y-2">
-                        <h3 className="font-heading font-bold text-lg leading-tight truncate">{c.campus_name}</h3>
+                        <h3 className="font-heading font-bold text-lg leading-tight truncate flex items-center gap-1.5">
+                          {c.campus_name}
+                          {c.is_verified && <BadgeCheck className="h-4 w-4 text-primary shrink-0" />}
+                        </h3>
                         <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
                           <MapPin className="h-3.5 w-3.5 shrink-0" /> {c.area}
                         </div>

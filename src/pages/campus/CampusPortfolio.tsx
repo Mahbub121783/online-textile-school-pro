@@ -9,8 +9,10 @@ import CampusLeadershipCard from '@/components/campus/CampusLeadershipCard';
 import CampusInstructorsSection from '@/components/campus/CampusInstructorsSection';
 import CampusStudentsSection from '@/components/campus/CampusStudentsSection';
 import FabricLibrarySection from '@/components/campus/FabricLibrarySection';
+import CampusReviews from '@/components/campus/CampusReviews';
+import CampusEvents from '@/components/campus/CampusEvents';
 import { useCampusRealtime } from '@/hooks/useCampusRealtime';
-import { Building2, MapPin, Users, Mail, Phone, GraduationCap, Image as ImageIcon, CalendarDays, Link as LinkIcon, Sparkles } from 'lucide-react';
+import { Building2, MapPin, Users, Mail, Phone, GraduationCap, Image as ImageIcon, CalendarDays, Link as LinkIcon, Sparkles, BadgeCheck, Star } from 'lucide-react';
 
 interface Props {
   slug: string;
@@ -24,7 +26,7 @@ const CampusPortfolio = ({ slug }: Props) => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('campus_onboard_requests')
-        .select('id, campus_name, area, facilities, description, student_count, departments, logo_url, cover_image_url, contact_email, contact_phone, established_year, website_url, full_address, campus_type, highlights, principal_name, principal_designation, principal_photo_url, principal_phone, principal_email')
+        .select('id, campus_name, area, facilities, description, student_count, departments, logo_url, cover_image_url, contact_email, contact_phone, established_year, website_url, full_address, campus_type, highlights, principal_name, principal_designation, principal_photo_url, principal_phone, principal_email, is_verified')
         .eq('subdomain_slug', slug)
         .eq('status', 'approved')
         .maybeSingle();
@@ -45,6 +47,19 @@ const CampusPortfolio = ({ slug }: Props) => {
         .eq('onboarded_campus_id', campus!.id);
       if (error) throw error;
       return count ?? 0;
+    },
+  });
+
+  const { data: reviewStats } = useQuery({
+    queryKey: ['campus-reviews-stats', campus?.id],
+    enabled: !!campus?.id,
+    refetchInterval: 45000,
+    refetchIntervalInBackground: false,
+    queryFn: async () => {
+      const { data, error } = await supabase.from('campus_reviews').select('rating').eq('campus_id', campus!.id);
+      if (error) throw error;
+      const ratings = (data || []).map((r: any) => r.rating);
+      return { avg: ratings.length ? ratings.reduce((a: number, b: number) => a + b, 0) / ratings.length : 0, count: ratings.length };
     },
   });
 
@@ -104,7 +119,10 @@ const CampusPortfolio = ({ slug }: Props) => {
               <Building2 className="h-10 w-10" />
             </div>
           )}
-          <h1 className="font-heading text-3xl md:text-5xl font-black mb-3 drop-shadow-sm">{campus.campus_name}</h1>
+          <h1 className="font-heading text-3xl md:text-5xl font-black mb-3 drop-shadow-sm flex items-center justify-center gap-2">
+            {campus.campus_name}
+            {campus.is_verified && <BadgeCheck className="h-8 w-8 shrink-0" />}
+          </h1>
           <p className="flex items-center justify-center gap-1.5 opacity-90 text-base">
             <MapPin className="h-4 w-4" /> {campus.area}
           </p>
@@ -131,6 +149,13 @@ const CampusPortfolio = ({ slug }: Props) => {
               <p className="text-sm text-muted-foreground">Established</p>
             </CardContent></Card>
           )}
+          {reviewStats && reviewStats.count > 0 && (
+            <Card><CardContent className="pt-6 text-center">
+              <Star className="h-6 w-6 mx-auto text-primary mb-1.5" />
+              <p className="text-2xl font-heading font-black tabular-nums">{reviewStats.avg.toFixed(1)}</p>
+              <p className="text-sm text-muted-foreground">Avg Rating ({reviewStats.count})</p>
+            </CardContent></Card>
+          )}
         </div>
 
         <CampusLeadershipCard
@@ -139,14 +164,18 @@ const CampusPortfolio = ({ slug }: Props) => {
         />
 
         <Tabs defaultValue="overview">
-          <TabsList className="grid grid-cols-6 w-full">
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="instructors">Instructors</TabsTrigger>
-            <TabsTrigger value="students">Students</TabsTrigger>
-            <TabsTrigger value="gallery">Gallery</TabsTrigger>
-            <TabsTrigger value="notices">Notices</TabsTrigger>
-            <TabsTrigger value="fabric-library">Fabric Library</TabsTrigger>
-          </TabsList>
+          <div className="w-full overflow-x-auto">
+            <TabsList className="inline-flex h-auto w-max gap-1">
+              <TabsTrigger value="overview" className="shrink-0">Overview</TabsTrigger>
+              <TabsTrigger value="instructors" className="shrink-0">Instructors</TabsTrigger>
+              <TabsTrigger value="students" className="shrink-0">Students</TabsTrigger>
+              <TabsTrigger value="gallery" className="shrink-0">Gallery</TabsTrigger>
+              <TabsTrigger value="notices" className="shrink-0">Notices</TabsTrigger>
+              <TabsTrigger value="fabric-library" className="shrink-0">Fabric Library</TabsTrigger>
+              <TabsTrigger value="reviews" className="shrink-0">Reviews</TabsTrigger>
+              <TabsTrigger value="events" className="shrink-0">Events</TabsTrigger>
+            </TabsList>
+          </div>
 
           <TabsContent value="overview" className="space-y-4 pt-4">
             {campus.highlights && campus.highlights.length > 0 && (
@@ -236,6 +265,18 @@ const CampusPortfolio = ({ slug }: Props) => {
           <TabsContent value="fabric-library" className="pt-4">
             <Card><CardContent className="pt-6">
               <FabricLibrarySection campusId={campus.id} mode="public" />
+            </CardContent></Card>
+          </TabsContent>
+
+          <TabsContent value="reviews" className="pt-4">
+            <Card><CardContent className="pt-6">
+              <CampusReviews campusId={campus.id} />
+            </CardContent></Card>
+          </TabsContent>
+
+          <TabsContent value="events" className="pt-4">
+            <Card><CardContent className="pt-6">
+              <CampusEvents campusId={campus.id} mode="public" />
             </CardContent></Card>
           </TabsContent>
         </Tabs>
