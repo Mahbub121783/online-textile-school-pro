@@ -1,5 +1,7 @@
 import { lazy, Suspense, useEffect } from 'react';
 import ChatWidget from '@/components/chat/ChatWidget';
+import NotificationPermissionBanner from '@/components/notifications/NotificationPermissionBanner';
+import MaintenanceGate from '@/components/MaintenanceGate';
 
 import CookieConsentBanner from '@/components/cookies/CookieConsentBanner';
 import { CookieConsentProvider } from '@/hooks/useCookieConsent';
@@ -26,6 +28,7 @@ const NotFound = lazy(() => import("./pages/NotFound"));
 const Login = lazy(() => import("./pages/auth/Login"));
 const Register = lazy(() => import("./pages/auth/Register"));
 const ForgotPassword = lazy(() => import("./pages/auth/ForgotPassword"));
+const OAuthCallback = lazy(() => import("./pages/auth/OAuthCallback"));
 const ResetPassword = lazy(() => import("./pages/auth/ResetPassword"));
 const CourseCatalog = lazy(() => import("./pages/courses/CourseCatalog"));
 const CourseDetail = lazy(() => import("./pages/courses/CourseDetail"));
@@ -178,6 +181,7 @@ const MyWorkshopsPage = lazy(() => import("./pages/dashboard/MyWorkshopsPage"));
 const AdminWorkshops = lazy(() => import("./pages/admin/AdminWorkshops"));
 const AdminSponsors = lazy(() => import("./pages/admin/AdminSponsors"));
 const VerifyCertificate = lazy(() => import("./pages/verify/VerifyCertificate"));
+const VerifyStudent = lazy(() => import("./pages/verify/VerifyStudent"));
 const AdminPopups = lazy(() => import("./pages/admin/AdminPopups"));
 const PopupAnalytics = lazy(() => import("./pages/admin/popups/PopupAnalytics"));
 const ContributorProfile = lazy(() => import("./pages/contributor/ContributorProfile"));
@@ -298,6 +302,7 @@ const AppRoutes = () => {
           <Route path="/auth/login" element={<Login />} />
           <Route path="/auth/register" element={<Register />} />
           <Route path="/auth/forgot-password" element={<ForgotPassword />} />
+          <Route path="/auth/callback" element={<OAuthCallback />} />
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/profile" element={<Navigate to="/dashboard" replace />} />
           <Route path="/contributor/:id" element={<ContributorProfile />} />
@@ -460,6 +465,7 @@ const AppRoutes = () => {
           <Route path="/campus-onboard/register" element={<CampusOnboardRegister />} />
           <Route path="/campus-onboard/:id" element={<CampusOnboardDetail />} />
           <Route path="/verify-certificate" element={<VerifyCertificate />} />
+          <Route path="/verify-student" element={<VerifyStudent />} />
           <Route path="/register/:slug" element={<PublicRegistration />} />
           {/* Forum */}
           <Route path="/forum" element={<ForumHome />} />
@@ -496,13 +502,21 @@ const GlobalOverlays = () => {
     path.startsWith('/quiz/') ||
     path.startsWith('/assignment/');
 
-  if (skipHeavyOverlays) return <CookieConsentBanner />;
-
+  // CookieConsentBanner/NotificationPermissionBanner stay at a fixed
+  // position in the returned tree regardless of skipHeavyOverlays, so React
+  // keeps them mounted (same component instance) across route changes --
+  // only PopupRenderer/ChatWidget conditionally mount/unmount. Previously
+  // both banners were duplicated into each branch, which meant crossing the
+  // skipHeavyOverlays boundary (e.g. navigating from a course page into
+  // /dashboard) unmounted and remounted them, resetting their local
+  // dismissed/closed state and re-triggering the notification permission
+  // prompt on every such navigation.
   return (
     <>
-      <PopupRenderer />
-      {!isPreviewOrEmbedded && <ChatWidget />}
+      {!skipHeavyOverlays && <PopupRenderer />}
+      {!skipHeavyOverlays && !isPreviewOrEmbedded && <ChatWidget />}
       <CookieConsentBanner />
+      <NotificationPermissionBanner />
     </>
   );
 };
@@ -530,7 +544,9 @@ const App = () => (
               <Toaster />
               <Sonner />
               <BrowserRouter future={{ v7_relativeSplatPath: true }}>
-                <AppRoutes />
+                <MaintenanceGate>
+                  <AppRoutes />
+                </MaintenanceGate>
                 <GlobalOverlays />
               </BrowserRouter>
             </TooltipProvider>

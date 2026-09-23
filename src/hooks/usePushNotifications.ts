@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { isStandalone } from "@/hooks/useStandaloneMode";
 
 // VAPID public key — public, safe to embed in client. Pairs with VAPID_PRIVATE_KEY
 // in backend/.env. Regenerated during the self-host migration (the original
@@ -33,8 +32,13 @@ export const usePushNotifications = () => {
     "PushManager" in window &&
     "Notification" in window;
 
-  // Only available when running as installed app
-  const eligible = supported && isStandalone();
+  // Web Push works in a regular browser tab too (Chrome/Edge/Firefox on
+  // desktop and Android) -- previously gated to installed-app-only, which
+  // meant most visitors were never even offered the permission prompt.
+  // Installed/standalone mode is still the more reliable path (survives the
+  // tab being closed, works on iOS Safari), but it's no longer a hard
+  // requirement -- see NotificationSettingsCard.tsx / NotificationPermissionBanner.tsx.
+  const eligible = supported;
 
   useEffect(() => {
     if (!eligible) return;

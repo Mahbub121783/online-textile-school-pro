@@ -87,20 +87,20 @@ const NotificationSettingsCard = () => {
             <Bell className="h-4 w-4 text-primary" /> App Notifications
           </h3>
           <p className="text-xs text-muted-foreground mt-1">
-            Real-time push reminders for classes, workshops and assignments. Available only inside the installed
-            app.
+            Real-time push reminders for classes, workshops, assignments and more — straight to your device's
+            notification bar.
           </p>
         </div>
       </div>
 
-      {!standalone && (
+      {!standalone && eligible && (
         <div className="rounded-lg border border-dashed bg-muted/40 p-4 flex items-start gap-3">
           <Smartphone className="h-5 w-5 text-primary shrink-0 mt-0.5" />
           <div className="flex-1">
-            <p className="text-sm font-medium">Install the app to enable push notifications</p>
+            <p className="text-sm font-medium">Want the most reliable delivery?</p>
             <p className="text-xs text-muted-foreground mt-1">
-              Browser tabs cannot deliver advanced reminders. Install the app to your home screen — you will receive
-              notifications even when the app is closed.
+              Notifications already work in this browser tab. Installing the app to your home screen makes them keep
+              arriving even after you close the tab.
             </p>
             <div className="mt-3">
               <InstallAppButton />
@@ -109,7 +109,7 @@ const NotificationSettingsCard = () => {
         </div>
       )}
 
-      {standalone && eligible && (
+      {eligible && (
         <div className="rounded-lg border bg-muted/30 p-4 flex items-center justify-between gap-3">
           <div className="flex-1">
             <p className="text-sm font-medium">
@@ -117,9 +117,11 @@ const NotificationSettingsCard = () => {
             </p>
             <p className="text-xs text-muted-foreground mt-0.5">
               {permission === "denied"
-                ? "Permission was blocked. Enable notifications for this app from your device settings."
+                ? "Permission was blocked. Enable notifications for this site from your browser/device settings."
                 : subscribed
-                  ? "This device will receive reminders even when the app is closed."
+                  ? standalone
+                    ? "This device will receive reminders even when the app is closed."
+                    : "This browser will receive reminders while it's running."
                   : "Turn on to start receiving reminders on this device."}
             </p>
           </div>

@@ -30,8 +30,11 @@ export async function createNotification(params: CreateNotificationParams) {
 export async function createNotificationWithEmail(
   params: CreateNotificationParams & { recipientEmail?: string }
 ) {
-  // Create in-app notification
-  await createNotification(params);
+  // Every notifications insert now also auto-emails via the backend's
+  // central fan-out (db/59 + backend/src/notify.js) -- already_emailed
+  // suppresses that generic email since this function sends its own
+  // custom-built one below, while still leaving push notifications on.
+  await createNotification({ ...params, metadata: { ...(params.metadata || {}), already_emailed: true } });
 
   // Send email notification
   try {
@@ -75,7 +78,7 @@ function buildNotificationEmailHtml(title: string, message: string, link?: strin
       </div>
       <div style="background:#f8fafc;padding:24px;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 8px 8px;">
         <p style="color:#334155;font-size:14px;line-height:1.6;margin:0 0 16px;">${message}</p>
-        ${link ? `<a href="https://learn-textile-hub.lovable.app${link}" style="display:inline-block;background:#0ea5e9;color:#fff;padding:10px 24px;border-radius:6px;text-decoration:none;font-size:14px;">View Details</a>` : ''}
+        ${link ? `<a href="https://onlinetextileschool.com${link}" style="display:inline-block;background:#0ea5e9;color:#fff;padding:10px 24px;border-radius:6px;text-decoration:none;font-size:14px;">View Details</a>` : ''}
       </div>
       <p style="color:#94a3b8;font-size:11px;text-align:center;margin-top:16px;">Online Textile School — Notification</p>
     </div>
@@ -115,8 +118,10 @@ export async function broadcastNotificationWithEmail(params: {
   link?: string;
   metadata?: Record<string, any>;
 }) {
-  await broadcastNotification(params);
-  // Send emails in background - don't block
+  // broadcastNotification() is NOT also called here -- createNotificationWithEmail
+  // below already inserts one row per recipient. Calling both used to insert
+  // two notification rows per user (one un-emailed, one emailed), which
+  // would now mean up to 3 emails per recipient once every insert auto-emails.
   for (const uid of params.userIds) {
     createNotificationWithEmail({
       userId: uid,

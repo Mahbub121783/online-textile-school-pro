@@ -260,13 +260,27 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   // so when an admin granted/revoked a role, the AFFECTED user's own session
   // (sidebar, route guards, permissions) never found out until they manually
   // logged out and back in -- reported as "role change not reflecting live."
-  // This 30s/focus poll stays as a fallback safety net (SSE connections can
-  // drop), but the SSE effect below is what makes it actually instant.
+  // This poll stays as a fallback safety net (SSE connections can drop), but
+  // the SSE effect below is what makes it actually instant -- so this only
+  // needs to catch the rare case SSE missed, not run continuously. It was
+  // originally every 30s, force-bypassing its own 2-minute cache every
+  // single tick (see refreshProfile()) -- that meant every open tab of
+  // every logged-in user forced two real DB queries every 30 seconds,
+  // unconditionally, which measurably added to backend load site-wide. 5
+  // minutes is still fast for a "safety net", not the primary mechanism.
   useEffect(() => {
     if (!user) return;
     let cancelled = false;
-    const tick = () => { if (!cancelled) refreshProfile(); };
-    const interval = setInterval(tick, 30000);
+    const tick = () => {
+      if (cancelled) return;
+      refreshProfile();
+      // Sessions expire after a period of total inactivity (see
+      // backend/.env JWT_EXPIRE + authClient.ts refreshSession()) -- this
+      // is what keeps a genuinely active user logged in across that window.
+      // @ts-expect-error -- refreshSession is our own extension to authClient, not part of supabase-js's typed .auth surface
+      supabase.auth.refreshSession();
+    };
+    const interval = setInterval(tick, 5 * 60 * 1000);
     window.addEventListener('focus', tick);
     return () => { cancelled = true; clearInterval(interval); window.removeEventListener('focus', tick); };
     // eslint-disable-next-line react-hooks/exhaustive-deps

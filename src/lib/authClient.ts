@@ -5,12 +5,20 @@
 // across the app (getSession, getUser, onAuthStateChange, signInWithPassword,
 // signUp, signOut, updateUser) so those call sites don't need to change.
 //
-// Known gap: signInWithOAuth (Google login) is NOT implemented -- there is
-// no OAuth flow on the self-hosted backend yet. Calling it returns a clear
-// error instead of silently failing.
+// signInWithOAuth (Google) is a full-page redirect to the backend's own
+// OAuth flow (backend/src/functions/googleOAuth.js), not a popup -- it
+// returns control to the browser via navigation, then exchangeOAuthCode()
+// below completes it once the backend redirects back to /auth/callback.
 
 const STORAGE_KEY = 'ots-auth-session';
 const API_BASE = import.meta.env.VITE_SUPABASE_URL;
+
+// Sessions are issued with a short JWT_EXPIRE (see backend/.env) so an idle
+// account auto-logs-out instead of staying valid for weeks. refreshSession()
+// (called from useAuth.tsx while the app is open/focused) renews it -- this
+// just throttles those calls so an open tab doesn't re-sign a token every 30s.
+const REFRESH_MIN_INTERVAL_MS = 6 * 60 * 60 * 1000;
+let lastRefreshAttempt = 0;
 
 type StoredSession = {
   access_token: string;
@@ -129,8 +137,52 @@ export const authClient = {
     return { data: { user: data }, error: null };
   },
 
-  // Not implemented -- no OAuth flow on the self-hosted backend yet.
-  async signInWithOAuth(_opts: { provider: string; options?: unknown }) {
-    return { data: null, error: { message: 'Social sign-in is not available yet. Please use email/password.' } };
+  async signInWithOAuth({ provider, options }: { provider: string; options?: { redirectTo?: string } }) {
+    if (provider !== 'google') {
+      return { data: null, error: { message: `${provider} sign-in is not available yet.` } };
+    }
+    // The backend redirects the browser straight back to this frontend
+    // origin, so only a same-origin path (not a full URL) needs to travel
+    // through it.
+    let redirectPath = '/';
+    try {
+      const url = new URL(options?.redirectTo || window.location.origin);
+      redirectPath = url.pathname + url.search;
+    } catch { /* keep default */ }
+
+    window.location.href = `${API_BASE}/auth/v1/google/start?redirect=${encodeURIComponent(redirectPath)}`;
+    return { data: null, error: null };
+  },
+
+  // Not part of supabase-js's API -- called once by src/pages/auth/OAuthCallback.tsx
+  // after the backend's Google OAuth flow redirects back with a one-time code.
+  async exchangeOAuthCode(code: string) {
+    const { data, error } = await apiFetch('/auth/v1/google/exchange', {
+      method: 'POST',
+      body: JSON.stringify({ code }),
+    });
+    if (error) return { data: { session: null, user: null }, error };
+    const session: StoredSession = { access_token: data.access_token, token_type: data.token_type, user: data.user };
+    writeSession(session);
+    emit('SIGNED_IN', session);
+    return { data: { session, user: session.user }, error: null };
+  },
+
+  // Not part of supabase-js's API -- called from useAuth.tsx while a tab is
+  // open/focused, to keep an active user's session alive (see backend's
+  // POST /auth/v1/refresh). No event emitted: only the token string changes,
+  // nothing UI-visible.
+  async refreshSession() {
+    const now = Date.now();
+    if (now - lastRefreshAttempt < REFRESH_MIN_INTERVAL_MS) return { error: null };
+    lastRefreshAttempt = now;
+
+    const current = readSession();
+    if (!current) return { error: null };
+
+    const { data, error } = await apiFetch('/auth/v1/refresh', { method: 'POST' });
+    if (error) return { error };
+    writeSession({ ...current, access_token: data.access_token, token_type: data.token_type });
+    return { error: null };
   },
 };
