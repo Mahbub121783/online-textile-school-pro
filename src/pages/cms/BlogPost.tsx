@@ -83,8 +83,8 @@ const BlogPost = () => {
           datePublished: post.published_at || post.created_at,
           dateModified: post.updated_at,
           author: { '@type': 'Person', name: (post as any).user_profiles?.full_name || 'Online Textile School' },
-          publisher: { '@type': 'Organization', name: 'Online Textile School', url: 'https://onlinetextileschool.com' },
-          mainEntityOfPage: `https://onlinetextileschool.com/blog/${post.slug}`,
+          publisher: { '@type': 'Organization', name: 'Online Textile School', url: 'https://www.onlinetextileschool.com' },
+          mainEntityOfPage: `https://www.onlinetextileschool.com/blog/${post.slug}`,
         }}
       />
       <UtilityBar />

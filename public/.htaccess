@@ -1,6 +1,18 @@
 Options -MultiViews -Indexes
 RewriteEngine On
 
+# ── Canonical domain: apex → www ──
+# The apex (onlinetextileschool.com) and www hosts both served the site
+# directly with no redirect, which makes browsers treat them as two totally
+# separate origins -- separate localStorage, separate Notification
+# permission grants. A visitor bouncing between the two (bookmark, search
+# result, email link) would see the notification-permission prompt reset
+# and reappear on the "new" origin even after already answering it on the
+# other one. www is the canonical host (CORS, live-cutover verification,
+# and the deploy docroot are all keyed to it).
+RewriteCond %{HTTP_HOST} ^onlinetextileschool\.com$ [NC]
+RewriteRule ^(.*)$ https://www.onlinetextileschool.com/$1 [R=301,L]
+
 # ── Cache-busting: never cache index.html ──
 <FilesMatch "^(index\.html|sw\.js|workbox-.*)$">
   Header set Cache-Control "no-cache, no-store, must-revalidate"

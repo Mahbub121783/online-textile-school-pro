@@ -82,7 +82,7 @@ const EventsPage = () => {
           '@context': 'https://schema.org',
           '@type': 'CollectionPage',
           name: 'Events — Online Textile School',
-          url: 'https://onlinetextileschool.com/events',
+          url: 'https://www.onlinetextileschool.com/events',
         }}
       />
       <Header />

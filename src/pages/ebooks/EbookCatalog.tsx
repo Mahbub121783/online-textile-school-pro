@@ -118,8 +118,8 @@ const EbookCatalog = () => {
           '@context': 'https://schema.org', '@type': 'CollectionPage',
           name: 'eBook Library — Online Textile School',
           description: 'Comprehensive textile engineering eBooks for students and professionals.',
-          url: 'https://onlinetextileschool.com/ebooks',
-          provider: { '@type': 'EducationalOrganization', name: 'Online Textile School', url: 'https://onlinetextileschool.com' },
+          url: 'https://www.onlinetextileschool.com/ebooks',
+          provider: { '@type': 'EducationalOrganization', name: 'Online Textile School', url: 'https://www.onlinetextileschool.com' },
         }}
       />
       <UtilityBar /><Header />

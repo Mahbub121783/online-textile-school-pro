@@ -20,7 +20,7 @@ interface SEOHeadProps {
 
 const FALLBACK_NAME = 'Online Textile School';
 const FALLBACK_DESC = "Bangladesh's premier online learning platform for textile engineering. Courses in Spinning, Weaving, Dyeing, Knitting, Garments Technology and more.";
-const SITE_URL = 'https://onlinetextileschool.com';
+const SITE_URL = 'https://www.onlinetextileschool.com';
 
 const SEOHead = ({
   title,

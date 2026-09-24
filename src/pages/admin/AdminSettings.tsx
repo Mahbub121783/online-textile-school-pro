@@ -212,7 +212,7 @@ const AdminSettings = () => {
                 IndexNow: {indexNowKey ? 'Configured' : 'Not configured (Bing/Yandex/Seznam instant indexing disabled)'}
               </div>
               <div className="flex flex-wrap gap-3 pt-2">
-                <a href="https://onlinetextileschool.com/sitemap.xml" target="_blank" rel="noreferrer" className="text-primary hover:underline inline-flex items-center gap-1">
+                <a href="https://www.onlinetextileschool.com/sitemap.xml" target="_blank" rel="noreferrer" className="text-primary hover:underline inline-flex items-center gap-1">
                   View Sitemap <ExternalLink className="h-3 w-3" />
                 </a>
                 <a href="https://search.google.com/search-console" target="_blank" rel="noreferrer" className="text-primary hover:underline inline-flex items-center gap-1">
