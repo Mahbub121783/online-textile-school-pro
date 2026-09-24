@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
-import { Search, ShoppingCart, Menu, X, ChevronDown, Heart, User, LogOut, GraduationCap, Shield, BookOpen, Settings, TrendingUp } from 'lucide-react';
+import { Search, ShoppingCart, Menu, X, Heart, User, LogOut, GraduationCap, Shield, BookOpen, Settings, TrendingUp } from 'lucide-react';
 import ThemeToggle from '@/components/ThemeToggle';
 import LanguageToggle from '@/components/LanguageToggle';
 import CurrencySelector from '@/components/CurrencySelector';
@@ -34,7 +34,6 @@ const Header = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [searchFocused, setSearchFocused] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [certDropdown, setCertDropdown] = useState(false);
   const { t } = useTranslation();
   const { user, roles, signOut, profile } = useAuth();
   const itemCount = useCartStore((s) => s.getItemCount());
@@ -96,48 +95,6 @@ const Header = () => {
               {t('nav.courses')}
             </Link>
 
-            <div
-              className="relative"
-              onMouseEnter={() => setCertDropdown(true)}
-              onMouseLeave={() => setCertDropdown(false)}
-            >
-              <Link
-                to="/learning-paths"
-                className={`flex items-center gap-1 px-3 py-2 text-sm font-medium transition-colors rounded-md hover:text-primary ${certDropdown ? 'text-primary' : 'text-foreground'}`}
-              >
-                {t('nav.learningPaths')}
-                <ChevronDown className="h-3.5 w-3.5" />
-              </Link>
-
-              {certDropdown && (
-                <div className="absolute top-full left-0 w-[280px] bg-background border rounded-lg shadow-xl p-3 animate-fade-in z-50">
-                  <p className="text-xs font-bold text-primary mb-2 uppercase tracking-wide px-2">Learning Paths</p>
-                  {['Spinning Expert', 'Weaving Professional', 'Dyeing & Finishing'].map((item) => (
-                    <Link
-                      key={item}
-                      to="/learning-paths"
-                      className="block px-2 py-1.5 text-sm rounded-md hover:bg-secondary transition-colors"
-                      onClick={() => setCertDropdown(false)}
-                    >
-                      {item}
-                    </Link>
-                  ))}
-                  <div className="border-t my-2" />
-                  <p className="text-xs font-bold text-primary mb-2 uppercase tracking-wide px-2">Popular Certifications</p>
-                  {['Textile Quality Control', 'Garments Technology', 'Yarn Manufacturing', 'Merchandising'].map((item) => (
-                    <Link
-                      key={item}
-                      to="/learning-paths"
-                      className="block px-2 py-1.5 text-sm rounded-md hover:bg-secondary transition-colors"
-                      onClick={() => setCertDropdown(false)}
-                    >
-                      {item}
-                    </Link>
-                  ))}
-                </div>
-              )}
-            </div>
-
             <Link to="/ebooks" className="px-3 py-2 text-sm font-medium text-foreground hover:text-primary transition-colors rounded-md">
               {t('nav.ebooks')}
             </Link>
@@ -153,7 +110,7 @@ const Header = () => {
           <div
             ref={searchRef}
             className={`relative transition-all duration-300 ease-in-out ${
-              searchFocused ? 'flex-1 min-w-0' : 'shrink-0 w-40 lg:w-56 xl:w-72'
+              searchFocused ? 'flex-1 min-w-0' : 'shrink-0 w-28 lg:w-36 xl:w-44'
             }`}
           >
             <form onSubmit={handleSearch} className="relative">
@@ -223,77 +180,80 @@ const Header = () => {
               </Link>
             )}
 
-            <CreditBalancePill />
+            {/* Account/commerce cluster — visually boxed off from the utility icons above */}
+            <div className="flex items-center gap-0.5 ml-1 pl-2 border-l border-border">
+              <CreditBalancePill />
 
-            <Link to="/cart" className="relative">
-              <Button variant="ghost" size="icon" className="h-9 w-9">
-                <ShoppingCart className="h-[18px] w-[18px]" />
-                {itemCount > 0 && (
-                  <span className="absolute -top-0.5 -right-0.5 bg-accent text-accent-foreground text-[10px] w-[18px] h-[18px] flex items-center justify-center rounded-full font-bold">
-                    {itemCount}
-                  </span>
-                )}
-              </Button>
-            </Link>
+              <Link to="/cart" className="relative">
+                <Button variant="ghost" size="icon" className="h-9 w-9">
+                  <ShoppingCart className="h-[18px] w-[18px]" />
+                  {itemCount > 0 && (
+                    <span className="absolute -top-0.5 -right-0.5 bg-accent text-accent-foreground text-[10px] w-[18px] h-[18px] flex items-center justify-center rounded-full font-bold">
+                      {itemCount}
+                    </span>
+                  )}
+                </Button>
+              </Link>
 
-            {user && <NotificationBell basePath="/dashboard" />}
+              {user && <NotificationBell basePath="/dashboard" />}
 
-            {/* User avatar dropdown or auth buttons */}
-            {user ? (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-9 w-9 rounded-full p-0 ml-1">
-                    <Avatar className="h-8 w-8 border-2 border-primary/20">
-                      <AvatarFallback className="bg-primary text-primary-foreground text-xs font-bold">
-                        {userInitials}
-                      </AvatarFallback>
-                    </Avatar>
+              {/* User avatar dropdown or auth buttons */}
+              {user ? (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-9 w-9 rounded-full p-0 ml-1">
+                      <Avatar className="h-8 w-8 border-2 border-primary/20">
+                        <AvatarFallback className="bg-primary text-primary-foreground text-xs font-bold">
+                          {userInitials}
+                        </AvatarFallback>
+                      </Avatar>
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-52">
+                    <div className="px-3 py-2">
+                      <p className="text-sm font-medium truncate">{profile?.full_name || 'Student'}</p>
+                      <p className="text-xs text-muted-foreground truncate">{user.email}</p>
+                    </div>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => navigate('/dashboard')}>
+                      <User className="mr-2 h-4 w-4" /> {t('common.dashboard')}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => navigate(`/contributor/${user.id}`)}>
+                      <GraduationCap className="mr-2 h-4 w-4" /> View public profile
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => navigate('/dashboard/courses')}>
+                      <BookOpen className="mr-2 h-4 w-4" /> {t('dashboard.myCourses')}
+                    </DropdownMenuItem>
+                    {isInstructor && (
+                      <DropdownMenuItem onClick={() => navigate('/instructor')}>
+                        <GraduationCap className="mr-2 h-4 w-4" /> Instructor Portal
+                      </DropdownMenuItem>
+                    )}
+                    {isAdmin && (
+                      <DropdownMenuItem onClick={() => navigate('/admin')}>
+                        <Shield className="mr-2 h-4 w-4" /> Admin Panel
+                      </DropdownMenuItem>
+                    )}
+                    <DropdownMenuItem onClick={() => navigate('/dashboard/settings')}>
+                      <Settings className="mr-2 h-4 w-4" /> {t('common.settings')}
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={signOut} className="text-destructive focus:text-destructive">
+                      <LogOut className="mr-2 h-4 w-4" /> {t('common.signOut')}
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ) : (
+                <div className="flex items-center gap-2 ml-2">
+                  <Button variant="ghost" size="sm" className="h-8 text-sm" onClick={() => navigate('/auth/login')}>
+                    {t('common.login')}
                   </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-52">
-                  <div className="px-3 py-2">
-                    <p className="text-sm font-medium truncate">{profile?.full_name || 'Student'}</p>
-                    <p className="text-xs text-muted-foreground truncate">{user.email}</p>
-                  </div>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => navigate('/dashboard')}>
-                    <User className="mr-2 h-4 w-4" /> {t('common.dashboard')}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => navigate(`/contributor/${user.id}`)}>
-                    <GraduationCap className="mr-2 h-4 w-4" /> View public profile
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => navigate('/dashboard/courses')}>
-                    <BookOpen className="mr-2 h-4 w-4" /> {t('dashboard.myCourses')}
-                  </DropdownMenuItem>
-                  {isInstructor && (
-                    <DropdownMenuItem onClick={() => navigate('/instructor')}>
-                      <GraduationCap className="mr-2 h-4 w-4" /> Instructor Portal
-                    </DropdownMenuItem>
-                  )}
-                  {isAdmin && (
-                    <DropdownMenuItem onClick={() => navigate('/admin')}>
-                      <Shield className="mr-2 h-4 w-4" /> Admin Panel
-                    </DropdownMenuItem>
-                  )}
-                  <DropdownMenuItem onClick={() => navigate('/dashboard/settings')}>
-                    <Settings className="mr-2 h-4 w-4" /> {t('common.settings')}
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={signOut} className="text-destructive focus:text-destructive">
-                    <LogOut className="mr-2 h-4 w-4" /> {t('common.signOut')}
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            ) : (
-              <div className="flex items-center gap-2 ml-2">
-                <Button variant="ghost" size="sm" className="h-8 text-sm" onClick={() => navigate('/auth/login')}>
-                  {t('common.login')}
-                </Button>
-                <Button size="sm" className="h-8 text-sm bg-primary hover:bg-primary/90 text-primary-foreground" onClick={() => navigate('/auth/register')}>
-                  {t('common.register')}
-                </Button>
-              </div>
-            )}
+                  <Button size="sm" className="h-8 text-sm bg-primary hover:bg-primary/90 text-primary-foreground" onClick={() => navigate('/auth/register')}>
+                    {t('common.register')}
+                  </Button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
