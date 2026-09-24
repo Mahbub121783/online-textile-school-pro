@@ -87,7 +87,11 @@ const Header = () => {
           </Link>
 
           {/* Nav links */}
-          <nav className="hidden lg:flex items-center gap-0.5 shrink-0">
+          <nav
+            className={`hidden lg:flex items-center gap-0.5 shrink-0 overflow-hidden transition-all duration-300 ease-in-out ${
+              searchFocused ? 'max-w-0 opacity-0' : 'max-w-[420px] opacity-100'
+            }`}
+          >
             <Link to="/courses" className="px-3 py-2 text-sm font-medium text-foreground hover:text-primary transition-colors rounded-md">
               {t('nav.courses')}
             </Link>
@@ -143,8 +147,13 @@ const Header = () => {
             </Link>
           </nav>
 
-          {/* Search */}
-          <div ref={searchRef} className="flex-1 max-w-lg relative">
+          {/* Search — compact by default, expands on focus */}
+          <div
+            ref={searchRef}
+            className={`relative shrink-0 transition-all duration-300 ease-in-out ${
+              searchFocused ? 'w-full max-w-xl' : 'w-40 lg:w-56 xl:w-72'
+            }`}
+          >
             <form onSubmit={handleSearch} className="relative">
               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <input
@@ -179,8 +188,12 @@ const Header = () => {
             )}
           </div>
 
-          {/* Right nav */}
-          <nav className="hidden lg:flex items-center gap-1 shrink-0">
+          {/* Right nav — collapses out of the way while search is expanded */}
+          <nav
+            className={`hidden lg:flex items-center gap-1 shrink-0 overflow-hidden transition-all duration-300 ease-in-out ${
+              searchFocused ? 'max-w-0 opacity-0' : 'max-w-[420px] opacity-100'
+            }`}
+          >
             <Link to="/verify-student" className="px-3 py-2 text-sm font-medium text-foreground hover:text-primary transition-colors whitespace-nowrap">
               Verify Student
             </Link>
