@@ -3,7 +3,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { useTopLeaderboard } from '@/hooks/useTopLeaderboard';
+import { useTopLeaderboard, useLeaderboardParticipantCount } from '@/hooks/useTopLeaderboard';
 import LeaderboardSlideContent from './LeaderboardSlideContent';
 
 
@@ -192,6 +192,8 @@ const HeroSlider = () => {
   // mostly just picking up changes that already happened server-side.
   const { data: dailyTop3 = [] } = useTopLeaderboard('daily', 3);
   const { data: weeklyTop3 = [] } = useTopLeaderboard('weekly', 3);
+  const { data: dailyCount = 0 } = useLeaderboardParticipantCount('daily');
+  const { data: weeklyCount = 0 } = useLeaderboardParticipantCount('weekly');
 
   const slides = useMemo(() => {
     const base = dbSlides && dbSlides.length > 0 ? dbSlides : FALLBACK_SLIDES;
@@ -223,7 +225,10 @@ const HeroSlider = () => {
       is_leaderboard_slide: 'weekly' as const,
     };
 
-    let result = [...base, dailySlide, weeklySlide];
+    // Daily/Weekly Top-3 are ALWAYS the very first two slides, ahead of
+    // even the workshop slide -- explicit requirement, not just "somewhere
+    // near the front".
+    let result = [dailySlide, weeklySlide, ...base];
 
     if (latestWorkshop) {
       const ws: any = latestWorkshop;
@@ -248,8 +253,8 @@ const HeroSlider = () => {
         countdown_target: ws.start_at,
         is_workshop_slide: true,
       };
-      // Workshop slide ALWAYS pinned to position 1 (index 0), regardless of admin sort_order
-      result = [workshopSlide, ...result];
+      // Workshop slide goes right after the two leaderboard slides (position 2)
+      result = [dailySlide, weeklySlide, workshopSlide, ...base];
     }
 
     return result;
@@ -377,6 +382,7 @@ const HeroSlider = () => {
             <LeaderboardSlideContent
               title={slide.is_leaderboard_slide === 'daily' ? "Today's Top 3" : "This Week's Top 3"}
               rows={slide.is_leaderboard_slide === 'daily' ? dailyTop3 : weeklyTop3}
+              participantCount={slide.is_leaderboard_slide === 'daily' ? dailyCount : weeklyCount}
             />
           ) : (
             <SlideContent slide={slide} animKey={current} />

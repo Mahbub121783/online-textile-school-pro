@@ -43,3 +43,26 @@ export const useTopLeaderboard = (period: 'daily' | 'weekly', limit = 3) => {
     retry: 1,
   });
 };
+
+// Lightweight "N students today/this week" counter for the hero-banner
+// leaderboard slides -- a real, live-updating number (not decorative) next
+// to the LIVE badge, since it's just a count query against the same
+// already-fresh cache.
+export const useLeaderboardParticipantCount = (period: 'daily' | 'weekly') => {
+  return useQuery({
+    queryKey: ['hero-leaderboard-count', period],
+    queryFn: async (): Promise<number> => {
+      const { count } = await supabase
+        .from('qb_leaderboard_cache')
+        .select('user_id', { count: 'exact', head: true })
+        .eq('period', period)
+        .is('subject_id', null)
+        .is('difficulty', null);
+      return count ?? 0;
+    },
+    staleTime: 5000,
+    refetchInterval: 10000,
+    refetchIntervalInBackground: false,
+    retry: 1,
+  });
+};
