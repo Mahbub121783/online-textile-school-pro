@@ -14,7 +14,7 @@ type Diff = 'all' | 'basic' | 'intermediate' | 'advanced';
 
 const PracticeLeaderboard = () => {
   const { user } = useAuth();
-  const [period, setPeriod] = useState<'all_time' | 'monthly' | 'weekly'>('all_time');
+  const [period, setPeriod] = useState<'all_time' | 'monthly' | 'weekly' | 'daily'>('all_time');
   const [subjectId, setSubjectId] = useState<string>('all');
   const [difficulty, setDifficulty] = useState<Diff>('all');
 
@@ -67,6 +67,7 @@ const PracticeLeaderboard = () => {
               <TabsTrigger value="all_time">All Time</TabsTrigger>
               <TabsTrigger value="monthly">This Month</TabsTrigger>
               <TabsTrigger value="weekly">This Week</TabsTrigger>
+              <TabsTrigger value="daily">Today</TabsTrigger>
             </TabsList>
           </Tabs>
           <Select value={subjectId} onValueChange={setSubjectId}>
@@ -115,33 +116,39 @@ const PracticeLeaderboard = () => {
           </CardContent></Card>
         ) : (
           <div className="space-y-1.5">
-            {rows.map((r: any, i: number) => {
+            {rows.map((r: any) => {
               const isMe = r.user_id === user?.id;
+              // Badge is keyed off the actual DB-computed rank (which ties
+              // correctly share, e.g. 1,1,3) rather than array position --
+              // two students tied for #1 both get the crown instead of one
+              // getting silver just because of row order.
               return (
-                <Card key={r.id} className={isMe ? 'border-primary' : ''}>
-                  <CardContent className="p-3 flex items-center gap-3">
-                    <div className="w-10 text-center font-heading font-bold text-lg">
-                      {i === 0 ? <Crown className="h-6 w-6 mx-auto text-amber-500" /> :
-                       i === 1 ? <Medal className="h-6 w-6 mx-auto text-slate-400" /> :
-                       i === 2 ? <Medal className="h-6 w-6 mx-auto text-orange-600" /> :
-                       <span className="text-muted-foreground">#{r.rank}</span>}
-                    </div>
-                    <div className="w-9 h-9 rounded-full bg-muted overflow-hidden shrink-0">
-                      {r.profile?.avatar_url
-                        ? <img src={r.profile.avatar_url} alt="" className="w-full h-full object-cover" />
-                        : <div className="w-full h-full flex items-center justify-center font-bold text-sm">{(r.profile?.full_name || '?')[0]}</div>}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-sm truncate">
-                        {r.profile?.full_name || 'Unknown'} {isMe && <Badge variant="outline" className="ml-1 text-[10px]">You</Badge>}
-                      </p>
-                      <p className="text-[10px] text-muted-foreground font-mono">
-                        {r.profile?.roll_id || '—'} · {r.total_exams} exams · {Math.round(Number(r.avg_percentage))}% avg
-                      </p>
-                    </div>
-                    <p className="font-bold font-heading">{r.total_points} <span className="text-xs text-muted-foreground font-normal">pts</span></p>
-                  </CardContent>
-                </Card>
+                <Link key={r.id} to={`/contributor/${r.user_id}`} className="block">
+                  <Card className={`transition-colors hover:border-primary/50 ${isMe ? 'border-primary' : ''}`}>
+                    <CardContent className="p-3 flex items-center gap-3">
+                      <div className="w-10 text-center font-heading font-bold text-lg">
+                        {r.rank === 1 ? <Crown className="h-6 w-6 mx-auto text-amber-500" /> :
+                         r.rank === 2 ? <Medal className="h-6 w-6 mx-auto text-slate-400" /> :
+                         r.rank === 3 ? <Medal className="h-6 w-6 mx-auto text-orange-600" /> :
+                         <span className="text-muted-foreground">#{r.rank}</span>}
+                      </div>
+                      <div className="w-9 h-9 rounded-full bg-muted overflow-hidden shrink-0">
+                        {r.profile?.avatar_url
+                          ? <img src={r.profile.avatar_url} alt="" className="w-full h-full object-cover" />
+                          : <div className="w-full h-full flex items-center justify-center font-bold text-sm">{(r.profile?.full_name || '?')[0]}</div>}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm truncate">
+                          {r.profile?.full_name || 'Unknown'} {isMe && <Badge variant="outline" className="ml-1 text-[10px]">You</Badge>}
+                        </p>
+                        <p className="text-[10px] text-muted-foreground font-mono">
+                          {r.profile?.roll_id || '—'} · {r.total_exams} exams · {Math.round(Number(r.avg_percentage))}% avg
+                        </p>
+                      </div>
+                      <p className="font-bold font-heading">{r.total_points} <span className="text-xs text-muted-foreground font-normal">pts</span></p>
+                    </CardContent>
+                  </Card>
+                </Link>
               );
             })}
           </div>

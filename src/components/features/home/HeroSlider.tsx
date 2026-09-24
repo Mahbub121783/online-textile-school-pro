@@ -3,6 +3,8 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { useTopLeaderboard } from '@/hooks/useTopLeaderboard';
+import LeaderboardSlideContent from './LeaderboardSlideContent';
 
 
 const FALLBACK_SLIDES = [
@@ -184,33 +186,73 @@ const HeroSlider = () => {
     refetchOnReconnect: false,
   });
 
+  // Daily/weekly "Top 3" leaderboard slides -- polled every 10s so the
+  // banner feels live; the underlying cache is also refreshed instantly on
+  // every exam submission (see db/69 + db/73 + db/81), so this poll is
+  // mostly just picking up changes that already happened server-side.
+  const { data: dailyTop3 = [] } = useTopLeaderboard('daily', 3);
+  const { data: weeklyTop3 = [] } = useTopLeaderboard('weekly', 3);
+
   const slides = useMemo(() => {
     const base = dbSlides && dbSlides.length > 0 ? dbSlides : FALLBACK_SLIDES;
-    if (!latestWorkshop) return base;
-    const ws: any = latestWorkshop;
-    const link = `/workshops/${ws.slug || ws.id}`;
-    const instructorName = ws.instructor?.full_name;
-    const workshopSlide = {
-      id: `ws-${ws.id}`,
-      title: ws.title,
-      subtitle: ws.short_description || (instructorName ? `Live workshop with ${instructorName}. Limited seats — register now.` : 'Live workshop. Limited seats — register now.'),
-      cta_text: 'Register Now',
-      cta_link: link,
-      secondary_cta_text: 'View Details',
-      secondary_cta_link: link,
-      image_url: ws.thumbnail_url || '',
+
+    const dailySlide = {
+      id: 'lb-daily',
       gradient_from: 'accent',
-      gradient_to: 'primary-dark',
+      gradient_to: 'accent-hover',
       gradient_direction: 'br',
-      overlay_opacity: 15,
-      text_alignment: 'left',
+      overlay_opacity: 10,
+      text_alignment: 'center',
+      image_url: '',
       title_color: null,
       subtitle_color: null,
-      countdown_target: ws.start_at,
-      is_workshop_slide: true,
+      countdown_target: null,
+      is_leaderboard_slide: 'daily' as const,
     };
-    // Workshop slide ALWAYS pinned to position 1 (index 0), regardless of admin sort_order
-    return [workshopSlide, ...base];
+    const weeklySlide = {
+      id: 'lb-weekly',
+      gradient_from: 'primary-dark',
+      gradient_to: 'primary',
+      gradient_direction: 'br',
+      overlay_opacity: 10,
+      text_alignment: 'center',
+      image_url: '',
+      title_color: null,
+      subtitle_color: null,
+      countdown_target: null,
+      is_leaderboard_slide: 'weekly' as const,
+    };
+
+    let result = [...base, dailySlide, weeklySlide];
+
+    if (latestWorkshop) {
+      const ws: any = latestWorkshop;
+      const link = `/workshops/${ws.slug || ws.id}`;
+      const instructorName = ws.instructor?.full_name;
+      const workshopSlide = {
+        id: `ws-${ws.id}`,
+        title: ws.title,
+        subtitle: ws.short_description || (instructorName ? `Live workshop with ${instructorName}. Limited seats — register now.` : 'Live workshop. Limited seats — register now.'),
+        cta_text: 'Register Now',
+        cta_link: link,
+        secondary_cta_text: 'View Details',
+        secondary_cta_link: link,
+        image_url: ws.thumbnail_url || '',
+        gradient_from: 'accent',
+        gradient_to: 'primary-dark',
+        gradient_direction: 'br',
+        overlay_opacity: 15,
+        text_alignment: 'left',
+        title_color: null,
+        subtitle_color: null,
+        countdown_target: ws.start_at,
+        is_workshop_slide: true,
+      };
+      // Workshop slide ALWAYS pinned to position 1 (index 0), regardless of admin sort_order
+      result = [workshopSlide, ...result];
+    }
+
+    return result;
   }, [dbSlides, latestWorkshop]);
 
   // When the workshop slide appears (or changes), snap back to it so it's the first thing users see
@@ -331,7 +373,14 @@ const HeroSlider = () => {
       {/* Content */}
       <div className="relative container h-full flex items-center">
         <div className="w-full text-primary-foreground" key={current}>
-          <SlideContent slide={slide} animKey={current} />
+          {slide.is_leaderboard_slide ? (
+            <LeaderboardSlideContent
+              title={slide.is_leaderboard_slide === 'daily' ? "Today's Top 3" : "This Week's Top 3"}
+              rows={slide.is_leaderboard_slide === 'daily' ? dailyTop3 : weeklyTop3}
+            />
+          ) : (
+            <SlideContent slide={slide} animKey={current} />
+          )}
         </div>
       </div>
 
