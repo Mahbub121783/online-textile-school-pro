@@ -38,6 +38,13 @@ const PracticeExam = () => {
   const [activeIdx, setActiveIdx] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
   const qRefs = useRef<(HTMLDivElement | null)[]>([]);
+  // Always-current mirrors of state, read by handleSubmit so a stale closure
+  // (e.g. the countdown timer's interval, set up once on load) never submits
+  // frozen/empty answers instead of what the student actually selected.
+  const questionsRef = useRef(questions);
+  const answersRef = useRef(answers);
+  useEffect(() => { questionsRef.current = questions; }, [questions]);
+  useEffect(() => { answersRef.current = answers; }, [answers]);
 
   const integrity = useExamIntegrity({ sessionId, enabled: !loading });
   useExamHeartbeat(sessionId, !loading);
@@ -103,17 +110,21 @@ const PracticeExam = () => {
     } catch { /* ignore */ }
   }, [answers, flagged, sessionId, loading]);
 
-  // Countdown
+  // Countdown -- calls handleSubmitRef.current (not handleSubmit directly):
+  // this effect only re-runs on `loading` changes, so a direct reference
+  // would freeze on the answers/questions state from the moment the timer
+  // started, silently submitting a stale/empty answer set for anyone whose
+  // exam actually times out. The ref always points at the latest render's
+  // handleSubmit, which closes over the current answers.
   useEffect(() => {
     if (loading) return;
     const iv = setInterval(() => {
       setRemaining((r) => {
-        if (r <= 1) { clearInterval(iv); handleSubmit(true); return 0; }
+        if (r <= 1) { clearInterval(iv); handleSubmitRef.current(true); return 0; }
         return r - 1;
       });
     }, 1000);
     return () => clearInterval(iv);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading]);
 
   // Track scrolled-into-view question
@@ -160,9 +171,9 @@ const PracticeExam = () => {
     setSubmitting(true);
     setConfirmSubmit(false);
     try {
-      const payload = questions.map((q) => ({
+      const payload = questionsRef.current.map((q) => ({
         question_id: q.id,
-        selected_answer: answers[q.id] ?? null,
+        selected_answer: answersRef.current[q.id] ?? null,
         time_spent_seconds: 0,
       }));
       const { error } = await supabase.rpc('qb_submit_exam', { _session_id: sessionId!, _answers: payload as never });
@@ -176,6 +187,8 @@ const PracticeExam = () => {
       setSubmitting(false);
     }
   };
+  const handleSubmitRef = useRef(handleSubmit);
+  useEffect(() => { handleSubmitRef.current = handleSubmit; });
 
   const answered = useMemo(
     () => Object.keys(answers).filter((k) => answers[k] !== '' && answers[k] != null).length,
