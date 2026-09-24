@@ -147,11 +147,13 @@ const Header = () => {
             </Link>
           </nav>
 
-          {/* Search — compact by default, expands on focus */}
+          {/* Search — compact by default; on focus it grows into whatever
+              space the collapsing nav links free up (flex-1), filling the
+              whole row rather than stopping at a fixed cap */}
           <div
             ref={searchRef}
-            className={`relative shrink-0 transition-all duration-300 ease-in-out ${
-              searchFocused ? 'w-full max-w-xl' : 'w-40 lg:w-56 xl:w-72'
+            className={`relative transition-all duration-300 ease-in-out ${
+              searchFocused ? 'flex-1 min-w-0' : 'shrink-0 w-40 lg:w-56 xl:w-72'
             }`}
           >
             <form onSubmit={handleSearch} className="relative">
