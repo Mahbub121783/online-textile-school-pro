@@ -6,6 +6,7 @@ export interface TokenStatus {
   daily_balance: number;
   paid_balance: number;
   last_refill_date: string;
+  is_flash_day: boolean;
   is_staff: boolean;
 }
 
