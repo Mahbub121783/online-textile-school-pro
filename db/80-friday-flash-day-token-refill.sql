@@ -1,7 +1,7 @@
 -- Friday "Flash Day" bonus: the daily free practice-credit refill is 20
 -- every day, except Friday (the weekly holiday in Bangladesh -- this site's
 -- primary audience -- where traffic is noticeably higher), which refills to
--- 70 (20 base + 50 flash-day bonus) instead. Redefines qb_get_token_status()
+-- 50 instead. Redefines qb_get_token_status()
 -- (exact current body from db/58) with the refill amount now Friday-aware,
 -- and returns `is_flash_day` in the response so the frontend can surface it.
 --
@@ -20,7 +20,7 @@ DECLARE
   _row public.qb_user_tokens%ROWTYPE;
   _today date := (now() AT TIME ZONE 'Asia/Dhaka')::date;
   _is_flash_day boolean := EXTRACT(DOW FROM _today) = 5; -- 5 = Friday
-  _refill_amount int := CASE WHEN EXTRACT(DOW FROM _today) = 5 THEN 70 ELSE 20 END;
+  _refill_amount int := CASE WHEN EXTRACT(DOW FROM _today) = 5 THEN 50 ELSE 20 END;
 BEGIN
   IF _uid IS NULL THEN RAISE EXCEPTION 'Not authenticated'; END IF;
   PERFORM set_config('request.jwt.claim.role', 'service_role', true);
@@ -40,4 +40,6 @@ BEGIN
   );
 END $$;
 
-GRANT EXECUTE ON FUNCTION public.qb_get_token_status() TO authenticated;
+-- No GRANT needed here -- this self-hosted DB has no real "authenticated"
+-- Postgres role (see project memory), and the function owner
+-- (tecnedub_ots_app) can already execute its own functions.

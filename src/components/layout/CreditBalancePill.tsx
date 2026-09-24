@@ -14,7 +14,7 @@ const CreditBalancePill = () => {
       to="/practice/credits"
       title={
         flashDay
-          ? `Friday Flash Day — +50 bonus credits! Daily ${data?.daily_balance ?? 0} • Paid ${data?.paid_balance ?? 0}`
+          ? `Friday Flash Day — 50 credits today! Daily ${data?.daily_balance ?? 0} • Paid ${data?.paid_balance ?? 0}`
           : `Practice Credits — Daily ${data?.daily_balance ?? 0} • Paid ${data?.paid_balance ?? 0}`
       }
       className={`hidden sm:inline-flex items-center gap-1.5 h-9 px-3 rounded-full border transition-colors ${

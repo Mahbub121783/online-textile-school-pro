@@ -82,14 +82,14 @@ const PracticeCredits = () => {
             </Badge>
             <h1 className="font-heading text-3xl md:text-4xl font-black mb-2">Top Up Your Tokens</h1>
             <p className="opacity-90 text-sm max-w-xl">
-              Free users get 20 tokens per day — <strong>70 every Friday</strong> (our Flash Day bonus: +50 extra).
+              Free users get 20 tokens per day — <strong>50 every Friday</strong> (our Flash Day bonus).
               Each mixed exam costs 10 tokens; each department exam costs 5.
               Buy more credits anytime — <strong>100 credits = ৳50</strong> (৳0.50 per credit).
             </p>
 
             {balance?.is_flash_day && (
               <div className="mt-4 inline-flex items-center gap-2 bg-amber-400 text-amber-950 rounded-full px-4 py-1.5 text-sm font-bold">
-                <Flame className="h-4 w-4" /> Friday Flash Day — +50 bonus credits today!
+                <Flame className="h-4 w-4" /> Friday Flash Day — 50 credits today!
               </div>
             )}
 
