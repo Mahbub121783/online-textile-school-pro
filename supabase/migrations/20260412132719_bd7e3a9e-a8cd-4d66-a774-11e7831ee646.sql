@@ -1,3 +1,0 @@
--- Original: seeded a specific user (from the old Supabase project, now
--- deleted) as super_admin. That user_id doesn't exist in the self-hosted
--- system. See 20260412122046 for the equivalent note.

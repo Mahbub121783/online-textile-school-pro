@@ -263,7 +263,7 @@ const AdminQuestionBank = () => {
 
   const aiSettings = bootstrap?.aiSettings ?? null;
   const [settingsForm, setSettingsForm] = useState<any>(null);
-  const currentSettings = settingsForm ?? aiSettings ?? { provider: 'groq', model: 'llama-3.3-70b-versatile', temperature: 0.7, fallback_enabled: true, fallback_provider: 'lovable', fallback_model: 'google/gemini-2.5-flash', max_questions_per_run: 25, system_prompt_override: '' };
+  const currentSettings = settingsForm ?? aiSettings ?? { provider: 'groq', model: 'llama-3.3-70b-versatile', temperature: 0.7, fallback_enabled: true, fallback_provider: 'groq', fallback_model: 'llama-3.1-8b-instant', max_questions_per_run: 25, system_prompt_override: '' };
 
   const saveSettings = async () => {
     const payload = {

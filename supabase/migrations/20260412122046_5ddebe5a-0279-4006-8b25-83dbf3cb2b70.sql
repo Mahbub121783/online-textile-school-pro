@@ -1,4 +1,0 @@
--- Original: seeded a specific user (from the old Supabase project, now
--- deleted) as super_admin. That user_id doesn't exist in the self-hosted
--- system. After signing up on the new system, grant yourself super_admin
--- manually: INSERT INTO public.user_roles (user_id, role) VALUES ('<your-new-uuid>', 'super_admin');

@@ -1,6 +1,0 @@
--- pg_cron unavailable on self-host; scheduling moved to cPanel Cron Jobs (Phase 5).
--- Original jobs:
---   'qb-refresh-leaderboard'         */15 * * * *  -> public.qb_refresh_leaderboard()
---   'qb-prune-free-tier'             0 21 * * *    -> public.prune_free_tier_data()
---   'qb-aggregate-question-stats'    30 21 * * *   -> public.qb_aggregate_question_stats()
---   'qb-auto-close-orphans'          */10 * * * *  -> public.qb_auto_close_orphans()

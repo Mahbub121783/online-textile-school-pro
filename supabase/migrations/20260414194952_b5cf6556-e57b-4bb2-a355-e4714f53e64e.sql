@@ -1,1 +1,0 @@
--- pg_cron/pg_net unavailable on self-host; skipped entirely (see Phase 5 cron plan).

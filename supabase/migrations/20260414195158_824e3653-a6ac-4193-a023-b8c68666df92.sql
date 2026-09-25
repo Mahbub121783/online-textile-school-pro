@@ -1,3 +1,0 @@
--- pg_cron/pg_net unavailable on self-host; this job is superseded by later migrations anyway.
--- Original cron job 'unreplied-message-reminder' (every minute, calls edge function) removed.
--- See Phase 5 cron plan: recreate as a cPanel Cron Job hitting the ported Node endpoint.

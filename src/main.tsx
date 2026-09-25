@@ -10,12 +10,8 @@ initSecurity();
 const isInIframe = (() => {
   try { return window.self !== window.top; } catch { return true; }
 })();
-const isPreviewHost =
-  window.location.hostname.includes("id-preview--") ||
-  window.location.hostname.includes("lovableproject.com") ||
-  window.location.hostname.includes("lovable.app");
 
-if (isPreviewHost || isInIframe) {
+if (isInIframe) {
   // Never run a service worker inside the preview iframe — it would cache the editor shell
   navigator.serviceWorker?.getRegistrations().then((regs) => {
     regs.forEach((r) => r.unregister());

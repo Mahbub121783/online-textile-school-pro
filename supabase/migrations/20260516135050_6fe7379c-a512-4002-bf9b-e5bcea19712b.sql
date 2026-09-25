@@ -1,4 +1,0 @@
--- Original: emergency reset of anon/authenticated/authenticator role settings
--- after a bad temp_buffers value broke production (see 20260516125226, which
--- on self-host never sets temp_buffers in the first place -- see its note).
--- Nothing to reset here since those roles don't exist on self-host.

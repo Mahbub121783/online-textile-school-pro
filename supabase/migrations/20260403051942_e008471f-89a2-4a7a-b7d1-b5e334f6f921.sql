@@ -1,1 +1,0 @@
-ALTER TABLE public.student_id_cards ADD COLUMN IF NOT EXISTS download_blocked boolean NOT NULL DEFAULT false;

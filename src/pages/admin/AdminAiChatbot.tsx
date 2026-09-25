@@ -56,11 +56,15 @@ interface IndexStats {
 }
 
 const PROVIDERS = [
-  { value: 'lovable', label: 'Lovable AI (Default)', description: 'Pre-configured, no API key needed' },
+  { value: 'groq', label: 'Groq (Default)', description: 'Llama 3.3, Mixtral - Ultra fast' },
   { value: 'openai', label: 'OpenAI (ChatGPT)', description: 'GPT-4o, GPT-4o-mini' },
-  { value: 'groq', label: 'Groq', description: 'Llama 3.3, Mixtral - Ultra fast' },
   { value: 'mistral', label: 'Mistral AI', description: 'Mistral Small/Large' },
   { value: 'gemini', label: 'Google Gemini', description: 'Gemini 2.5 Pro/Flash' },
+  // Legacy: routed through Lovable's AI gateway, which was scoped to the old
+  // Lovable/Supabase account and no longer has a working key (see
+  // backend/src/functions/aiTutor.js) -- kept selectable only so an existing
+  // saved config doesn't break, not as something to newly pick.
+  { value: 'lovable', label: 'Lovable AI (legacy, inactive)', description: 'No longer configured -- pick another provider' },
 ];
 
 const PROVIDER_MODELS: Record<string, { value: string; label: string }[]> = {

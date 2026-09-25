@@ -1,2 +1,0 @@
--- pg_cron/pg_net unavailable on self-host; this job is superseded by later migrations anyway.
--- Original cron job 'workshop-reminder-cron' (every 10 min, calls edge function) removed.
