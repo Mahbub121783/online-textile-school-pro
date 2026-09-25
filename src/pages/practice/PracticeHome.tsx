@@ -76,7 +76,7 @@ const PracticeHome = () => {
     queryFn: async () => {
       const [{ count: qCount }, { count: examCount }, { count: studentCount }] = await Promise.all([
         supabase.rpc('qb_count_active_questions').then((r: any) => ({ count: r.data ?? 0 })),
-        supabase.from('qb_exam_sessions').select('*', { count: 'exact', head: true }).not('submitted_at', 'is', null),
+        supabase.rpc('qb_count_completed_exams').then((r: any) => ({ count: r.data ?? 0 })),
         supabase.from('qb_user_stats').select('*', { count: 'exact', head: true }),
       ]);
       return { questions: qCount ?? 0, exams: examCount ?? 0, students: studentCount ?? 0 };
