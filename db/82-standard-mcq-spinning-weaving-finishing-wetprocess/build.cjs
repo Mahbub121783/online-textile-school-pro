@@ -15,7 +15,7 @@ const SUBJECT_IDS = {
 // once a base file is deployed, further additions go in a new file so
 // re-running the base build+deploy never re-inserts already-live rows).
 for (const base of Object.keys(SUBJECT_IDS)) {
-  for (let i = 2; i <= 9; i++) SUBJECT_IDS[`${base}_p${i}`] = SUBJECT_IDS[base];
+  for (let i = 2; i <= 30; i++) SUBJECT_IDS[`${base}_p${i}`] = SUBJECT_IDS[base];
 }
 
 const key = process.argv[2];
