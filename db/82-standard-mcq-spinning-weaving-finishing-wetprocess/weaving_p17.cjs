@@ -1,0 +1,4 @@
+module.exports = [
+{ q: "A pair of trousers requires 1.1 meters of fabric. For an order of 8,000 pairs plus a 6% cutting waste allowance, approximately how many total meters of fabric must be purchased?", options: ["≈ 9,328 meters", "8,800 meters", "≈ 8,272 meters", "≈ 9,600 meters"], correct: "≈ 9,328 meters", exp: "Base fabric = 1.1 × 8,000 = 8,800 meters. With 6% waste: 8,800 × 1.06 = 9,328 meters.", difficulty: "intermediate", tags: ["fabric-consumption-with-waste"] },
+{ q: "A weaving mill's target is 6,000 meters of fabric per day per loom at 80% efficiency. What is the theoretical (100% efficiency) daily capacity per loom?", options: ["≈ 7,500 meters", "≈ 4,800 meters", "≈ 6,000 meters", "≈ 7,200 meters"], correct: "≈ 7,500 meters", exp: "Theoretical capacity = actual target ÷ efficiency = 6,000 ÷ 0.80 = 7,500 meters.", difficulty: "intermediate", tags: ["theoretical-capacity-calc"] },
+];

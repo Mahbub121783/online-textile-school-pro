@@ -1,0 +1,4 @@
+module.exports = [
+{ q: "A stenter processes fabric at 30 meters per minute for an 8-hour shift at 90% uptime. Approximately how many meters of fabric are processed in that shift?", options: ["≈ 12,960 meters", "≈ 14,400 meters", "≈ 30 meters", "≈ 240 meters"], correct: "≈ 12,960 meters", exp: "At 100% uptime: 30 m/min × 480 min = 14,400 meters. At 90% uptime: 14,400 × 0.90 = 12,960 meters.", difficulty: "intermediate", tags: ["stenter-production-calc"] },
+{ q: "A stenter processes fabric at 25 meters per minute for a 10-hour shift at 85% uptime. Approximately how many meters of fabric are processed in that shift?", options: ["≈ 12,750 meters", "≈ 15,000 meters", "≈ 25 meters", "≈ 212.5 meters"], correct: "≈ 12,750 meters", exp: "At 100% uptime: 25 m/min × 600 min = 15,000 meters. At 85% uptime: 15,000 × 0.85 = 12,750 meters.", difficulty: "intermediate", tags: ["stenter-production-calc"] },
+];

@@ -1,0 +1,9 @@
+SELECT set_config('request.jwt.claim.role','service_role',false);
+SELECT set_config('request.jwt.claim.sub','f49d6153-1835-4455-81f3-2918d5d3484e',false);
+BEGIN;
+INSERT INTO public.qb_questions (subject_id, difficulty, question_type, question_text, options, correct_answer, explanation, points, tags) VALUES
+('33333333-3333-3333-3333-333333333333', 'intermediate', 'multiple_choice', 'A padder has a wet pickup of 65%. If 300 kg of dry fabric enters the padder, what is the total wet weight after padding?', '["495 kg","300 kg","195 kg","365 kg"]'::jsonb, '495 kg', 'Wet weight = dry weight × (1 + wet pickup%) = 300 × 1.65 = 495 kg.', 2, '{"wet-pickup-calc"}'::text[]),
+('33333333-3333-3333-3333-333333333333', 'intermediate', 'multiple_choice', 'A padder has a wet pickup of 75%. If 400 kg of dry fabric enters the padder, what is the total wet weight after padding?', '["700 kg","400 kg","300 kg","475 kg"]'::jsonb, '700 kg', 'Wet weight = dry weight × (1 + wet pickup%) = 400 × 1.75 = 700 kg.', 2, '{"wet-pickup-calc"}'::text[]),
+('33333333-3333-3333-3333-333333333333', 'basic', 'multiple_choice', 'A dyeing machine consumes 12 liters of water per kg of fabric and processes 2,500 kg of fabric per day. What is the approximate daily water consumption?', '["30,000 liters","2,500 liters","12 liters","208 liters"]'::jsonb, '30,000 liters', 'Daily water = consumption rate × fabric weight = 12 L/kg × 2,500 kg = 30,000 liters.', 1, '{"water-consumption-calc"}'::text[]),
+('33333333-3333-3333-3333-333333333333', 'intermediate', 'multiple_choice', 'If a mill reduces its water consumption from 15 L/kg to 10 L/kg of fabric, approximately what percentage reduction in water use per kg does this represent?', '["≈ 33.3%","≈ 50%","≈ 66.7%","≈ 5%"]'::jsonb, '≈ 33.3%', 'Reduction % = ((old − new) / old) × 100 = ((15 − 10) / 15) × 100 ≈ 33.3%.', 2, '{"water-reduction-calc"}'::text[]);
+COMMIT;

@@ -1,0 +1,8 @@
+SELECT set_config('request.jwt.claim.role','service_role',false);
+SELECT set_config('request.jwt.claim.sub','f49d6153-1835-4455-81f3-2918d5d3484e',false);
+BEGIN;
+INSERT INTO public.qb_questions (subject_id, difficulty, question_type, question_text, options, correct_answer, explanation, points, tags) VALUES
+('4b495e60-fc2b-4165-a0c7-e0b144e931f7', 'intermediate', 'multiple_choice', 'A fabric order requires 10,000 meters of finished fabric with 6% warp take-up (relative to finished fabric length). Approximately how much warp yarn length must be prepared?', '["≈ 10,600 meters","≈ 10,000 meters","≈ 9,400 meters","≈ 11,000 meters"]'::jsonb, '≈ 10,600 meters', 'Required warp length = fabric length × (1 + take-up%) = 10,000 × 1.06 = 10,600 meters.', 2, '{"warp-length-calc"}'::text[]),
+('4b495e60-fc2b-4165-a0c7-e0b144e931f7', 'intermediate', 'multiple_choice', 'A fabric order requires 15,000 meters of finished fabric with 7% warp take-up. Approximately how much warp yarn length must be prepared?', '["≈ 16,050 meters","≈ 15,000 meters","≈ 13,950 meters","≈ 15,700 meters"]'::jsonb, '≈ 16,050 meters', 'Required warp length = fabric length × (1 + take-up%) = 15,000 × 1.07 = 16,050 meters.', 2, '{"warp-length-calc"}'::text[]),
+('4b495e60-fc2b-4165-a0c7-e0b144e931f7', 'intermediate', 'multiple_choice', 'A fabric''s body width is 40 inches at 80 EPI (ends per inch). Each selvedge (one on each side) is 0.5 inches wide at 120 EPI. What is the total number of warp ends (body + both selvedges)?', '["3,320 ends","3,200 ends","3,240 ends","3,080 ends"]'::jsonb, '3,320 ends', 'Body ends = 40 × 80 = 3,200. Each selvedge = 0.5 × 120 = 60 ends; both selvedges = 120. Total = 3,200 + 120 = 3,320 ends.', 2, '{"total-ends-calc"}'::text[]);
+COMMIT;

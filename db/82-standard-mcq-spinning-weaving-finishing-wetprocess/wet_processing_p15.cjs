@@ -1,0 +1,5 @@
+module.exports = [
+{ q: "A mill wants to reduce ETP treatment volume by processing only 20,000 liters per day instead of the current 32,000 liters. Approximately what percentage reduction does this represent?", options: ["≈ 37.5%", "≈ 62.5%", "≈ 12,000%", "≈ 160%"], correct: "≈ 37.5%", exp: "Reduction % = ((old − new) / old) × 100 = ((32,000 − 20,000) / 32,000) × 100 = (12,000/32,000) × 100 = 37.5%.", difficulty: "intermediate", tags: ["etp-reduction-calc"] },
+{ q: "A finishing chemical recipe requires 4% (by weight of fabric) of a resin, for a batch of 750 kg fabric. How many kg of resin are needed?", options: ["30 kg", "4 kg", "75 kg", "18.75 kg"], correct: "30 kg", exp: "Resin needed = 4% × fabric weight = 0.04 × 750 kg = 30 kg.", difficulty: "basic", tags: ["resin-recipe-calc"] },
+{ q: "A dyeing machine's rated capacity is 500 kg per batch, and it completes 3 batches per day. What is the machine's daily production capacity?", options: ["1,500 kg", "500 kg", "167 kg", "3 kg"], correct: "1,500 kg", exp: "Daily capacity = batch size × number of batches per day = 500 × 3 = 1,500 kg.", difficulty: "basic", tags: ["daily-capacity-calc"] },
+];

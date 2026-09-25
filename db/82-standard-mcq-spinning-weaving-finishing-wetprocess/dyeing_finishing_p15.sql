@@ -1,0 +1,8 @@
+SELECT set_config('request.jwt.claim.role','service_role',false);
+SELECT set_config('request.jwt.claim.sub','f49d6153-1835-4455-81f3-2918d5d3484e',false);
+BEGIN;
+INSERT INTO public.qb_questions (subject_id, difficulty, question_type, question_text, options, correct_answer, explanation, points, tags) VALUES
+('9e3b3072-3153-414d-b2d7-1bf0789002ac', 'intermediate', 'multiple_choice', 'A fabric with GSM 180 is priced at $6 per kg. What is the approximate fabric cost per linear meter, if the fabric width is 1.5 meters?', '["≈ $1.62","≈ $6.00","≈ $0.27","≈ $1.08"]'::jsonb, '≈ $1.62', 'Weight per meter = GSM × width (m) / 1000 = 180 × 1.5 / 1000 = 0.27 kg/m. Cost per meter = 0.27 kg × $6/kg = $1.62.', 2, '{"fabric-cost-calc"}'::text[]),
+('9e3b3072-3153-414d-b2d7-1bf0789002ac', 'intermediate', 'multiple_choice', 'A fabric with GSM 220 is priced at $5 per kg. What is the approximate fabric cost per linear meter, if the fabric width is 1.6 meters?', '["≈ $1.76","≈ $5.00","≈ $0.35","≈ $1.10"]'::jsonb, '≈ $1.76', 'Weight per meter = GSM × width (m) / 1000 = 220 × 1.6 / 1000 = 0.352 kg/m. Cost per meter = 0.352 kg × $5/kg ≈ $1.76.', 2, '{"fabric-cost-calc"}'::text[]),
+('9e3b3072-3153-414d-b2d7-1bf0789002ac', 'intermediate', 'multiple_choice', 'A lab dip uses 0.02 g of dye on a 2 g sample to achieve a target shade at 1% owf. If the bulk order is 1,000 kg of fabric, how many kg of dye should be used to reproduce the same %owf?', '["10 kg","1 kg","20 kg","0.02 kg"]'::jsonb, '10 kg', 'Since %owf = 0.02/2×100 = 1%, scaling to bulk: dye needed = 1% × 1,000 kg = 10 kg.', 2, '{"lab-to-bulk-scaleup-calc"}'::text[]);
+COMMIT;
