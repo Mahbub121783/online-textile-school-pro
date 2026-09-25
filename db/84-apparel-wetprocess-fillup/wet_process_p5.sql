@@ -1,0 +1,10 @@
+SELECT set_config('request.jwt.claim.role','service_role',false);
+SELECT set_config('request.jwt.claim.sub','f49d6153-1835-4455-81f3-2918d5d3484e',false);
+BEGIN;
+INSERT INTO public.qb_questions (subject_id, difficulty, question_type, question_text, options, correct_answer, explanation, points, tags) VALUES
+('33333333-3333-3333-3333-333333333333', 'basic', 'multiple_choice', 'A dyehouse mixes a stock paste: 1.2 kg of dye dissolved into 20 liters of water. What is the resulting concentration in g/L?', '["60 g/L","1.2 g/L","20 g/L","24 g/L"]'::jsonb, '60 g/L', 'Concentration = mass (g) / volume (L) = 1,200 g / 20 L = 60 g/L.', 1, '{"stock-solution-calc"}'::text[]),
+('33333333-3333-3333-3333-333333333333', 'intermediate', 'multiple_choice', 'From a 60 g/L dye stock solution, how many liters must be taken to obtain exactly 3 kg (3,000 g) of dye?', '["50 liters","60 liters","180 liters","20 liters"]'::jsonb, '50 liters', 'Volume needed = mass required / concentration = 3,000 g / 60 g/L = 50 liters.', 2, '{"stock-solution-volume-calc"}'::text[]),
+('33333333-3333-3333-3333-333333333333', 'intermediate', 'multiple_choice', 'A padder wet pickup is 60%. For 800 kg of dry fabric, what is the total wet weight after padding?', '["1,280 kg","800 kg","480 kg","1,360 kg"]'::jsonb, '1,280 kg', 'Wet weight = dry weight × (1 + wet pickup%) = 800 × 1.60 = 1,280 kg.', 2, '{"wet-pickup-calc"}'::text[]),
+('33333333-3333-3333-3333-333333333333', 'intermediate', 'multiple_choice', 'A dyeing batch of 450 kg fabric uses a liquor ratio of 1:12. If salt is dosed at 55 g/L, how many kg of salt are used in total?', '["297 kg","55 kg","12 kg","450 kg"]'::jsonb, '297 kg', 'Total liquor = 12 × 450 kg = 5,400 liters. Total salt = 55 g/L × 5,400 L = 297,000 g = 297 kg.', 2, '{"salt-dosing-calc"}'::text[]),
+('33333333-3333-3333-3333-333333333333', 'basic', 'multiple_choice', 'A finishing chemical is applied at 5% add-on on a 1,100 kg fabric batch. How many kg of chemical are added?', '["55 kg","5 kg","550 kg","11 kg"]'::jsonb, '55 kg', 'Add-on = 5% × fabric weight = 0.05 × 1,100 kg = 55 kg.', 1, '{"addon-calc"}'::text[]);
+COMMIT;
