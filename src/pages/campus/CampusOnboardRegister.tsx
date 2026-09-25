@@ -15,6 +15,7 @@ import UtilityBar from '@/components/layout/UtilityBar';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import BottomNav from '@/components/layout/BottomNav';
+import { RESERVED_SUBDOMAINS } from '@/lib/campusSubdomain';
 import { CheckCircle, Loader2, Clock, XCircle } from 'lucide-react';
 
 const CAMPUS_TYPES = ['University', 'College', 'Institute', 'Training Center', 'School'];
@@ -103,6 +104,10 @@ const CampusOnboardRegister = () => {
     const slug = slugify(form.subdomainSlug || form.campusName);
     if (!slug) {
       toast.error('Please provide a valid subdomain name');
+      return;
+    }
+    if (RESERVED_SUBDOMAINS.has(slug)) {
+      toast.error(`"${slug}" is a reserved name and can't be used as a subdomain. Please choose another.`);
       return;
     }
     setSubmitting(true);

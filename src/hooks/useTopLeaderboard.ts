@@ -25,7 +25,7 @@ export const useTopLeaderboard = (period: 'daily' | 'weekly', limit = 3) => {
         .eq('period', period)
         .is('subject_id', null)
         .is('difficulty', null)
-        .order('total_points', { ascending: false })
+        .order('rank', { ascending: true })
         .limit(limit);
       const rows = data ?? [];
       const userIds = rows.map((r: any) => r.user_id);

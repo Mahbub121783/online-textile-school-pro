@@ -5,6 +5,9 @@ const SITE_URL = 'https://onlinetextileschool.com';
 const SITE_NAME = 'Online Textile School';
 const DEFAULT_DESC = "Bangladesh's premier online learning platform for textile engineering. Courses in Spinning, Weaving, Dyeing, Knitting, Garments Technology and more.";
 const DEFAULT_IMAGE = `${SITE_URL}/og-default.png`;
+const ROOT_DOMAIN = 'onlinetextileschool.com';
+// Mirrors src/lib/campusSubdomain.ts / backend/src/functions/campusOnboard.js.
+const RESERVED_SUBDOMAINS = new Set(['www', 'api', 'mail', 'cpanel', 'webmail', 'autodiscover', 'ftp', 'admin']);
 
 function escapeHtml(s) {
   return String(s ?? '')
@@ -147,9 +150,46 @@ SECTION_QUERIES.posts = SECTION_QUERIES.blog;
 async function ogMeta(req, res) {
   try {
     const path = req.query.path || '/';
+    const host = String(req.query.host || '').toLowerCase();
     const fullUrl = SITE_URL + path;
 
     let meta = { title: SITE_NAME, description: DEFAULT_DESC, image: DEFAULT_IMAGE, url: fullUrl, type: 'website' };
+
+    // A campus's provisioned subdomain reuses the main site's docroot (see
+    // backend/src/functions/campusOnboard.js), so a link-preview crawler
+    // hitting e.g. rtec.onlinetextileschool.com used to land here with no
+    // way to tell it apart from the main site, always getting the generic
+    // OTS title/description/image instead of that campus's own.
+    let campusSlug = null;
+    if (host.endsWith(`.${ROOT_DOMAIN}`)) {
+      const sub = host.slice(0, -(ROOT_DOMAIN.length + 1));
+      if (sub && !sub.includes('.') && !RESERVED_SUBDOMAINS.has(sub)) campusSlug = sub;
+    }
+    if (campusSlug) {
+      try {
+        const result = await serviceQuery(
+          `SELECT campus_name, area, description, facilities, logo_url, cover_image_url
+           FROM public.campus_onboard_requests WHERE subdomain_slug = $1 AND status = 'approved' LIMIT 1`,
+          [campusSlug]
+        );
+        const c = result.rows[0];
+        if (c) {
+          meta = {
+            title: `${c.campus_name} — ${SITE_NAME}`,
+            description: truncate(c.description || c.facilities || `${c.campus_name}${c.area ? ` (${c.area})` : ''} — a partner campus on the ${SITE_NAME} network.`),
+            image: normalizeImageUrl(c.cover_image_url || c.logo_url),
+            url: `https://${host}/`,
+            type: 'website',
+          };
+        }
+      } catch (err) {
+        console.error('og-meta campus lookup error:', err);
+      }
+      res.set('Content-Type', 'text/html; charset=utf-8');
+      res.set('Cache-Control', 'public, max-age=300, s-maxage=600');
+      res.send(renderHtml(meta));
+      return;
+    }
 
     const parts = path.split('/').filter(Boolean);
     const section = parts[0];

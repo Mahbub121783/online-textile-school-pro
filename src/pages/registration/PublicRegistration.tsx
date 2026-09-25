@@ -110,10 +110,11 @@ export default function PublicRegistration() {
 
   useEffect(() => {
     const load = async () => {
-      const [cfgRes, purpRes, uniRes] = await Promise.all([
+      const [cfgRes, purpRes, uniRes, campusRes] = await Promise.all([
         supabase.from('registration_form_config' as any).select('*').limit(1).single(),
         supabase.from('registration_purposes' as any).select('*').eq('is_active', true).order('sort_order'),
         supabase.from('registrations' as any).select('university'),
+        supabase.from('campus_onboard_requests' as any).select('campus_name').eq('status', 'approved'),
       ]);
       if (cfgRes.data) setConfig(cfgRes.data as any);
 
@@ -139,7 +140,15 @@ export default function PublicRegistration() {
         if (match) setSelectedPurpose(match.id);
       }
 
-      const unis = [...new Set(((uniRes.data || []) as any[]).map((r: any) => r.university).filter(Boolean))];
+      // Onboarded campuses' own canonical names come first, ahead of whatever
+      // freeform spellings past registrants typed -- previously this list was
+      // built purely from past registrations' own university text, which had
+      // no relationship to actual onboarded campuses (db/35-campus-onboarding.sql)
+      // and just let typo/spelling variants of the same institution compound
+      // over time, never matching the campus it actually corresponds to.
+      const campusNames = ((campusRes.data || []) as any[]).map((r: any) => r.campus_name).filter(Boolean);
+      const pastUnis = ((uniRes.data || []) as any[]).map((r: any) => r.university).filter(Boolean);
+      const unis = [...new Set([...campusNames, ...pastUnis])];
       setUniversities(unis as string[]);
       setLoading(false);
     };

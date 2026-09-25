@@ -18,7 +18,7 @@ const AnalyticsTab = () => {
       const { data } = await supabase
         .from('qb_exam_sessions')
         .select('id, percentage, passed, time_taken_seconds, submitted_at, subject_id, qb_subjects(name)')
-        .eq('status', 'submitted')
+        .eq('status', 'completed')
         .gte('submitted_at', since)
         .limit(500);
       return data ?? [];
@@ -201,6 +201,7 @@ const UserStatsTable = () => {
         .from('qb_exam_sessions')
         .select('user_id, percentage')
         .in('user_id', ids)
+        .eq('status', 'completed')
         .not('submitted_at', 'is', null);
       const avgMap = new Map<string, number>();
       const cntMap = new Map<string, number>();

@@ -1,5 +1,5 @@
 const ROOT_DOMAIN = 'onlinetextileschool.com';
-const RESERVED_SUBDOMAINS = new Set(['www', 'api', 'mail', 'cpanel', 'webmail', 'autodiscover', 'ftp', 'admin']);
+export const RESERVED_SUBDOMAINS = new Set(['www', 'api', 'mail', 'cpanel', 'webmail', 'autodiscover', 'ftp', 'admin']);
 
 // A campus's provisioned subdomain (e.g. greenvalley.onlinetextileschool.com)
 // points at the same docroot as the main site (see campusOnboard.js --

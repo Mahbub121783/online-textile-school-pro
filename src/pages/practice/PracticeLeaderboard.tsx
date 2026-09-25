@@ -29,12 +29,12 @@ const PracticeLeaderboard = () => {
   const { data: rows = [], isLoading } = useQuery({
     queryKey: ['qb-leaderboard', period, subjectId, difficulty],
     queryFn: async () => {
-      let q = supabase.from('qb_leaderboard_cache').select('*').eq('period', period).order('total_points', { ascending: false }).limit(100);
+      let q = supabase.from('qb_leaderboard_cache').select('*').eq('period', period).order('rank', { ascending: true }).limit(100);
       q = subjectId === 'all' ? q.is('subject_id', null) : q.eq('subject_id', subjectId);
       q = difficulty === 'all' ? q.is('difficulty', null) : q.eq('difficulty', difficulty);
       // Per-difficulty buckets only exist for all_time — fall back gracefully
       if (period !== 'all_time' && difficulty !== 'all') {
-        q = supabase.from('qb_leaderboard_cache').select('*').eq('period', period).order('total_points', { ascending: false }).limit(100);
+        q = supabase.from('qb_leaderboard_cache').select('*').eq('period', period).order('rank', { ascending: true }).limit(100);
         q = subjectId === 'all' ? q.is('subject_id', null) : q.eq('subject_id', subjectId);
         q = q.is('difficulty', null);
       }

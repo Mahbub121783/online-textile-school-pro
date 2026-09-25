@@ -30,6 +30,12 @@ async function isAdmin(userId) {
 
 const ROOT_DOMAIN = process.env.CAMPUS_ROOT_DOMAIN || 'onlinetextileschool.com';
 const SLUG_RE = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
+// Mirrors src/lib/campusSubdomain.ts's RESERVED_SUBDOMAINS -- that copy is
+// purely client-side SPA routing logic and never stopped a reserved slug
+// from being saved or provisioned. This is the copy that actually gates the
+// real `uapi SubDomain addsubdomain` call, backed by a DB CHECK constraint
+// (db/85-block-reserved-subdomains.sql) as the final enforcement layer.
+const RESERVED_SUBDOMAINS = new Set(['www', 'api', 'mail', 'cpanel', 'webmail', 'autodiscover', 'ftp', 'admin']);
 
 function runUapi(args) {
   return new Promise((resolve, reject) => {
@@ -66,6 +72,7 @@ function checkUrlReachable(url) {
 
 async function provisionSubdomain(campus) {
   if (!SLUG_RE.test(campus.subdomain_slug)) throw new Error('Invalid subdomain slug');
+  if (RESERVED_SUBDOMAINS.has(campus.subdomain_slug)) throw new Error(`"${campus.subdomain_slug}" is a reserved subdomain and can't be provisioned`);
   await runUapi([
     'SubDomain', 'addsubdomain',
     `domain=${campus.subdomain_slug}`,
@@ -100,6 +107,7 @@ async function campusApprove(req, res) {
   if (subdomainSlug) {
     const slug = String(subdomainSlug).toLowerCase().trim();
     if (!SLUG_RE.test(slug)) return res.status(400).json({ error: 'Invalid subdomain slug' });
+    if (RESERVED_SUBDOMAINS.has(slug)) return res.status(400).json({ error: `"${slug}" is a reserved subdomain and can't be used` });
     const clash = await serviceQuery(
       'SELECT id FROM public.campus_onboard_requests WHERE subdomain_slug = $1 AND id <> $2',
       [slug, id]

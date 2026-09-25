@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import SEOHead from '@/components/SEOHead';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -12,7 +13,7 @@ import FabricLibrarySection from '@/components/campus/FabricLibrarySection';
 import CampusReviews from '@/components/campus/CampusReviews';
 import CampusEvents from '@/components/campus/CampusEvents';
 import { useCampusRealtime } from '@/hooks/useCampusRealtime';
-import { Building2, MapPin, Users, Mail, Phone, GraduationCap, Image as ImageIcon, CalendarDays, Link as LinkIcon, Sparkles, BadgeCheck, Star } from 'lucide-react';
+import { Building2, MapPin, Users, Mail, Phone, GraduationCap, Image as ImageIcon, CalendarDays, Link as LinkIcon, Sparkles, BadgeCheck, Star, LogIn } from 'lucide-react';
 
 interface Props {
   slug: string;
@@ -100,8 +101,24 @@ const CampusPortfolio = ({ slug }: Props) => {
     );
   }
 
+  const canonicalUrl = `https://${slug}.onlinetextileschool.com/`;
   return (
     <div className="min-h-screen flex flex-col bg-background">
+      <SEOHead
+        title={campus.campus_name}
+        description={campus.description || campus.facilities || `${campus.campus_name}${campus.area ? ` (${campus.area})` : ''} — a partner campus on the Online Textile School network.`}
+        canonical={canonicalUrl}
+        ogImage={campus.cover_image_url || campus.logo_url || undefined}
+        jsonLd={{
+          '@context': 'https://schema.org',
+          '@type': 'EducationalOrganization',
+          name: campus.campus_name,
+          url: canonicalUrl,
+          logo: campus.logo_url || undefined,
+          image: campus.cover_image_url || campus.logo_url || undefined,
+          address: campus.full_address || campus.area ? { '@type': 'PostalAddress', addressLocality: campus.area, streetAddress: campus.full_address, addressCountry: 'BD' } : undefined,
+        }}
+      />
       <div
         className="relative text-primary-foreground py-20 sm:py-24 bg-cover bg-center"
         style={campus.cover_image_url
@@ -157,6 +174,20 @@ const CampusPortfolio = ({ slug }: Props) => {
             </CardContent></Card>
           )}
         </div>
+
+        <Card>
+          <CardContent className="pt-6 text-center space-y-3">
+            <p className="text-sm text-muted-foreground">
+              A student or instructor at {campus.campus_name}? Sign in on your Online Textile School account to link it here and be counted.
+            </p>
+            <a
+              href={`https://www.onlinetextileschool.com/campus-onboard/${campus.id}`}
+              className="inline-flex items-center gap-2 h-10 px-4 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
+            >
+              <LogIn className="h-4 w-4" /> I'm a Student / Instructor Here
+            </a>
+          </CardContent>
+        </Card>
 
         <CampusLeadershipCard
           name={campus.principal_name} designation={campus.principal_designation}

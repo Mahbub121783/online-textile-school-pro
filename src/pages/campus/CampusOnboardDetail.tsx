@@ -1,8 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useFileUpload } from '@/hooks/useFileUpload';
+import SEOHead from '@/components/SEOHead';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -27,6 +28,7 @@ import { MapPin, Users, Building2, Globe, ArrowLeft, CheckCircle2, Image as Imag
 
 const CampusOnboardDetail = () => {
   const { id } = useParams();
+  const navigate = useNavigate();
   const { user, profile, roles, refreshProfile } = useAuth();
   const isInstructor = roles?.includes('instructor');
   useCampusRealtime(id);
@@ -163,6 +165,12 @@ const CampusOnboardDetail = () => {
 
   return (
     <div className="min-h-screen flex flex-col">
+      <SEOHead
+        title={campus.campus_name}
+        description={campus.description || campus.facilities || `${campus.campus_name}${campus.area ? ` (${campus.area})` : ''} — a partner campus on the Online Textile School network.`}
+        canonical={`https://www.onlinetextileschool.com/campus-onboard/${campus.id}`}
+        ogImage={campus.cover_image_url || campus.logo_url || undefined}
+      />
       <UtilityBar /><Header />
       <main className="flex-1 pb-14 lg:pb-0">
         <div
@@ -239,26 +247,33 @@ const CampusOnboardDetail = () => {
             />
           </div>
 
-          {user && (
-            <Card className="mb-6">
-              <CardContent className="pt-6 text-center space-y-3">
-                {isLinked ? (
-                  <p className="flex items-center justify-center gap-2 text-emerald-600 font-medium">
-                    <CheckCircle2 className="h-5 w-5" /> You're registered under this campus
+          <Card className="mb-6">
+            <CardContent className="pt-6 text-center space-y-3">
+              {!user ? (
+                <>
+                  <p className="text-sm text-muted-foreground">
+                    A student or instructor at {campus.campus_name}? Sign in to link your OTS account so you're counted here.
                   </p>
-                ) : (
-                  <>
-                    <p className="text-sm text-muted-foreground">
-                      {isInstructor ? `Teaching at ${campus.campus_name}?` : `Studying at ${campus.campus_name}?`} Link your OTS account so you're counted here.
-                    </p>
-                    <Button onClick={() => linkMutation.mutate()} disabled={linkMutation.isPending}>
-                      {linkMutation.isPending ? 'Linking...' : isInstructor ? 'I teach here' : "I'm a student here"}
-                    </Button>
-                  </>
-                )}
-              </CardContent>
-            </Card>
-          )}
+                  <Button onClick={() => navigate(`/auth/login?redirect=/campus-onboard/${id}`)}>
+                    Sign In to Link Your Account
+                  </Button>
+                </>
+              ) : isLinked ? (
+                <p className="flex items-center justify-center gap-2 text-emerald-600 font-medium">
+                  <CheckCircle2 className="h-5 w-5" /> You're registered under this campus
+                </p>
+              ) : (
+                <>
+                  <p className="text-sm text-muted-foreground">
+                    {isInstructor ? `Teaching at ${campus.campus_name}?` : `Studying at ${campus.campus_name}?`} Link your OTS account so you're counted here.
+                  </p>
+                  <Button onClick={() => linkMutation.mutate()} disabled={linkMutation.isPending}>
+                    {linkMutation.isPending ? 'Linking...' : isInstructor ? 'I teach here' : "I'm a student here"}
+                  </Button>
+                </>
+              )}
+            </CardContent>
+          </Card>
 
           <Tabs defaultValue="overview">
             <div className="w-full overflow-x-auto">

@@ -29,7 +29,7 @@ export function useQuestionBankBootstrap() {
         supabase.from('qb_subjects').select('*').order('sort_order'),
         supabase.rpc('qb_subject_question_counts'),
         supabase.from('qb_questions').select('id', { count: 'exact', head: true }),
-        supabase.from('qb_exam_sessions').select('id', { count: 'exact', head: true }).gte('started_at', since7d),
+        supabase.from('qb_exam_sessions').select('id', { count: 'exact', head: true }).eq('status', 'completed').gte('submitted_at', since7d),
         supabase.from('qb_exam_violations').select('id', { count: 'exact', head: true }).gte('occurred_at', since24h),
         supabase.from('qb_exam_sessions').select('id', { count: 'exact', head: true }).eq('status', 'in_progress'),
         supabase.from('qb_ai_settings').select('*').limit(1).maybeSingle(),
