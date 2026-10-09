@@ -22,6 +22,7 @@ const JOBS = {
   'refresh-homepage-stats': 'SELECT public.refresh_homepage_stats()',
   'pg-housekeeping-daily': 'SELECT public.pg_housekeeping_daily()',
   'kill-idle-connections': 'SELECT public.kill_idle_connections()',
+  'ambassador-evaluate-voting-deadlines': 'SELECT public.ambassador_evaluate_voting_deadlines()',
 };
 
 async function internalCron(req, res) {

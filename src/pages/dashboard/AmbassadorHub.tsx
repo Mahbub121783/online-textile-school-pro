@@ -4,11 +4,14 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Loader2, Crown, Star, Palette, Download, Clock, Building2, Users } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Loader2, Crown, Star, Palette, Download, Clock, Building2, Users, ThumbsUp, AlertTriangle, MessageSquare, Share2, Copy } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { renderAmbassadorCard, downloadAmbassadorCard } from '@/lib/ambassadorCardRenderer';
 import { renderTeamCard, downloadTeamCard } from '@/lib/teamCardRenderer';
 import { useCampusAmbassadorTeam } from '@/hooks/useCampusAmbassadorTeam';
+import AmbassadorSkillsEditor from '@/components/dashboard/AmbassadorSkillsEditor';
+import AmbassadorMessages from '@/components/dashboard/AmbassadorMessages';
 import { toast } from 'sonner';
 
 const SUB_ROLE_META: Record<string, { label: string; icon: any }> = {
@@ -68,6 +71,17 @@ const AmbassadorHub = () => {
       setGenerating(false);
     }
   };
+
+  const { data: voteTally } = useQuery({
+    queryKey: ['my-ambassador-vote-tally', application?.id],
+    enabled: !!application?.id,
+    refetchInterval: 30000,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('ambassador_vote_tally', { _application_id: application!.id });
+      if (error) throw error;
+      return data?.[0] || { up_votes: 0, down_votes: 0, total_votes: 0, accept_pct: null };
+    },
+  });
 
   const { data: team } = useCampusAmbassadorTeam(application?.campus_id, application?.campus?.campus_name);
 
@@ -173,6 +187,58 @@ const AmbassadorHub = () => {
           </CardContent>
         </Card>
       )}
+
+      <Card>
+        <CardContent className="p-5 space-y-3">
+          <p className="font-semibold flex items-center gap-2"><Share2 className="h-4 w-4" /> Your Public Profile</p>
+          <p className="text-sm text-muted-foreground">Share this link — anyone signed in can view your profile and vote on your performance.</p>
+          <div className="flex items-center gap-2">
+            <code className="flex-1 text-xs bg-muted rounded px-2 py-1.5 truncate">{window.location.origin}/ambassador/{application.id}</code>
+            <Button
+              size="sm" variant="outline"
+              onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/ambassador/${application.id}`); toast.success('Link copied!'); }}
+            >
+              <Copy className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+
+          {voteTally && (
+            <div className="border-t pt-3 space-y-2">
+              <div className="flex items-center justify-between text-sm">
+                <span className="flex items-center gap-1.5 text-muted-foreground"><ThumbsUp className="h-3.5 w-3.5" /> Community Acceptance</span>
+                <span className="font-bold">{voteTally.accept_pct != null ? `${voteTally.accept_pct}%` : 'No votes yet'}</span>
+              </div>
+              <p className="text-xs text-muted-foreground">{voteTally.up_votes} up · {voteTally.down_votes} down · {voteTally.total_votes} total votes {!application.vote_confirmed && '(100 needed within 7 days of approval to confirm)'}</p>
+              {application.needs_review && (
+                <div className="flex items-start gap-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-2.5 text-xs">
+                  <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-semibold text-amber-800 dark:text-amber-400">Under Admin Review</p>
+                    <p className="text-amber-700 dark:text-amber-500">{application.review_reason}</p>
+                  </div>
+                </div>
+              )}
+              {application.vote_confirmed && (
+                <Badge className="bg-emerald-600">Community Confirmed</Badge>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="p-5 space-y-3">
+          <p className="font-semibold mb-1">Skills &amp; Interests</p>
+          <AmbassadorSkillsEditor applicationId={application.id} currentSkills={application.skills || []} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="p-5 space-y-3">
+          <p className="font-semibold flex items-center gap-2"><MessageSquare className="h-4 w-4" /> Message Admin</p>
+          <AmbassadorMessages applicationId={application.id} asAdmin={false} />
+        </CardContent>
+      </Card>
 
       <Card className="border-dashed">
         <CardContent className="p-5 space-y-1">

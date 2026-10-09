@@ -11,10 +11,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { CheckCircle, XCircle, Loader2, Crown, Star, Palette, Plus, Trash2, Minus, Download, Users } from 'lucide-react';
-import { format } from 'date-fns';
+import { CheckCircle, XCircle, Loader2, Crown, Star, Palette, Plus, Trash2, Minus, Download, Users, AlertTriangle, MessageSquare, ThumbsUp } from 'lucide-react';
+import { format, formatDistanceToNow } from 'date-fns';
 import { downloadTeamCard, renderTeamCard } from '@/lib/teamCardRenderer';
 import { useCampusAmbassadorTeam } from '@/hooks/useCampusAmbassadorTeam';
+import AmbassadorMessages from '@/components/dashboard/AmbassadorMessages';
 
 const SUB_ROLE_META: Record<string, { label: string; icon: any }> = {
   head_of_campus: { label: 'Head of Campus Ambassador', icon: Crown },
@@ -28,12 +29,36 @@ const STATUS_COLORS: Record<string, string> = {
   rejected: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
 };
 
+const AmbassadorVoteSummary = ({ applicationId, voteConfirmed, votingDeadline }: { applicationId: string; voteConfirmed: boolean; votingDeadline: string | null }) => {
+  const { data: tally } = useQuery({
+    queryKey: ['admin-ambassador-vote-tally', applicationId],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('ambassador_vote_tally', { _application_id: applicationId });
+      if (error) throw error;
+      return data?.[0] || { up_votes: 0, down_votes: 0, total_votes: 0, accept_pct: null };
+    },
+  });
+  if (!tally) return null;
+  const deadlinePassed = votingDeadline && new Date(votingDeadline) < new Date();
+  return (
+    <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+      <ThumbsUp className="h-3 w-3" /> {tally.accept_pct != null ? `${tally.accept_pct}%` : '—'} acceptance ({tally.total_votes} votes)
+      {voteConfirmed
+        ? <Badge variant="secondary" className="text-[10px] bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30">Confirmed</Badge>
+        : votingDeadline && !deadlinePassed
+          ? <span>· {formatDistanceToNow(new Date(votingDeadline))} left to reach 100</span>
+          : null}
+    </p>
+  );
+};
+
 const ApplicationsTab = () => {
   const queryClient = useQueryClient();
   const [rejectTarget, setRejectTarget] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState('');
   const [pointsTarget, setPointsTarget] = useState<any | null>(null);
   const [pointsDelta, setPointsDelta] = useState('');
+  const [messageTarget, setMessageTarget] = useState<any | null>(null);
   const [filter, setFilter] = useState('pending');
 
   const { data: applications = [], isLoading } = useQuery({
@@ -86,14 +111,33 @@ const ApplicationsTab = () => {
     onError: (e: any) => toast.error(e.message),
   });
 
-  const filtered = applications.filter((a: any) => filter === 'all' || a.status === filter);
+  const resolveReviewMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('ambassador_applications').update({ needs_review: false, review_reason: null }).eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['admin-ambassador-applications'] }); toast.success('Review cleared'); },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const needsReviewCount = applications.filter((a: any) => a.needs_review).length;
+  const filtered = filter === 'needs_review'
+    ? applications.filter((a: any) => a.needs_review)
+    : applications.filter((a: any) => filter === 'all' || a.status === filter);
 
   return (
     <div className="space-y-4">
-      <div className="flex gap-2">
+      <div className="flex gap-2 flex-wrap">
         {['pending', 'approved', 'rejected', 'all'].map((f) => (
           <Button key={f} size="sm" variant={filter === f ? 'default' : 'outline'} onClick={() => setFilter(f)} className="capitalize">{f}</Button>
         ))}
+        <Button
+          size="sm" variant={filter === 'needs_review' ? 'default' : 'outline'}
+          className={filter !== 'needs_review' && needsReviewCount > 0 ? 'border-amber-400 text-amber-700 dark:text-amber-400' : ''}
+          onClick={() => setFilter('needs_review')}
+        >
+          Needs Review {needsReviewCount > 0 && `(${needsReviewCount})`}
+        </Button>
       </div>
 
       {isLoading ? (
@@ -118,9 +162,24 @@ const ApplicationsTab = () => {
                   <p className="text-xs text-muted-foreground">{a.profile?.roll_id}</p>
                   <p className="text-sm">{meta?.label}{a.campus?.campus_name && ` · ${a.campus.campus_name}`}{a.session?.label && ` · ${a.session.label}`}</p>
                   <p className="text-xs text-muted-foreground">Applied {format(new Date(a.applied_at), 'dd MMM yyyy')} · Points: <span className="font-bold text-foreground">{a.points}</span></p>
+                  {a.skills?.length > 0 && (
+                    <div className="flex flex-wrap gap-1">
+                      {a.skills.map((s: string) => <Badge key={s} variant="secondary" className="text-[10px]">{s}</Badge>)}
+                    </div>
+                  )}
                   {a.rejection_reason && <p className="text-xs text-destructive">Rejected: {a.rejection_reason}</p>}
+                  {a.status === 'approved' && <AmbassadorVoteSummary applicationId={a.id} voteConfirmed={a.vote_confirmed} votingDeadline={a.voting_deadline} />}
+                  {a.needs_review && (
+                    <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-2 text-xs space-y-1">
+                      <p className="font-semibold text-amber-800 dark:text-amber-400 flex items-center gap-1"><AlertTriangle className="h-3.5 w-3.5" /> Needs Review</p>
+                      <p className="text-amber-700 dark:text-amber-500">{a.review_reason}</p>
+                      <Button size="sm" variant="outline" className="h-6 text-xs" onClick={() => resolveReviewMutation.mutate(a.id)} disabled={resolveReviewMutation.isPending}>
+                        Clear Review
+                      </Button>
+                    </div>
+                  )}
 
-                  <div className="flex gap-2 pt-2">
+                  <div className="flex gap-2 pt-2 flex-wrap">
                     {a.status === 'pending' && (
                       <>
                         <Button size="sm" className="flex-1" onClick={() => approveMutation.mutate(a.id)} disabled={approveMutation.isPending}>
@@ -136,6 +195,9 @@ const ApplicationsTab = () => {
                         Adjust Points
                       </Button>
                     )}
+                    <Button size="sm" variant="outline" onClick={() => setMessageTarget(a)}>
+                      <MessageSquare className="h-3.5 w-3.5" />
+                    </Button>
                     <Button size="sm" variant="outline" className="text-destructive hover:text-destructive px-2" onClick={() => { if (confirm('Delete this application?')) deleteMutation.mutate(a.id); }}>
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>
@@ -146,6 +208,13 @@ const ApplicationsTab = () => {
           })}
         </div>
       )}
+
+      <Dialog open={!!messageTarget} onOpenChange={(o) => !o && setMessageTarget(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader><DialogTitle>Messages — {messageTarget?.profile?.full_name}</DialogTitle></DialogHeader>
+          {messageTarget && <AmbassadorMessages applicationId={messageTarget.id} asAdmin />}
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={!!rejectTarget} onOpenChange={(o) => !o && setRejectTarget(null)}>
         <DialogContent>

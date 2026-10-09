@@ -1,12 +1,14 @@
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Loader2, Crown, Star, Palette, Building2, ArrowLeft, Lock, GraduationCap } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Loader2, Crown, Star, Palette, Building2, ArrowLeft, Lock, GraduationCap, ThumbsUp, ThumbsDown } from 'lucide-react';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
+import { toast } from 'sonner';
 
 const SUB_ROLE_META: Record<string, { label: string; icon: any }> = {
   head_of_campus: { label: 'Head of Campus Ambassador', icon: Crown },
@@ -18,6 +20,7 @@ const AmbassadorProfile = () => {
   const { id } = useParams();
   const { user } = useAuth();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   const { data: ambassador, isLoading } = useQuery({
     queryKey: ['ambassador-profile', id],
@@ -32,6 +35,48 @@ const AmbassadorProfile = () => {
       if (error) throw error;
       return data;
     },
+  });
+
+  const { data: tally } = useQuery({
+    queryKey: ['ambassador-vote-tally', id],
+    enabled: !!user && !!ambassador,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('ambassador_vote_tally', { _application_id: id });
+      if (error) throw error;
+      return data?.[0] || { up_votes: 0, down_votes: 0, total_votes: 0, accept_pct: null };
+    },
+  });
+
+  const { data: myVote } = useQuery({
+    queryKey: ['my-ambassador-vote', id, user?.id],
+    enabled: !!user && !!ambassador,
+    queryFn: async () => {
+      const { data } = await supabase.from('ambassador_votes').select('is_upvote').eq('application_id', id!).eq('voter_user_id', user!.id).maybeSingle();
+      return data?.is_upvote ?? null;
+    },
+  });
+
+  const voteMutation = useMutation({
+    mutationFn: async (isUpvote: boolean) => {
+      if (!user || !id) return;
+      if (myVote === isUpvote) {
+        // Tap the same choice again -- retract the vote.
+        const { error } = await supabase.from('ambassador_votes').delete().eq('application_id', id).eq('voter_user_id', user.id);
+        if (error) throw error;
+        return null;
+      }
+      const { error } = await supabase.from('ambassador_votes').upsert(
+        { application_id: id, voter_user_id: user.id, is_upvote: isUpvote, updated_at: new Date().toISOString() },
+        { onConflict: 'application_id,voter_user_id' }
+      );
+      if (error) throw error;
+      return isUpvote;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['my-ambassador-vote', id, user?.id] });
+      queryClient.invalidateQueries({ queryKey: ['ambassador-vote-tally', id] });
+    },
+    onError: (e: any) => toast.error(e.message),
   });
 
   if (!user) {
@@ -136,6 +181,51 @@ const AmbassadorProfile = () => {
               <div className="flex gap-3 pt-2 border-t text-sm">
                 {p.facebook_url && <a href={p.facebook_url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Facebook</a>}
                 {p.linkedin_url && <a href={p.linkedin_url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">LinkedIn</a>}
+              </div>
+            )}
+
+            {ambassador.skills?.length > 0 && (
+              <div className="pt-2 border-t">
+                <p className="text-xs text-muted-foreground mb-1.5">Skills &amp; Interests</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {ambassador.skills.map((s: string) => <Badge key={s} variant="secondary">{s}</Badge>)}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="mt-4">
+          <CardContent className="p-6 space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="font-semibold">Community Rating</p>
+              {ambassador.vote_confirmed && <Badge className="bg-emerald-600">Confirmed</Badge>}
+            </div>
+            {tally && (
+              <p className="text-sm text-muted-foreground">
+                {tally.accept_pct != null ? `${tally.accept_pct}% acceptance` : 'No votes yet'} · {tally.total_votes} total votes
+              </p>
+            )}
+            {user.id === ambassador.user_id ? (
+              <p className="text-xs text-muted-foreground">You can't vote on your own profile.</p>
+            ) : (
+              <div className="flex gap-2">
+                <Button
+                  variant={myVote === true ? 'default' : 'outline'}
+                  size="sm" className="gap-1.5"
+                  onClick={() => voteMutation.mutate(true)}
+                  disabled={voteMutation.isPending}
+                >
+                  <ThumbsUp className="h-4 w-4" /> Helpful
+                </Button>
+                <Button
+                  variant={myVote === false ? 'destructive' : 'outline'}
+                  size="sm" className="gap-1.5"
+                  onClick={() => voteMutation.mutate(false)}
+                  disabled={voteMutation.isPending}
+                >
+                  <ThumbsDown className="h-4 w-4" /> Not Helpful
+                </Button>
               </div>
             )}
           </CardContent>
