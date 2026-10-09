@@ -28,6 +28,14 @@ const statusColors: Record<string, string> = {
   rejected: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
 };
 
+// Mirrors backend/src/functions/campusOnboard.js's SSL_PENDING_MESSAGE --
+// a brand-new subdomain spends a while (minutes to a few hours) waiting on
+// AutoSSL before it's actually live, which is expected and self-resolves
+// (see campusAutoVerifyPendingSubdomains), not a real failure. Shown as an
+// informational note instead of a red error so it doesn't look broken.
+const isSslPendingMessage = (msg: string | null | undefined) =>
+  !!msg && msg.startsWith('SSL certificate is being issued for this subdomain automatically');
+
 const AdminCampusOnboard = () => {
   const queryClient = useQueryClient();
   const [rejectTarget, setRejectTarget] = useState<string | null>(null);
@@ -85,6 +93,8 @@ const AdminCampusOnboard = () => {
       queryClient.invalidateQueries({ queryKey: ['admin-campus-onboard'] });
       if (data?.subdomainError) {
         toast.warning(`Approved, but subdomain setup failed: ${data.subdomainError}. Retry from the card.`);
+      } else if (data?.subdomainPending) {
+        toast.info(`Approved — ${data?.subdomain} is being set up (SSL cert issuing automatically), will go live on its own shortly.`);
       } else {
         toast.success(`Approved — live at ${data?.subdomain}`);
       }
@@ -114,7 +124,11 @@ const AdminCampusOnboard = () => {
     },
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ['admin-campus-onboard'] });
-      toast.success(`Subdomain live: ${data?.subdomain}`);
+      if (data?.subdomainPending) {
+        toast.info(`${data?.subdomain} is being set up (SSL cert issuing automatically), will go live on its own shortly.`);
+      } else {
+        toast.success(`Subdomain live: ${data?.subdomain}`);
+      }
     },
     onError: (e: any) => toast.error(e.message),
   });
@@ -291,7 +305,13 @@ const AdminCampusOnboard = () => {
                   <p>Subdomain: <span className="font-mono">{c.subdomain_slug}.onlinetextileschool.com</span></p>
                   <p>Submitted {format(new Date(c.created_at), 'dd MMM yyyy')}</p>
                   {c.rejection_reason && <p className="text-destructive">Rejected: {c.rejection_reason}</p>}
-                  {c.subdomain_error && <p className="text-destructive">Subdomain error: {c.subdomain_error}</p>}
+                  {c.subdomain_error && (
+                    isSslPendingMessage(c.subdomain_error) ? (
+                      <p className="text-amber-600 dark:text-amber-400 flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> SSL cert issuing — will go live automatically, usually within a few minutes to a few hours.</p>
+                    ) : (
+                      <p className="text-destructive">Subdomain error: {c.subdomain_error}</p>
+                    )
+                  )}
                 </div>
 
                 {c.status === 'pending' && (
@@ -307,7 +327,7 @@ const AdminCampusOnboard = () => {
                 {c.status === 'approved' && !c.subdomain_provisioned && (
                   <Button size="sm" variant="outline" className="w-full mt-2" onClick={() => provisionMutation.mutate(c.id)} disabled={provisionMutation.isPending}>
                     {provisionMutation.isPending ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Globe className="h-3.5 w-3.5 mr-1.5" />}
-                    Retry Subdomain Setup
+                    {isSslPendingMessage(c.subdomain_error) ? 'Check Now' : 'Retry Subdomain Setup'}
                   </Button>
                 )}
                 {c.subdomain_provisioned && (

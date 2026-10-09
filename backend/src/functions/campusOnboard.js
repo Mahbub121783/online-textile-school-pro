@@ -8,7 +8,7 @@
 // function -- confirmed by testing), so it's a distinct, explicit admin
 // action taken only after approval, never automatic.
 const { execFile } = require('child_process');
-const https = require('https');
+const tls = require('tls');
 const jwt = require('jsonwebtoken');
 const { serviceQuery } = require('../db');
 
@@ -54,22 +54,51 @@ function runUapi(args) {
   });
 }
 
-// HEAD-checks a campus's live subdomain URL. Used to detect drift when a
-// subdomain was removed directly via cPanel's UI (which supports removal
-// even though uapi on this account doesn't expose SubDomain::delsubdomain --
-// confirmed by enumerating every uapi call this account has access to).
-function checkUrlReachable(url) {
+
+// This hosting account is shared/reseller-tier: many unrelated cPanel
+// accounts' sites sit behind the same IP. A freshly `addsubdomain`-ed host
+// has no SSL cert of its own until AutoSSL actually issues and installs
+// one (minutes to a few hours later, not instant even after kicking a
+// scan) -- and until then, an HTTPS request's TLS handshake has no
+// matching vhost cert to present, so Apache falls back to whatever
+// certificate/vhost is configured as the IP's default. On this box that
+// default is a *different customer's unrelated site* (confirmed live: a
+// freshly-approved campus briefly served a totally unrelated domain's
+// homepage, not a cert-warning page -- checkUrlReachable's plain
+// HEAD-200-or-not check can't tell that apart from the real thing, since
+// the wrong site still answers 200).
+//
+// The only reliable signal is the TLS certificate itself: does it actually
+// cover this hostname? If not, whatever answered isn't our site yet, no
+// matter what status code it returned.
+function checkCertMatchesHost(hostname, timeoutMs = 8000) {
   return new Promise((resolve) => {
-    const req = https.request(url, { method: 'HEAD', timeout: 8000 }, (res) => {
-      res.resume();
-      resolve(res.statusCode < 500);
-    });
-    req.on('error', () => resolve(false));
-    req.on('timeout', () => { req.destroy(); resolve(false); });
-    req.end();
+    let settled = false;
+    const finish = (ok) => { if (!settled) { settled = true; resolve(ok); } };
+    const socket = tls.connect(
+      { host: hostname, port: 443, servername: hostname, timeout: timeoutMs, rejectUnauthorized: false },
+      () => {
+        const cert = socket.getPeerCertificate();
+        socket.end();
+        const names = (cert?.subjectaltname || '')
+          .split(',')
+          .map((s) => s.trim().replace(/^DNS:/, ''));
+        finish(names.includes(hostname));
+      }
+    );
+    socket.on('error', () => finish(false));
+    socket.on('timeout', () => { socket.destroy(); finish(false); });
   });
 }
 
+const SSL_PENDING_MESSAGE = "SSL certificate is being issued for this subdomain automatically -- this is normal for a brand-new subdomain and usually takes a few minutes to a few hours. It will go live on its own once ready; no action needed.";
+
+// Returns true if the subdomain is confirmed actually serving under its own
+// matching certificate right now, false if it's still mid-provisioning
+// (expected for a while after creation -- see checkCertMatchesHost above).
+// Never silently marks a campus "live" without this check: doing so was
+// the bug -- notifying the owner "you're live!" while the public URL could
+// still be showing a stranger's unrelated website underneath.
 async function provisionSubdomain(campus) {
   if (!SLUG_RE.test(campus.subdomain_slug)) throw new Error('Invalid subdomain slug');
   if (RESERVED_SUBDOMAINS.has(campus.subdomain_slug)) throw new Error(`"${campus.subdomain_slug}" is a reserved subdomain and can't be provisioned`);
@@ -79,17 +108,26 @@ async function provisionSubdomain(campus) {
     `rootdomain=${ROOT_DOMAIN}`,
     `dir=${ROOT_DOMAIN}`, // reuse the main site's existing docroot -- no new deploy/process
   ]);
-  // A freshly-created subdomain has no SSL cert until cPanel's AutoSSL next
-  // runs its periodic scan, which can leave a window (observed live: several
-  // minutes) where the new subdomain shows a scary "connection not private"
-  // warning before it's browsable. Kick AutoSSL immediately instead of
-  // waiting -- fire-and-forget (account-wide cert scan can take a while;
-  // approval shouldn't block on it), best-effort only.
+  // Kick AutoSSL immediately instead of waiting for its next scheduled
+  // scan -- fire-and-forget (account-wide cert scan can take a while;
+  // approval shouldn't block on it), best-effort only. Doesn't make the
+  // cert appear instantly, just shortens the wait.
   runUapi(['SSL', 'start_autossl_check']).catch(() => {});
-  await serviceQuery(
-    "UPDATE public.campus_onboard_requests SET subdomain_provisioned=true, subdomain_provisioned_at=now(), subdomain_error=NULL WHERE id=$1",
-    [campus.id]
-  );
+
+  const hostname = `${campus.subdomain_slug}.${ROOT_DOMAIN}`;
+  const live = await checkCertMatchesHost(hostname);
+  if (live) {
+    await serviceQuery(
+      "UPDATE public.campus_onboard_requests SET subdomain_provisioned=true, subdomain_provisioned_at=now(), subdomain_error=NULL WHERE id=$1",
+      [campus.id]
+    );
+  } else {
+    await serviceQuery(
+      "UPDATE public.campus_onboard_requests SET subdomain_provisioned=false, subdomain_error=$1 WHERE id=$2",
+      [SSL_PENDING_MESSAGE, campus.id]
+    );
+  }
+  return live;
 }
 
 // POST /functions/v1/campus-approve { id, subdomainSlug? }
@@ -123,28 +161,37 @@ async function campusApprove(req, res) {
   const campus = upd.rows[0];
   if (!campus) return res.status(404).json({ error: 'Request not found or already processed' });
 
-  const notifyOwner = async (extraMessage, subdomainError) => {
+  const notifyOwner = async (message) => {
     if (!campus.submitted_by) return;
-    const message = subdomainError
-      ? `${campus.campus_name} was approved, but automatic subdomain setup hit an error (${subdomainError}). An admin will retry it shortly.`
-      : `${campus.campus_name} is live at ${campus.subdomain_slug}.${ROOT_DOMAIN} — manage your portfolio from your dashboard.`;
     await serviceQuery(
       `INSERT INTO public.notifications (user_id, type, title, message, link)
        VALUES ($1, 'campus_approved', '🎉 Campus Approved!', $2, '/dashboard/campus')`,
-      [campus.submitted_by, extraMessage || message]
+      [campus.submitted_by, message]
     ).catch(() => {});
   };
 
   try {
-    await provisionSubdomain(campus);
-    await notifyOwner();
-    res.json({ success: true, subdomain: `${campus.subdomain_slug}.${ROOT_DOMAIN}` });
+    const live = await provisionSubdomain(campus);
+    if (live) {
+      await notifyOwner(`${campus.campus_name} is live at ${campus.subdomain_slug}.${ROOT_DOMAIN} — manage your portfolio from your dashboard.`);
+      res.json({ success: true, subdomain: `${campus.subdomain_slug}.${ROOT_DOMAIN}` });
+    } else {
+      // Not an error -- genuinely expected for a brand-new subdomain (see
+      // provisionSubdomain). A background check promotes it to live
+      // automatically and sends the real "you're live" notification once
+      // the certificate is actually ready -- see
+      // campusAutoVerifyPendingSubdomains.
+      await notifyOwner(`${campus.campus_name} was approved! Your subdomain ${campus.subdomain_slug}.${ROOT_DOMAIN} is being set up and will go live automatically within a few minutes to a few hours.`);
+      res.json({ success: true, subdomainPending: true, subdomain: `${campus.subdomain_slug}.${ROOT_DOMAIN}` });
+    }
   } catch (err) {
     // Approval itself already succeeded and committed -- record the
     // provisioning failure so the admin can retry via campus-provision-subdomain
-    // instead of leaving the request stuck.
+    // instead of leaving the request stuck. This is a real failure (e.g. the
+    // uapi addsubdomain call itself failed), distinct from the normal
+    // "SSL still pending" case handled above.
     await serviceQuery('UPDATE public.campus_onboard_requests SET subdomain_error=$1 WHERE id=$2', [err.message, id]).catch(() => {});
-    await notifyOwner(null, err.message);
+    await notifyOwner(`${campus.campus_name} was approved, but automatic subdomain setup hit an error (${err.message}). An admin will retry it shortly.`);
     res.json({ success: true, subdomainError: err.message });
   }
 }
@@ -189,8 +236,10 @@ async function campusProvisionSubdomain(req, res) {
   if (campus.subdomain_provisioned) return res.status(400).json({ error: 'Subdomain already provisioned' });
 
   try {
-    await provisionSubdomain(campus);
-    res.json({ success: true, subdomain: `${campus.subdomain_slug}.${ROOT_DOMAIN}` });
+    const live = await provisionSubdomain(campus);
+    res.json(live
+      ? { success: true, subdomain: `${campus.subdomain_slug}.${ROOT_DOMAIN}` }
+      : { success: true, subdomainPending: true, subdomain: `${campus.subdomain_slug}.${ROOT_DOMAIN}` });
   } catch (err) {
     await serviceQuery('UPDATE public.campus_onboard_requests SET subdomain_error=$1 WHERE id=$2', [err.message, id]).catch(() => {});
     res.status(500).json({ error: `Subdomain provisioning failed: ${err.message}` });
@@ -315,8 +364,10 @@ async function campusVerifySubdomains(req, res) {
   );
   const results = [];
   for (const row of r.rows) {
-    const url = `https://${row.subdomain_slug}.${ROOT_DOMAIN}/`;
-    const reachable = await checkUrlReachable(url);
+    // Cert-match, not just "something answered" -- see checkCertMatchesHost's
+    // comment for why a plain reachability check can't tell our real site
+    // apart from another customer's unrelated one answering on the same IP.
+    const reachable = await checkCertMatchesHost(`${row.subdomain_slug}.${ROOT_DOMAIN}`);
     if (!reachable) {
       await serviceQuery(
         "UPDATE public.campus_onboard_requests SET subdomain_provisioned=false, subdomain_provisioned_at=NULL, subdomain_error=$1 WHERE id=$2",
@@ -326,6 +377,50 @@ async function campusVerifySubdomains(req, res) {
     results.push({ id: row.id, slug: row.subdomain_slug, reachable });
   }
   res.json({ success: true, results });
+}
+
+// ALL /functions/v1/campus-auto-verify-pending-subdomains?secret=...
+// Cron-only (shared-secret gated, same convention as internal-cron), run
+// every few minutes. Re-checks every campus still waiting on its SSL
+// certificate (see provisionSubdomain/SSL_PENDING_MESSAGE) and promotes it
+// to live -- with the real "you're live" notification -- the moment
+// AutoSSL actually finishes, instead of requiring an admin to remember to
+// click "Retry Subdomain Setup". Deliberately scoped to rows whose error
+// is exactly the SSL-pending message, not just any subdomain_error, so a
+// genuine uapi failure (bad slug, account quota, etc.) still surfaces to
+// an admin instead of being silently retried forever.
+async function campusAutoVerifyPendingSubdomains(req, res) {
+  const secret = req.headers['x-cron-secret'] || req.query.secret;
+  if (!process.env.CRON_SECRET || secret !== process.env.CRON_SECRET) {
+    return res.status(401).json({ error: 'unauthorized' });
+  }
+
+  const r = await serviceQuery(
+    `SELECT id, campus_name, subdomain_slug, submitted_by FROM public.campus_onboard_requests
+     WHERE status='approved' AND subdomain_provisioned=false
+       AND subdomain_slug IS NOT NULL AND subdomain_error = $1`,
+    [SSL_PENDING_MESSAGE]
+  );
+  const results = [];
+  for (const row of r.rows) {
+    const hostname = `${row.subdomain_slug}.${ROOT_DOMAIN}`;
+    const live = await checkCertMatchesHost(hostname);
+    if (live) {
+      await serviceQuery(
+        "UPDATE public.campus_onboard_requests SET subdomain_provisioned=true, subdomain_provisioned_at=now(), subdomain_error=NULL WHERE id=$1",
+        [row.id]
+      );
+      if (row.submitted_by) {
+        await serviceQuery(
+          `INSERT INTO public.notifications (user_id, type, title, message, link)
+           VALUES ($1, 'campus_approved', '🎉 Your Campus Is Live!', $2, '/dashboard/campus')`,
+          [row.submitted_by, `${row.campus_name} is now live at ${hostname} — manage your portfolio from your dashboard.`]
+        ).catch(() => {});
+      }
+    }
+    results.push({ id: row.id, slug: row.subdomain_slug, live });
+  }
+  res.json({ success: true, checked: results.length, promoted: results.filter((x) => x.live).length, results });
 }
 
 // POST /functions/v1/campus-transfer-lookup { campus_id, email }
@@ -390,5 +485,5 @@ async function campusTransferApprove(req, res) {
 
 module.exports = {
   campusApprove, campusReject, campusProvisionSubdomain, campusUpdate, campusRemoveSubdomain, campusVerifySubdomains,
-  campusTransferLookup, campusTransferApprove, campusVerify,
+  campusAutoVerifyPendingSubdomains, campusTransferLookup, campusTransferApprove, campusVerify,
 };
