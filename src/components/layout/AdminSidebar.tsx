@@ -1,4 +1,4 @@
-import { LayoutDashboard, Users, BookOpen, Image, Activity, LogOut, GraduationCap, Tag, Wallet, FileText, PenTool, ImageIcon, Menu, Palette, Video, HelpCircle, ClipboardList, Award, Settings, ChevronDown, BarChart3, UserCog, CheckSquare, DollarSign, Shield, MessageSquare, Wrench, Mail, CreditCard, ReceiptText, Cloud, Bell, ShoppingCart, HardDrive, Crown, Server, ClipboardEdit, Send, Calendar, Layers, Star, AlertTriangle, FolderKanban, Briefcase, FlaskConical, Presentation, Brain, Sparkles, Trophy, Radio, Globe, Shirt } from 'lucide-react';
+import { LayoutDashboard, Users, BookOpen, Image, Activity, LogOut, GraduationCap, Tag, Wallet, FileText, PenTool, ImageIcon, Menu, Palette, Video, HelpCircle, ClipboardList, Award, Settings, ChevronDown, BarChart3, UserCog, CheckSquare, DollarSign, Shield, MessageSquare, Wrench, Mail, CreditCard, ReceiptText, Cloud, Bell, ShoppingCart, HardDrive, Crown, Server, ClipboardEdit, Send, Calendar, Layers, Star, AlertTriangle, FolderKanban, Briefcase, FlaskConical, Presentation, Brain, Sparkles, Trophy, Radio, Globe, Shirt, Home } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
@@ -240,6 +240,10 @@ export function AdminSidebar() {
         </SidebarGroup>
       </SidebarContent>
       <SidebarFooter className="p-2 space-y-1">
+        <Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => navigate('/')}>
+          <Home className="h-4 w-4 mr-2" />
+          {!collapsed && 'Back to Website'}
+        </Button>
         <Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => navigate('/dashboard')}>
           <GraduationCap className="h-4 w-4 mr-2" />
           {!collapsed && 'Student Dashboard'}

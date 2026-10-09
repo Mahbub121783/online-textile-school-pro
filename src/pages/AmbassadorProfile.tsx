@@ -5,6 +5,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Loader2, Crown, Star, Palette, Building2, ArrowLeft, Lock, GraduationCap } from 'lucide-react';
+import Header from '@/components/layout/Header';
+import Footer from '@/components/layout/Footer';
 
 const SUB_ROLE_META: Record<string, { label: string; icon: any }> = {
   head_of_campus: { label: 'Head of Campus Ambassador', icon: Crown },
@@ -34,17 +36,21 @@ const AmbassadorProfile = () => {
 
   if (!user) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background px-4">
-        <Card className="max-w-md w-full">
-          <CardContent className="p-8 text-center space-y-4">
-            <Lock className="h-10 w-10 mx-auto text-muted-foreground" />
-            <div>
-              <p className="font-semibold">Sign in to view this ambassador's profile</p>
-              <p className="text-sm text-muted-foreground mt-1">Ambassador profile details are only visible to signed-in OTS members.</p>
-            </div>
-            <Button onClick={() => navigate(`/auth/login?redirect=/ambassador/${id}`)}>Sign In</Button>
-          </CardContent>
-        </Card>
+      <div className="min-h-screen bg-background flex flex-col">
+        <Header />
+        <div className="flex-1 flex items-center justify-center px-4">
+          <Card className="max-w-md w-full">
+            <CardContent className="p-8 text-center space-y-4">
+              <Lock className="h-10 w-10 mx-auto text-muted-foreground" />
+              <div>
+                <p className="font-semibold">Sign in to view this ambassador's profile</p>
+                <p className="text-sm text-muted-foreground mt-1">Ambassador profile details are only visible to signed-in OTS members.</p>
+              </div>
+              <Button onClick={() => navigate(`/auth/login?redirect=/ambassador/${id}`)}>Sign In</Button>
+            </CardContent>
+          </Card>
+        </div>
+        <Footer />
       </div>
     );
   }
@@ -55,8 +61,12 @@ const AmbassadorProfile = () => {
 
   if (!ambassador) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <p className="text-muted-foreground">Ambassador not found.</p>
+      <div className="min-h-screen bg-background flex flex-col">
+        <Header />
+        <div className="flex-1 flex items-center justify-center">
+          <p className="text-muted-foreground">Ambassador not found.</p>
+        </div>
+        <Footer />
       </div>
     );
   }
@@ -67,6 +77,7 @@ const AmbassadorProfile = () => {
 
   return (
     <div className="min-h-screen bg-background">
+      <Header />
       <div className="container mx-auto px-4 py-8 max-w-2xl">
         <Button asChild variant="ghost" size="sm" className="mb-4">
           <Link to="/ambassadors"><ArrowLeft className="h-4 w-4 mr-1" /> Ambassadors</Link>
@@ -130,6 +141,7 @@ const AmbassadorProfile = () => {
           </CardContent>
         </Card>
       </div>
+      <Footer />
     </div>
   );
 };

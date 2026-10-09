@@ -1,7 +1,7 @@
-import { BookOpen, LayoutDashboard, Library, Wallet, Settings, LogOut, FileQuestion, ClipboardList, Award, Users, FileText, Bell, ShoppingCart, Heart, Trophy, MessageSquare, ClipboardCheck, GraduationCap, FolderKanban, BarChart3, CalendarCheck, FlaskConical, Briefcase, Mail, AtSign, Presentation, Brain, Building2, Crown } from 'lucide-react';
+import { BookOpen, LayoutDashboard, Library, Wallet, Settings, LogOut, FileQuestion, ClipboardList, Award, Users, FileText, Bell, ShoppingCart, Heart, Trophy, MessageSquare, ClipboardCheck, GraduationCap, FolderKanban, BarChart3, CalendarCheck, FlaskConical, Briefcase, Mail, AtSign, Presentation, Brain, Building2, Crown, Home } from 'lucide-react';
 import ProfileCompletenessWidget from '@/components/ProfileCompletenessWidget';
 import { NavLink } from '@/components/NavLink';
-import { useLocation } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useEnrollments } from '@/hooks/useEnrollments';
 import { useQuery } from '@tanstack/react-query';
@@ -182,7 +182,13 @@ export function DashboardSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
-      <SidebarFooter className="p-2">
+      <SidebarFooter className="p-2 space-y-1">
+        <Button asChild variant="ghost" size="sm" className="w-full justify-start">
+          <Link to="/">
+            <Home className="h-4 w-4 mr-2" />
+            {!collapsed && 'Back to Website'}
+          </Link>
+        </Button>
         <Button variant="ghost" size="sm" className="w-full justify-start text-destructive" onClick={signOut}>
           <LogOut className="h-4 w-4 mr-2" />
           {!collapsed && 'Sign Out'}

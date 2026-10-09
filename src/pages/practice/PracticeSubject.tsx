@@ -10,6 +10,8 @@ import { useState } from 'react';
 import { toast } from '@/hooks/use-toast';
 import SEOHead from '@/components/SEOHead';
 import { useTokenBalance } from '@/hooks/useTokenBalance';
+import Header from '@/components/layout/Header';
+import Footer from '@/components/layout/Footer';
 
 const DIFFICULTY_META = {
   basic: { label: 'Basic', icon: Brain, color: 'text-emerald-600', bg: 'bg-emerald-50 dark:bg-emerald-950/30', border: 'border-emerald-200 dark:border-emerald-900', mins: 25, desc: 'Foundation level. Perfect to warm up.' },
@@ -111,6 +113,7 @@ const PracticeSubject = () => {
   return (
     <div className="min-h-screen bg-background">
       <SEOHead title={`${subject.name} — Practice Exam`} description={subject.description ?? `Practice exams for ${subject.name}`} />
+      <Header />
       <div className="container mx-auto px-4 py-8 max-w-5xl">
         <Button asChild variant="ghost" size="sm" className="mb-4">
           <Link to="/practice"><ArrowLeft className="h-4 w-4 mr-1" /> All Subjects</Link>
@@ -180,6 +183,7 @@ const PracticeSubject = () => {
           })}
         </div>
       </div>
+      <Footer />
     </div>
   );
 };

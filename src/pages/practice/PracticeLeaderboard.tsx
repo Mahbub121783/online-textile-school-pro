@@ -9,6 +9,8 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ArrowLeft, Trophy, Crown, Medal } from 'lucide-react';
+import Header from '@/components/layout/Header';
+import Footer from '@/components/layout/Footer';
 
 type Diff = 'all' | 'basic' | 'intermediate' | 'advanced';
 
@@ -51,6 +53,7 @@ const PracticeLeaderboard = () => {
 
   return (
     <div className="min-h-screen bg-background">
+      <Header />
       <div className="container mx-auto px-4 py-8 max-w-4xl">
         <Button asChild variant="ghost" size="sm" className="mb-4">
           <Link to="/practice"><ArrowLeft className="h-4 w-4 mr-1" /> Practice Hub</Link>
@@ -154,6 +157,7 @@ const PracticeLeaderboard = () => {
           </div>
         )}
       </div>
+      <Footer />
     </div>
   );
 };

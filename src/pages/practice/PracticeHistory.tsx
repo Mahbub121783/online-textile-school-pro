@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ArrowLeft, History as HistoryIcon, Eye, CheckCircle2, XCircle } from 'lucide-react';
 import { format } from 'date-fns';
+import Header from '@/components/layout/Header';
+import Footer from '@/components/layout/Footer';
 
 const PracticeHistory = () => {
   const { user } = useAuth();
@@ -29,6 +31,7 @@ const PracticeHistory = () => {
 
   return (
     <div className="min-h-screen bg-background">
+      <Header />
       <div className="container mx-auto px-4 py-8 max-w-5xl">
         <Button asChild variant="ghost" size="sm" className="mb-4">
           <Link to="/practice"><ArrowLeft className="h-4 w-4 mr-1" /> Practice Hub</Link>
@@ -80,6 +83,7 @@ const PracticeHistory = () => {
           </div>
         )}
       </div>
+      <Footer />
     </div>
   );
 };

@@ -13,6 +13,8 @@ import {
 } from 'lucide-react';
 import SEOHead from '@/components/SEOHead';
 import { useAuth } from '@/hooks/useAuth';
+import Header from '@/components/layout/Header';
+import Footer from '@/components/layout/Footer';
 
 const useCountUp = (target: number, duration = 1200) => {
   const [val, setVal] = useState(0);
@@ -118,6 +120,7 @@ const PracticeResult = () => {
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-muted/30">
       <SEOHead title={`${pct}% — Practice Result`} description="Your practice exam result" />
+      <Header />
       <div className="container mx-auto px-4 py-8 max-w-4xl">
 
         {/* Hero score reveal */}
@@ -348,6 +351,7 @@ const PracticeResult = () => {
           </Button>
         )}
       </div>
+      <Footer />
     </div>
   );
 };
