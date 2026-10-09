@@ -13,11 +13,14 @@ export interface TeamMember {
 
 export interface TeamCardData {
   campusName: string;
+  campusLogoUrl?: string | null;
   sessionLabel?: string;
   head?: TeamMember | null;
   ambassadors: TeamMember[];
   graphics: TeamMember[];
 }
+
+const OTS_LOGO_URL = '/logo-512.png';
 
 const imageCache = new Map<string, HTMLImageElement>();
 function loadImage(src: string): Promise<HTMLImageElement> {
@@ -131,21 +134,41 @@ export async function renderTeamCard(data: TeamCardData): Promise<HTMLCanvasElem
   const grad = ctx.createLinearGradient(0, 0, W, HEADER_H);
   grad.addColorStop(0, PRIMARY_DARK); grad.addColorStop(1, PRIMARY);
   ctx.fillStyle = grad; ctx.fillRect(0, 0, W, HEADER_H);
-  drawDots(ctx, 60, 50, 5, 4, 22, 'rgba(255,255,255,0.18)');
-  drawX(ctx, W - 70, 50, 10, 'rgba(255,255,255,0.3)');
-  drawX(ctx, W - 110, 50, 10, 'rgba(255,255,255,0.3)');
-  drawX(ctx, W - 70, 90, 10, 'rgba(255,255,255,0.3)');
-  drawX(ctx, W - 110, 90, 10, 'rgba(255,255,255,0.3)');
+  drawDots(ctx, 50, 170, 4, 3, 20, 'rgba(255,255,255,0.14)');
+  drawX(ctx, W - 50, 170, 9, 'rgba(255,255,255,0.25)');
+  drawX(ctx, W - 50, 198, 9, 'rgba(255,255,255,0.25)');
+
+  // Two logo badges -- OTS (left) and this campus's own logo (right), both
+  // on a white disc so transparent/white-bg logos stay legible on the dark
+  // gradient header.
+  async function drawLogoBadge(cx: number, cy: number, r: number, url: string) {
+    ctx.save();
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.closePath();
+    ctx.fillStyle = '#ffffff'; ctx.fill();
+    ctx.clip();
+    const img = await loadAvatar(url);
+    if (img) {
+      const pad = r * 0.3;
+      const scale = Math.min((r * 2 - pad) / img.width, (r * 2 - pad) / img.height);
+      const dw = img.width * scale, dh = img.height * scale;
+      ctx.drawImage(img, cx - dw / 2, cy - dh / 2, dw, dh);
+    }
+    ctx.restore();
+    ctx.strokeStyle = 'rgba(255,255,255,0.6)'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
+  }
+  await drawLogoBadge(110, 90, 52, OTS_LOGO_URL);
+  if (data.campusLogoUrl) await drawLogoBadge(W - 110, 90, 52, data.campusLogoUrl);
 
   ctx.textAlign = 'center';
   ctx.fillStyle = 'rgba(255,255,255,0.85)';
   ctx.font = '700 22px Arial, sans-serif';
   try { (ctx as any).letterSpacing = '4px'; } catch {}
-  ctx.fillText('ONLINE TEXTILE SCHOOL', W / 2, 70);
+  ctx.fillText('ONLINE TEXTILE SCHOOL', W / 2, 152);
   try { (ctx as any).letterSpacing = '0px'; } catch {}
 
   const titleLines = wrapTitle(ctx, data.campusName, W - 160, 56);
-  let ty = 150;
+  let ty = 210;
   ctx.fillStyle = '#ffffff';
   titleLines.forEach((line) => { ctx.font = '800 56px Arial, sans-serif'; ctx.fillText(line, W / 2, ty); ty += 62; });
   ctx.fillStyle = ACCENT;

@@ -7,11 +7,14 @@ export function useCampusAmbassadorTeam(campusId: string | null | undefined, cam
     queryKey: ['campus-ambassador-team', campusId],
     enabled: !!campusId,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('ambassador_applications')
-        .select('sub_role, session_id, profile:user_profiles(full_name, avatar_url), session:ambassador_sessions(label)')
-        .eq('campus_id', campusId!)
-        .eq('status', 'approved');
+      const [{ data, error }, { data: campusRow }] = await Promise.all([
+        supabase
+          .from('ambassador_applications')
+          .select('sub_role, session_id, profile:user_profiles(full_name, avatar_url), session:ambassador_sessions(label)')
+          .eq('campus_id', campusId!)
+          .eq('status', 'approved'),
+        supabase.from('campus_onboard_requests').select('logo_url').eq('id', campusId!).maybeSingle(),
+      ]);
       if (error) throw error;
       const rows = data ?? [];
       const toMember = (r: any) => ({ name: r.profile?.full_name || 'Ambassador', avatarUrl: r.profile?.avatar_url || null });
@@ -22,6 +25,7 @@ export function useCampusAmbassadorTeam(campusId: string | null | undefined, cam
       const sessionLabel = [...sessionCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
       return {
         campusName: campusName || 'Campus',
+        campusLogoUrl: campusRow?.logo_url || null,
         sessionLabel,
         head: head ? toMember(head) : null,
         ambassadors: rows.filter((r: any) => r.sub_role === 'ambassador').map(toMember),
