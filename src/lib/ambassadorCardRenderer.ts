@@ -1,7 +1,7 @@
-// Simple canvas-drawn Facebook share card for approved campus ambassadors --
-// deliberately plain Canvas 2D (same technique as certificateRenderer.ts)
-// rather than pulling in html2canvas, since this is a fixed layout, not an
-// arbitrary DOM snapshot.
+// Canvas-drawn Facebook/Instagram/LinkedIn share card for approved campus
+// ambassadors -- plain Canvas 2D (same technique as certificateRenderer.ts),
+// styled as a professional "event speaker" promo card: branded side strip,
+// large photo, bold name, role, campus/session badge, dotted decoration.
 
 export interface AmbassadorCardData {
   fullName: string;
@@ -33,101 +33,159 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
   ctx.closePath();
 }
 
+function drawDots(ctx: CanvasRenderingContext2D, cx: number, cy: number, cols: number, rows: number, gap: number, color: string) {
+  ctx.fillStyle = color;
+  for (let i = 0; i < cols; i++) {
+    for (let j = 0; j < rows; j++) {
+      ctx.beginPath();
+      ctx.arc(cx + i * gap, cy + j * gap, 2.6, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+}
+
+function fitFontSize(ctx: CanvasRenderingContext2D, text: string, maxWidth: number, startPx: number, minPx: number, weight = '800') {
+  let size = startPx;
+  while (size > minPx) {
+    ctx.font = `${weight} ${size}px Arial, sans-serif`;
+    if (ctx.measureText(text).width <= maxWidth) break;
+    size -= 2;
+  }
+  return size;
+}
+
+const PRIMARY = 'hsl(193, 88%, 21%)';
+const PRIMARY_DARK = 'hsl(193, 90%, 15%)';
+const ACCENT = 'hsl(2, 64%, 57%)';
+
 export async function renderAmbassadorCard(data: AmbassadorCardData): Promise<HTMLCanvasElement> {
-  const W = 1200, H = 630;
+  const W = 1080, H = 1080;
+  const STRIP_W = 110;
   const canvas = document.createElement('canvas');
   canvas.width = W; canvas.height = H;
   const ctx = canvas.getContext('2d')!;
 
-  // Brand gradient background (matches the Practice Arena hero: primary -> primary-dark -> accent)
-  const grad = ctx.createLinearGradient(0, 0, W, H);
-  grad.addColorStop(0, 'hsl(193, 88%, 21%)');
-  grad.addColorStop(0.6, 'hsl(193, 90%, 15%)');
-  grad.addColorStop(1, 'hsl(2, 64%, 57%)');
-  ctx.fillStyle = grad;
+  // Main background
+  ctx.fillStyle = 'hsl(193, 55%, 96%)';
   ctx.fillRect(0, 0, W, H);
 
-  // Decorative translucent circles
-  ctx.fillStyle = 'rgba(255,255,255,0.08)';
-  ctx.beginPath(); ctx.arc(W - 80, -40, 220, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.arc(-60, H + 40, 260, 0, Math.PI * 2); ctx.fill();
+  // Decorative dot clusters
+  drawDots(ctx, W - 220, 50, 6, 5, 26, 'rgba(10, 60, 80, 0.14)');
+  drawDots(ctx, STRIP_W + 40, H - 160, 5, 4, 26, 'rgba(10, 60, 80, 0.10)');
 
-  // Brand name
-  ctx.fillStyle = '#ffffff';
-  ctx.font = '700 28px Arial, sans-serif';
-  ctx.textAlign = 'left';
-  ctx.fillText('ONLINE TEXTILE SCHOOL', 60, 70);
-  ctx.font = '400 16px Arial, sans-serif';
-  ctx.fillStyle = 'rgba(255,255,255,0.8)';
-  ctx.fillText('onlinetextileschool.com', 60, 96);
-
-  // Badge pill
-  ctx.fillStyle = 'rgba(255,255,255,0.18)';
-  roundRect(ctx, 60, 130, 260, 44, 22);
-  ctx.fill();
-  ctx.fillStyle = '#ffffff';
-  ctx.font = '700 18px Arial, sans-serif';
-  ctx.textAlign = 'left';
-  ctx.fillText('CAMPUS AMBASSADOR', 84, 158);
-
-  // Avatar
-  const avatarX = 60, avatarY = 210, avatarR = 90;
+  // Left brand strip
+  const stripGrad = ctx.createLinearGradient(0, 0, 0, H);
+  stripGrad.addColorStop(0, PRIMARY);
+  stripGrad.addColorStop(1, PRIMARY_DARK);
+  ctx.fillStyle = stripGrad;
+  ctx.fillRect(0, 0, STRIP_W, H);
   ctx.save();
-  ctx.beginPath();
-  ctx.arc(avatarX + avatarR, avatarY + avatarR, avatarR, 0, Math.PI * 2);
-  ctx.closePath();
-  ctx.fillStyle = 'rgba(255,255,255,0.25)';
-  ctx.fill();
+  ctx.translate(STRIP_W / 2 + 8, H / 2);
+  ctx.rotate(-Math.PI / 2);
+  ctx.fillStyle = '#ffffff';
+  ctx.font = '700 32px Arial, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  try { (ctx as any).letterSpacing = '6px'; } catch {}
+  ctx.fillText('ONLINE TEXTILE SCHOOL', 0, 0);
+  ctx.restore();
+
+  // Top badge + accent bars
+  ctx.textAlign = 'right';
+  ctx.fillStyle = ACCENT;
+  ctx.font = '800 26px Arial, sans-serif';
+  ctx.fillText('CAMPUS', W - 190, 72);
+  ctx.fillText('AMBASSADOR', W - 190, 104);
+  ctx.fillStyle = PRIMARY;
+  ctx.fillRect(W - 160, 50, 7, 60);
+  ctx.fillRect(W - 140, 50, 7, 60);
+  ctx.fillRect(W - 120, 50, 7, 60);
+
+  // Photo (centered square, rounded)
+  const photoSize = 460;
+  const photoX = (W + STRIP_W - photoSize) / 2;
+  const photoY = 150;
+  ctx.save();
+  roundRect(ctx, photoX, photoY, photoSize, photoSize, 28);
   ctx.clip();
   if (data.avatarUrl) {
     try {
       const img = await loadImage(data.avatarUrl);
-      ctx.drawImage(img, avatarX, avatarY, avatarR * 2, avatarR * 2);
+      const scale = Math.max(photoSize / img.width, photoSize / img.height);
+      const dw = img.width * scale, dh = img.height * scale;
+      ctx.drawImage(img, photoX + (photoSize - dw) / 2, photoY + (photoSize - dh) / 2, dw, dh);
     } catch {
-      ctx.fillStyle = '#ffffff';
-      ctx.font = '700 64px Arial, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText((data.fullName || '?')[0].toUpperCase(), avatarX + avatarR, avatarY + avatarR + 24);
+      const g = ctx.createLinearGradient(photoX, photoY, photoX + photoSize, photoY + photoSize);
+      g.addColorStop(0, PRIMARY); g.addColorStop(1, ACCENT);
+      ctx.fillStyle = g; ctx.fillRect(photoX, photoY, photoSize, photoSize);
+      ctx.fillStyle = '#ffffff'; ctx.font = '800 180px Arial, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText((data.fullName || '?')[0].toUpperCase(), photoX + photoSize / 2, photoY + photoSize / 2 + 15);
     }
   } else {
-    ctx.fillStyle = '#ffffff';
-    ctx.font = '700 64px Arial, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText((data.fullName || '?')[0].toUpperCase(), avatarX + avatarR, avatarY + avatarR + 24);
+    const g = ctx.createLinearGradient(photoX, photoY, photoX + photoSize, photoY + photoSize);
+    g.addColorStop(0, PRIMARY); g.addColorStop(1, ACCENT);
+    ctx.fillStyle = g; ctx.fillRect(photoX, photoY, photoSize, photoSize);
+    ctx.fillStyle = '#ffffff'; ctx.font = '800 180px Arial, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText((data.fullName || '?')[0].toUpperCase(), photoX + photoSize / 2, photoY + photoSize / 2 + 15);
   }
   ctx.restore();
+  ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+  ctx.lineWidth = 6;
+  roundRect(ctx, photoX, photoY, photoSize, photoSize, 28);
+  ctx.stroke();
 
-  // Name + role + campus + session
-  const textX = 280;
-  ctx.textAlign = 'left';
-  ctx.fillStyle = '#ffffff';
-  ctx.font = '700 44px Arial, sans-serif';
-  ctx.fillText(data.fullName, textX, 270);
-
-  ctx.font = '600 24px Arial, sans-serif';
-  ctx.fillStyle = 'rgba(255,255,255,0.92)';
-  ctx.fillText(data.roleLabel, textX, 312);
-
-  if (data.campusName) {
-    ctx.font = '400 22px Arial, sans-serif';
-    ctx.fillStyle = 'rgba(255,255,255,0.8)';
-    ctx.fillText(data.campusName, textX, 346);
-  }
-
-  if (data.sessionLabel) {
-    ctx.fillStyle = 'rgba(255,255,255,0.18)';
-    roundRect(ctx, textX, 370, ctx.measureText(data.sessionLabel).width + 40 + 60, 40, 20);
-    ctx.fill();
-    ctx.fillStyle = '#ffffff';
-    ctx.font = '600 18px Arial, sans-serif';
-    ctx.fillText(`SESSION: ${data.sessionLabel.toUpperCase()}`, textX + 20, 396);
-  }
-
-  // Footer tagline
-  ctx.font = '400 20px Arial, sans-serif';
-  ctx.fillStyle = 'rgba(255,255,255,0.85)';
+  // Name (auto-fit width)
+  const textCenterX = (W + STRIP_W) / 2;
+  const maxTextWidth = W - STRIP_W - 100;
   ctx.textAlign = 'center';
-  ctx.fillText('Bangladesh’s premier online textile education platform', W / 2, H - 50);
+  ctx.textBaseline = 'alphabetic';
+  const nameSize = fitFontSize(ctx, data.fullName, maxTextWidth, 60, 34);
+  ctx.font = `800 ${nameSize}px Arial, sans-serif`;
+  ctx.fillStyle = PRIMARY_DARK;
+  ctx.fillText(data.fullName, textCenterX, 700);
+
+  // Role
+  ctx.font = '700 30px Arial, sans-serif';
+  ctx.fillStyle = ACCENT;
+  ctx.fillText(data.roleLabel, textCenterX, 744);
+
+  // Campus
+  let y = 782;
+  if (data.campusName) {
+    ctx.font = '400 24px Arial, sans-serif';
+    ctx.fillStyle = 'rgba(10, 50, 65, 0.75)';
+    ctx.fillText(data.campusName, textCenterX, y);
+    y += 44;
+  }
+
+  // Session pill
+  if (data.sessionLabel) {
+    const label = `SESSION: ${data.sessionLabel.toUpperCase()}`;
+    ctx.font = '700 20px Arial, sans-serif';
+    const tw = ctx.measureText(label).width;
+    const pillW = tw + 48, pillX = textCenterX - pillW / 2;
+    ctx.fillStyle = 'rgba(10, 60, 80, 0.10)';
+    roundRect(ctx, pillX, y, pillW, 44, 22);
+    ctx.fill();
+    ctx.fillStyle = PRIMARY;
+    ctx.fillText(label, textCenterX, y + 29);
+  }
+
+  // Bottom-right diagonal accent + footer
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(W, H);
+  ctx.lineTo(W, H - 140);
+  ctx.lineTo(W - 240, H);
+  ctx.closePath();
+  ctx.fillStyle = ACCENT;
+  ctx.fill();
+  ctx.restore();
+
+  ctx.font = '400 20px Arial, sans-serif';
+  ctx.fillStyle = 'rgba(10, 50, 65, 0.6)';
+  ctx.textAlign = 'center';
+  ctx.fillText('onlinetextileschool.com', textCenterX, H - 36);
 
   return canvas;
 }

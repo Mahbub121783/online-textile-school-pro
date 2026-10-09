@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Crown, Star, Building2, Trophy } from 'lucide-react';
 import { useMemo } from 'react';
+import { Link } from 'react-router-dom';
 
 const SUB_ROLE_META: Record<string, { label: string; icon: any }> = {
   head_of_campus: { label: 'Head of Campus Ambassador', icon: Crown },
@@ -75,22 +76,24 @@ const AmbassadorLeaderboard = () => {
                     const meta = SUB_ROLE_META[m.sub_role];
                     const Icon = meta?.icon || Star;
                     return (
-                      <Card key={m.id} className={m.sub_role === 'head_of_campus' ? 'border-amber-400/60' : ''}>
-                        <CardContent className="p-4 flex items-center gap-3">
-                          <div className="w-11 h-11 rounded-full bg-muted overflow-hidden shrink-0 flex items-center justify-center">
-                            {m.profile?.avatar_url
-                              ? <img src={m.profile.avatar_url} alt="" className="w-full h-full object-cover" />
-                              : <span className="font-bold">{(m.profile?.full_name || '?')[0]}</span>}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="font-semibold text-sm truncate">{m.profile?.full_name || 'Ambassador'}</p>
-                            <p className="text-[11px] text-muted-foreground flex items-center gap-1">
-                              <Icon className="h-3 w-3" /> {meta?.label}
-                            </p>
-                          </div>
-                          <p className="font-bold font-heading text-primary shrink-0">{m.points} <span className="text-xs text-muted-foreground font-normal">pts</span></p>
-                        </CardContent>
-                      </Card>
+                      <Link key={m.id} to={`/ambassador/${m.id}`} className="block">
+                        <Card className={`transition-colors hover:border-primary/50 ${m.sub_role === 'head_of_campus' ? 'border-amber-400/60' : ''}`}>
+                          <CardContent className="p-4 flex items-center gap-3">
+                            <div className="w-11 h-11 rounded-full bg-muted overflow-hidden shrink-0 flex items-center justify-center">
+                              {m.profile?.avatar_url
+                                ? <img src={m.profile.avatar_url} alt="" className="w-full h-full object-cover" />
+                                : <span className="font-bold">{(m.profile?.full_name || '?')[0]}</span>}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-semibold text-sm truncate">{m.profile?.full_name || 'Ambassador'}</p>
+                              <p className="text-[11px] text-muted-foreground flex items-center gap-1">
+                                <Icon className="h-3 w-3" /> {meta?.label}
+                              </p>
+                            </div>
+                            <p className="font-bold font-heading text-primary shrink-0">{m.points} <span className="text-xs text-muted-foreground font-normal">pts</span></p>
+                          </CardContent>
+                        </Card>
+                      </Link>
                     );
                   })}
                 </div>

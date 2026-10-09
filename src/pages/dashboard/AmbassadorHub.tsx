@@ -1,13 +1,12 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Loader2, Crown, Star, Palette, Download, Clock, Building2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { downloadAmbassadorCard } from '@/lib/ambassadorCardRenderer';
+import { renderAmbassadorCard, downloadAmbassadorCard } from '@/lib/ambassadorCardRenderer';
 import { toast } from 'sonner';
 
 const SUB_ROLE_META: Record<string, { label: string; icon: any }> = {
@@ -19,6 +18,7 @@ const SUB_ROLE_META: Record<string, { label: string; icon: any }> = {
 const AmbassadorHub = () => {
   const { user, profile } = useAuth();
   const [generating, setGenerating] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
   const { data: application, isLoading } = useQuery({
     queryKey: ['my-ambassador-app-full', user?.id],
@@ -34,18 +34,30 @@ const AmbassadorHub = () => {
     },
   });
 
+  const cardData = application ? {
+    fullName: profile?.full_name || 'Ambassador',
+    roleLabel: SUB_ROLE_META[application.sub_role]?.label || 'Ambassador',
+    campusName: application.campus?.campus_name,
+    sessionLabel: application.session?.label,
+    avatarUrl: (profile as any)?.avatar_url || null,
+  } : null;
+
+  useEffect(() => {
+    if (!cardData) return;
+    let cancelled = false;
+    renderAmbassadorCard(cardData).then((canvas) => {
+      if (!cancelled) setPreviewUrl(canvas.toDataURL('image/png'));
+    }).catch(() => {});
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [application?.id, profile?.full_name, (profile as any)?.avatar_url]);
+
   const handleDownload = async () => {
-    if (!application) return;
+    if (!cardData) return;
     setGenerating(true);
     try {
-      await downloadAmbassadorCard({
-        fullName: profile?.full_name || 'Ambassador',
-        roleLabel: SUB_ROLE_META[application.sub_role]?.label || 'Ambassador',
-        campusName: application.campus?.campus_name,
-        sessionLabel: application.session?.label,
-        avatarUrl: (profile as any)?.avatar_url || null,
-      });
-      toast.success('Card downloaded — share it on Facebook!');
+      await downloadAmbassadorCard(cardData);
+      toast.success('Card downloaded — share it on Facebook, Instagram, or LinkedIn!');
     } catch (e: any) {
       toast.error('Could not generate card: ' + e.message);
     } finally {
@@ -98,8 +110,15 @@ const AmbassadorHub = () => {
 
       <Card>
         <CardContent className="p-5 space-y-3">
-          <p className="font-semibold flex items-center gap-2"><Download className="h-4 w-4" /> Facebook Share Card</p>
-          <p className="text-sm text-muted-foreground">A ready-made branded card with your name, role, campus, and session — download and post it to announce yourself as an OTS ambassador.</p>
+          <p className="font-semibold flex items-center gap-2"><Download className="h-4 w-4" /> Share Card — Facebook, Instagram, LinkedIn</p>
+          <p className="text-sm text-muted-foreground">A ready-made branded card with your photo, name, role, campus, and session — download and post it to announce yourself as an OTS ambassador.</p>
+          {previewUrl ? (
+            <img src={previewUrl} alt="Ambassador share card preview" className="w-full max-w-sm rounded-lg border shadow-sm" />
+          ) : (
+            <div className="w-full max-w-sm aspect-square rounded-lg border flex items-center justify-center bg-muted">
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            </div>
+          )}
           <Button onClick={handleDownload} disabled={generating}>
             {generating ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Download className="h-4 w-4 mr-1.5" />}
             Download Share Card

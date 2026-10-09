@@ -197,6 +197,7 @@ const PracticeCredits = lazy(() => import("./pages/practice/PracticeCredits"));
 const MyCampusPage = lazy(() => import("./pages/dashboard/MyCampusPage"));
 const AmbassadorHub = lazy(() => import("./pages/dashboard/AmbassadorHub"));
 const AmbassadorLeaderboard = lazy(() => import("./pages/AmbassadorLeaderboard"));
+const AmbassadorProfile = lazy(() => import("./pages/AmbassadorProfile"));
 const AdminQuestionBank = lazy(() => import("./pages/admin/AdminQuestionBank"));
 
 import { isPreviewOrEmbedded } from '@/lib/previewMode';
@@ -470,6 +471,7 @@ const AppRoutes = () => {
           <Route path="/campus-onboard/register" element={<CampusOnboardRegister />} />
           <Route path="/campus-onboard/:id" element={<CampusOnboardDetail />} />
           <Route path="/ambassadors" element={<AmbassadorLeaderboard />} />
+          <Route path="/ambassador/:id" element={<AmbassadorProfile />} />
           <Route path="/verify-certificate" element={<VerifyCertificate />} />
           <Route path="/verify-student" element={<VerifyStudent />} />
           <Route path="/register/:slug" element={<PublicRegistration />} />
