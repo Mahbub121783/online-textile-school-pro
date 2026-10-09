@@ -261,19 +261,28 @@ const Header = () => {
         <div className="container">
           <nav className="flex items-center gap-0.5 h-10 overflow-hidden">
             {COURSE_CATEGORIES.map((cat) => (
-              <Link
-                key={cat.slug}
-                to={`/courses?category=${cat.slug}`}
-                className="px-2.5 py-1 text-[13px] text-foreground/80 hover:text-primary transition-colors whitespace-nowrap"
-              >
-                {cat.name}
-              </Link>
+              cat.slug === 'textile-management' ? (
+                <Link
+                  key="campus-onboard"
+                  to="/campus-onboard"
+                  className="px-2.5 py-1 text-[13px] text-foreground/80 hover:text-primary transition-colors whitespace-nowrap"
+                >
+                  Campus Onboard
+                </Link>
+              ) : (
+                <Link
+                  key={cat.slug}
+                  to={`/courses?category=${cat.slug}`}
+                  className="px-2.5 py-1 text-[13px] text-foreground/80 hover:text-primary transition-colors whitespace-nowrap"
+                >
+                  {cat.name}
+                </Link>
+              )
             ))}
             <Link to="/events" className="px-2.5 py-1 text-[13px] text-foreground/80 hover:text-primary transition-colors whitespace-nowrap">{t('nav.events')}</Link>
             <Link to="/workshops" className="px-2.5 py-1 text-[13px] text-foreground/80 hover:text-primary transition-colors whitespace-nowrap">Workshops</Link>
             <Link to="/class-videos" className="px-2.5 py-1 text-[13px] text-foreground/80 hover:text-primary transition-colors whitespace-nowrap font-medium">Class Videos</Link>
             <Link to="/practice" className="px-2.5 py-1 text-[13px] text-accent hover:text-accent-hover transition-colors whitespace-nowrap font-bold">🧠 Practice</Link>
-            <Link to="/campus-onboard" className="px-2.5 py-1 text-[13px] text-foreground/80 hover:text-primary transition-colors whitespace-nowrap">Campus Onboard</Link>
             <Link to="/ambassadors" className="px-2.5 py-1 text-[13px] text-foreground/80 hover:text-primary transition-colors whitespace-nowrap">Ambassadors</Link>
             <Link to="/blog" className="px-2.5 py-1 text-[13px] text-foreground/80 hover:text-primary transition-colors whitespace-nowrap">{t('nav.blog')}</Link>
             <Link to="/forum" className="px-2.5 py-1 text-[13px] text-foreground/80 hover:text-primary transition-colors whitespace-nowrap">{t('nav.forum')}</Link>
