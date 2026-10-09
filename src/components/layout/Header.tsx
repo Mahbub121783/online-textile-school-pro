@@ -159,11 +159,9 @@ const Header = () => {
             <Link to="/become-instructor" className="px-3 py-2 text-sm font-medium text-foreground hover:text-primary transition-colors whitespace-nowrap">
               Become Instructor
             </Link>
-            {user && (
-              <Link to="/dashboard/courses" className="px-3 py-2 text-sm font-medium text-foreground hover:text-primary transition-colors whitespace-nowrap">
-                {t('dashboard.myCourses')}
-              </Link>
-            )}
+            <Link to="/ambassadors" className="px-3 py-2 text-sm font-medium text-foreground hover:text-primary transition-colors whitespace-nowrap">
+              Ambassadors
+            </Link>
           </nav>
 
           {/* Action icons — clean & minimal */}
