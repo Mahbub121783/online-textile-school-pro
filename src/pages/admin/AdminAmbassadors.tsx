@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';
@@ -11,8 +11,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { CheckCircle, XCircle, Loader2, Crown, Star, Palette, Plus, Trash2, Minus } from 'lucide-react';
+import { CheckCircle, XCircle, Loader2, Crown, Star, Palette, Plus, Trash2, Minus, Download, Users } from 'lucide-react';
 import { format } from 'date-fns';
+import { downloadTeamCard, renderTeamCard } from '@/lib/teamCardRenderer';
+import { useCampusAmbassadorTeam } from '@/hooks/useCampusAmbassadorTeam';
 
 const SUB_ROLE_META: Record<string, { label: string; icon: any }> = {
   head_of_campus: { label: 'Head of Campus Ambassador', icon: Crown },
@@ -249,6 +251,82 @@ const SessionsTab = () => {
   );
 };
 
+const TeamCardsTab = () => {
+  const [campusId, setCampusId] = useState('');
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [generating, setGenerating] = useState(false);
+
+  const { data: campuses = [] } = useQuery({
+    queryKey: ['campuses-with-ambassadors'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('ambassador_applications')
+        .select('campus:campus_onboard_requests(id, campus_name)')
+        .eq('status', 'approved')
+        .not('campus_id', 'is', null);
+      const map = new Map<string, string>();
+      (data ?? []).forEach((r: any) => { if (r.campus?.id) map.set(r.campus.id, r.campus.campus_name); });
+      return [...map.entries()].map(([id, campus_name]) => ({ id, campus_name })).sort((a, b) => a.campus_name.localeCompare(b.campus_name));
+    },
+  });
+
+  const selectedCampus = campuses.find((c: any) => c.id === campusId);
+  const { data: team } = useCampusAmbassadorTeam(campusId || null, selectedCampus?.campus_name);
+
+  useEffect(() => {
+    setPreviewUrl(null);
+    if (!team) return;
+    let cancelled = false;
+    renderTeamCard(team).then((canvas) => { if (!cancelled) setPreviewUrl(canvas.toDataURL('image/png')); }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [team]);
+
+  const handleDownload = async () => {
+    if (!team) return;
+    setGenerating(true);
+    try {
+      await downloadTeamCard(team, `ots-${selectedCampus?.campus_name.toLowerCase().replace(/\s+/g, '-')}-team-card.png`);
+      toast.success('Team card downloaded');
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4 max-w-sm">
+      <div className="space-y-2">
+        <Label>Campus</Label>
+        <Select value={campusId} onValueChange={setCampusId}>
+          <SelectTrigger><SelectValue placeholder="Select a campus" /></SelectTrigger>
+          <SelectContent>
+            {campuses.map((c: any) => <SelectItem key={c.id} value={c.id}>{c.campus_name}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        {campuses.length === 0 && <p className="text-xs text-muted-foreground">No campus has approved ambassadors yet.</p>}
+      </div>
+
+      {campusId && (
+        previewUrl ? (
+          <img src={previewUrl} alt="Team card preview" className="w-full rounded-lg border shadow-sm" />
+        ) : (
+          <div className="w-full aspect-[9/12] rounded-lg border flex items-center justify-center bg-muted">
+            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+          </div>
+        )
+      )}
+
+      {campusId && (
+        <Button onClick={handleDownload} disabled={generating}>
+          {generating ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Download className="h-4 w-4 mr-1.5" />}
+          Download Team Card
+        </Button>
+      )}
+    </div>
+  );
+};
+
 const AdminAmbassadors = () => {
   return (
     <div className="space-y-6">
@@ -260,9 +338,11 @@ const AdminAmbassadors = () => {
         <TabsList>
           <TabsTrigger value="applications">Applications</TabsTrigger>
           <TabsTrigger value="sessions">Sessions</TabsTrigger>
+          <TabsTrigger value="team-cards"><Users className="h-3.5 w-3.5 mr-1.5" /> Team Cards</TabsTrigger>
         </TabsList>
         <TabsContent value="applications" className="pt-4"><ApplicationsTab /></TabsContent>
         <TabsContent value="sessions" className="pt-4"><SessionsTab /></TabsContent>
+        <TabsContent value="team-cards" className="pt-4"><TeamCardsTab /></TabsContent>
       </Tabs>
     </div>
   );

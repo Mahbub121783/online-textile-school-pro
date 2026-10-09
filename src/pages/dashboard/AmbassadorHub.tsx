@@ -4,9 +4,11 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Loader2, Crown, Star, Palette, Download, Clock, Building2 } from 'lucide-react';
+import { Loader2, Crown, Star, Palette, Download, Clock, Building2, Users } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { renderAmbassadorCard, downloadAmbassadorCard } from '@/lib/ambassadorCardRenderer';
+import { renderTeamCard, downloadTeamCard } from '@/lib/teamCardRenderer';
+import { useCampusAmbassadorTeam } from '@/hooks/useCampusAmbassadorTeam';
 import { toast } from 'sonner';
 
 const SUB_ROLE_META: Record<string, { label: string; icon: any }> = {
@@ -19,6 +21,8 @@ const AmbassadorHub = () => {
   const { user, profile } = useAuth();
   const [generating, setGenerating] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [teamPreviewUrl, setTeamPreviewUrl] = useState<string | null>(null);
+  const [teamGenerating, setTeamGenerating] = useState(false);
 
   const { data: application, isLoading } = useQuery({
     queryKey: ['my-ambassador-app-full', user?.id],
@@ -62,6 +66,30 @@ const AmbassadorHub = () => {
       toast.error('Could not generate card: ' + e.message);
     } finally {
       setGenerating(false);
+    }
+  };
+
+  const { data: team } = useCampusAmbassadorTeam(application?.campus_id, application?.campus?.campus_name);
+
+  useEffect(() => {
+    if (!team) return;
+    let cancelled = false;
+    renderTeamCard(team).then((canvas) => {
+      if (!cancelled) setTeamPreviewUrl(canvas.toDataURL('image/png'));
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [team]);
+
+  const handleTeamDownload = async () => {
+    if (!team) return;
+    setTeamGenerating(true);
+    try {
+      await downloadTeamCard(team);
+      toast.success('Team card downloaded!');
+    } catch (e: any) {
+      toast.error('Could not generate team card: ' + e.message);
+    } finally {
+      setTeamGenerating(false);
     }
   };
 
@@ -125,6 +153,26 @@ const AmbassadorHub = () => {
           </Button>
         </CardContent>
       </Card>
+
+      {team && (team.head || team.ambassadors.length > 0 || team.graphics.length > 0) && (
+        <Card>
+          <CardContent className="p-5 space-y-3">
+            <p className="font-semibold flex items-center gap-2"><Users className="h-4 w-4" /> Campus Team Card</p>
+            <p className="text-sm text-muted-foreground">A full roster card for {team.campusName}'s ambassador team — Head, Ambassadors, and Graphics/Others.</p>
+            {teamPreviewUrl ? (
+              <img src={teamPreviewUrl} alt="Campus ambassador team card preview" className="w-full max-w-sm rounded-lg border shadow-sm" />
+            ) : (
+              <div className="w-full max-w-sm aspect-[9/12] rounded-lg border flex items-center justify-center bg-muted">
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              </div>
+            )}
+            <Button onClick={handleTeamDownload} disabled={teamGenerating}>
+              {teamGenerating ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Download className="h-4 w-4 mr-1.5" />}
+              Download Team Card
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       <Card className="border-dashed">
         <CardContent className="p-5 space-y-1">
