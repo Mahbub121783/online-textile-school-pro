@@ -153,7 +153,7 @@ async function cpanelEmailProvisioner(req, res) {
           <p><strong>Webmail:</strong> <a href="https://${process.env.CPANEL_HOSTNAME || ''}:2096">Webmail Login</a></p>
           </div>
           <p>⚠️ <strong>Please change your password after first login for security.</strong></p>
-          <p><strong>IMAP Settings:</strong></p><ul><li>Server: mail.onlinetextileschool.com</li><li>Port: 993 (SSL)</li><li>Username: ${emailReq.requested_email}</li></ul>
+          <p><strong>IMAP Settings:</strong></p><ul><li>Server: premium.us01.webrserver.com</li><li>Port: 993 (SSL)</li><li>Username: ${emailReq.requested_email}</li></ul>
           <p><strong>SMTP Settings:</strong></p><ul><li>Server: mail.onlinetextileschool.com</li><li>Port: 465 (SSL)</li><li>Username: ${emailReq.requested_email}</li></ul>`);
       }
 

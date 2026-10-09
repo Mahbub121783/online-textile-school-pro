@@ -10,7 +10,16 @@ const jwt = require('jsonwebtoken');
 const { TextDecoder } = require('util');
 const { serviceQuery } = require('../db');
 
-const IMAP_HOST = 'mail.onlinetextileschool.com';
+// mail.onlinetextileschool.com resolves to this hosting account's shared
+// mail cluster, but that cluster's TLS cert is issued for the cluster's own
+// hostname (confirmed live: SAN covers premium.us01.webrserver.com /
+// premium.us10.svlogins.com / premium.us101.webxlogin.com, not any
+// customer's own mail.* domain) -- connecting with the customer-facing
+// hostname made every IMAP TLS handshake fail hostname verification
+// ("Hostname/IP does not match certificate's altnames"), breaking EduMail
+// for every student. Connect to the cluster's real name instead; verified
+// directly (TLS authorized + real IMAP LOGIN succeeded) against this host.
+const IMAP_HOST = 'premium.us01.webrserver.com';
 const IMAP_PORT = 993;
 
 // ============ IMAP CLIENT ============
@@ -57,7 +66,7 @@ async function imapCommand(socket, command) {
 
 function imapConnect(email, password) {
   return new Promise((resolve, reject) => {
-    const socket = tls.connect({ host: IMAP_HOST, port: IMAP_PORT }, async () => {
+    const socket = tls.connect({ host: IMAP_HOST, port: IMAP_PORT, servername: IMAP_HOST }, async () => {
       try {
         await readGreeting(socket);
         await imapCommand(socket, `LOGIN "${email}" "${password}"`);

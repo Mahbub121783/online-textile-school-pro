@@ -9,8 +9,11 @@ const { sendSmtpEmail } = require('./sendSmtpEmail');
 
 async function sendViaUserSmtp(fromEmail, password, to, cc, bcc, subject, bodyHtml) {
   try {
+    // See edumailImapSync.js's IMAP_HOST comment -- mail.onlinetextileschool.com
+    // doesn't carry its own cert; the shared mail cluster's actual hostname
+    // (verified: TLS authorized, real login succeeded) is required instead.
     const transporter = nodemailer.createTransport({
-      host: 'mail.onlinetextileschool.com',
+      host: 'premium.us01.webrserver.com',
       port: 465,
       secure: true,
       auth: { user: fromEmail, pass: password },
