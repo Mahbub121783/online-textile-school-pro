@@ -34,13 +34,34 @@ const MyCampusPage = () => {
     queryKey: ['my-owned-campus-full', user?.id],
     enabled: !!user,
     queryFn: async () => {
-      const { data, error } = await supabase
+      let { data, error } = await supabase
         .from('campus_onboard_requests')
         .select('*')
         .eq('submitted_by', user!.id)
         .eq('status', 'approved')
         .maybeSingle();
       if (error) throw error;
+      // Not the owner -- check for an approved campus-tied ambassador link
+      // (head_of_campus / ambassador) instead, which grants the same
+      // management access via is_campus_owner_or_ambassador() RLS.
+      if (!data) {
+        const { data: amb } = await supabase
+          .from('ambassador_applications')
+          .select('campus_id')
+          .eq('user_id', user!.id)
+          .eq('status', 'approved')
+          .not('campus_id', 'is', null)
+          .maybeSingle();
+        if (amb?.campus_id) {
+          const { data: linkedCampus, error: linkedErr } = await supabase
+            .from('campus_onboard_requests')
+            .select('*')
+            .eq('id', amb.campus_id)
+            .maybeSingle();
+          if (linkedErr) throw linkedErr;
+          data = linkedCampus;
+        }
+      }
       if (data && !form) {
         setForm({
           campus_name: data.campus_name, area: data.area, facilities: data.facilities || '',

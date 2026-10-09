@@ -17,11 +17,14 @@ import { useProfileCompleteness } from '@/hooks/useProfileCompleteness';
 import LocationCapture from '@/components/LocationCapture';
 import { cldImg } from '@/lib/cloudinaryUrl';
 import ImageCropUpload from '@/components/shared/ImageCropUpload';
+import AmbassadorApplicationCard from '@/components/dashboard/AmbassadorApplicationCard';
 
 const ROLE_OPTIONS = [
   { value: 'student', label: 'Student' },
   { value: 'employee', label: 'Employee' },
   { value: 'businessman', label: 'Businessman' },
+  { value: 'instructor', label: 'Instructor' },
+  { value: 'ambassador', label: 'Ambassador' },
 ];
 
 const GENDER_OPTIONS = ['Male', 'Female', 'Other', 'Prefer not to say'];
@@ -403,6 +406,10 @@ const SettingsPage = () => {
             </div>
           )}
         </div>
+
+        {form.professional_role === 'ambassador' && (
+          <div className="mt-4"><AmbassadorApplicationCard /></div>
+        )}
       </div>
 
       {/* Public Profile */}

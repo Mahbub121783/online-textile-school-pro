@@ -16,6 +16,7 @@ const topItems = [
   { title: 'Users', url: '/admin/users', icon: Users },
   { title: 'Students', url: '/admin/students', icon: GraduationCap },
   { title: 'Campus Onboard', url: '/admin/campus-onboard', icon: Globe },
+  { title: 'Ambassadors', url: '/admin/ambassadors', icon: Crown },
   { title: 'Fabric Library', url: '/admin/fabric-library', icon: Shirt },
 ];
 

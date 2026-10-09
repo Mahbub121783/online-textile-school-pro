@@ -1,4 +1,4 @@
-import { BookOpen, LayoutDashboard, Library, Wallet, Settings, LogOut, FileQuestion, ClipboardList, Award, Users, FileText, Bell, ShoppingCart, Heart, Trophy, MessageSquare, ClipboardCheck, GraduationCap, FolderKanban, BarChart3, CalendarCheck, FlaskConical, Briefcase, Mail, AtSign, Presentation, Brain, Building2 } from 'lucide-react';
+import { BookOpen, LayoutDashboard, Library, Wallet, Settings, LogOut, FileQuestion, ClipboardList, Award, Users, FileText, Bell, ShoppingCart, Heart, Trophy, MessageSquare, ClipboardCheck, GraduationCap, FolderKanban, BarChart3, CalendarCheck, FlaskConical, Briefcase, Mail, AtSign, Presentation, Brain, Building2, Crown } from 'lucide-react';
 import ProfileCompletenessWidget from '@/components/ProfileCompletenessWidget';
 import { NavLink } from '@/components/NavLink';
 import { useLocation } from 'react-router-dom';
@@ -82,9 +82,10 @@ export function DashboardSidebar() {
   });
   const mailApproved = emailReq?.status === 'approved';
 
-  // "Campus Onboard" only appears for a user who has an approved campus
-  // request of their own -- their gateway to managing its hero/details/
-  // gallery from their own dashboard instead of needing an admin.
+  // "Campus Onboard" appears for a user who owns an approved campus request,
+  // OR an approved campus-tied ambassador (head_of_campus / ambassador) --
+  // either way, their gateway to managing its hero/details/gallery from
+  // their own dashboard instead of needing an admin.
   const { data: ownedCampus } = useQuery({
     queryKey: ['my-owned-campus', user?.id],
     enabled: !!user,
@@ -102,14 +103,35 @@ export function DashboardSidebar() {
     },
   });
 
+  // "Ambassador Hub" appears once an ambassador application is approved
+  // (any sub-role) -- their points balance, Facebook share card, and (once
+  // built) daily activity updates.
+  const { data: ambassadorApp } = useQuery({
+    queryKey: ['my-ambassador-app', user?.id],
+    enabled: !!user,
+    refetchInterval: 30000,
+    refetchIntervalInBackground: false,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('ambassador_applications')
+        .select('id, sub_role, campus_id')
+        .eq('user_id', user!.id)
+        .eq('status', 'approved')
+        .maybeSingle();
+      return data;
+    },
+  });
+  const ambassadorCampusAccess = !!ambassadorApp?.campus_id && ambassadorApp.sub_role !== 'graphics_team';
+
   // Insert EduMail (always, once enrolled) + Mail (only once approved)
   const visibleEnrolledItems = hasPurchasedCourse
     ? enrolledOnlyItems.filter((i) => i.title !== 'Mail' || mailApproved)
     : [];
-  const campusItems = ownedCampus ? [{ title: 'Campus Onboard', url: '/dashboard/campus', icon: Building2 }] : [];
+  const campusItems = (ownedCampus || ambassadorCampusAccess) ? [{ title: 'Campus Onboard', url: '/dashboard/campus', icon: Building2 }] : [];
+  const ambassadorItems = ambassadorApp ? [{ title: 'Ambassador Hub', url: '/dashboard/ambassador', icon: Crown }] : [];
   const navItems = hasPurchasedCourse
-    ? [...baseNavItems.slice(0, 22), ...visibleEnrolledItems, ...campusItems, ...baseNavItems.slice(22)]
-    : [...baseNavItems, ...campusItems];
+    ? [...baseNavItems.slice(0, 22), ...visibleEnrolledItems, ...campusItems, ...ambassadorItems, ...baseNavItems.slice(22)]
+    : [...baseNavItems, ...campusItems, ...ambassadorItems];
 
   const isActive = (path: string) =>
     path === '/dashboard' ? location.pathname === '/dashboard' : location.pathname.startsWith(path);

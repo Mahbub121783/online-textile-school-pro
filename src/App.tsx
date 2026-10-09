@@ -86,6 +86,7 @@ const AdminCertificates = lazy(() => import("./pages/admin/AdminCertificates"));
 const AdminSetup = lazy(() => import("./pages/admin/AdminSetup"));
 const AdminOrders = lazy(() => import("./pages/admin/AdminOrders"));
 const AdminCampusOnboard = lazy(() => import("./pages/admin/AdminCampusOnboard"));
+const AdminAmbassadors = lazy(() => import("./pages/admin/AdminAmbassadors"));
 const AdminFabricLibrary = lazy(() => import("./pages/admin/AdminFabricLibrary"));
 const AdminPayment = lazy(() => import("./pages/admin/AdminPayment"));
 const AdminManagement = lazy(() => import("./pages/admin/AdminManagement"));
@@ -194,6 +195,8 @@ const PracticeHistory = lazy(() => import("./pages/practice/PracticeHistory"));
 const PracticeLeaderboard = lazy(() => import("./pages/practice/PracticeLeaderboard"));
 const PracticeCredits = lazy(() => import("./pages/practice/PracticeCredits"));
 const MyCampusPage = lazy(() => import("./pages/dashboard/MyCampusPage"));
+const AmbassadorHub = lazy(() => import("./pages/dashboard/AmbassadorHub"));
+const AmbassadorLeaderboard = lazy(() => import("./pages/AmbassadorLeaderboard"));
 const AdminQuestionBank = lazy(() => import("./pages/admin/AdminQuestionBank"));
 
 import { isPreviewOrEmbedded } from '@/lib/previewMode';
@@ -335,6 +338,7 @@ const AppRoutes = () => {
             <Route path="workshops" element={<MyWorkshopsPage />} />
             <Route path="practice" element={<DashboardPracticePage />} />
             <Route path="campus" element={<MyCampusPage />} />
+            <Route path="ambassador" element={<AmbassadorHub />} />
             <Route path="settings" element={<SettingsPage />} />
           </Route>
           {/* Instructor Portal */}
@@ -380,6 +384,7 @@ const AppRoutes = () => {
             <Route path="payment/:tab" element={<AdminPayment />} />
             <Route path="orders" element={<AdminOrders />} />
             <Route path="campus-onboard" element={<AdminCampusOnboard />} />
+            <Route path="ambassadors" element={<AdminAmbassadors />} />
             <Route path="fabric-library" element={<AdminFabricLibrary />} />
             <Route path="ebooks" element={<AdminEbooks />} />
             <Route path="coupons" element={<AdminCoupons />} />
@@ -464,6 +469,7 @@ const AppRoutes = () => {
           <Route path="/fabric-library" element={<FabricLibraryHub />} />
           <Route path="/campus-onboard/register" element={<CampusOnboardRegister />} />
           <Route path="/campus-onboard/:id" element={<CampusOnboardDetail />} />
+          <Route path="/ambassadors" element={<AmbassadorLeaderboard />} />
           <Route path="/verify-certificate" element={<VerifyCertificate />} />
           <Route path="/verify-student" element={<VerifyStudent />} />
           <Route path="/register/:slug" element={<PublicRegistration />} />
