@@ -2,11 +2,20 @@ import { supabase } from '@/integrations/supabase/client';
 
 /**
  * Ensures a student ID card exists and is up-to-date for a user with at
- * least one genuinely paid enrollment. Creates a new card if none exists,
- * or extends validity if new courses were added. Returns true if a card
- * was created or updated.
+ * least one genuinely paid enrollment, OR an approved campus ambassador
+ * (program perk, flat 1-year validity instead of the enrollment-tiered
+ * formula). Creates a new card if none exists, or extends validity if new
+ * courses were added. Returns true if a card was created or updated.
  */
 export async function ensureStudentIdCard(userId: string): Promise<boolean> {
+  // Existing card already covers the user (paid-enrollment path below, or
+  // a previous ambassador-perk issuance) -- nothing to do either way.
+  const { data: existingCard } = await supabase
+    .from('student_id_cards')
+    .select('id, valid_until')
+    .eq('user_id', userId)
+    .maybeSingle();
+
   // 1. Get all paid enrollments. `payment_id` alone is not proof of payment --
   // it's set to the order id for every checkout, including $0 free-course
   // self-enrollment. Only an order that actually completed for a nonzero
@@ -19,15 +28,38 @@ export async function ensureStudentIdCard(userId: string): Promise<boolean> {
     .eq('status', 'completed')
     .gt('total', 0);
   const paidOrderIds = (paidOrders || []).map((o) => o.id);
-  if (paidOrderIds.length === 0) return false;
 
-  const { data: allEnrollments } = await supabase
-    .from('enrollments')
-    .select('id, enrolled_at, payment_id')
-    .eq('user_id', userId)
-    .order('enrolled_at', { ascending: true });
+  const { data: allEnrollments } = paidOrderIds.length
+    ? await supabase
+        .from('enrollments')
+        .select('id, enrolled_at, payment_id')
+        .eq('user_id', userId)
+        .order('enrolled_at', { ascending: true })
+    : { data: null };
 
-  if (!allEnrollments?.length) return false;
+  if (!allEnrollments?.length) {
+    // No paid enrollment -- still issue a card if this user is an approved
+    // campus ambassador (a program perk, not something they bought). Flat
+    // 1-year validity instead of the enrollment-based tiered formula below,
+    // since there's no enrollment history to compute from -- matches
+    // enforce_student_id_card_integrity()'s ambassador branch (db/91).
+    if (existingCard) return false;
+    const { data: amb } = await supabase
+      .from('ambassador_applications')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('status', 'approved')
+      .maybeSingle();
+    if (!amb) return false;
+
+    const cardNumber = `OTS-ID-${Math.floor(100000 + Math.random() * 900000)}`;
+    const { error } = await supabase.from('student_id_cards').insert({
+      user_id: userId,
+      card_number: cardNumber,
+    });
+    if (error) { console.error('Failed to create ambassador ID card:', error); return false; }
+    return true;
+  }
 
   const paidOrderIdSet = new Set(paidOrderIds);
   const paidCount = allEnrollments.filter((e) => e.payment_id && paidOrderIdSet.has(e.payment_id)).length;
@@ -45,32 +77,25 @@ export async function ensureStudentIdCard(userId: string): Promise<boolean> {
   if (freeCount > 0) totalMonths += 6;
   const validUntil = new Date(earliest.getTime() + totalMonths * 30.44 * 24 * 60 * 60 * 1000);
 
-  // 2. Check existing card
-  const { data: existing } = await supabase
-    .from('student_id_cards')
-    .select('id, valid_until')
-    .eq('user_id', userId)
-    .maybeSingle();
-
-  if (existing) {
+  if (existingCard) {
     // Only update if new validity is greater
-    if (new Date(existing.valid_until) < validUntil) {
+    if (new Date(existingCard.valid_until) < validUntil) {
       await supabase
         .from('student_id_cards')
         .update({
           valid_until: validUntil.toISOString(),
           updated_at: new Date().toISOString(),
         })
-        .eq('id', existing.id);
+        .eq('id', existingCard.id);
       return true;
     }
     return false;
   }
 
-  // 3. Generate card number
+  // 2. Generate card number
   const cardNumber = `OTS-ID-${Math.floor(100000 + Math.random() * 900000)}`;
 
-  // 4. Insert new card
+  // 3. Insert new card
   const { error } = await supabase.from('student_id_cards').insert({
     user_id: userId,
     card_number: cardNumber,

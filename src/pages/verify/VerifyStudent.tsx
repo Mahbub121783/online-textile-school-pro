@@ -17,7 +17,7 @@ interface VerifyResult {
   card_number?: string;
   university_name?: string;
   location?: string | null;
-  status?: 'active' | 'expired' | 'revoked';
+  status?: 'active' | 'expired' | 'revoked' | 'no_card';
   valid_from?: string;
   valid_until?: string;
   issued_at?: string;
@@ -61,12 +61,12 @@ const VerifyStudent = () => {
             <IdCard className="h-8 w-8 text-primary" />
           </div>
           <h1 className="font-heading text-3xl font-bold">Student Status Verification</h1>
-          <p className="text-muted-foreground">Enter the card / reference number printed on the document to independently confirm it was genuinely issued by Online Textile School.</p>
+          <p className="text-muted-foreground">Enter the student's Roll ID (e.g. OTS-264506) or the ID card number printed on the document to independently confirm it was genuinely issued by Online Textile School.</p>
         </div>
 
         <div className="flex gap-2">
           <Input
-            placeholder="e.g. OTS-ID-264506"
+            placeholder="e.g. OTS-264506 or OTS-ID-264506"
             value={code}
             onChange={e => setCode(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && handleVerify()}
@@ -110,17 +110,21 @@ const VerifyStudent = () => {
                   <div>
                     <p className="text-xs text-muted-foreground mb-0.5">Status</p>
                     <Badge variant={result.status === 'active' ? 'default' : 'secondary'} className={result.status === 'active' ? 'bg-emerald-600' : ''}>
-                      {result.status === 'active' ? 'Active' : result.status === 'expired' ? 'Expired' : 'Revoked'}
+                      {result.status === 'active' ? 'Active' : result.status === 'expired' ? 'Expired' : result.status === 'revoked' ? 'Revoked' : 'No ID Card Issued'}
                     </Badge>
                   </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground mb-0.5">Issued On</p>
-                    <p className="font-medium">{result.issued_at ? format(new Date(result.issued_at), 'MMMM dd, yyyy') : '—'}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground mb-0.5">Valid Until</p>
-                    <p className="font-medium">{result.valid_until ? format(new Date(result.valid_until), 'MMMM dd, yyyy') : '—'}</p>
-                  </div>
+                  {result.card_number && (
+                    <>
+                      <div>
+                        <p className="text-xs text-muted-foreground mb-0.5">Issued On</p>
+                        <p className="font-medium">{result.issued_at ? format(new Date(result.issued_at), 'MMMM dd, yyyy') : '—'}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground mb-0.5">Valid Until</p>
+                        <p className="font-medium">{result.valid_until ? format(new Date(result.valid_until), 'MMMM dd, yyyy') : '—'}</p>
+                      </div>
+                    </>
+                  )}
                 </div>
               </CardContent>
             </Card>

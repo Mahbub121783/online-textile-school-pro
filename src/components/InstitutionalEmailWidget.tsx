@@ -33,9 +33,26 @@ export default function InstitutionalEmailWidget() {
     },
   });
 
+  // Approved campus ambassadors can request EduMail without any enrollment
+  // (program perk) -- and get it auto-approved the moment they request it,
+  // see requestMutation below.
+  const { data: isApprovedAmbassador, isLoading: ambLoading } = useQuery({
+    queryKey: ['my-ambassador-status-for-edumail', user?.id],
+    enabled: !!user,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('ambassador_applications')
+        .select('id')
+        .eq('user_id', user!.id)
+        .eq('status', 'approved')
+        .maybeSingle();
+      return !!data;
+    },
+  });
+
   const { data: existingRequest, isLoading } = useQuery({
     queryKey: ['my-institutional-email', user?.id],
-    enabled: !!user && (enrollmentCount ?? 0) > 0,
+    enabled: !!user && ((enrollmentCount ?? 0) > 0 || !!isApprovedAmbassador),
     refetchInterval: 15000,
     refetchIntervalInBackground: false,
     queryFn: async () => {
@@ -62,14 +79,33 @@ export default function InstitutionalEmailWidget() {
     mutationFn: async () => {
       const email = generateEmail();
       if (!email || !user) throw new Error('Cannot generate email');
-      const { error } = await supabase.from('institutional_email_requests').insert({
-        user_id: user.id,
-        requested_email: email,
-      });
+      const { data, error } = await supabase
+        .from('institutional_email_requests')
+        .insert({ user_id: user.id, requested_email: email })
+        .select('id')
+        .single();
       if (error) throw error;
+
+      // Approved campus ambassadors get this auto-approved immediately --
+      // no admin wait, matching the perk. Self-approve is backend-gated
+      // (cpanelEmailProvisioner.js) to only the requester's own request and
+      // only when their ambassador status is genuinely approved there too.
+      if (isApprovedAmbassador) {
+        const { error: approveError } = await supabase.functions.invoke('cpanel-email-provisioner', {
+          body: { requestId: data.id, action: 'approve' },
+        });
+        if (approveError) throw approveError;
+        return 'auto-approved' as const;
+      }
+      return 'pending' as const;
     },
-    onSuccess: () => {
-      toast({ title: '✅ Request Submitted', description: 'Your institutional email request has been sent to admin for approval.' });
+    onSuccess: (outcome) => {
+      toast({
+        title: outcome === 'auto-approved' ? '🎉 Institutional Email Ready!' : '✅ Request Submitted',
+        description: outcome === 'auto-approved'
+          ? 'Your institutional email has been created — check your registered email for login details.'
+          : 'Your institutional email request has been sent to admin for approval.',
+      });
       queryClient.invalidateQueries({ queryKey: ['my-institutional-email'] });
     },
     onError: (err: any) => {
@@ -77,8 +113,8 @@ export default function InstitutionalEmailWidget() {
     },
   });
 
-  if (enrollLoading || isLoading) return null;
-  if ((enrollmentCount ?? 0) === 0) return null;
+  if (enrollLoading || ambLoading || isLoading) return null;
+  if ((enrollmentCount ?? 0) === 0 && !isApprovedAmbassador) return null;
 
   const config = existingRequest ? statusConfig[existingRequest.status] : null;
   const StatusIcon = config?.icon;

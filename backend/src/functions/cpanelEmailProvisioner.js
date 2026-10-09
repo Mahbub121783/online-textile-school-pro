@@ -90,13 +90,25 @@ async function cpanelEmailProvisioner(req, res) {
     const { requestId, action, adminNotes } = req.body || {};
     if (!requestId || !action) return res.status(400).json({ error: 'requestId and action required' });
 
-    if (!isAdmin && action !== 'change-password') {
-      return res.status(403).json({ error: 'Forbidden' });
-    }
-
     const emailReqRes = await serviceQuery('SELECT * FROM public.institutional_email_requests WHERE id = $1', [requestId]);
     const emailReq = emailReqRes.rows[0];
     if (!emailReq) return res.status(404).json({ error: 'Request not found' });
+
+    // Approved campus ambassadors get EduMail auto-approved as a program
+    // perk -- they can trigger 'approve' on their own (and only their own)
+    // request, same as an admin would, instead of waiting for manual review.
+    let selfApproveAsAmbassador = false;
+    if (!isAdmin && action === 'approve' && emailReq.user_id === userId) {
+      const ambRes = await serviceQuery(
+        "SELECT 1 FROM public.ambassador_applications WHERE user_id = $1 AND status = 'approved'",
+        [userId]
+      );
+      selfApproveAsAmbassador = ambRes.rows.length > 0;
+    }
+
+    if (!isAdmin && action !== 'change-password' && !selfApproveAsAmbassador) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
 
     const emailParts = emailReq.requested_email.split('@');
     const localPart = emailParts[0];
@@ -133,13 +145,14 @@ async function cpanelEmailProvisioner(req, res) {
 
       const enrollRes = await serviceQuery('SELECT id, enrolled_at, payment_id FROM public.enrollments WHERE user_id = $1', [emailReq.user_id]);
       const { validFrom, validUntil } = calculateValidity(enrollRes.rows);
+      const resolvedNotes = adminNotes || (selfApproveAsAmbassador ? 'Auto-approved: Campus Ambassador perk' : null);
 
       await serviceQuery(
         `UPDATE public.institutional_email_requests
          SET status = 'approved', current_password = $1, generated_password = '***sent-via-email***',
              admin_notes = $2, approved_by = $3, approved_at = now(), valid_from = $4, valid_until = $5
          WHERE id = $6`,
-        [password, adminNotes || null, userId, validFrom, validUntil, requestId]
+        [password, resolvedNotes, userId, validFrom, validUntil, requestId]
       );
 
       const { profile, authEmail } = await getUserInfo(emailReq.user_id);
