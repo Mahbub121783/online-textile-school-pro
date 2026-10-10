@@ -102,12 +102,21 @@ const SSL_PENDING_MESSAGE = "SSL certificate is being issued for this subdomain 
 async function provisionSubdomain(campus) {
   if (!SLUG_RE.test(campus.subdomain_slug)) throw new Error('Invalid subdomain slug');
   if (RESERVED_SUBDOMAINS.has(campus.subdomain_slug)) throw new Error(`"${campus.subdomain_slug}" is a reserved subdomain and can't be provisioned`);
-  await runUapi([
-    'SubDomain', 'addsubdomain',
-    `domain=${campus.subdomain_slug}`,
-    `rootdomain=${ROOT_DOMAIN}`,
-    `dir=${ROOT_DOMAIN}`, // reuse the main site's existing docroot -- no new deploy/process
-  ]);
+  try {
+    await runUapi([
+      'SubDomain', 'addsubdomain',
+      `domain=${campus.subdomain_slug}`,
+      `rootdomain=${ROOT_DOMAIN}`,
+      `dir=${ROOT_DOMAIN}`, // reuse the main site's existing docroot -- no new deploy/process
+    ]);
+  } catch (e) {
+    // A retry (admin "Retry Subdomain Setup", or the auto-verify cron) calls
+    // this a second time for a subdomain whose DNS entry was already created
+    // by an earlier call that merely hadn't passed the SSL cert-check yet --
+    // that's not a failure, it's the expected state. Only re-throw for a
+    // genuinely different error.
+    if (!/already exists/i.test(e.message)) throw e;
+  }
   // Kick AutoSSL immediately instead of waiting for its next scheduled
   // scan -- fire-and-forget (account-wide cert scan can take a while;
   // approval shouldn't block on it), best-effort only. Doesn't make the
