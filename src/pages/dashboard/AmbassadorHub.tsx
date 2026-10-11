@@ -7,7 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, Crown, Star, Palette, Download, Building2, Users, ThumbsUp, AlertTriangle, MessageSquare, Share2, Copy, UserPlus, LogIn, ShoppingCart, Megaphone, TrendingUp, Award } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { renderAmbassadorCard, downloadAmbassadorCard } from '@/lib/ambassadorCardRenderer';
+import { renderAmbassadorCard, type AmbassadorCardData } from '@/lib/ambassadorCardRenderer';
+import { EXTRA_AMBASSADOR_CARD_TEMPLATES, type AmbassadorCardTemplate } from '@/lib/ambassadorCardTemplates';
 import { renderTeamCard, downloadTeamCard } from '@/lib/teamCardRenderer';
 import { useCampusAmbassadorTeam } from '@/hooks/useCampusAmbassadorTeam';
 import AmbassadorSkillsEditor from '@/components/dashboard/AmbassadorSkillsEditor';
@@ -28,10 +29,16 @@ const ACTIVITY_META: Record<string, { label: string; icon: any; hint: string }> 
   admin_assigned: { label: 'Admin-Assigned Tasks', icon: Award, hint: 'Extra tasks admin asked you to do, with points they assigned' },
 };
 
+const CARD_TEMPLATES: AmbassadorCardTemplate[] = [
+  { id: 'classic', name: 'Classic Strip', description: 'Branded side strip with centered photo', render: renderAmbassadorCard },
+  ...EXTRA_AMBASSADOR_CARD_TEMPLATES,
+];
+
 const AmbassadorHub = () => {
   const { user, profile } = useAuth();
-  const [generating, setGenerating] = useState(false);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [templates, setTemplates] = useState<{ id: string; url: string }[]>([]);
+  const [templatesLoading, setTemplatesLoading] = useState(true);
+  const [selectedTemplateId, setSelectedTemplateId] = useState('classic');
   const [teamPreviewUrl, setTeamPreviewUrl] = useState<string | null>(null);
   const [teamGenerating, setTeamGenerating] = useState(false);
 
@@ -60,24 +67,25 @@ const AmbassadorHub = () => {
   useEffect(() => {
     if (!cardData) return;
     let cancelled = false;
-    renderAmbassadorCard(cardData).then((canvas) => {
-      if (!cancelled) setPreviewUrl(canvas.toDataURL('image/png'));
-    }).catch(() => {});
+    setTemplatesLoading(true);
+    Promise.all(
+      CARD_TEMPLATES.map((t) => t.render(cardData).then((canvas) => ({ id: t.id, url: canvas.toDataURL('image/png') })))
+    ).then((results) => {
+      if (!cancelled) { setTemplates(results); setTemplatesLoading(false); }
+    }).catch(() => { if (!cancelled) setTemplatesLoading(false); });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [application?.id, profile?.full_name, (profile as any)?.avatar_url]);
 
-  const handleDownload = async () => {
-    if (!cardData) return;
-    setGenerating(true);
-    try {
-      await downloadAmbassadorCard(cardData);
-      toast.success('Card downloaded — share it on Facebook, Instagram, or LinkedIn!');
-    } catch (e: any) {
-      toast.error('Could not generate card: ' + e.message);
-    } finally {
-      setGenerating(false);
-    }
+  const selectedTemplateUrl = templates.find((t) => t.id === selectedTemplateId)?.url || null;
+
+  const handleDownload = () => {
+    if (!selectedTemplateUrl) return;
+    const a = document.createElement('a');
+    a.href = selectedTemplateUrl;
+    a.download = `ots-ambassador-card-${selectedTemplateId}.png`;
+    a.click();
+    toast.success('Card downloaded — share it on Facebook, Instagram, or LinkedIn!');
   };
 
   const { data: voteTally } = useQuery({
@@ -173,16 +181,43 @@ const AmbassadorHub = () => {
       <Card>
         <CardContent className="p-5 space-y-3">
           <p className="font-semibold flex items-center gap-2"><Download className="h-4 w-4" /> Share Card — Facebook, Instagram, LinkedIn</p>
-          <p className="text-sm text-muted-foreground">A ready-made branded card with your photo, name, role, campus, and session — download and post it to announce yourself as an OTS ambassador.</p>
-          {previewUrl ? (
-            <img src={previewUrl} alt="Ambassador share card preview" className="w-full max-w-sm rounded-lg border shadow-sm" />
-          ) : (
+          <p className="text-sm text-muted-foreground">Pick a design, then download and post it to announce yourself as an OTS ambassador.</p>
+
+          {templatesLoading ? (
             <div className="w-full max-w-sm aspect-square rounded-lg border flex items-center justify-center bg-muted">
               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
             </div>
+          ) : (
+            <>
+              {selectedTemplateUrl && (
+                <img src={selectedTemplateUrl} alt="Ambassador share card preview" className="w-full max-w-sm rounded-lg border shadow-sm" />
+              )}
+              <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 max-w-xl">
+                {CARD_TEMPLATES.map((t) => {
+                  const thumbUrl = templates.find((x) => x.id === t.id)?.url;
+                  return (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => setSelectedTemplateId(t.id)}
+                      title={t.description}
+                      className={`rounded-lg overflow-hidden border-2 transition-colors ${selectedTemplateId === t.id ? 'border-primary' : 'border-transparent hover:border-muted-foreground/30'}`}
+                    >
+                      {thumbUrl ? (
+                        <img src={thumbUrl} alt={t.name} className="w-full aspect-square object-cover" />
+                      ) : (
+                        <div className="w-full aspect-square bg-muted" />
+                      )}
+                      <p className="text-[10px] text-center py-1 truncate px-1">{t.name}</p>
+                    </button>
+                  );
+                })}
+              </div>
+            </>
           )}
-          <Button onClick={handleDownload} disabled={generating}>
-            {generating ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Download className="h-4 w-4 mr-1.5" />}
+
+          <Button onClick={handleDownload} disabled={templatesLoading || !selectedTemplateUrl}>
+            <Download className="h-4 w-4 mr-1.5" />
             Download Share Card
           </Button>
         </CardContent>
