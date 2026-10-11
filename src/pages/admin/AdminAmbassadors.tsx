@@ -11,7 +11,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { CheckCircle, XCircle, Loader2, Crown, Star, Palette, Plus, Trash2, Minus, Download, Users, AlertTriangle, MessageSquare, ThumbsUp, Pencil, Trophy, UserPlus, LogIn, ShoppingCart, Megaphone, Award } from 'lucide-react';
+import { CheckCircle, XCircle, Loader2, Crown, Star, Palette, Plus, Trash2, Minus, Download, Users, AlertTriangle, MessageSquare, ThumbsUp, Pencil, Trophy, UserPlus, LogIn, ShoppingCart, Megaphone, Award, Search, Medal, FileDown } from 'lucide-react';
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
+import jsPDF from 'jspdf';
 import { format, formatDistanceToNow } from 'date-fns';
 import { downloadTeamCard, renderTeamCard } from '@/lib/teamCardRenderer';
 import { useCampusAmbassadorTeam } from '@/hooks/useCampusAmbassadorTeam';
@@ -584,13 +586,148 @@ const TeamCardsTab = () => {
   );
 };
 
+const AmbassadorDetailDialog = ({ application, onOpenChange }: { application: any; onOpenChange: (open: boolean) => void }) => {
+  const meta = SUB_ROLE_META[application?.sub_role];
+  const Icon = meta?.icon || Star;
+
+  const { data: breakdown } = useQuery({
+    queryKey: ['admin-ambassador-activity-breakdown', application?.id],
+    enabled: !!application,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('ambassador_activity_breakdown', { _application_id: application.id });
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+  const { data: tally } = useQuery({
+    queryKey: ['admin-ambassador-vote-tally', application?.id],
+    enabled: !!application,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('ambassador_vote_tally', { _application_id: application.id });
+      if (error) throw error;
+      return data?.[0] || { up_votes: 0, down_votes: 0, total_votes: 0, accept_pct: null };
+    },
+  });
+
+  const { data: timeline = [] } = useQuery({
+    queryKey: ['admin-ambassador-activity-timeline', application?.id],
+    enabled: !!application,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('ambassador_activity_log')
+        .select('*')
+        .eq('application_id', application.id)
+        .order('created_at', { ascending: false })
+        .limit(20);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  return (
+    <Dialog open={!!application} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-3">
+            <Avatar className="h-10 w-10">
+              <AvatarImage src={application?.profile?.avatar_url} />
+              <AvatarFallback>{application?.profile?.full_name?.[0]?.toUpperCase() || '?'}</AvatarFallback>
+            </Avatar>
+            <div>
+              <p>{application?.profile?.full_name}</p>
+              <p className="text-xs font-normal text-muted-foreground">{application?.profile?.roll_id}</p>
+            </div>
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          <div className="flex items-center gap-2 text-sm">
+            <Icon className="h-4 w-4 text-primary" />
+            {meta?.label}{application?.campus?.campus_name && ` · ${application.campus.campus_name}`}{application?.session?.label && ` · ${application.session.label}`}
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Total Points</p><p className="text-2xl font-heading font-bold text-primary">{application?.points}</p></CardContent></Card>
+            <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Community Acceptance</p><p className="text-2xl font-heading font-bold">{tally?.accept_pct != null ? `${tally.accept_pct}%` : '—'}</p><p className="text-[10px] text-muted-foreground">{tally?.total_votes ?? 0} votes</p></CardContent></Card>
+          </div>
+
+          <div>
+            <p className="text-sm font-semibold mb-2">Why they're ranked here</p>
+            <div className="grid grid-cols-2 gap-2">
+              {Object.entries(ACTIVITY_META).map(([type, m]) => {
+                const row = breakdown?.find((r: any) => r.activity_type === type);
+                if (!row) return null;
+                const Ic = m.icon;
+                return (
+                  <div key={type} className="border rounded-lg p-2.5 text-xs">
+                    <p className="text-muted-foreground flex items-center gap-1.5"><Ic className="h-3.5 w-3.5" /> {m.label}</p>
+                    <p className="font-bold text-sm mt-0.5">{row.cnt} <span className="font-normal text-muted-foreground">(+{row.total_points} pts)</span></p>
+                  </div>
+                );
+              })}
+              {(!breakdown || breakdown.length === 0) && <p className="text-xs text-muted-foreground col-span-2">No tracked activity yet.</p>}
+            </div>
+          </div>
+
+          {application?.skills?.length > 0 && (
+            <div>
+              <p className="text-sm font-semibold mb-2">Skills</p>
+              <div className="flex flex-wrap gap-1">
+                {application.skills.map((s: string) => <Badge key={s} variant="secondary" className="text-[10px]">{s}</Badge>)}
+              </div>
+            </div>
+          )}
+
+          <div>
+            <p className="text-sm font-semibold mb-2">Recent Activity</p>
+            {timeline.length === 0 ? (
+              <p className="text-xs text-muted-foreground">Nothing logged yet.</p>
+            ) : (
+              <div className="space-y-1.5 max-h-56 overflow-y-auto">
+                {timeline.map((t: any) => {
+                  const m = ACTIVITY_META[t.activity_type];
+                  const Ic = m?.icon || Award;
+                  return (
+                    <div key={t.id} className="flex items-start justify-between gap-2 text-xs border-b pb-1.5 last:border-0">
+                      <div className="flex items-start gap-1.5 min-w-0">
+                        <Ic className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
+                        <div className="min-w-0">
+                          <p className="truncate">{t.note || m?.label || t.activity_type}</p>
+                          <p className="text-muted-foreground">{format(new Date(t.created_at), 'dd MMM yyyy, h:mm a')}</p>
+                        </div>
+                      </div>
+                      <span className="font-bold text-primary shrink-0">+{t.points}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
+const MEDAL_STYLES = [
+  'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 ring-2 ring-amber-400', // gold
+  'bg-slate-200 text-slate-700 dark:bg-slate-700/50 dark:text-slate-300 ring-2 ring-slate-400', // silver
+  'bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-400 ring-2 ring-orange-400', // bronze
+];
+
+const ROWS_PER_PDF_PAGE = 10;
+
 const RankingTab = () => {
+  const [search, setSearch] = useState('');
+  const [detailTarget, setDetailTarget] = useState<any | null>(null);
+
   const { data: applications = [], isLoading } = useQuery({
     queryKey: ['admin-ambassador-ranking'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('ambassador_applications')
-        .select('*, profile:user_profiles(full_name, roll_id), campus:campus_onboard_requests(campus_name), session:ambassador_sessions(label)')
+        .select('*, profile:user_profiles(full_name, roll_id, avatar_url), campus:campus_onboard_requests(campus_name), session:ambassador_sessions(label)')
         .eq('status', 'approved')
         .order('points', { ascending: false });
       if (error) throw error;
@@ -599,6 +736,62 @@ const RankingTab = () => {
     refetchInterval: 20000,
     refetchIntervalInBackground: false,
   });
+
+  const q = search.trim().toLowerCase();
+  const filtered = !q ? applications : applications.filter((a: any) =>
+    a.profile?.full_name?.toLowerCase().includes(q) || a.campus?.campus_name?.toLowerCase().includes(q)
+  );
+
+  const downloadPDF = () => {
+    const doc = new jsPDF();
+    const pageWidth = 210;
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'bold');
+    doc.text('OTS Campus Ambassador Leaderboard', pageWidth / 2, 18, { align: 'center' });
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Generated: ${new Date().toLocaleDateString()} · ${applications.length} ambassadors · ${applications.reduce((s: number, a: any) => s + a.points, 0)} total points`, pageWidth / 2, 25, { align: 'center' });
+
+    const drawTableHeader = (y: number) => {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9);
+      doc.setFillColor(235, 235, 235);
+      doc.rect(15, y, 180, 8, 'F');
+      doc.text('Rank', 18, y + 6);
+      doc.text('Name', 35, y + 6);
+      doc.text('Campus', 95, y + 6);
+      doc.text('Role', 150, y + 6);
+      doc.text('Points', 180, y + 6);
+      return y + 10;
+    };
+
+    let y = drawTableHeader(35);
+    doc.setFont('helvetica', 'normal');
+
+    applications.forEach((a: any, idx: number) => {
+      if (idx > 0 && idx % ROWS_PER_PDF_PAGE === 0) {
+        doc.addPage();
+        y = drawTableHeader(20);
+      }
+      doc.text(`#${idx + 1}`, 18, y + 5);
+      doc.text((a.profile?.full_name || 'Unknown').substring(0, 28), 35, y + 5);
+      doc.text((a.campus?.campus_name || '—').substring(0, 30), 95, y + 5);
+      doc.text(SUB_ROLE_META[a.sub_role]?.label.replace(' Ambassador', '').substring(0, 16) || a.sub_role, 150, y + 5);
+      doc.text(String(a.points), 180, y + 5);
+      doc.line(15, y + 7, 195, y + 7);
+      y += 10;
+    });
+
+    const totalPages = doc.internal.getNumberOfPages();
+    for (let p = 1; p <= totalPages; p++) {
+      doc.setPage(p);
+      doc.setFontSize(7);
+      doc.text(`Page ${p} of ${totalPages}`, pageWidth / 2, 290, { align: 'center' });
+    }
+
+    doc.save(`ots-ambassador-leaderboard-${new Date().toISOString().slice(0, 10)}.pdf`);
+    toast.success('Leaderboard PDF downloaded');
+  };
 
   if (isLoading) return <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
   if (applications.length === 0) return <p className="text-center py-12 text-muted-foreground">No approved ambassadors yet.</p>;
@@ -613,16 +806,31 @@ const RankingTab = () => {
         <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Avg Points / Ambassador</p><p className="text-2xl font-heading font-bold">{Math.round(totalPoints / applications.length)}</p></CardContent></Card>
       </div>
 
+      <div className="flex gap-2">
+        <div className="relative flex-1">
+          <Search className="h-4 w-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Input placeholder="Search by name or campus..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-8" />
+        </div>
+        <Button variant="outline" onClick={downloadPDF}>
+          <FileDown className="h-4 w-4 mr-1.5" /> Download PDF
+        </Button>
+      </div>
+
       <div className="space-y-2">
-        {applications.map((a: any, idx: number) => {
+        {filtered.map((a: any) => {
+          const idx = applications.indexOf(a);
           const meta = SUB_ROLE_META[a.sub_role];
           const Icon = meta?.icon || Star;
           return (
-            <Card key={a.id}>
+            <Card key={a.id} className="cursor-pointer hover:border-primary/50 transition-colors" onClick={() => setDetailTarget(a)}>
               <CardContent className="p-4 flex items-center gap-3">
-                <div className={`shrink-0 h-8 w-8 rounded-full flex items-center justify-center font-bold text-sm ${idx < 3 ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30' : 'bg-muted text-muted-foreground'}`}>
-                  {idx + 1}
+                <div className={`shrink-0 h-8 w-8 rounded-full flex items-center justify-center font-bold text-sm ${idx < 3 ? MEDAL_STYLES[idx] : 'bg-muted text-muted-foreground'}`}>
+                  {idx < 3 ? <Medal className="h-4 w-4" /> : idx + 1}
                 </div>
+                <Avatar className="h-9 w-9 shrink-0">
+                  <AvatarImage src={a.profile?.avatar_url} />
+                  <AvatarFallback>{a.profile?.full_name?.[0]?.toUpperCase() || '?'}</AvatarFallback>
+                </Avatar>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5">
                     <Icon className="h-3.5 w-3.5 text-primary shrink-0" />
@@ -635,12 +843,17 @@ const RankingTab = () => {
                   <p className="text-xl font-heading font-bold text-primary">{a.points}</p>
                   <p className="text-[10px] text-muted-foreground">points</p>
                 </div>
-                <AddActivityButton application={a} />
+                <div onClick={(e) => e.stopPropagation()}>
+                  <AddActivityButton application={a} />
+                </div>
               </CardContent>
             </Card>
           );
         })}
+        {filtered.length === 0 && <p className="text-center py-8 text-muted-foreground text-sm">No ambassadors match "{search}".</p>}
       </div>
+
+      {detailTarget && <AmbassadorDetailDialog application={detailTarget} onOpenChange={(o) => !o && setDetailTarget(null)} />}
     </div>
   );
 };
