@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { toast } from 'sonner';
 import { CheckCircle, XCircle, Loader2, Crown, Star, Palette, Plus, Trash2, Minus, Download, Users, AlertTriangle, MessageSquare, ThumbsUp, Pencil, Trophy, UserPlus, LogIn, ShoppingCart, Megaphone, Award, Search, Medal, FileDown } from 'lucide-react';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
-import jsPDF from 'jspdf';
+import { downloadAmbassadorLeaderboardPdf } from '@/lib/ambassadorLeaderboardPdf';
 import { format, formatDistanceToNow } from 'date-fns';
 import { downloadTeamCard, renderTeamCard } from '@/lib/teamCardRenderer';
 import { useCampusAmbassadorTeam } from '@/hooks/useCampusAmbassadorTeam';
@@ -716,11 +716,10 @@ const MEDAL_STYLES = [
   'bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-400 ring-2 ring-orange-400', // bronze
 ];
 
-const ROWS_PER_PDF_PAGE = 10;
-
 const RankingTab = () => {
   const [search, setSearch] = useState('');
   const [detailTarget, setDetailTarget] = useState<any | null>(null);
+  const [pdfGenerating, setPdfGenerating] = useState(false);
 
   const { data: applications = [], isLoading } = useQuery({
     queryKey: ['admin-ambassador-ranking'],
@@ -742,55 +741,16 @@ const RankingTab = () => {
     a.profile?.full_name?.toLowerCase().includes(q) || a.campus?.campus_name?.toLowerCase().includes(q)
   );
 
-  const downloadPDF = () => {
-    const doc = new jsPDF();
-    const pageWidth = 210;
-    doc.setFontSize(16);
-    doc.setFont('helvetica', 'bold');
-    doc.text('OTS Campus Ambassador Leaderboard', pageWidth / 2, 18, { align: 'center' });
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`Generated: ${new Date().toLocaleDateString()} · ${applications.length} ambassadors · ${applications.reduce((s: number, a: any) => s + a.points, 0)} total points`, pageWidth / 2, 25, { align: 'center' });
-
-    const drawTableHeader = (y: number) => {
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(9);
-      doc.setFillColor(235, 235, 235);
-      doc.rect(15, y, 180, 8, 'F');
-      doc.text('Rank', 18, y + 6);
-      doc.text('Name', 35, y + 6);
-      doc.text('Campus', 95, y + 6);
-      doc.text('Role', 150, y + 6);
-      doc.text('Points', 180, y + 6);
-      return y + 10;
-    };
-
-    let y = drawTableHeader(35);
-    doc.setFont('helvetica', 'normal');
-
-    applications.forEach((a: any, idx: number) => {
-      if (idx > 0 && idx % ROWS_PER_PDF_PAGE === 0) {
-        doc.addPage();
-        y = drawTableHeader(20);
-      }
-      doc.text(`#${idx + 1}`, 18, y + 5);
-      doc.text((a.profile?.full_name || 'Unknown').substring(0, 28), 35, y + 5);
-      doc.text((a.campus?.campus_name || '—').substring(0, 30), 95, y + 5);
-      doc.text(SUB_ROLE_META[a.sub_role]?.label.replace(' Ambassador', '').substring(0, 16) || a.sub_role, 150, y + 5);
-      doc.text(String(a.points), 180, y + 5);
-      doc.line(15, y + 7, 195, y + 7);
-      y += 10;
-    });
-
-    const totalPages = doc.internal.getNumberOfPages();
-    for (let p = 1; p <= totalPages; p++) {
-      doc.setPage(p);
-      doc.setFontSize(7);
-      doc.text(`Page ${p} of ${totalPages}`, pageWidth / 2, 290, { align: 'center' });
+  const downloadPDF = async () => {
+    setPdfGenerating(true);
+    try {
+      await downloadAmbassadorLeaderboardPdf(applications);
+      toast.success('Leaderboard PDF downloaded');
+    } catch (e: any) {
+      toast.error('Could not generate PDF: ' + e.message);
+    } finally {
+      setPdfGenerating(false);
     }
-
-    doc.save(`ots-ambassador-leaderboard-${new Date().toISOString().slice(0, 10)}.pdf`);
-    toast.success('Leaderboard PDF downloaded');
   };
 
   if (isLoading) return <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
@@ -811,8 +771,9 @@ const RankingTab = () => {
           <Search className="h-4 w-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <Input placeholder="Search by name or campus..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-8" />
         </div>
-        <Button variant="outline" onClick={downloadPDF}>
-          <FileDown className="h-4 w-4 mr-1.5" /> Download PDF
+        <Button variant="outline" onClick={downloadPDF} disabled={pdfGenerating}>
+          {pdfGenerating ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <FileDown className="h-4 w-4 mr-1.5" />}
+          {pdfGenerating ? 'Generating...' : 'Download PDF'}
         </Button>
       </div>
 
