@@ -11,7 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { CheckCircle, XCircle, Loader2, Crown, Star, Palette, Plus, Trash2, Minus, Download, Users, AlertTriangle, MessageSquare, ThumbsUp } from 'lucide-react';
+import { CheckCircle, XCircle, Loader2, Crown, Star, Palette, Plus, Trash2, Minus, Download, Users, AlertTriangle, MessageSquare, ThumbsUp, Pencil, Trophy, UserPlus, LogIn, ShoppingCart, Megaphone } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { downloadTeamCard, renderTeamCard } from '@/lib/teamCardRenderer';
 import { useCampusAmbassadorTeam } from '@/hooks/useCampusAmbassadorTeam';
@@ -27,6 +27,39 @@ const STATUS_COLORS: Record<string, string> = {
   pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
   approved: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
   rejected: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
+};
+
+const ACTIVITY_META: Record<string, { label: string; icon: any }> = {
+  referral_signup: { label: 'Referral signups', icon: UserPlus },
+  referral_login: { label: 'Referred logins', icon: LogIn },
+  referral_purchase: { label: 'Referred purchases', icon: ShoppingCart },
+  campus_post: { label: 'Campus wall posts', icon: Megaphone },
+};
+
+const AmbassadorActivityBreakdown = ({ applicationId }: { applicationId: string }) => {
+  const { data } = useQuery({
+    queryKey: ['admin-ambassador-activity-breakdown', applicationId],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('ambassador_activity_breakdown', { _application_id: applicationId });
+      if (error) throw error;
+      return data || [];
+    },
+  });
+  if (!data || data.length === 0) return null;
+  return (
+    <div className="flex flex-wrap gap-2">
+      {data.map((row: any) => {
+        const meta = ACTIVITY_META[row.activity_type];
+        if (!meta) return null;
+        const Icon = meta.icon;
+        return (
+          <span key={row.activity_type} className="text-[10px] bg-muted rounded px-1.5 py-0.5 flex items-center gap-1" title={meta.label}>
+            <Icon className="h-3 w-3" /> {row.cnt} (+{row.total_points})
+          </span>
+        );
+      })}
+    </div>
+  );
 };
 
 const AmbassadorVoteSummary = ({ applicationId, voteConfirmed, votingDeadline }: { applicationId: string; voteConfirmed: boolean; votingDeadline: string | null }) => {
@@ -59,7 +92,12 @@ const ApplicationsTab = () => {
   const [pointsTarget, setPointsTarget] = useState<any | null>(null);
   const [pointsDelta, setPointsDelta] = useState('');
   const [messageTarget, setMessageTarget] = useState<any | null>(null);
+  const [editTarget, setEditTarget] = useState<any | null>(null);
+  const [editCampusId, setEditCampusId] = useState('');
+  const [editSubRole, setEditSubRole] = useState('');
+  const [editSessionId, setEditSessionId] = useState('');
   const [filter, setFilter] = useState('pending');
+  const [sortByPoints, setSortByPoints] = useState(false);
 
   const { data: applications = [], isLoading } = useQuery({
     queryKey: ['admin-ambassador-applications'],
@@ -73,6 +111,24 @@ const ApplicationsTab = () => {
     },
     refetchInterval: 20000,
     refetchIntervalInBackground: false,
+  });
+
+  const { data: allCampuses = [] } = useQuery({
+    queryKey: ['admin-all-campuses-for-ambassador-edit'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('campus_onboard_requests').select('id, campus_name, status').order('campus_name');
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  const { data: allSessions = [] } = useQuery({
+    queryKey: ['admin-ambassador-sessions-for-edit'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('ambassador_sessions').select('id, label').order('sort_order');
+      if (error) throw error;
+      return data ?? [];
+    },
   });
 
   const approveMutation = useMutation({
@@ -120,10 +176,20 @@ const ApplicationsTab = () => {
     onError: (e: any) => toast.error(e.message),
   });
 
+  const editMutation = useMutation({
+    mutationFn: async ({ id, campus_id, sub_role, session_id }: { id: string; campus_id: string | null; sub_role: string; session_id: string | null }) => {
+      const { error } = await supabase.from('ambassador_applications').update({ campus_id, sub_role, session_id }).eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['admin-ambassador-applications'] }); toast.success('Ambassador updated'); setEditTarget(null); },
+    onError: (e: any) => toast.error(e.message),
+  });
+
   const needsReviewCount = applications.filter((a: any) => a.needs_review).length;
-  const filtered = filter === 'needs_review'
+  const filtered = (filter === 'needs_review'
     ? applications.filter((a: any) => a.needs_review)
-    : applications.filter((a: any) => filter === 'all' || a.status === filter);
+    : applications.filter((a: any) => filter === 'all' || a.status === filter)
+  ).slice().sort((a: any, b: any) => sortByPoints ? (b.points - a.points) : 0);
 
   return (
     <div className="space-y-4">
@@ -138,6 +204,9 @@ const ApplicationsTab = () => {
         >
           Needs Review {needsReviewCount > 0 && `(${needsReviewCount})`}
         </Button>
+        <Button size="sm" variant={sortByPoints ? 'default' : 'outline'} onClick={() => setSortByPoints((v) => !v)} className="ml-auto">
+          <Trophy className="h-3.5 w-3.5 mr-1.5" /> Rank by Points
+        </Button>
       </div>
 
       {isLoading ? (
@@ -146,7 +215,7 @@ const ApplicationsTab = () => {
         <p className="text-center py-12 text-muted-foreground">No {filter !== 'all' ? filter : ''} applications.</p>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {filtered.map((a: any) => {
+          {filtered.map((a: any, idx: number) => {
             const meta = SUB_ROLE_META[a.sub_role];
             const Icon = meta?.icon || Star;
             return (
@@ -154,6 +223,7 @@ const ApplicationsTab = () => {
                 <CardContent className="p-4 space-y-2">
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-center gap-2 min-w-0">
+                      {sortByPoints && <span className="text-xs font-bold text-muted-foreground shrink-0">#{idx + 1}</span>}
                       <Icon className="h-4 w-4 text-primary shrink-0" />
                       <p className="font-semibold text-sm truncate">{a.profile?.full_name || a.user_id.slice(0, 8)}</p>
                     </div>
@@ -162,6 +232,7 @@ const ApplicationsTab = () => {
                   <p className="text-xs text-muted-foreground">{a.profile?.roll_id}</p>
                   <p className="text-sm">{meta?.label}{a.campus?.campus_name && ` · ${a.campus.campus_name}`}{a.session?.label && ` · ${a.session.label}`}</p>
                   <p className="text-xs text-muted-foreground">Applied {format(new Date(a.applied_at), 'dd MMM yyyy')} · Points: <span className="font-bold text-foreground">{a.points}</span></p>
+                  <AmbassadorActivityBreakdown applicationId={a.id} />
                   {a.skills?.length > 0 && (
                     <div className="flex flex-wrap gap-1">
                       {a.skills.map((s: string) => <Badge key={s} variant="secondary" className="text-[10px]">{s}</Badge>)}
@@ -195,6 +266,12 @@ const ApplicationsTab = () => {
                         Adjust Points
                       </Button>
                     )}
+                    <Button
+                      size="sm" variant="outline"
+                      onClick={() => { setEditTarget(a); setEditCampusId(a.campus_id || ''); setEditSubRole(a.sub_role); setEditSessionId(a.session_id || ''); }}
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
                     <Button size="sm" variant="outline" onClick={() => setMessageTarget(a)}>
                       <MessageSquare className="h-3.5 w-3.5" />
                     </Button>
@@ -213,6 +290,56 @@ const ApplicationsTab = () => {
         <DialogContent className="max-w-lg">
           <DialogHeader><DialogTitle>Messages — {messageTarget?.profile?.full_name}</DialogTitle></DialogHeader>
           {messageTarget && <AmbassadorMessages applicationId={messageTarget.id} asAdmin />}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!editTarget} onOpenChange={(o) => !o && setEditTarget(null)}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Edit Ambassador — {editTarget?.profile?.full_name}</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label>Role</Label>
+              <Select value={editSubRole} onValueChange={setEditSubRole}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {Object.entries(SUB_ROLE_META).map(([v, m]) => <SelectItem key={v} value={v}>{m.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Campus {editSubRole !== 'graphics_team' && <span className="text-destructive">*</span>}</Label>
+              <Select value={editCampusId} onValueChange={setEditCampusId}>
+                <SelectTrigger><SelectValue placeholder="No campus" /></SelectTrigger>
+                <SelectContent>
+                  {allCampuses.map((c: any) => <SelectItem key={c.id} value={c.id}>{c.campus_name} {c.status !== 'approved' && `(${c.status})`}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">Use this to fix a campus the ambassador mistakenly selected at application time.</p>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Session</Label>
+              <Select value={editSessionId} onValueChange={setEditSessionId}>
+                <SelectTrigger><SelectValue placeholder="No session" /></SelectTrigger>
+                <SelectContent>
+                  {allSessions.map((s: any) => <SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditTarget(null)}>Cancel</Button>
+            <Button
+              onClick={() => editTarget && editMutation.mutate({
+                id: editTarget.id,
+                campus_id: editCampusId || null,
+                sub_role: editSubRole,
+                session_id: editSessionId || null,
+              })}
+              disabled={editMutation.isPending || (editSubRole !== 'graphics_team' && !editCampusId)}
+            >
+              {editMutation.isPending && <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />} Save
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
@@ -401,7 +528,7 @@ const AdminAmbassadors = () => {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-heading font-bold">Ambassador Management</h1>
-        <p className="text-sm text-muted-foreground mt-1">Review ambassador applications, approve/reject, adjust points, and manage selectable sessions.</p>
+        <p className="text-sm text-muted-foreground mt-1">Review applications, approve/reject, rank by points, correct a mistakenly-entered campus or role, and manage selectable sessions.</p>
       </div>
       <Tabs defaultValue="applications">
         <TabsList>

@@ -5,7 +5,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Crown, Star, Palette, Download, Clock, Building2, Users, ThumbsUp, AlertTriangle, MessageSquare, Share2, Copy } from 'lucide-react';
+import { Loader2, Crown, Star, Palette, Download, Building2, Users, ThumbsUp, AlertTriangle, MessageSquare, Share2, Copy, UserPlus, LogIn, ShoppingCart, Megaphone, TrendingUp } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { renderAmbassadorCard, downloadAmbassadorCard } from '@/lib/ambassadorCardRenderer';
 import { renderTeamCard, downloadTeamCard } from '@/lib/teamCardRenderer';
@@ -18,6 +18,13 @@ const SUB_ROLE_META: Record<string, { label: string; icon: any }> = {
   head_of_campus: { label: 'Head of Campus Ambassador', icon: Crown },
   ambassador: { label: 'Ambassador', icon: Star },
   graphics_team: { label: 'Graphics Team', icon: Palette },
+};
+
+const ACTIVITY_META: Record<string, { label: string; icon: any; hint: string }> = {
+  referral_signup: { label: 'Referral Signups', icon: UserPlus, hint: '+10 pts when someone registers with your referral code' },
+  referral_login: { label: 'Referred Logins', icon: LogIn, hint: '+1 pt per day a person you referred logs in' },
+  referral_purchase: { label: 'Referred Purchases', icon: ShoppingCart, hint: '+15 pts per completed purchase by someone you referred' },
+  campus_post: { label: 'Campus Wall Posts', icon: Megaphone, hint: '+3 pts per notice, event, or gallery photo you post to your campus wall' },
 };
 
 const AmbassadorHub = () => {
@@ -82,6 +89,18 @@ const AmbassadorHub = () => {
       return data?.[0] || { up_votes: 0, down_votes: 0, total_votes: 0, accept_pct: null };
     },
   });
+
+  const { data: activityBreakdown } = useQuery({
+    queryKey: ['my-ambassador-activity-breakdown', application?.id],
+    enabled: !!application?.id,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('ambassador_activity_breakdown', { _application_id: application!.id });
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+  const referralLink = `${window.location.origin}/auth/register?ref=${profile?.referral_code || ''}`;
 
   const { data: team } = useCampusAmbassadorTeam(application?.campus_id, application?.campus?.campus_name);
 
@@ -240,10 +259,37 @@ const AmbassadorHub = () => {
         </CardContent>
       </Card>
 
-      <Card className="border-dashed">
-        <CardContent className="p-5 space-y-1">
-          <p className="font-semibold flex items-center gap-2 text-muted-foreground"><Clock className="h-4 w-4" /> Daily Activity Updates</p>
-          <p className="text-sm text-muted-foreground">Coming soon — you'll be able to log your daily ambassador activities here.</p>
+      <Card>
+        <CardContent className="p-5 space-y-3">
+          <p className="font-semibold flex items-center gap-2"><TrendingUp className="h-4 w-4" /> Your Activity &amp; Points</p>
+          <p className="text-sm text-muted-foreground">
+            Points here are earned automatically from real activity — nothing to fill in or self-report. Share your referral link below;
+            when someone signs up, logs in, or buys a course through it, or whenever you post on your campus wall, points land here on their own.
+          </p>
+
+          <div className="flex items-center gap-2">
+            <code className="flex-1 text-xs bg-muted rounded px-2 py-1.5 truncate">{referralLink}</code>
+            <Button
+              size="sm" variant="outline"
+              onClick={() => { navigator.clipboard.writeText(referralLink); toast.success('Referral link copied!'); }}
+            >
+              <Copy className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 pt-1">
+            {Object.entries(ACTIVITY_META).map(([type, meta]) => {
+              const row = activityBreakdown?.find((r: any) => r.activity_type === type);
+              const Icon = meta.icon;
+              return (
+                <div key={type} className="border rounded-lg p-3" title={meta.hint}>
+                  <p className="text-xs text-muted-foreground flex items-center gap-1.5"><Icon className="h-3.5 w-3.5" /> {meta.label}</p>
+                  <p className="text-xl font-heading font-bold mt-1">{row?.cnt ?? 0}</p>
+                  <p className="text-xs text-muted-foreground">+{row?.total_points ?? 0} pts</p>
+                </div>
+              );
+            })}
+          </div>
         </CardContent>
       </Card>
 
