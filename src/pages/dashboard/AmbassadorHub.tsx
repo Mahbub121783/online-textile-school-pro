@@ -5,7 +5,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Crown, Star, Palette, Download, Building2, Users, ThumbsUp, AlertTriangle, MessageSquare, Share2, Copy, UserPlus, LogIn, ShoppingCart, Megaphone, TrendingUp } from 'lucide-react';
+import { Loader2, Crown, Star, Palette, Download, Building2, Users, ThumbsUp, AlertTriangle, MessageSquare, Share2, Copy, UserPlus, LogIn, ShoppingCart, Megaphone, TrendingUp, Award } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { renderAmbassadorCard, downloadAmbassadorCard } from '@/lib/ambassadorCardRenderer';
 import { renderTeamCard, downloadTeamCard } from '@/lib/teamCardRenderer';
@@ -25,6 +25,7 @@ const ACTIVITY_META: Record<string, { label: string; icon: any; hint: string }> 
   referral_login: { label: 'Referred Logins', icon: LogIn, hint: '+1 pt per day a person you referred logs in' },
   referral_purchase: { label: 'Referred Purchases', icon: ShoppingCart, hint: '+15 pts per completed purchase by someone you referred' },
   campus_post: { label: 'Campus Wall Posts', icon: Megaphone, hint: '+3 pts per notice, event, or gallery photo you post to your campus wall' },
+  admin_assigned: { label: 'Admin-Assigned Tasks', icon: Award, hint: 'Extra tasks admin asked you to do, with points they assigned' },
 };
 
 const AmbassadorHub = () => {

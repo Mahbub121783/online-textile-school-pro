@@ -11,7 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { CheckCircle, XCircle, Loader2, Crown, Star, Palette, Plus, Trash2, Minus, Download, Users, AlertTriangle, MessageSquare, ThumbsUp, Pencil, Trophy, UserPlus, LogIn, ShoppingCart, Megaphone } from 'lucide-react';
+import { CheckCircle, XCircle, Loader2, Crown, Star, Palette, Plus, Trash2, Minus, Download, Users, AlertTriangle, MessageSquare, ThumbsUp, Pencil, Trophy, UserPlus, LogIn, ShoppingCart, Megaphone, Award } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { downloadTeamCard, renderTeamCard } from '@/lib/teamCardRenderer';
 import { useCampusAmbassadorTeam } from '@/hooks/useCampusAmbassadorTeam';
@@ -34,6 +34,64 @@ const ACTIVITY_META: Record<string, { label: string; icon: any }> = {
   referral_login: { label: 'Referred logins', icon: LogIn },
   referral_purchase: { label: 'Referred purchases', icon: ShoppingCart },
   campus_post: { label: 'Campus wall posts', icon: Megaphone },
+  admin_assigned: { label: 'Admin-assigned tasks', icon: Award },
+};
+
+const AddActivityButton = ({ application }: { application: any }) => {
+  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [note, setNote] = useState('');
+  const [points, setPoints] = useState('');
+
+  const mutation = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase.from('ambassador_activity_log').insert({
+        application_id: application.id,
+        activity_type: 'admin_assigned',
+        points: parseInt(points, 10) || 0,
+        note: note.trim(),
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-ambassador-applications'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-ambassador-ranking'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-ambassador-activity-breakdown', application.id] });
+      toast.success('Activity added');
+      setOpen(false); setNote(''); setPoints('');
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  return (
+    <>
+      <Button size="sm" variant="outline" onClick={() => setOpen(true)} title="Add Activity">
+        <Award className="h-3.5 w-3.5" />
+      </Button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Add Activity — {application.profile?.full_name}</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label>What extra task did they do?</Label>
+              <Textarea placeholder="e.g. Organized the spring onboarding webinar" value={note} onChange={(e) => setNote(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Points to award</Label>
+              <Input type="number" placeholder="e.g. 20" value={points} onChange={(e) => setPoints(e.target.value)} />
+            </div>
+            <p className="text-xs text-muted-foreground">This is logged (unlike the quick points adjustment below) so it shows up in their activity stats as proof of work.</p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+            <Button onClick={() => mutation.mutate()} disabled={mutation.isPending || !note.trim() || !points}>
+              {mutation.isPending && <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />} Add
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
 };
 
 const AmbassadorActivityBreakdown = ({ applicationId }: { applicationId: string }) => {
@@ -262,9 +320,12 @@ const ApplicationsTab = () => {
                       </>
                     )}
                     {a.status === 'approved' && (
-                      <Button size="sm" variant="outline" className="flex-1" onClick={() => { setPointsTarget(a); setPointsDelta(''); }}>
-                        Adjust Points
-                      </Button>
+                      <>
+                        <Button size="sm" variant="outline" className="flex-1" onClick={() => { setPointsTarget(a); setPointsDelta(''); }}>
+                          Adjust Points
+                        </Button>
+                        <AddActivityButton application={a} />
+                      </>
                     )}
                     <Button
                       size="sm" variant="outline"
@@ -523,6 +584,67 @@ const TeamCardsTab = () => {
   );
 };
 
+const RankingTab = () => {
+  const { data: applications = [], isLoading } = useQuery({
+    queryKey: ['admin-ambassador-ranking'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('ambassador_applications')
+        .select('*, profile:user_profiles(full_name, roll_id), campus:campus_onboard_requests(campus_name), session:ambassador_sessions(label)')
+        .eq('status', 'approved')
+        .order('points', { ascending: false });
+      if (error) throw error;
+      return data ?? [];
+    },
+    refetchInterval: 20000,
+    refetchIntervalInBackground: false,
+  });
+
+  if (isLoading) return <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
+  if (applications.length === 0) return <p className="text-center py-12 text-muted-foreground">No approved ambassadors yet.</p>;
+
+  const totalPoints = applications.reduce((sum: number, a: any) => sum + a.points, 0);
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-3 gap-3">
+        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Total Ambassadors</p><p className="text-2xl font-heading font-bold">{applications.length}</p></CardContent></Card>
+        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Total Points Earned</p><p className="text-2xl font-heading font-bold">{totalPoints}</p></CardContent></Card>
+        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Avg Points / Ambassador</p><p className="text-2xl font-heading font-bold">{Math.round(totalPoints / applications.length)}</p></CardContent></Card>
+      </div>
+
+      <div className="space-y-2">
+        {applications.map((a: any, idx: number) => {
+          const meta = SUB_ROLE_META[a.sub_role];
+          const Icon = meta?.icon || Star;
+          return (
+            <Card key={a.id}>
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className={`shrink-0 h-8 w-8 rounded-full flex items-center justify-center font-bold text-sm ${idx < 3 ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30' : 'bg-muted text-muted-foreground'}`}>
+                  {idx + 1}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5">
+                    <Icon className="h-3.5 w-3.5 text-primary shrink-0" />
+                    <p className="font-semibold text-sm truncate">{a.profile?.full_name || a.user_id.slice(0, 8)}</p>
+                  </div>
+                  <p className="text-xs text-muted-foreground truncate">{meta?.label}{a.campus?.campus_name && ` · ${a.campus.campus_name}`}{a.session?.label && ` · ${a.session.label}`}</p>
+                  <AmbassadorActivityBreakdown applicationId={a.id} />
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="text-xl font-heading font-bold text-primary">{a.points}</p>
+                  <p className="text-[10px] text-muted-foreground">points</p>
+                </div>
+                <AddActivityButton application={a} />
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
 const AdminAmbassadors = () => {
   return (
     <div className="space-y-6">
@@ -533,10 +655,12 @@ const AdminAmbassadors = () => {
       <Tabs defaultValue="applications">
         <TabsList>
           <TabsTrigger value="applications">Applications</TabsTrigger>
+          <TabsTrigger value="ranking"><Trophy className="h-3.5 w-3.5 mr-1.5" /> Ranking</TabsTrigger>
           <TabsTrigger value="sessions">Sessions</TabsTrigger>
           <TabsTrigger value="team-cards"><Users className="h-3.5 w-3.5 mr-1.5" /> Team Cards</TabsTrigger>
         </TabsList>
         <TabsContent value="applications" className="pt-4"><ApplicationsTab /></TabsContent>
+        <TabsContent value="ranking" className="pt-4"><RankingTab /></TabsContent>
         <TabsContent value="sessions" className="pt-4"><SessionsTab /></TabsContent>
         <TabsContent value="team-cards" className="pt-4"><TeamCardsTab /></TabsContent>
       </Tabs>
