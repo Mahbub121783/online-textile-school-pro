@@ -27,6 +27,28 @@ function requireUser(req) {
   }
 }
 
+// Core disk-write logic, factored out so other handlers (the public,
+// no-login registration-photo upload in cloudinaryProxy.js) can fall back
+// to it directly -- mirrors useFileUpload.ts's own cloudinary-then-local
+// fallback, just applied server-side for that one endpoint instead of
+// requiring a second round trip from the browser.
+function saveLocalFile(buffer, fileType) {
+  const ext = ALLOWED_TYPES[(fileType || '').toLowerCase()];
+  if (!ext) throw Object.assign(new Error('Only image uploads are allowed via local storage (jpeg/png/gif/webp/svg/bmp)'), { statusCode: 400 });
+  if (!Buffer.isBuffer(buffer) || !buffer.length) throw Object.assign(new Error('A non-empty file body is required'), { statusCode: 400 });
+  if (buffer.length > MAX_BYTES) throw Object.assign(new Error('Image exceeds 8MB local-storage limit'), { statusCode: 400 });
+
+  const now = new Date();
+  const subdir = `${now.getUTCFullYear()}/${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
+  const dir = path.join(UPLOAD_ROOT, subdir);
+  fs.mkdirSync(dir, { recursive: true });
+
+  const fileName = `${crypto.randomBytes(16).toString('hex')}.${ext}`;
+  fs.writeFileSync(path.join(dir, fileName), buffer);
+
+  return `${process.env.API_URL || 'https://api.onlinetextileschool.com'}/uploads/${subdir}/${fileName}`;
+}
+
 // Raw-binary local-storage upload, mounted under
 // /functions/v1/uploads/local with express.raw() -- avoids the base64 +
 // JSON-body overhead so this fallback path doesn't die around the same size
@@ -36,27 +58,11 @@ async function localUploadRaw(req, res) {
     const userId = requireUser(req);
     if (!userId) return res.status(401).json({ error: 'Unauthorized' });
 
-    const fileType = (req.headers['x-file-type'] || '').toLowerCase();
-    const ext = ALLOWED_TYPES[fileType];
-    if (!ext) return res.status(400).json({ error: 'Only image uploads are allowed via local storage (jpeg/png/gif/webp/svg/bmp)' });
-
-    const buffer = req.body;
-    if (!Buffer.isBuffer(buffer) || !buffer.length) return res.status(400).json({ error: 'A non-empty file body is required' });
-    if (buffer.length > MAX_BYTES) return res.status(400).json({ error: 'Image exceeds 8MB local-storage limit' });
-
-    const now = new Date();
-    const subdir = `${now.getUTCFullYear()}/${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
-    const dir = path.join(UPLOAD_ROOT, subdir);
-    fs.mkdirSync(dir, { recursive: true });
-
-    const fileName = `${crypto.randomBytes(16).toString('hex')}.${ext}`;
-    fs.writeFileSync(path.join(dir, fileName), buffer);
-
-    const publicUrl = `${process.env.API_URL || 'https://api.onlinetextileschool.com'}/uploads/${subdir}/${fileName}`;
+    const publicUrl = saveLocalFile(req.body, req.headers['x-file-type']);
     res.json({ url: publicUrl, source: 'local' });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(e.statusCode || 500).json({ error: e.message });
   }
 }
 
-module.exports = { localUploadRaw };
+module.exports = { localUploadRaw, saveLocalFile };

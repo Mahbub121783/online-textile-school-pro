@@ -13,7 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { CheckCircle, Upload, Clock, Users, Calendar, Camera, Star, FileUp } from 'lucide-react';
-import { useFileUpload } from '@/hooks/useFileUpload';
+import { apiBase, xhrUpload } from '@/lib/rawUpload';
 import SEOHead from '@/components/SEOHead';
 
 interface Purpose {
@@ -86,7 +86,7 @@ const CountdownUnit = ({ value, label }: { value: number; label: string }) => (
 export default function PublicRegistration() {
   const { slug } = useParams<{ slug?: string }>();
   const { toast } = useToast();
-  const { upload, uploading } = useFileUpload();
+  const [uploading, setUploading] = useState(false);
 
   const [config, setConfig] = useState<FormConfig | null>(null);
   const [purposes, setPurposes] = useState<Purpose[]>([]);
@@ -160,12 +160,34 @@ export default function PublicRegistration() {
     [uniQuery, universities]
   );
 
+  // This page has no login wall by design (public event registration), so
+  // uploads can't go through the authenticated cloudinary endpoint every
+  // other upload in the app uses -- that one 401s with no JWT (see
+  // backend/src/functions/cloudinaryProxy.js's handleUploadRaw). Routed
+  // instead to the dedicated unauthenticated /uploads/registration-photo
+  // endpoint, which is scoped to images only with its own rate limit.
+  const uploadPublicFile = useCallback(async (file: File): Promise<{ url?: string } | null> => {
+    setUploading(true);
+    try {
+      const data = await xhrUpload(`${apiBase()}/functions/v1/uploads/registration-photo`, file, {
+        'Content-Type': file.type || 'application/octet-stream',
+        'X-File-Type': file.type || 'application/octet-stream',
+      });
+      return { url: data?.url };
+    } catch (err: any) {
+      toast({ title: 'Photo upload failed', description: err.message, variant: 'destructive' });
+      return null;
+    } finally {
+      setUploading(false);
+    }
+  }, [toast]);
+
   const handlePhotoUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const result = await upload(file);
+    const result = await uploadPublicFile(file);
     if (result?.url) setFormData(prev => ({ ...prev, photo_url: result.url }));
-  }, [upload]);
+  }, [uploadPublicFile]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -189,7 +211,18 @@ export default function PublicRegistration() {
     }
 
     setSubmitting(true);
-    const { data, error } = await supabase.from('registrations' as any).insert({
+    // Generated client-side and sent as the row's own id, instead of
+    // chaining .select().single() to read the inserted row back -- this
+    // table deliberately has no SELECT policy letting an anonymous
+    // submitter read ANY row (it holds other registrants' name/email/
+    // phone/blood group/photo, so opening that up would leak everyone's
+    // PII to anyone hitting the endpoint). Requesting the row back via
+    // Prefer: return=representation hit that missing SELECT policy and
+    // failed as an RLS violation even though the insert itself succeeds
+    // fine on its own -- confirmed directly against the live API.
+    const generatedId = crypto.randomUUID();
+    const { error } = await supabase.from('registrations' as any).insert({
+      id: generatedId,
       purpose_id: selectedPurpose,
       full_name: formData.full_name,
       email: formData.email,
@@ -202,11 +235,11 @@ export default function PublicRegistration() {
       experience_years: formData.experience_years ? parseInt(formData.experience_years) : null,
       photo_url: formData.photo_url || null,
       extra_fields: Object.keys(extraFields).length > 0 ? extraFields : {},
-    } as any).select('id').single();
+    } as any);
 
     setSubmitting(false);
     if (error) { toast({ title: 'Registration failed', description: error.message, variant: 'destructive' }); return; }
-    setRegId((data as any)?.id?.slice(0, 8).toUpperCase() || 'OK');
+    setRegId(generatedId.slice(0, 8).toUpperCase());
     setSubmitted(true);
     toast({ title: 'Registration successful!' });
   };
@@ -393,7 +426,7 @@ export default function PublicRegistration() {
                           field={cf}
                           value={extraFields[cf.key]}
                           onChange={(v) => setExtraFields(p => ({ ...p, [cf.key]: v }))}
-                          uploader={upload}
+                          uploader={uploadPublicFile}
                         />
                       ))}
                     </div>

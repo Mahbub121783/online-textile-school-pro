@@ -7,7 +7,7 @@
 const express = require('express');
 const rateLimit = require('express-rate-limit');
 const { r2UploadSingle, r2UploadChunk } = require('./r2Presign');
-const { handleUploadRaw: cloudinaryUploadRaw } = require('./cloudinaryProxy');
+const { handleUploadRaw: cloudinaryUploadRaw, handlePublicRegistrationUploadRaw } = require('./cloudinaryProxy');
 const { localUploadRaw } = require('./localUpload');
 
 const router = express.Router();
@@ -21,5 +21,12 @@ router.post('/r2-single', rawBody('8mb'), r2UploadSingle);
 router.post('/r2-chunk', rawBody('6mb'), r2UploadChunk);
 router.post('/cloudinary', rawBody('20mb'), cloudinaryUploadRaw);
 router.post('/local', rawBody('8mb'), localUploadRaw);
+
+// No login wall on this one by design -- PublicRegistration.tsx's event
+// registration form is meant for anonymous visitors. Its own tighter IP
+// rate limit on top of the shared one above, since it has no per-user
+// identity to rely on for abuse control.
+const publicRegistrationLimiter = rateLimit({ windowMs: 60 * 1000, limit: 15, standardHeaders: true, legacyHeaders: false });
+router.post('/registration-photo', publicRegistrationLimiter, rawBody('6mb'), handlePublicRegistrationUploadRaw);
 
 module.exports = router;

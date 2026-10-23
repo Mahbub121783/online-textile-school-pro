@@ -3,6 +3,7 @@ const fetch = require('node-fetch');
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const { serviceQuery } = require('../db');
+const { saveLocalFile } = require('./localUpload');
 
 function sha1Hex(message) {
   return crypto.createHash('sha1').update(message).digest('hex');
@@ -184,6 +185,64 @@ async function handleUploadRaw(req, res) {
   }
 }
 
+// Unauthenticated counterpart to handleUploadRaw(), for the one legitimate
+// anonymous-upload use case in this app: the public event registration form
+// (PublicRegistration.tsx), which has no login wall by design. Scoped down
+// from the general-purpose endpoint to limit abuse: images only, fixed
+// folder (no X-Folder/X-Public-Id/X-Overwrite from the client -- those
+// exist on the authenticated endpoint for admin/CMS use and would let an
+// anonymous caller overwrite someone else's asset by guessing its
+// public_id), and mounted behind its own stricter rate limit
+// (see uploadsRouter.js) plus a smaller body-size cap.
+async function handlePublicRegistrationUploadRaw(req, res) {
+  const buffer = req.body;
+  if (!Buffer.isBuffer(buffer) || !buffer.length) return res.status(400).json({ error: 'A non-empty file body is required' });
+
+  const fileType = req.headers['x-file-type'] || 'application/octet-stream';
+  if (!fileType.startsWith('image/')) return res.status(400).json({ error: 'Only image files are accepted here' });
+
+  const account = await getAccount('images');
+  if (!account) {
+    // No Cloudinary account configured -- same fallback useFileUpload.ts
+    // already does for logged-in uploads elsewhere in the app, applied
+    // here too so this endpoint isn't the one place that hard-fails on a
+    // gap that's otherwise invisible.
+    try {
+      return res.json({ url: saveLocalFile(buffer, fileType), source: 'local' });
+    } catch (e) {
+      return res.status(e.statusCode || 500).json({ error: e.message });
+    }
+  }
+
+  try {
+    const timestamp = Math.floor(Date.now() / 1000).toString();
+    const signParams = { folder: 'public-registrations', timestamp };
+    const signature = buildSignedParams(signParams, account.api_secret);
+
+    const form = new FormData();
+    form.append('file', new Blob([buffer], { type: fileType }));
+    form.append('api_key', account.api_key);
+    form.append('signature', signature);
+    Object.entries(signParams).forEach(([k, v]) => form.append(k, String(v)));
+
+    const cRes = await globalThis.fetch(`https://api.cloudinary.com/v1_1/${account.cloud_name}/image/upload`, {
+      method: 'POST',
+      body: form,
+    });
+    const result = await cRes.json();
+
+    if (result.error) {
+      console.error('Public registration upload error:', result.error);
+      return res.status(500).json({ error: result.error.message || 'Upload failed' });
+    }
+
+    return res.json({ url: result.secure_url, publicId: result.public_id, source: 'cloudinary', accountId: account.id });
+  } catch (err) {
+    console.error('Public registration upload error:', err);
+    res.status(500).json({ error: err.message || 'Upload failed' });
+  }
+}
+
 async function cloudinaryProxy(req, res) {
   try {
     const userId = requireUser(req);
@@ -204,4 +263,4 @@ async function cloudinaryProxy(req, res) {
   }
 }
 
-module.exports = { cloudinaryProxy, handleUploadRaw };
+module.exports = { cloudinaryProxy, handleUploadRaw, handlePublicRegistrationUploadRaw };
