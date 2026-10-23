@@ -322,6 +322,14 @@ const RPC_BLOCKLIST = new Set([
   // registered user. Block the raw function; claim_my_workshop_certificate
   // is the intended client-facing entry point and is not blocklisted.
   'issue_workshop_certificate',
+  // ambassador_award_activity: SECURITY DEFINER, takes an arbitrary
+  // application id + point value and elevates to service_role -- callable
+  // directly here it would let any signed-in user mint ambassador points.
+  // Only ever meant to be invoked by the db/94 triggers.
+  'ambassador_award_activity', 'ambassador_evaluate_voting_deadlines',
+  // Blood bank internals (db/97): dispatch/escalation send donor alerts and
+  // elevate to service_role; only triggers and blood-bank-cron call them.
+  'blood_dispatch_round', 'blood_escalate_requests', 'blood_notify_moderators',
 ]);
 
 // node-postgres serializes a bare JS array as a Postgres array literal

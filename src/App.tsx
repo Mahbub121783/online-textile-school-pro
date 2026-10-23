@@ -87,6 +87,7 @@ const AdminSetup = lazy(() => import("./pages/admin/AdminSetup"));
 const AdminOrders = lazy(() => import("./pages/admin/AdminOrders"));
 const AdminCampusOnboard = lazy(() => import("./pages/admin/AdminCampusOnboard"));
 const AdminAmbassadors = lazy(() => import("./pages/admin/AdminAmbassadors"));
+const AdminBloodBank = lazy(() => import("./pages/admin/AdminBloodBank"));
 const AdminFabricLibrary = lazy(() => import("./pages/admin/AdminFabricLibrary"));
 const AdminPayment = lazy(() => import("./pages/admin/AdminPayment"));
 const AdminManagement = lazy(() => import("./pages/admin/AdminManagement"));
@@ -196,6 +197,7 @@ const PracticeLeaderboard = lazy(() => import("./pages/practice/PracticeLeaderbo
 const PracticeCredits = lazy(() => import("./pages/practice/PracticeCredits"));
 const MyCampusPage = lazy(() => import("./pages/dashboard/MyCampusPage"));
 const AmbassadorHub = lazy(() => import("./pages/dashboard/AmbassadorHub"));
+const BloodBankPage = lazy(() => import("./pages/dashboard/BloodBankPage"));
 const AmbassadorLeaderboard = lazy(() => import("./pages/AmbassadorLeaderboard"));
 const AmbassadorProfile = lazy(() => import("./pages/AmbassadorProfile"));
 const AdminQuestionBank = lazy(() => import("./pages/admin/AdminQuestionBank"));
@@ -340,6 +342,7 @@ const AppRoutes = () => {
             <Route path="practice" element={<DashboardPracticePage />} />
             <Route path="campus" element={<MyCampusPage />} />
             <Route path="ambassador" element={<AmbassadorHub />} />
+            <Route path="blood-bank" element={<BloodBankPage />} />
             <Route path="settings" element={<SettingsPage />} />
           </Route>
           {/* Instructor Portal */}
@@ -386,6 +389,7 @@ const AppRoutes = () => {
             <Route path="orders" element={<AdminOrders />} />
             <Route path="campus-onboard" element={<AdminCampusOnboard />} />
             <Route path="ambassadors" element={<AdminAmbassadors />} />
+            <Route path="blood-bank" element={<AdminBloodBank />} />
             <Route path="fabric-library" element={<AdminFabricLibrary />} />
             <Route path="ebooks" element={<AdminEbooks />} />
             <Route path="coupons" element={<AdminCoupons />} />
